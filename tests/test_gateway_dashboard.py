@@ -68,6 +68,29 @@ def test_public_shell_and_packaged_assets_have_local_ui_policy(tmp_path, dist):
         assert "https:" not in UI_CSP and "unsafe-eval" not in UI_CSP
 
 
+def test_ui_policy_accepts_bundled_inline_fonts_without_widening_api_or_scripts(tmp_path, dist):
+    css = (
+        '@font-face { font-family: "Packaged math font"; '
+        'src: url(data:font/woff2;base64,d09GMg==) format("woff2"); }'
+    )
+    (dist / "assets" / "app.css").write_text(css, encoding="utf-8")
+    with TestClient(app_for(tmp_path, dist), base_url=ORIGIN) as client:
+        response = client.get("/assets/app.css")
+        assert response.status_code == 200 and response.text == css
+        shell = client.get("/", headers={"Accept": "text/html"})
+        policy = {
+            parts[0]: parts[1:]
+            for directive in shell.headers["content-security-policy"].split(";")
+            if (parts := directive.split())
+        }
+        assert policy["font-src"] == ["'self'", "data:"]
+        assert policy["script-src"] == ["'self'"]
+        assert policy["connect-src"] == ["'self'"]
+        assert policy["default-src"] == ["'none'"]
+        assert client.get("/auth/session").headers["content-security-policy"] == API_CSP
+        assert "data:" not in API_CSP
+
+
 @pytest.mark.parametrize("path", [
     "/auth", "/auth/unknown", "/api", "/api/unknown", "/health/unknown",
     "/assets/missing.js", "/assets/missing", "/missing.css", "/missing.png",

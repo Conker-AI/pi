@@ -10,7 +10,8 @@ from fastapi.responses import JSONResponse, Response
 API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
 UI_CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
+    # Bundlers inline small local fonts (for example KaTeX Size3) as data URLs.
+    "font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; "
     "media-src 'self' blob:; object-src 'none'; frame-src 'none'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
