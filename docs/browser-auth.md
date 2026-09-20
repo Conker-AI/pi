@@ -37,6 +37,7 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | `POST /auth/revoke-all` | Revokes every session, including the caller's. |
 | `/api/pi/{path}` | Only methods and paths in `pi/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
 | `GET /api/owner/requests` | Reads the approval list through the dedicated ToolGate owner channel. |
+| `GET /api/owner/requests/{id}` | Reads the canonical owner-request projection for review or lost-decision reconciliation. |
 | `POST /api/owner/requests/{id}/decision` | JSON `status` (`approved`, `rejected`, `dismissed`) and optional `note`; uses only the owner channel. |
 | `GET /health` | Reports login setup and dependency health without returning conversation or approval content. |
 
@@ -212,9 +213,13 @@ The live test starts real HTTPS and Pi
 processes, saves a conversation, rejects a logged-out cookie, and verifies host
 password recovery. Only terminal input is supplied by a test harness.
 
-ToolGate's `/v2/owner/...` routes do **not yet exist in the inspected checkout**.
-The forwarding contract has been tested against a service fixture, not presented
-as a working owner approval round trip. Its implementation and live negative test
-(an execution key cannot approve) remain a dependency owned by the ToolGate instance.
+The sibling ToolGate implementation now provides dedicated `/v2/owner/requests`
+list/detail/decision routes with its own pinned owner-credential hash. See that
+module's `docs/owner-channel.md` for the projection and host provisioning contract.
+Gateway list reads forward only bounded `limit`/`cursor` parameters. Existing
+deployments still require a version containing those routes and explicit owner-key
+provisioning; this source change does not activate or deploy the channel. The
+gateway forwarding tests use a service fixture; ToolGate separately tests that
+execution/admin credentials cannot authorize the dedicated owner channel.
 Publish a versioned Pi image containing this package before activating companion's
 gateway deployment. No release tag or published-image claim is made by this branch.

@@ -249,6 +249,31 @@ def test_health_is_honest_when_dependencies_are_unavailable(gateway):
     assert "csrf" not in health.text and OWNER not in health.text
 
 
+def test_owner_detail_and_bounded_list_pagination_keep_dedicated_authority(gateway):
+    client, _, seen = gateway
+    assert client.get("/api/owner/requests/request_1").status_code == 401
+    sign_in(client)
+    assert client.get("/api/owner/requests?limit=1&cursor=request_1").status_code == 200
+    assert (
+        str(seen[-1].url) == "http://toolgate-api:8010/v2/owner/requests?limit=1&cursor=request_1"
+    )
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert "X-ToolGate-Key" not in seen[-1].headers
+    assert client.get("/api/owner/requests/request_1").status_code == 200
+    assert str(seen[-1].url) == "http://toolgate-api:8010/v2/owner/requests/request_1"
+    before = len(seen)
+    for path in (
+        "/api/owner/requests?limit=201",
+        "/api/owner/requests?limit=0",
+        "/api/owner/requests?limit=1&limit=2",
+        "/api/owner/requests?secret=hidden",
+        "/api/owner/requests?cursor=bad%2Fid",
+        "/api/owner/requests/request_1?limit=1",
+    ):
+        assert client.get(path).status_code == 422
+    assert len(seen) == before
+
+
 def test_task_ledger_routes_use_runtime_authority_and_keep_csrf_boundary(gateway):
     client, _, seen = gateway
     assert client.get("/api/pi/tasks").status_code == 401

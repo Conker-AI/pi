@@ -392,9 +392,36 @@ def create_app(
     @app.get("/api/owner/requests")
     def owner_requests(request: Request):
         session(request)
+        # Only the bounded owner-list pagination contract crosses this channel.
+        if set(request.query_params) - {"limit", "cursor"} or any(
+            len(request.query_params.getlist(key)) != 1 for key in request.query_params
+        ):
+            raise AuthError("Use only owner request pagination parameters.", 422)
+        limit, cursor = request.query_params.get("limit"), request.query_params.get("cursor")
+        if (
+            (limit is not None
+            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 200))
+            or (cursor is not None
+            and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cursor))
+        ):
+            raise AuthError("Use valid owner request pagination parameters.", 422)
         return forward(
             "GET",
             app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            None,
+            request.scope["query_string"],
+        )
+
+    @app.get("/api/owner/requests/{identity}")
+    def owner_request(identity: str, request: Request):
+        session(request)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identity) or request.scope["query_string"]:
+            raise AuthError("Invalid owner request identity.", 422)
+        return forward(
+            "GET",
+            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}",
             "X-ToolGate-Owner-Key",
             app.state.config.owner_key,
             None,
@@ -404,13 +431,14 @@ def create_app(
     @app.post("/api/owner/requests/{identity}/decision")
     async def owner_decision(identity: str, request: Request):
         session(request)
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", identity):
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identity):
             raise AuthError("Invalid request identifier. Reload the approval list.", 422)
         body = await json_body(request)
         if (
             set(body) - {"status", "note"}
             or body.get("status") not in {"approved", "rejected", "dismissed"}
             or not isinstance(body.get("note", ""), str)
+            or len(body.get("note", "")) > 2000
         ):
             raise AuthError("Send a decision status and optional note.", 422)
         from starlette.concurrency import run_in_threadpool
