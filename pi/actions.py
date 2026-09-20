@@ -2,7 +2,8 @@
 
 import json
 import time
-import uuid
+
+from . import submissions
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tool_actions (
@@ -64,24 +65,12 @@ def record(store, action, outcome):
         ).fetchone()
         if previous[0] == "completed":
             return
-        seq = db.execute(
-            "SELECT COALESCE(MAX(seq),0)+1 FROM messages WHERE session_id=?", (turn["session_id"],)
-        ).fetchone()[0]
         observation = json.dumps(
             {"tool": outcome.tool_id, "ok": outcome.ok, "result": outcome.result},
             ensure_ascii=False,
         )
-        db.execute(
-            "INSERT INTO messages(id,session_id,seq,role,content,created_at) "
-            "VALUES(?,?,?,'tool',?,?)",
-            (
-                "msg_" + uuid.uuid4().hex[:16],
-                turn["session_id"],
-                seq,
-                json.dumps(observation, ensure_ascii=False),
-                time.time(),
-            ),
-        )
+        submissions.append(db, turn["session_id"], "tool", observation,
+                           turn_id=action["turn_id"], purpose="tool_result", action_id=action["id"])
         db.execute(
             "UPDATE turns SET acted=MAX(acted,?) WHERE id=?", (int(outcome.ok), action["turn_id"])
         )

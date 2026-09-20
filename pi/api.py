@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from . import activity, tasks
+from . import activity, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -166,6 +166,18 @@ class TurnRequest(BaseModel):
     needs_tools: bool = False
     is_analysis: bool = False
     owner_requested_strong: bool = False
+    request_id: str | None = Field(default=None, min_length=16, max_length=128,
+                                  pattern=r"^[A-Za-z0-9_-]+$")
+    task_id: str | None = Field(default=None, min_length=1, max_length=128)
+    task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
+
+    @model_validator(mode="after")
+    def task_submission(self):
+        if (self.task_id is None) != (self.task_expected_revision is None):
+            raise ValueError("Task identity and revision belong together.")
+        if self.task_id is not None and self.request_id is None:
+            raise ValueError("Task-bound submissions require a retained request identity.")
+        return self
 
 
 class ResumeRequest(BaseModel):
@@ -257,7 +269,10 @@ def get_session(session_id: str):
     session = app.state.store.get_session(session_id)
     if session is None:
         raise HTTPException(404, "no such session")
+    pending = submissions.list_pending(app.state.store, session_id, limit=100)
     return {**session,
+            "pending_submissions": pending["results"],
+            "pending_submissions_truncated": pending["next_cursor"] is not None,
             "messages": app.state.store.messages(session_id),
             "turns": [{**turn, "memory": app.state.loop.memory.status(session_id, turn["id"])}
                       for turn in app.state.store.turns(session_id)],
@@ -271,20 +286,36 @@ def run_turn(session_id: str, body: TurnRequest):
             "needs_tools": body.needs_tools,
             "is_analysis": body.is_analysis,
             "owner_requested_strong": body.owner_requested_strong,
-        })
+        }, request_id=body.request_id, task_id=body.task_id,
+            task_expected_revision=body.task_expected_revision)
     except ActedWithoutReply as exc:
         # Deliberately not an error status. A tool ran, so this request did the
         # thing that actually matters, and the one detail missing is what the
         # model would have said about it. An error code would invite a retry,
         # and retrying this turn would run the action a second time.
-        return _acted_without_reply(exc)
+        result = _acted_without_reply(exc)
+        if body.request_id:
+            result["submission"] = submissions.get(app.state.store, body.request_id)
+        return result
     except TurnFailed as exc:
         # 503, not 500: the provider did not answer, which is a state the caller
         # can act on. The user's message is already stored either way.
         raise HTTPException(503, {"message": f"turn failed: {exc.reason}",
                                   "turn_id": exc.turn_id,
                                   "memory": app.state.loop.memory.status(
-                                      session_id, exc.turn_id)}) from exc
+                                      session_id, exc.turn_id),
+                                  "request_id": body.request_id}) from exc
+
+
+@app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
+def get_submission(request_id: str):
+    return submissions.get(app.state.store, request_id)
+
+
+@app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_key)])
+def list_pending_submissions(session_id: str, limit: int = Query(default=50, ge=1, le=200),
+                             cursor: str | None = Query(default=None, max_length=128)):
+    return submissions.list_pending(app.state.store, session_id, limit, cursor)
 
 
 @app.get("/turns/unreplied", dependencies=[Depends(require_key)])

@@ -336,7 +336,12 @@ def test_model_request_to_forget_is_only_conversation(conversation):
 
     with closing(Store(path)) as store:
         loop = Loop(store, Router(local_provider=Provider(), local_model="test"))
-        loop.run_turn(root, "Forget everything I said")
+        # The fixture root is parked on approval. Exercise the model boundary in
+        # a fresh conversation rather than bypassing the unresolved-turn guard.
+        chat = store.create_session()
+        store.append_message(chat, "user", SECRET)
+        loop.run_turn(chat, "Forget everything I said")
+        assert store.messages(chat)[0]["content"] == SECRET
         assert store.messages(root)[0]["content"] == SECRET
         assert store.get_session(root)["status"] == "open"
         assert not hasattr(store, "forget")

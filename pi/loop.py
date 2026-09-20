@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 
-from . import actions, memory_store
+from . import actions, memory_store, submissions, tasks
 from . import tools as tool_protocol
 from .memory import Memory
 from .openrouter import ModelUnusable
@@ -314,9 +315,8 @@ class Loop:
                 raise ActedWithoutReply(turn_id, reason) from exc
             raise TurnFailed(reason, turn_id) from exc
 
-        message = self.store.append_message(session_id, "assistant", completion.text)
-        self.store.finish_turn(
-            turn_id, "complete", acted=int(acted),
+        message = self.store.complete_turn(
+            turn_id, completion.text, acted=int(acted),
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,
@@ -340,7 +340,9 @@ class Loop:
 
     # --- the turn ---------------------------------------------------------
 
-    def run_turn(self, session_id: str, user_text: str, context: dict | None = None) -> dict:
+    def run_turn(self, session_id: str, user_text: str, context: dict | None = None, *,
+                 request_id: str | None = None, task_id: str | None = None,
+                 task_expected_revision: int | None = None) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
         The session id may change: if history has outgrown the window the turn
@@ -349,20 +351,50 @@ class Loop:
         """
         if len(user_text) > memory_store.MAX_CONTENT_CHARACTERS:
             raise TurnFailed("Send at most 16000 characters per message; split longer text.")
-        session = self.store.get_session(session_id)
-        if session is None:
-            raise TurnFailed(f"no such session: {session_id}")
-        if session["status"] != "open":
-            raise TurnFailed(f"session {session_id} is {session['status']}, not open")
+        explicit = request_id is not None
+        if not explicit:
+            session = self.store.get_session(session_id)
+            if session is None:
+                raise TurnFailed(f"no such session: {session_id}")
+            if session["status"] != "open":
+                raise TurnFailed(f"session {session_id} is {session['status']}, not open")
+        identity = request_id or "legacy_" + uuid.uuid4().hex
+        try:
+            receipt, created = submissions.reserve(self.store, identity, session_id, user_text,
+                                                   context or {}, task_id, task_expected_revision)
+        except tasks.TaskError as exc:
+            if explicit:
+                raise
+            raise TurnFailed(str(exc)) from exc
+        if not created:
+            return {"session_id": receipt["effective_session_id"] or session_id,
+                    "turn_id": receipt["turn_id"], "status": receipt["status"],
+                    "acted": receipt["acted"], "replayed": True, "submission": receipt,
+                    "message": self.store.get_message(receipt["final_message_id"])
+                    if receipt["final_message_id"] else None}
+        try:
+            history = self._history(session_id)
+            outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
+            if outgrown and task_id:
+                raise submissions.SubmissionError("task_fork_required", "This task needs its "
+                    "original conversation. Create a child task before continuing after a fork.")
+            summary = self._summarise(history) if outgrown else None
+            receipt = submissions.bind(self.store, identity, fork_summary=summary)
+        except Exception as exc:
+            submissions.fail_preparation(self.store, identity,
+                exc.detail["code"] if isinstance(exc, tasks.TaskError) else "preparation_failed")
+            if not explicit and isinstance(exc, tasks.TaskError):
+                raise TurnFailed(str(exc)) from exc
+            raise
+        actual_session = receipt["effective_session_id"]
+        result = self._run_bound(actual_session, user_text, receipt["turn_id"], context,
+                                 session_id if actual_session != session_id else None)
+        if explicit:
+            result["submission"] = submissions.get(self.store, identity)
+            result["replayed"] = False
+        return result
 
-        forked_from = None
-        outgrown = (self._history_size(self._history(session_id)) + len(user_text)
-                    > self.fork_threshold_chars)
-        if outgrown:
-            forked_from, session_id = session_id, self.fork(session_id)
-
-        self.store.append_message(session_id, "user", user_text)
-        turn_id = self.store.start_turn(session_id)
+    def _run_bound(self, session_id, user_text, turn_id, context, forked_from):
         self.memory.prepare(turn_id, user_text)
         # Held for the whole turn: if this parks on an approval, the owner needs
         # to see what they asked for next to what it produced.
@@ -386,7 +418,8 @@ class Loop:
                 call = tool_protocol.parse(completion.text, allowed)
                 if call is None:
                     break
-                self.store.append_message(session_id, "assistant", completion.text)
+                self.store.append_message(session_id, "assistant", completion.text,
+                                          turn_id=turn_id, purpose="intermediate")
 
                 ran = False
                 action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
@@ -440,7 +473,8 @@ class Loop:
                                              ensure_ascii=False)
 
                 if actions.latest(self.store, turn_id)["state"] != "completed":
-                    self.store.append_message(session_id, "tool", observation)
+                    self.store.append_message(session_id, "tool", observation, turn_id=turn_id,
+                                              purpose="tool_result", action_id=action["id"])
                 if ran:
                     # Written before the next model call, which can fail.
                     self.store.mark_acted(turn_id)
@@ -461,9 +495,8 @@ class Loop:
             self.store.finish_turn(turn_id, "failed", detail=reason, latency_ms=latency)
             raise TurnFailed(reason, turn_id=turn_id) from exc
 
-        message = self.store.append_message(session_id, "assistant", completion.text)
-        self.store.finish_turn(
-            turn_id, "complete",
+        message = self.store.complete_turn(
+            turn_id, completion.text,
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,

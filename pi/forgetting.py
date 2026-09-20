@@ -17,7 +17,7 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from . import memory_store, tasks
+from . import memory_store, submissions, tasks
 from .access import MaintenanceRequired, acquire
 from .store import FORGETTING_SCHEMA, Store
 
@@ -77,6 +77,14 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
             plan[field].extend(r[0] for r in db.execute(
                 f"SELECT id FROM {table} WHERE session_id=? ORDER BY id", (sid,),
             ))
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='turn_submissions'").fetchone():
+        identities = set()
+        for sid in sessions:
+            identities.update(row[0] for row in db.execute(
+                "SELECT request_id FROM turn_submissions WHERE requested_session_id=? "
+                "OR effective_session_id=?", (sid, sid),
+            ))
+        plan["submission_ids"] = sorted(identities)
     plan["confirmation"] = hashlib.sha256(
         json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -119,6 +127,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # The runtime lease prevents a provider response from arriving after deletion.
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])
+        submissions.redact(db, plan["session_ids"])
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='tool_actions'").fetchone():
             for session_id in plan["session_ids"]:
                 db.execute("UPDATE tool_actions SET args=NULL WHERE turn_id IN "

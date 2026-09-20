@@ -1,4 +1,5 @@
 """Bounded read projections of Pi's actual turns and content-free state events."""
+from . import submissions
 from .tasks import TaskError
 
 
@@ -22,6 +23,7 @@ def _run(db, row):
     value["task_ids"] = [item[0] for item in db.execute(
         "SELECT task_id FROM task_runs WHERE run_id=? ORDER BY task_id", (row["id"],)
     )]
+    value["message_refs"] = submissions.message_refs(db, row["id"])
     return value
 
 

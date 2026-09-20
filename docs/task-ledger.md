@@ -9,9 +9,10 @@ registry in this increment.
 
 Runs are existing Pi turns, retaining every recorded state, including approval or
 budget waits, action-in-progress, uncertain outcome and acted-without-reply. They
-are not copies of the execution history. `outputs` is currently empty: existing
-messages lack exact turn associations, so the API does not guess which message
-or artifact belongs to a run. ToolGate remains authoritative for effects,
+are not copies of the execution history. `outputs` is currently empty; new turns
+expose exact `message_refs`, while historical messages are never associated by
+guessing. Message references do not claim that an artifact was generated.
+ToolGate remains authoritative for effects,
 credentials, approvals, action identities and execution receipts.
 
 ## API
@@ -50,7 +51,8 @@ outcomes, criteria or review prose.
 
 Run fields: `id`, `session_id`, `status`, `acted`, `provider`, `model`, `started_at`,
 `ended_at`, `task_ids`, `action: {id,state,job_id} | null`, `outputs: []`,
-`source: {kind: conversation,session_id}`, `provenance: recorded`, `content_status`.
+`source: {kind: conversation,session_id}`, `provenance: recorded`, `content_status`,
+`message_refs: [{message_id,purpose,action_id,seq}]`. See [submission recovery](turn-submissions.md).
 
 Event fields: `sequence`, `id`, `kind`, `session_id`, nullable `task_id`, `run_id`,
 `action_id`, `from_status`, `to_status`, `revision`, plus `occurred_at` and
@@ -103,6 +105,6 @@ Pi's existing forgetting contract; no tool arguments or turn detail are projecte
 
 The ledger lives in `pi.db` and survives closing/reopening Pi. A consistent backup
 of that existing database includes it; no separate volume or service is added.
-Backup/restore deployment exercises and idempotent **turn submission** remain P15
-work. This metadata request identity does not make existing turn submission
-idempotent and must not be presented as doing so.
+Backup/restore deployment exercises remain P15 work. Task metadata identities are
+separate from the optional retained identities in [turn submission](turn-submissions.md).
+Clients omitting a turn request identity still cannot safely repeat a lost POST.

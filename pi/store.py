@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import actions, memory_store, tasks
+from . import actions, memory_store, submissions, tasks
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -223,6 +223,7 @@ class Store:
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)
+                db.executescript(submissions.SCHEMA)
         except BaseException:
             self.close()
             raise
@@ -299,33 +300,20 @@ class Store:
 
     # --- messages ---------------------------------------------------------
 
-    def append_message(self, session_id: str, role: str, content: Any) -> dict:
+    def append_message(self, session_id: str, role: str, content: Any, *,
+                       turn_id=None, purpose=None, action_id=None) -> dict:
         """Add one message to the end of a session. There is no other way in.
 
         No update, no delete, no reorder - not because callers are trusted but
         because the functions do not exist and the triggers would refuse them.
         """
-        if role == "user" and (not isinstance(content, str) or
-                               len(content) > memory_store.MAX_CONTENT_CHARACTERS):
-            raise ValueError("Send user text in messages of at most 16000 characters.")
-        message_id = f"msg_{uuid.uuid4().hex[:16]}"
-        now = time.time()
         with self._connect() as db:
             # Sequence allocation and the outbox trigger share the message commit.
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute(
-                "SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM messages WHERE session_id=?",
-                (session_id,),
-            ).fetchone()
-            seq = row["next"]
-            db.execute(
-                "INSERT INTO messages (id, session_id, seq, role, content, created_at)"
-                " VALUES (?,?,?,?,?,?)",
-                (message_id, session_id, seq, role, json.dumps(content, ensure_ascii=False), now),
-            )
+            message = submissions.append(db, session_id, role, content, turn_id=turn_id,
+                                         purpose=purpose, action_id=action_id)
             db.commit()
-        return {"id": message_id, "session_id": session_id, "seq": seq,
-                "role": role, "content": content, "created_at": now}
+        return message
 
     def messages(self, session_id: str) -> list[dict]:
         with self._connect() as db:
@@ -353,6 +341,11 @@ class Store:
 
     def finish_turn(self, turn_id: str, status: str, *, expected_status: str = "running",
                     **fields: Any) -> bool:
+        with self._connect() as db:
+            return self._finish_turn(db, turn_id, status, expected_status=expected_status, **fields)
+
+    @staticmethod
+    def _finish_turn(db, turn_id, status, *, expected_status="running", **fields):
         allowed = {"provider", "model", "input_tokens", "output_tokens", "cached_tokens",
                    "cost_usd", "latency_ms", "detail", "route_tier", "route_reason",
                    "approval_request_id", "approval_tool_id", "approval_args",
@@ -362,16 +355,34 @@ class Store:
             raise ValueError(f"unknown turn fields: {sorted(unknown)}")
         sets = ", ".join(f"{k}=?" for k in fields)
         clause = f", {sets}" if sets else ""
+        return db.execute(
+            f"UPDATE turns SET status=?, ended_at=?{clause} WHERE id=? AND status=?",
+            (status, time.time(), *fields.values(), turn_id, expected_status),
+        ).rowcount == 1
+
+    def complete_turn(self, turn_id, text, **fields):
+        """A final reply and terminal state are one commit, including exact message provenance."""
         with self._connect() as db:
-            return db.execute(
-                f"UPDATE turns SET status=?, ended_at=?{clause} WHERE id=? AND status=?",
-                (status, time.time(), *fields.values(), turn_id, expected_status),
-            ).rowcount == 1
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT session_id,status FROM turns WHERE id=?",
+                             (turn_id,)).fetchone()
+            if row is None or row["status"] != "running":
+                raise RuntimeError("Turn is no longer claimed by this caller")
+            message = submissions.append(db, row["session_id"], "assistant", text,
+                                         turn_id=turn_id, purpose="final")
+            if not self._finish_turn(db, turn_id, "complete", **fields):
+                raise RuntimeError("Turn is no longer claimed by this caller")
+            db.commit()
+            return message
 
     def claim_turn(self, turn_id: str, expected_status: str) -> bool:
         with self._connect() as db:
             return db.execute("UPDATE turns SET status='running',ended_at=NULL "
-                              "WHERE id=? AND status=?",
+                              "WHERE id=? AND status=? AND NOT EXISTS "
+                              "(SELECT 1 FROM turns other WHERE other.session_id=turns.session_id "
+                              "AND other.id!=turns.id AND other.status='running') AND NOT EXISTS "
+                              "(SELECT 1 FROM turn_submissions s WHERE s.requested_session_id="
+                              "turns.session_id AND s.state='preparing')",
                               (turn_id, expected_status)).rowcount == 1
 
     def acted_without_reply(self) -> list[dict]:
@@ -457,6 +468,8 @@ class Store:
         not finish, and saying nothing about it is the one answer that is wrong -
         the owner would see a request that simply vanished."""
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            preparing = submissions.recover_preparations(db)
             cursor = db.execute(
                 "UPDATE turns SET status=CASE WHEN EXISTS(SELECT 1 FROM tool_actions a "
                 "WHERE a.turn_id=turns.id "
@@ -475,7 +488,9 @@ class Store:
                 " AND session_id NOT IN (SELECT session_id FROM forgotten_sessions)",
                 (time.time(),),
             )
-            return cursor.rowcount
+            count = cursor.rowcount + preparing
+            db.commit()
+            return count
 
     def health(self) -> dict:
         try:
