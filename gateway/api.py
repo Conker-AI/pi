@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from pi.browser_contract import runtime_allowed
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
+from .operations import fingerprint, parse_object
 from .store import AuthError, AuthStore
 
 COOKIE = "__Host-conker"
@@ -31,8 +32,14 @@ class Config:
     toolgate_url: str = "http://toolgate-api:8010"
     owner_key: str = ""
     dashboard_dir: str = ""
+    idle_timeout_seconds: int = 1800
 
     def validate(self) -> None:
+        if (
+            type(self.idle_timeout_seconds) is not int
+            or not 60 <= self.idle_timeout_seconds <= 86400
+        ):
+            raise ValueError("GATEWAY_IDLE_TIMEOUT_SECONDS must be between 60 and 86400.")
         origin = urlsplit(self.origin)
         if (
             origin.scheme != "https"
@@ -75,6 +82,7 @@ class Config:
             os.environ.get("GATEWAY_TOOLGATE_URL", "http://toolgate-api:8010"),
             os.environ.get("GATEWAY_TOOLGATE_OWNER_KEY", ""),
             os.environ.get("GATEWAY_DASHBOARD_DIR", ""),
+            int(os.environ.get("GATEWAY_IDLE_TIMEOUT_SECONDS", "1800")),
         )
 
 
@@ -92,7 +100,9 @@ def create_app(
         app.state.dashboard = (
             DashboardAssets(settings.dashboard_dir) if settings.dashboard_dir else None
         )
-        app.state.auth = store or AuthStore(settings.database)
+        app.state.auth = store or AuthStore(
+            settings.database, idle_seconds=settings.idle_timeout_seconds
+        )
         with httpx.Client(
             transport=transport, timeout=660, follow_redirects=False, trust_env=False
         ) as client:
@@ -109,7 +119,8 @@ def create_app(
 
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
-        return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+        detail = {"code": exc.code, "message": str(exc)} if exc.code else str(exc)
+        return JSONResponse({"detail": detail}, status_code=exc.status)
 
     @app.middleware("http")
     async def boundary(request: Request, call_next):
@@ -213,6 +224,7 @@ def create_app(
                 "csrf_token": value["csrf"],
                 "session_id": value["id"],
                 "expires_at": value["expires"],
+                "unlock_expires_at": value["unlock_expires_at"],
                 "setup_required": not app.state.auth.configured(),
             }
         )
@@ -240,9 +252,33 @@ def create_app(
                     "csrf_token": value["csrf"],
                     "session_id": value["id"],
                     "expires_at": value["expires"],
+                    "unlock_expires_at": value["unlock_expires_at"],
                 }
             ),
             value["token"],
+        )
+
+    @app.post("/auth/verify")
+    async def verify(request: Request):
+        session(request)
+        body = await json_body(request)
+        operation = body.get("operation")
+        if (
+            set(body) != {"password", "operation"}
+            or not isinstance(body["password"], str)
+            or not isinstance(operation, dict)
+            or set(operation) != {"method", "path", "body"}
+        ):
+            raise AuthError("Send a password and the complete operation to verify.", 422)
+        binding = fingerprint(operation["method"], operation["path"], operation["body"])
+        from starlette.concurrency import run_in_threadpool
+
+        return await run_in_threadpool(
+            app.state.auth.verify,
+            request.cookies.get(COOKIE, ""),
+            body["password"],
+            request.client.host if request.client else "unknown",
+            binding,
         )
 
     @app.post("/auth/logout")
@@ -321,6 +357,16 @@ def create_app(
         # Upstream headers (especially cookies) never cross the browser boundary.
         return JSONResponse(data, status_code=response.status_code)
 
+    def admit_write(request: Request, body: dict) -> None:
+        if request.scope["query_string"]:
+            raise AuthError("Write operations must not include query parameters.", 422)
+        binding = fingerprint(request.method, request.url.path, body)
+        app.state.auth.consume(
+            request.cookies.get(COOKIE, ""),
+            request.headers.get("x-conker-verification", ""),
+            binding,
+        )
+
     @app.get("/api/pi/{path:path}", operation_id="runtime_read")
     @app.post("/api/pi/{path:path}", operation_id="runtime_write")
     async def runtime(path: str, request: Request):
@@ -329,6 +375,8 @@ def create_app(
         if not runtime_allowed(request.method, target):
             raise AuthError("This operation is not available through the browser gateway.", 403)
         body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
 
         return await run_in_threadpool(
@@ -367,6 +415,7 @@ def create_app(
             raise AuthError("Send a decision status and optional note.", 422)
         from starlette.concurrency import run_in_threadpool
 
+        admit_write(request, body)
         return await run_in_threadpool(
             forward,
             "POST",
@@ -394,15 +443,7 @@ async def json_body(request: Request) -> dict:
         raw.extend(chunk)
         if len(raw) > 65536:
             raise AuthError("Request is too large; keep it below 64 KiB.", 413)
-    import json
-
-    try:
-        value = json.loads(raw)
-    except (ValueError, UnicodeError):
-        raise AuthError("Send a valid JSON object.", 422) from None
-    if not isinstance(value, dict):
-        raise AuthError("Send a JSON object.", 422)
-    return value
+    return parse_object(raw)
 
 
 app = create_app()

@@ -47,6 +47,19 @@ def sign_in(client):
     return {"Origin": ORIGIN, "X-CSRF-Token": result.json()["csrf_token"]}
 
 
+def verified_headers(client, headers, path, body):
+    result = client.post(
+        "/auth/verify",
+        headers=headers,
+        json={
+            "password": PASSWORD,
+            "operation": {"method": "POST", "path": path, "body": body},
+        },
+    )
+    assert result.status_code == 200, result.text
+    return {**headers, "X-Conker-Verification": result.json()["verification_token"]}
+
+
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):
     client, _, seen = gateway
     cookie = client.get("/auth/session").headers["set-cookie"]
@@ -88,7 +101,11 @@ def test_proxy_keeps_credentials_separate_and_preserves_memory_status(gateway):
     result = client.post(
         "/api/pi/sessions",
         json={"title": "school"},
-        headers={**headers, "X-Pi-Key": "injected", "X-ToolGate-Owner-Key": "injected"},
+        headers={
+            **verified_headers(client, headers, "/api/pi/sessions", {"title": "school"}),
+            "X-Pi-Key": "injected",
+            "X-ToolGate-Owner-Key": "injected",
+        },
     )
     assert result.json() == {"memory": {"ingestion": "pending"}}
     assert "set-cookie" not in result.headers and "x-pi-key" not in result.headers
@@ -98,7 +115,11 @@ def test_proxy_keeps_credentials_separate_and_preserves_memory_status(gateway):
     client.get("/api/pi/sessions")
     assert "Cookie" not in seen[-1].headers
     result = client.post(
-        "/api/owner/requests/req_1/decision", json={"status": "approved"}, headers=headers
+        "/api/owner/requests/req_1/decision",
+        json={"status": "approved"},
+        headers=verified_headers(
+            client, headers, "/api/owner/requests/req_1/decision", {"status": "approved"}
+        ),
     )
     assert result.status_code == 200
     assert str(seen[-1].url) == "http://toolgate-api:8010/v2/owner/requests/req_1/decision"
@@ -182,7 +203,11 @@ def test_upstream_failure_is_explicit_and_never_retried(tmp_path, failure):
     ) as client:
         headers = sign_in(client)
         response = client.post(
-            "/api/owner/requests/r/decision", json={"status": "approved"}, headers=headers
+            "/api/owner/requests/r/decision",
+            json={"status": "approved"},
+            headers=verified_headers(
+                client, headers, "/api/owner/requests/r/decision", {"status": "approved"}
+            ),
         )
         assert response.status_code in {502, 503}
         assert len(seen) == (0 if failure == "missing_owner" else 1)
@@ -228,16 +253,33 @@ def test_task_ledger_routes_use_runtime_authority_and_keep_csrf_boundary(gateway
     client, _, seen = gateway
     assert client.get("/api/pi/tasks").status_code == 401
     headers = sign_in(client)
-    for path in ("/tasks", "/tasks/task_one/update", "/tasks/task_one/transition",
-                 "/tasks/task_one/archive"):
+    for path in (
+        "/tasks",
+        "/tasks/task_one/update",
+        "/tasks/task_one/transition",
+        "/tasks/task_one/archive",
+    ):
         before = len(seen)
         assert client.post("/api/pi" + path, json={}).status_code == 403
         assert len(seen) == before
-        assert client.post("/api/pi" + path, json={}, headers=headers).status_code == 200
+        assert (
+            client.post(
+                "/api/pi" + path,
+                json={},
+                headers=verified_headers(client, headers, "/api/pi" + path, {}),
+            ).status_code
+            == 200
+        )
         assert seen[-1].headers["X-Pi-Gateway-Key"] == RUNTIME
         assert "X-ToolGate-Owner-Key" not in seen[-1].headers
-    for path in ("/tasks", "/tasks/task_one", "/tasks/requests/request_identity_0001",
-                 "/runs", "/runs/turn_one", "/events"):
+    for path in (
+        "/tasks",
+        "/tasks/task_one",
+        "/tasks/requests/request_identity_0001",
+        "/runs",
+        "/runs/turn_one",
+        "/events",
+    ):
         assert client.get("/api/pi" + path).status_code == 200
     before = len(seen)
     for path in ("/tasks/task_one/run", "/events", "/runs/turn_one/cancel"):

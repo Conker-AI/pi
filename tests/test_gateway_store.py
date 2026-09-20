@@ -47,12 +47,13 @@ def test_idle_and_absolute_expiry(auth):
     now[0] += auth.idle
     with pytest.raises(AuthError):
         auth.session(session["token"])
+    auth.absolute = auth.idle * 2
     session = login(auth)
     for _ in range(100):
         now[0] += auth.idle - 1
         if now[0] >= session["expires"]:
             break
-        auth.session(session["token"])
+        auth.verify(session["token"], PASSWORD, "local", "binding")
     with pytest.raises(AuthError):
         auth.session(session["token"])
 

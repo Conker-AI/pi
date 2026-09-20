@@ -11,13 +11,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 API = "tests/test_gateway_api.py::"
 STORE = "tests/test_gateway_store.py::"
+VERIFY = "tests/test_gateway_verification.py::"
 CASES = [
+    (
+        "proof-replay-admitted",
+        "gateway/store.py",
+        'db.execute("DELETE FROM verification_proofs WHERE token_hash=?", (digest(proof),))',
+        'db.execute("SELECT 1")',
+        VERIFY + "test_concurrent_consumption_admits_exactly_once_and_stores_only_hashes",
+    ),
+    (
+        "proof-body-binding-ignored",
+        "gateway/store.py",
+        'not hmac.compare_digest(found["fingerprint"], fingerprint)',
+        "False",
+        VERIFY + "test_canonical_binding_covers_full_body_identity_revision_and_route",
+    ),
     (
         "tls-identity-changes-on-restart",
         "gateway/__main__.py",
         "        return certificate, key_path\n    key = rsa.generate_private_key",
-        ("        certificate.unlink()\n        key_path.unlink()\n"
-         "    key = rsa.generate_private_key"),
+        (
+            "        certificate.unlink()\n        key_path.unlink()\n"
+            "    key = rsa.generate_private_key"
+        ),
         (
             "tests/test_gateway_tls.py::"
             "test_tls_identity_survives_restart_and_only_explicit_renewal_replaces_it"
@@ -61,7 +78,12 @@ CASES = [
     (
         "expired-session-survives",
         "gateway/store.py",
-        'if not row or row["expires"] <= now or row["touched"] <= now - self.idle:',
+        (
+            'if (\n            not row\n            or row["expires"] <= now\n'
+            '            or (\n                row["authenticated"]\n'
+            '                and (row["verified_at"] is None or '
+            'row["verified_at"] + self.idle <= now)\n            )\n        ):'
+        ),
         "if not row:",
         STORE + "test_idle_and_absolute_expiry",
     ),
@@ -83,12 +105,13 @@ CASES = [
         "late-login-undoes-reset",
         "gateway/store.py",
         (
-            "if (\n                not current\n"
-            '                or current[0] != owner["generation"]\n'
-            '                or not row\n                or row["expires"] <= self.clock()\n'
-            '                or row["touched"] <= self.clock() - self.idle\n            ):'
+            "            self._session(db, token, authenticated=False)\n"
+            "            # A reset or logout during scrypt must not be undone by a late login.\n"
+            "            if not current or current[0] != generation:\n"
+            '                raise AuthError("Credentials changed during login. '
+            'Start sign-in again.")'
         ),
-        "if False:",
+        "            pass",
         STORE + "test_password_reset_during_login_cannot_issue_a_stale_session",
     ),
     (
@@ -155,7 +178,12 @@ def main() -> int:
                 ROOT / directory, target / directory, ignore=shutil.ignore_patterns("__pycache__")
             )
         (target / "tests").mkdir()
-        for file in ("test_gateway_api.py", "test_gateway_store.py", "test_gateway_tls.py"):
+        for file in (
+            "test_gateway_api.py",
+            "test_gateway_store.py",
+            "test_gateway_tls.py",
+            "test_gateway_verification.py",
+        ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:
             file = target / filename

@@ -93,8 +93,24 @@ def test_real_https_login_conversation_logout_and_host_recovery(tmp_path, monkey
                 result = client.post("/auth/login", json={"password": password}, headers=headers)
                 assert result.status_code == 200
                 headers["X-CSRF-Token"] = result.json()["csrf_token"]
+                operation = {
+                    "method": "POST",
+                    "path": "/api/pi/sessions",
+                    "body": {"title": "Before school / До школы"},
+                }
+                verified = client.post(
+                    "/auth/verify",
+                    json={"password": password, "operation": operation},
+                    headers=headers,
+                )
+                assert verified.status_code == 200
                 saved = client.post(
-                    "/api/pi/sessions", json={"title": "Before school / До школы"}, headers=headers
+                    operation["path"],
+                    json=operation["body"],
+                    headers={
+                        **headers,
+                        "X-Conker-Verification": verified.json()["verification_token"],
+                    },
                 )
                 assert saved.status_code == 200, saved.text
                 assert (

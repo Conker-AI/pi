@@ -17,9 +17,10 @@ HASH_SLOTS = threading.BoundedSemaphore(1)
 
 
 class AuthError(Exception):
-    def __init__(self, message: str, status: int = 401):
+    def __init__(self, message: str, status: int = 401, *, code: str | None = None):
         super().__init__(message)
         self.status = status
+        self.code = code
 
 
 def digest(value: str) -> str:
@@ -53,7 +54,10 @@ class AuthStore:
         self.idle = idle_seconds
         self.absolute = absolute_seconds
         with self.transaction() as db:
+            # executescript commits an existing transaction; explicitly reacquire the
+            # write lock so schema creation and migration remain one atomic operation.
             db.executescript("""
+                BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS owner (
                     id INTEGER PRIMARY KEY CHECK(id=1), salt TEXT NOT NULL,
                     verifier TEXT NOT NULL, generation INTEGER NOT NULL);
@@ -64,7 +68,18 @@ class AuthStore:
                     touched REAL NOT NULL, expires REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS login_attempts (at REAL NOT NULL, source TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS attempts_at ON login_attempts(at);
+                CREATE TABLE IF NOT EXISTS verification_proofs (
+                    token_hash TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                    generation INTEGER NOT NULL, fingerprint TEXT NOT NULL,
+                    expires REAL NOT NULL);
             """)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
+            if "verified_at" not in columns:
+                # Existing sessions have no known password-verification time: fail closed.
+                db.execute("ALTER TABLE sessions ADD COLUMN verified_at REAL")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(login_attempts)")}
+            if "attempt_id" not in columns:
+                db.execute("ALTER TABLE login_attempts ADD COLUMN attempt_id TEXT")
         if os.name == "posix":
             self.path.chmod(0o600)
 
@@ -100,6 +115,7 @@ class AuthStore:
                 "INSERT OR REPLACE INTO owner VALUES(1,?,?,?)", (salt.hex(), verifier, generation)
             )
             db.execute("DELETE FROM sessions")
+            db.execute("DELETE FROM verification_proofs")
             db.execute("DELETE FROM login_attempts")
 
     def configured(self) -> bool:
@@ -108,7 +124,16 @@ class AuthStore:
 
     def _prune(self, db: sqlite3.Connection) -> None:
         now = self.clock()
-        db.execute("DELETE FROM sessions WHERE expires<=? OR touched<=?", (now, now - self.idle))
+        db.execute(
+            "DELETE FROM sessions WHERE expires<=? OR (authenticated=1 AND "
+            "(verified_at IS NULL OR verified_at<=?))",
+            (now, now - self.idle),
+        )
+        db.execute(
+            "DELETE FROM verification_proofs WHERE expires<=? OR session_id NOT IN "
+            "(SELECT id FROM sessions)",
+            (now,),
+        )
         db.execute("DELETE FROM login_attempts WHERE at<=?", (now - 900,))
 
     def _new(self, db: sqlite3.Connection, authenticated: bool, generation: int) -> dict:
@@ -117,8 +142,18 @@ class AuthStore:
         identity = secrets.token_urlsafe(18)
         expires = now + (self.absolute if authenticated else 600)
         db.execute(
-            "INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?)",
-            (digest(token), identity, csrf, int(authenticated), generation, now, now, expires),
+            "INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?,?)",
+            (
+                digest(token),
+                identity,
+                csrf,
+                int(authenticated),
+                generation,
+                now,
+                now,
+                expires,
+                now if authenticated else None,
+            ),
         )
         return {
             "token": token,
@@ -126,6 +161,7 @@ class AuthStore:
             "csrf": csrf,
             "authenticated": authenticated,
             "expires": expires,
+            "unlock_expires_at": min(expires, now + self.idle) if authenticated else None,
         }
 
     def anonymous(self) -> dict:
@@ -138,34 +174,53 @@ class AuthStore:
 
     def session(self, token: str, *, authenticated: bool = True) -> dict:
         with self.transaction() as db:
-            row = db.execute(
-                "SELECT * FROM sessions WHERE token_hash=?", (digest(token),)
-            ).fetchone()
-            now = self.clock()
-            if not row or row["expires"] <= now or row["touched"] <= now - self.idle:
-                raise AuthError("Session expired or revoked. Sign in again.")
-            if authenticated and not row["authenticated"]:
-                raise AuthError("Sign in to continue.")
-            owner = db.execute("SELECT generation FROM owner WHERE id=1").fetchone()
-            if row["authenticated"] and (not owner or owner[0] != row["generation"]):
-                raise AuthError("Password changed. Sign in again.")
-            db.execute("UPDATE sessions SET touched=? WHERE token_hash=?", (now, digest(token)))
-            return dict(row)
+            row = self._session(db, token, authenticated=authenticated)
+            db.execute(
+                "UPDATE sessions SET touched=? WHERE token_hash=?", (self.clock(), digest(token))
+            )
+            return row
 
-    def login(self, token: str, password: str, source: str) -> dict:
-        self.session(token, authenticated=False)
+    def _session(self, db: sqlite3.Connection, token: str, *, authenticated: bool = True) -> dict:
+        row = db.execute("SELECT * FROM sessions WHERE token_hash=?", (digest(token),)).fetchone()
+        now = self.clock()
+        if (
+            not row
+            or row["expires"] <= now
+            or (
+                row["authenticated"]
+                and (row["verified_at"] is None or row["verified_at"] + self.idle <= now)
+            )
+        ):
+            raise AuthError("Session expired or revoked. Sign in again.")
+        if authenticated and not row["authenticated"]:
+            raise AuthError("Sign in to continue.")
+        owner = db.execute("SELECT generation FROM owner WHERE id=1").fetchone()
+        if row["authenticated"] and (not owner or owner[0] != row["generation"]):
+            raise AuthError("Password changed. Sign in again.")
+        value = dict(row)
+        value["unlock_expires_at"] = (
+            min(row["expires"], row["verified_at"] + self.idle) if row["authenticated"] else None
+        )
+        return value
+
+    def _check_password(self, token: str, password: str, source: str, *, authenticated: bool):
+        self.session(token, authenticated=authenticated)
+        attempt_id = secrets.token_urlsafe(24)
         with self.transaction() as db:
             self._prune(db)
+            self._session(db, token, authenticated=authenticated)
             attempts = db.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
             local = db.execute(
                 "SELECT count(*) FROM login_attempts WHERE source=? AND at>?",
                 (digest(source), self.clock() - 300),
             ).fetchone()[0]
             if attempts >= 30 or local >= 5:
-                raise AuthError("Too many login attempts. Wait fifteen minutes and retry.", 429)
-            db.execute("INSERT INTO login_attempts VALUES(?,?)", (self.clock(), digest(source)))
+                raise AuthError("Too many password attempts. Wait fifteen minutes and retry.", 429)
+            db.execute(
+                "INSERT INTO login_attempts(at,source,attempt_id) VALUES(?,?,?)",
+                (self.clock(), digest(source), attempt_id),
+            )
             owner = db.execute("SELECT * FROM owner WHERE id=1").fetchone()
-        # No HTTP setup race: only the host command can claim this installation.
         if not owner:
             raise AuthError("No password set. Run conker auth setup on the host.", 409)
         if len(password) > 1024 or not hmac.compare_digest(
@@ -174,22 +229,68 @@ class AuthStore:
             raise AuthError(
                 "Password not accepted. Retry or use conker auth reset-password on the host."
             )
+        return owner["generation"], attempt_id
+
+    def login(self, token: str, password: str, source: str) -> dict:
+        generation, attempt_id = self._check_password(token, password, source, authenticated=False)
         with self.transaction() as db:
             current = db.execute("SELECT generation FROM owner WHERE id=1").fetchone()
-            row = db.execute(
-                "SELECT * FROM sessions WHERE token_hash=?", (digest(token),)
-            ).fetchone()
+            self._session(db, token, authenticated=False)
             # A reset or logout during scrypt must not be undone by a late login.
-            if (
-                not current
-                or current[0] != owner["generation"]
-                or not row
-                or row["expires"] <= self.clock()
-                or row["touched"] <= self.clock() - self.idle
-            ):
+            if not current or current[0] != generation:
                 raise AuthError("Credentials changed during login. Start sign-in again.")
             db.execute("DELETE FROM sessions WHERE token_hash=?", (digest(token),))
-            return self._new(db, True, owner["generation"])
+            db.execute("DELETE FROM login_attempts WHERE attempt_id=?", (attempt_id,))
+            return self._new(db, True, generation)
+
+    def verify(self, token: str, password: str, source: str, fingerprint: str) -> dict:
+        generation, attempt_id = self._check_password(token, password, source, authenticated=True)
+        with self.transaction() as db:
+            # Revalidate after scrypt; a lock/reset/expiry during hashing cannot be undone.
+            row = self._session(db, token)
+            if row["generation"] != generation:
+                raise AuthError("Credentials changed during verification. Sign in again.")
+            now = self.clock()
+            deadline = min(row["expires"], now + self.idle)
+            proof, expires = secrets.token_urlsafe(32), min(now + 120, deadline)
+            db.execute(
+                "UPDATE sessions SET verified_at=?,touched=? WHERE id=?", (now, now, row["id"])
+            )
+            db.execute("DELETE FROM login_attempts WHERE attempt_id=?", (attempt_id,))
+            db.execute(
+                "INSERT INTO verification_proofs VALUES(?,?,?,?,?)",
+                (digest(proof), row["id"], generation, fingerprint, expires),
+            )
+            return {
+                "verification_token": proof,
+                "verification_expires_at": expires,
+                "unlock_expires_at": deadline,
+            }
+
+    def consume(self, token: str, proof: str, fingerprint: str) -> None:
+        with self.transaction() as db:
+            row = self._session(db, token)
+            found = (
+                db.execute(
+                    "SELECT * FROM verification_proofs WHERE token_hash=?", (digest(proof),)
+                ).fetchone()
+                if len(proof) <= 128
+                else None
+            )
+            if (
+                not found
+                or found["session_id"] != row["id"]
+                or found["generation"] != row["generation"]
+                or found["expires"] <= self.clock()
+                or not hmac.compare_digest(found["fingerprint"], fingerprint)
+            ):
+                raise AuthError(
+                    "Verify your password for this exact operation before submitting.",
+                    428,
+                    code="verification_required",
+                )
+            # Commit consumption before dispatch. Never restore authority on an uncertain response.
+            db.execute("DELETE FROM verification_proofs WHERE token_hash=?", (digest(proof),))
 
     def revoke(self, session_id: str | None = None) -> None:
         with self.transaction() as db:
@@ -197,6 +298,9 @@ class AuthStore:
                 db.execute("DELETE FROM sessions")
             else:
                 db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
+            db.execute(
+                "DELETE FROM verification_proofs WHERE session_id NOT IN (SELECT id FROM sessions)"
+            )
 
     def sessions(self) -> list[dict]:
         with self.transaction() as db:
