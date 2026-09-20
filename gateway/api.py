@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from pi.browser_contract import runtime_allowed
 
+from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .store import AuthError, AuthStore
 
 COOKIE = "__Host-conker"
@@ -29,6 +30,7 @@ class Config:
     pi_key: str
     toolgate_url: str = "http://toolgate-api:8010"
     owner_key: str = ""
+    dashboard_dir: str = ""
 
     def validate(self) -> None:
         origin = urlsplit(self.origin)
@@ -72,6 +74,7 @@ class Config:
             os.environ.get("PI_GATEWAY_KEY", ""),
             os.environ.get("GATEWAY_TOOLGATE_URL", "http://toolgate-api:8010"),
             os.environ.get("GATEWAY_TOOLGATE_OWNER_KEY", ""),
+            os.environ.get("GATEWAY_DASHBOARD_DIR", ""),
         )
 
 
@@ -86,6 +89,9 @@ def create_app(
         settings = config or Config.environment()
         settings.validate()
         app.state.config = settings
+        app.state.dashboard = (
+            DashboardAssets(settings.dashboard_dir) if settings.dashboard_dir else None
+        )
         app.state.auth = store or AuthStore(settings.database)
         with httpx.Client(
             transport=transport, timeout=660, follow_redirects=False, trust_env=False
@@ -122,7 +128,7 @@ def create_app(
                 "X-Content-Type-Options": "nosniff",
                 "Referrer-Policy": "same-origin",
                 "Content-Security-Policy": (
-                    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+                    UI_CSP if getattr(request.state, "dashboard_response", False) else API_CSP
                 ),
             }
         )
@@ -370,6 +376,12 @@ def create_app(
             body,
             b"",
         )
+
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    def dashboard(path: str, request: Request):
+        if app.state.dashboard is None:
+            return JSONResponse({"detail": "Not found."}, status_code=404)
+        return app.state.dashboard.response(path, request)
 
     return app
 

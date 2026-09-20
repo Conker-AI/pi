@@ -1,7 +1,8 @@
 # Browser authentication (B4)
 
 Backend implemented on `feat/browser-auth`; release and ToolGate integration gates
-are listed below. No dashboard screens are included.
+are listed below. Dashboard screens remain a separate product build; the gateway
+can optionally serve that build at its existing HTTPS origin.
 
 The gateway is a separate process and data volume, shipped in the Pi image.
 It owns a single owner's password and server-side sessions. Pi receives only a
@@ -83,6 +84,55 @@ echo and explain what the password protects. There is no network setup or reset
 endpoint, recovery email, or claim-by-first-visitor behavior. `revoke-all` can be
 used without changing the password. In companion these are `./conker auth ...`.
 
+## Optional same-origin dashboard assets
+
+Set `GATEWAY_DASHBOARD_DIR` to an absolute directory containing a trusted,
+prebuilt dashboard's `index.html` and assets. With this variable unset the gateway
+remains API-only. No frontend source, build tooling or owner configuration is
+copied into Pi. The deployment owns building and supplying the directory, for
+example as an immutable read-only volume mounted at `/dashboard/dist`. The
+existing Pi image and Dockerfile need no dashboard-specific build dependency.
+
+The gateway snapshots supported public build files at startup. Restart it after
+replacing a build; modifying files underneath a running process does not change
+the served publication. Startup rejects a missing index, relative directory,
+symlinks or path escapes, more than 4,096 directory entries, assets over 16 MiB,
+or more than 128 MiB of supported asset bytes. Only `index.html`, JavaScript,
+CSS, local fonts, images, bounded media, plain-text receipts and web manifests
+are served. Other HTML files, JSON configuration, source maps, hidden files,
+databases and arbitrary file extensions are not published. Keep credentials,
+owner data, uploads and generated applications out of this trusted build directory.
+
+The public shell and assets do not create a login session or contain injected
+owner data. API authorization remains mandatory. Only GET/HEAD extensionless
+navigation accepting `text/html` receives the SPA shell. Missing assets and
+unknown `/auth`, `/api` or `/health` paths never fall back to HTML. A path named
+like an asset, including a nonexistent `.js` file, returns 404. Traversal,
+encoded traversal and Windows path syntax cannot select host files: request
+handling selects vetted bytes from memory and never opens a supplied path.
+
+API/error responses retain `default-src 'none'`. Dashboard responses allow only
+same-origin scripts and connections; no inline/evaluated scripts, third-party
+scripts or frames are allowed. Inline styles support semantic theme variables,
+positioned controls and trusted renderers. Fonts stay local. Images allow local,
+`data:` and `blob:` sources for owner-supplied previews, and media allows local
+and `blob:` sources for explicit local playback. These source permissions do not
+enable uploads, generated applications, model calls or any service authority.
+The frontend build must avoid external font/analytics loading and be tested under
+this CSP. `Cache-Control: no-store`, `nosniff`, the exact HTTPS host check, cookie
+flags, CSRF and Origin checks remain unchanged.
+
+The companion build inspected on 2026-09-20 fits these file limits and packages
+its entry scripts, styles and renderer fonts locally. Its theme font loader still
+requests Google Fonts; this CSP blocks that request and leaves fallback fonts.
+Disable that external loader or package the required theme fonts locally before
+claiming a CSP-clean frontend release. Do not expand the gateway policy to admit
+third-party font services.
+
+This is an asset-hosting prerequisite only: supplying a dashboard build does not
+connect its fixture adapter to live services, enable unsupported CRUD, implement
+idle-screen locking or add recent-authentication/step-up enforcement.
+
 The gateway creates a local TLS identity once, in the auth volume. Export its public
 certificate with `certificate` and trust that certificate on the client before
 login; do not disable certificate verification. It is valid for one year.
@@ -95,7 +145,10 @@ rerun the host renewal command. This does not reset the password or recover data
 
 Run `python -m pytest tests/test_gateway_*.py -q` and
 `python scripts/auth_mutation_drill.py`. On shells without glob expansion, name
-the four gateway test files explicitly. The live test starts real HTTPS and Pi
+the gateway test files explicitly. `tests/test_gateway_dashboard.py` uses packaged
+stub assets and an in-process transport to check publication, CSP, path rejection,
+and unchanged authentication boundaries without starting a network listener.
+The live test starts real HTTPS and Pi
 processes, saves a conversation, rejects a logged-out cookie, and verifies host
 password recovery. Only terminal input is supplied by a test harness.
 
