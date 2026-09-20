@@ -13,12 +13,20 @@ RUNTIME_ROUTES = {
         r"/models",
         r"/messages/[A-Za-z0-9_-]+",
         r"/memory",
+        r"/tasks",
+        r"/tasks/[A-Za-z0-9_-]+",
+        r"/tasks/requests/[A-Za-z0-9_-]+",
+        r"/runs",
+        r"/runs/[A-Za-z0-9_-]+",
+        r"/events",
     ),
     "POST": (
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+/turns",
         r"/sessions/[A-Za-z0-9_-]+/fork",
         r"/turns/[A-Za-z0-9_-]+/resume",
+        r"/tasks",
+        r"/tasks/[A-Za-z0-9_-]+/(update|transition|archive)",
     ),
 }
 

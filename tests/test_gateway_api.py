@@ -222,3 +222,24 @@ def test_health_is_honest_when_dependencies_are_unavailable(gateway):
     assert health.json()["status"] == "degraded"
     assert "runtime" in health.json()["degraded"]
     assert "csrf" not in health.text and OWNER not in health.text
+
+
+def test_task_ledger_routes_use_runtime_authority_and_keep_csrf_boundary(gateway):
+    client, _, seen = gateway
+    assert client.get("/api/pi/tasks").status_code == 401
+    headers = sign_in(client)
+    for path in ("/tasks", "/tasks/task_one/update", "/tasks/task_one/transition",
+                 "/tasks/task_one/archive"):
+        before = len(seen)
+        assert client.post("/api/pi" + path, json={}).status_code == 403
+        assert len(seen) == before
+        assert client.post("/api/pi" + path, json={}, headers=headers).status_code == 200
+        assert seen[-1].headers["X-Pi-Gateway-Key"] == RUNTIME
+        assert "X-ToolGate-Owner-Key" not in seen[-1].headers
+    for path in ("/tasks", "/tasks/task_one", "/tasks/requests/request_identity_0001",
+                 "/runs", "/runs/turn_one", "/events"):
+        assert client.get("/api/pi" + path).status_code == 200
+    before = len(seen)
+    for path in ("/tasks/task_one/run", "/events", "/runs/turn_one/cancel"):
+        assert client.post("/api/pi" + path, json={}, headers=headers).status_code == 403
+    assert len(seen) == before

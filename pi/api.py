@@ -15,9 +15,11 @@ import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from . import activity, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -129,6 +131,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Pi", version=SERVICE_VERSION, lifespan=lifespan)
+
+
+@app.exception_handler(tasks.TaskError)
+async def task_error(request: Request, exc: tasks.TaskError):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
 def require_key(request: Request, x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
@@ -379,3 +386,62 @@ def get_message(message_id: str):
 def memory_status():
     """Delivery progress is server state; a model cannot hide this notice."""
     return app.state.loop.memory.status()
+
+
+@app.get("/tasks", dependencies=[Depends(require_key)])
+def list_tasks(limit: int = Query(default=50, ge=1, le=200),
+               cursor: str | None = Query(default=None, max_length=128),
+               session_id: str | None = Query(default=None, max_length=128)):
+    return tasks.list_tasks(app.state.store, limit, cursor, session_id)
+
+
+@app.post("/tasks", dependencies=[Depends(require_key)])
+def create_task(body: tasks.CreateTask):
+    return tasks.create(app.state.store, body)
+
+
+@app.get("/tasks/requests/{request_id}", dependencies=[Depends(require_key)])
+def task_by_request(request_id: str):
+    return tasks.by_request(app.state.store, request_id)
+
+
+@app.get("/tasks/{task_id}", dependencies=[Depends(require_key)])
+def get_task(task_id: str):
+    return tasks.get(app.state.store, task_id)
+
+
+@app.post("/tasks/{task_id}/update", dependencies=[Depends(require_key)])
+def update_task(task_id: str, body: tasks.UpdateTask):
+    return tasks.update(app.state.store, task_id, body)
+
+
+@app.post("/tasks/{task_id}/transition", dependencies=[Depends(require_key)])
+def transition_task(task_id: str, body: tasks.TransitionTask):
+    return tasks.transition(app.state.store, task_id, body)
+
+
+@app.post("/tasks/{task_id}/archive", dependencies=[Depends(require_key)])
+def archive_task(task_id: str, body: tasks.ArchiveTask):
+    return tasks.archive(app.state.store, task_id, body)
+
+
+@app.get("/runs", dependencies=[Depends(require_key)])
+def list_runs(limit: int = Query(default=50, ge=1, le=200),
+              cursor: str | None = Query(default=None, max_length=128),
+              session_id: str | None = Query(default=None, max_length=128),
+              task_id: str | None = Query(default=None, max_length=128)):
+    return activity.list_runs(app.state.store, limit, cursor, session_id, task_id)
+
+
+@app.get("/runs/{run_id}", dependencies=[Depends(require_key)])
+def get_run(run_id: str):
+    return activity.get_run(app.state.store, run_id)
+
+
+@app.get("/events", dependencies=[Depends(require_key)])
+def list_events(limit: int = Query(default=50, ge=1, le=200),
+                cursor: str | None = Query(default=None, max_length=128),
+                session_id: str | None = Query(default=None, max_length=128),
+                task_id: str | None = Query(default=None, max_length=128),
+                run_id: str | None = Query(default=None, max_length=128)):
+    return activity.list_events(app.state.store, limit, cursor, session_id, task_id, run_id)

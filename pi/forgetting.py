@@ -17,7 +17,7 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from . import memory_store
+from . import memory_store, tasks
 from .access import MaintenanceRequired, acquire
 from .store import FORGETTING_SCHEMA, Store
 
@@ -118,6 +118,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # Transactional DDL keeps the exception invisible to every other connection.
         # The runtime lease prevents a provider response from arriving after deletion.
         memory_store.redact(db, plan["session_ids"])
+        tasks.redact(db, plan["session_ids"])
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='tool_actions'").fetchone():
             for session_id in plan["session_ids"]:
                 db.execute("UPDATE tool_actions SET args=NULL WHERE turn_id IN "

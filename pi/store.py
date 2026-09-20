@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import actions, memory_store
+from . import actions, memory_store, tasks
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -222,6 +222,7 @@ class Store:
                 db.executescript(memory_store.SCHEMA)
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
+                db.executescript(tasks.SCHEMA)
         except BaseException:
             self.close()
             raise
