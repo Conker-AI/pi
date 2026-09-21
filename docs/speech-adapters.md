@@ -46,11 +46,13 @@ generated = client.synthesize("The text the owner asked to hear.")
 ```
 
 `transcribe` sends multipart `file`, configured `model`, `language=en`,
-`response_format=verbose_json`, and `timestamp_granularities[]=segment` to
+`response_format=verbose_json`, and repeated `timestamp_granularities[]` values
+`segment` and `word` to
 `{url}/audio/transcriptions`. It returns:
 
 ```text
 {text: str, segments: [{start: seconds, end: seconds, text: str}] | None,
+ words: [{start: seconds, end: seconds, word: str}] | None,
  duration_seconds: float, language: str | None}
 ```
 
@@ -59,6 +61,13 @@ reported field; requesting English does not establish independent language
 detection. Silence can yield an empty transcript. Missing segments remain `None`;
 the client does not estimate timing or manufacture word alignments. Returned segment
 times must be finite, ordered without overlap, and within measured audio duration.
+The same checks apply to word timestamps (at most 4000 entries and 16000 total
+characters). Missing words remain `None`. These are provider estimates, not a
+guarantee of exact alignment. Call responses carry them transiently, subject to
+the same interruption guard as segment captions; retries do not regenerate them.
+The [Speaches transcription router](https://github.com/speaches-ai/speaches/blob/master/src/speaches/routers/stt.py)
+accepts repeated timestamp granularities for verbose JSON. A configured model
+must support this contract. These input timestamps do not align synthesized TTS.
 
 `synthesize` sends configured `model`, `voice`, `input` and `response_format=wav` to
 `{url}/audio/speech`. It returns `{audio: bytes, mime: "audio/wav", duration_seconds}`.
@@ -72,8 +81,8 @@ Provider response bodies, URL credentials and underlying transport error strings
 never copied into it. `capabilities()` is read-only and does not probe a server:
 STT/TTS statuses are `unconfigured`, `configured` (not yet verified), `available`
 (latest operation succeeded), or `unavailable` (latest operation failed). It is not
-a continuously refreshed health check. Emotion controls, word timestamps and
-streaming are explicitly unsupported by this adapter.
+a continuously refreshed health check. Input word timestamps are available only
+when returned. Emotion controls, TTS word alignment and streaming remain unsupported.
 
 ## Character voice design
 

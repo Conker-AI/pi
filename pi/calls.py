@@ -679,8 +679,13 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             transcription = {
                 "text": text,
                 "segments": transcript.get("segments"),
+                "words": transcript.get("words"),
                 "durationSeconds": transcript.get("duration_seconds"),
-                "timing": "provider-segments" if transcript.get("segments") else "unavailable",
+                "timing": "provider-words"
+                if transcript.get("words")
+                else "provider-segments"
+                if transcript.get("segments")
+                else "unavailable",
                 "retention": "transient-response-only",
             }
         _stage(store, identity, body.request_id, generation, "model")

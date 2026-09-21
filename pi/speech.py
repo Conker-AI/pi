@@ -165,7 +165,7 @@ class SpeechClient:
             "max_audio_seconds": MAX_AUDIO_SECONDS,
             "max_text_characters": MAX_TEXT_CHARACTERS,
             "segment_timestamps": "only_when_returned",
-            "word_timestamps": False,
+            "word_timestamps": "only_when_returned",
             "emotion_control": False,
             "character_voice": {
                 "design": "instructions"
@@ -261,7 +261,7 @@ class SpeechClient:
                 "model": self._stt_model,
                 "language": "en",
                 "response_format": "verbose_json",
-                "timestamp_granularities[]": "segment",
+                "timestamp_granularities[]": ["segment", "word"],
             },
             files={"file": ("turn.wav", audio, "audio/wav")},
         )
@@ -303,6 +303,28 @@ class SpeechClient:
                         raise ValueError("Segment text exceeds boundary")
                     segments.append({"start": start, "end": end, "text": segment_text})
                     previous = end
+            words = value.get("words")
+            if words is not None:
+                if not isinstance(words, list) or len(words) > 4000:
+                    raise ValueError("Invalid words")
+                normalized, previous, characters = [], 0, 0
+                for word in words:
+                    start, end, token = word["start"], word["end"], word["word"]
+                    if any(
+                        type(v) not in (int, float) or not math.isfinite(v) for v in (start, end)
+                    ):
+                        raise ValueError("Invalid word timestamp")
+                    if not previous <= start <= end <= measured["duration_seconds"]:
+                        raise ValueError("Invalid word timing")
+                    if not isinstance(token, str) or not token.strip() or "\x00" in token:
+                        raise ValueError("Invalid word text")
+                    token.encode("utf-8")
+                    characters += len(token)
+                    if characters > MAX_TRANSCRIPT_CHARACTERS:
+                        raise ValueError("Word text exceeds boundary")
+                    normalized.append({"start": start, "end": end, "word": token})
+                    previous = end
+                words = normalized
         except (ValueError, TypeError, KeyError, RecursionError):
             self._state["stt"] = "unavailable"
             raise SpeechError(
@@ -312,6 +334,7 @@ class SpeechClient:
         return {
             "text": text,
             "segments": segments,
+            "words": words,
             "language": language,
             "duration_seconds": measured["duration_seconds"],
         }

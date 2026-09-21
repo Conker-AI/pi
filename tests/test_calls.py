@@ -455,7 +455,8 @@ def test_owner_only_api_factory_capabilities_and_typed_request(store):
 
 
 @pytest.mark.parametrize("pause", [False, True])
-def test_caption_segments_are_transient_and_generation_bound(store, pause):
+@pytest.mark.parametrize("with_words", [False, True])
+def test_caption_segments_are_transient_and_generation_bound(store, pause, with_words):
     call = start(store)
     call = c.update(
         store,
@@ -466,11 +467,20 @@ def test_caption_segments_are_transient_and_generation_bound(store, pause):
         ),
     )
     segments = [{"start": 0.25, "end": 0.75, "text": "spoken question"}]
+    words = (
+        [
+            {"start": 0.25, "end": 0.45, "word": "spoken"},
+            {"start": 0.5, "end": 0.75, "word": "question"},
+        ]
+        if with_words
+        else None
+    )
 
     class TimedSpeech(Speech):
         def transcribe(self, raw, mime):
             result = super().transcribe(raw, mime)
             result["segments"] = segments
+            result["words"] = words
             return result
 
     def interrupt():
@@ -492,8 +502,9 @@ def test_caption_segments_are_transient_and_generation_bound(store, pause):
         assert result["transcription"] == {
             "text": "spoken question",
             "segments": segments,
+            "words": words,
             "durationSeconds": 1,
-            "timing": "provider-segments",
+            "timing": "provider-words" if with_words else "provider-segments",
             "retention": "transient-response-only",
         }
         replay = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)

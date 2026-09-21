@@ -61,6 +61,7 @@ def test_transcription_returns_only_actual_timing_and_english_request():
         "language": "english",
         "duration_seconds": 1.0,
         "segments": [{"start": 0.2, "end": 0.8, "text": "Hello"}],
+        "words": None,
     }
     assert len(calls) == 1 and calls[0].headers["authorization"] == "Bearer synthetic-key"
     assert service.capabilities()["stt"]["status"] == "available"
@@ -72,10 +73,11 @@ def test_absent_timing_and_silence_are_not_fabricated():
     assert service.transcribe(wav(), "audio/wav") == {
         "text": "",
         "segments": None,
+        "words": None,
         "duration_seconds": 1.0,
         "language": None,
     }
-    assert service.capabilities()["word_timestamps"] is False
+    assert service.capabilities()["word_timestamps"] == "only_when_returned"
     assert service.capabilities()["emotion_control"] is False
 
 
