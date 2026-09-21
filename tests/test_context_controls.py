@@ -148,3 +148,19 @@ def test_reviewed_fork_stale_boundary_and_active_turn_are_atomic(store):
         c.reviewed_fork(store, sid, body.model_copy(update={"expected_last_message_id": last}))
     with store._connect() as db:
         assert db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
+
+
+def test_reviewed_fork_after_stop_but_not_during_preparation(store):
+    from pi import submissions, turn_control
+    sid = store.create_session()
+    c.save(store, sid, c.Update(expected_revision=0, policy=policy()))
+    body = c.ReviewedFork(expected_revision=1, summary="Reviewed",
+                         request_id="fork-after-stop-001")
+    submissions.reserve(store, "fork-preparing-001", sid, "pending", {})
+    with pytest.raises(c.ContextError, match="Finish"):
+        c.reviewed_fork(store, sid, body)
+    turn_control.cancel_submission(store, "fork-preparing-001")
+    turn = store.start_turn(sid)
+    turn_control.cancel(store, turn)
+    store.finish_turn(turn, "failed")
+    assert c.reviewed_fork(store, sid, body)["parent_id"] == sid

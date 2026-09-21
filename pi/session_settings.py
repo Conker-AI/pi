@@ -116,7 +116,7 @@ def save(store, identity, body):
         if db.execute("SELECT 1 FROM sessions WHERE id=? AND status!='open'", (identity,)).fetchone():
             raise agents.AgentError("closed", "Change settings on an open conversation.")
         if db.execute("SELECT 1 FROM turn_submissions WHERE requested_session_id=? AND state='preparing'", (identity,)).fetchone() or db.execute(
-                "SELECT 1 FROM turns WHERE session_id=? AND (status NOT IN ('complete','failed','interrupted') OR (status='interrupted' AND acted=1))", (identity,)).fetchone():
+                "SELECT 1 FROM turns WHERE session_id=? AND (status NOT IN ('complete','failed','interrupted','cancelled') OR (status='interrupted' AND acted=1))", (identity,)).fetchone():
             raise agents.AgentError("session_busy", "Resolve current work before changing session settings.")
         agent = agents._get(db, body.settings.agentId)
         if agent["archived_at"] is not None:

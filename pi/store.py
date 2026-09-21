@@ -549,6 +549,8 @@ class Store:
                 "WHERE a.turn_id=turns.id "
                 "AND a.state IN ('dispatching','action_in_progress','outcome_unknown')) "
                 "THEN 'outcome_unknown' WHEN acted=1 THEN 'acted_no_reply' "
+                "WHEN EXISTS(SELECT 1 FROM turn_cancellations c WHERE c.turn_id=turns.id) "
+                "THEN 'cancelled' "
                 "ELSE 'interrupted' END, ended_at=?,"
                 # An interrupted turn that had already acted is not the same event
                 # as one that had not, and that difference is the only thing the

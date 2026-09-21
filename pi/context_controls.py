@@ -267,11 +267,15 @@ def reviewed_fork(store, identity, body: ReviewedFork):
         if parent["status"] != "open":
             raise ContextError("session_closed", "Fork an open conversation.")
         pending = db.execute(
-            "SELECT 1 FROM turns WHERE session_id=? AND status NOT IN "
-            "('complete','failed','interrupted') LIMIT 1",
+            "SELECT 1 FROM turns WHERE session_id=? AND (status NOT IN "
+            "('complete','failed','interrupted','cancelled') "
+            "OR (status='interrupted' AND acted=1)) LIMIT 1",
             (identity,),
         ).fetchone()
-        if pending:
+        if pending or db.execute(
+            "SELECT 1 FROM turn_submissions WHERE requested_session_id=? AND state='preparing'",
+            (identity,),
+        ).fetchone():
             raise ContextError("turn_pending", "Finish the current turn before reviewing a fork.")
         last = db.execute(
             "SELECT id FROM messages WHERE session_id=? ORDER BY seq DESC LIMIT 1", (identity,)

@@ -174,3 +174,41 @@ def test_submission_cancel_route_requires_owner(tmp_path, monkeypatch):
         response = client.post(url, headers={"X-Pi-Key": "synthetic-owner"})
         assert response.status_code == 200
         assert response.json()["status"] == "cancelled"
+
+
+def test_stopped_turn_does_not_block_future_settings_or_work(tmp_path):
+    from pi import session_settings
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        turn = store.start_turn(sid)
+        turn_control.cancel(store, turn)
+        store.finish_turn(turn, "failed")
+        settings = session_settings.Settings(
+            agentId="companion",
+            privacy=session_settings.Privacy(memoryDisabled=True, harnessDisabled=True),
+        )
+        assert (
+            session_settings.save(
+                store, sid, session_settings.Update(expected_revision=0, settings=settings)
+            )["revision"]
+            == 1
+        )
+        result = loop_with(store, Recorder()).run_turn(
+            sid, "new request", request_id="after_cancel_request"
+        )
+        assert result["message"] is not None
+
+
+def test_restart_preserves_stop_but_not_at_cost_of_unknown_effect(tmp_path):
+    from pi import actions
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        stopped = store.start_turn(store.create_session())
+        turn_control.cancel(store, stopped)
+        unknown = store.start_turn(store.create_session())
+        actions.prepare(store, unknown, "tool", {}, "synthetic_action_001")
+        turn_control.cancel(store, unknown)
+        assert store.mark_interrupted_turns() == 2
+        assert store.get_turn(stopped)["status"] == "cancelled"
+        assert store.get_turn(unknown)["status"] == "outcome_unknown"
