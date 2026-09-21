@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
 from .browser_contract import runtime_allowed
-from . import jobs_api, turn_control
+from . import jobs_api, turn_control, turn_queue
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
 from . import project_sources
@@ -686,3 +686,6 @@ def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
         return app.state.loop.recover_reply(turn_id, body.request_id)
     except ActedWithoutReply as exc:
         return {**_acted_without_reply(exc), "request_id": body.request_id}
+
+
+app.include_router(turn_queue.router(lambda: app.state.store, require_admin))

@@ -18,7 +18,7 @@ from contextlib import closing
 from pathlib import Path
 
 from . import artifacts, citations, memory_store, session_settings, submissions, tasks
-from . import drafts
+from . import drafts, turn_queue
 from . import context_summaries
 from . import attachments
 from . import memory_proposals
@@ -140,6 +140,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         context_controls.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])
+        turn_queue.redact(db, plan["session_ids"])
         context_summaries.redact(db, plan["session_ids"])
         attachments.redact(db, plan["session_ids"])
         memory_proposals.redact(db, plan["session_ids"])
