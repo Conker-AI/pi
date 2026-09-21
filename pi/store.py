@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import turn_control, turn_queue, message_forks
+from . import turn_control, turn_queue, message_forks, turn_context
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
@@ -266,6 +266,7 @@ class Store:
                 db.executescript(turn_control.SCHEMA)
                 db.executescript(turn_queue.SCHEMA)
                 db.executescript(message_forks.SCHEMA)
+                db.executescript(turn_context.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)

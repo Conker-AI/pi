@@ -35,6 +35,7 @@ from . import (
     submissions,
     tasks,
     turn_control,
+    turn_context,
 )
 from . import tools as tool_protocol
 from .memory import Memory
@@ -224,6 +225,7 @@ class Loop:
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
         messages.extend(calls.context_messages(self.store, execution))
+        prefix_messages = list(messages)
         selected_history = context_controls.select_history(
             policy, context_controls.history(self.store, session_id), retrieved_ids)
         reply_to = execution.get("replyToMessageId")
@@ -245,6 +247,8 @@ class Loop:
             if attached:
                 messages.append(Message("user", attached))
         context_controls.check_budget(policy, messages)
+        if turn_id:
+            turn_context.capture(self.store, turn_id, selected_history, prefix_messages, reply_to)
         return messages
 
     def _history_size(self, messages: list[Message]) -> int:
