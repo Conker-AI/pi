@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, agents, owner_preferences, submissions, tasks
+from . import activity, agents, owner_preferences, projects_api, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -156,6 +156,9 @@ def require_key(request: Request, x_pi_key: str | None = Header(None, alias="X-P
 def require_admin(identity: str = Depends(require_key)) -> None:
     if identity != "recovery":
         raise HTTPException(403, "Owner administration credential required.")
+
+
+app.include_router(projects_api.router(lambda: app.state.store, require_admin))
 
 
 @app.get("/owner/preferences", dependencies=[Depends(require_admin)])
