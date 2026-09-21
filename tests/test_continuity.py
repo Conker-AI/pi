@@ -87,4 +87,4 @@ def test_quiet_hours_suppress_notifications_not_owner_inspection(tmp_path):
         assert night["suppressionReasons"] == ["quiet_hours"]
         assert not day["notificationSuppressed"]
         assert night["items"] == day["items"]
-        assert day["notificationDelivery"] == "not-configured"
+        assert day["notificationDelivery"] == "owner-poll; explicit delivery acknowledgement"

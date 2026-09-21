@@ -24,6 +24,9 @@ CREATE INDEX IF NOT EXISTS continuity_order_job ON continuity_order(scheduled_ru
 CREATE TABLE IF NOT EXISTS continuity_ack (
  event_id TEXT PRIMARY KEY REFERENCES continuity_order(event_id), seen_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS continuity_delivered (
+ event_id TEXT PRIMARY KEY REFERENCES continuity_order(event_id), delivered_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS continuity_migrations (id TEXT PRIMARY KEY);
 CREATE TRIGGER IF NOT EXISTS continuity_activity AFTER INSERT ON activity_events
 BEGIN
@@ -204,7 +207,7 @@ def briefing(store, *, limit=30, before=None, now=None):
             "preferenceRevision": row["revision"],
             "notificationSuppressed": bool(reasons),
             "suppressionReasons": reasons,
-            "notificationDelivery": "not-configured",
+            "notificationDelivery": "owner-poll; explicit delivery acknowledgement",
             "summaryGeneration": "none",
             "readMarksSeen": False,
         }
@@ -227,3 +230,60 @@ def acknowledge(store, body):
             db.execute("INSERT OR IGNORE INTO continuity_ack VALUES (?,?)", (identity, time.time()))
         db.commit()
     return {"acknowledged": ids}
+
+
+def notifications(store, *, limit=30, before=None, now=None):
+    """At-least-once owner delivery; clients deduplicate by stable eventId.
+
+    Delivery acknowledgement means shown, not read. Suppressed/private events
+    are not consumed, and no external push service or model is invoked.
+    """
+    feed = briefing(store, limit=limit, before=before, now=now)
+    identities = [item["eventId"] for item in feed["items"]]
+    with store._connect() as db:
+        delivered = (
+            {
+                row[0]
+                for row in db.execute(
+                    "SELECT event_id FROM continuity_delivered WHERE event_id IN ("
+                    + ",".join("?" for _ in identities)
+                    + ")",
+                    identities,
+                )
+            }
+            if identities
+            else set()
+        )
+    items = (
+        []
+        if feed["notificationSuppressed"]
+        else [item for item in feed["items"] if item["eventId"] not in delivered]
+    )
+    return {
+        "items": items,
+        "nextCursor": feed["nextCursor"],
+        "suppressionReasons": feed["suppressionReasons"],
+        "channel": "owner-poll",
+        "delivery": "at-least-once",
+        "deduplicationKey": "eventId",
+        "readMarksSeen": False,
+    }
+
+
+def delivered(store, body):
+    body = Acknowledge.model_validate(body.model_dump())
+    ids = agents.references(body.event_ids)
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        for identity in ids:
+            entry = db.execute(
+                "SELECT * FROM continuity_order WHERE event_id=?", (identity,)
+            ).fetchone()
+            if entry is None or _item(db, entry) is None:
+                raise agents.AgentError("event_unavailable", "Notification is unavailable.", 404)
+        for identity in ids:
+            db.execute(
+                "INSERT OR IGNORE INTO continuity_delivered VALUES (?,?)", (identity, time.time())
+            )
+        db.commit()
+    return {"delivered": ids}
