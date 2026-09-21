@@ -85,3 +85,50 @@ def test_process_interruption_leaves_pending_attempt_not_zero_cost(tmp_path):
         with store._connect() as db:
             assert db.execute("SELECT status FROM research_model_calls").fetchone()[0] == "pending"
             assert research_usage.totals(db, tid)["cost_usd"] is None
+
+
+def test_configured_model_dispatch_preserves_timeout_and_usage(tmp_path):
+    from test_model_roles import config
+    from pi import model_roles
+    from pi.providers import Completion, Message
+
+    class Bounded:
+        name = "one"
+        calls = []
+
+        def complete_bounded(self, messages, *, model, timeout):
+            self.calls.append((model, timeout))
+            return Completion(text="Answer", provider=self.name, model=model,
+                              input_tokens=11, output_tokens=4, cost_usd=.02)
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        tid = store.start_turn(sid)
+        execution = session_settings.execution(store, sid, turn_id=tid)
+        execution["researchMode"] = "web"
+        provider = Bounded()
+        wrapped = research_usage.wrap(store, execution, provider)
+        result = model_roles.dispatch(config(), "answer", [Message("user", "Research")], {"one": wrapped})
+        assert result["completion"].text == "Answer"
+        assert provider.calls == [("actual-a", 1.0)]
+        with store._connect() as db:
+            totals = research_usage.totals(db, tid)
+            assert totals["input_tokens"] == 11 and totals["cost_usd"] == .02
+
+
+def test_configured_timeout_cannot_fall_back_to_unbounded_call(tmp_path):
+    class Unbounded:
+        name = "one"
+
+        def complete(self, *args, **kwargs):
+            pytest.fail("Must not bypass configured deadline")
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        tid = store.start_turn(sid)
+        execution = session_settings.execution(store, sid, turn_id=tid)
+        execution["researchMode"] = "web"
+        with pytest.raises(ProviderUnavailable, match="configured timeout"):
+            research_usage.wrap(store, execution, Unbounded()).complete_bounded([], model="test", timeout=1)
+        with store._connect() as db:
+            assert db.execute("SELECT COUNT(*) FROM research_model_calls").fetchone()[0] == 0

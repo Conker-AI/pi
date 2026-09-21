@@ -57,6 +57,17 @@ class Metered:
         return self.provider.health()
 
     def complete(self, messages, *, model):
+        return self._call(lambda: self.provider.complete(messages, model=model), model)
+
+    def complete_bounded(self, messages, *, model, timeout):
+        from .providers import ProviderUnavailable
+
+        bounded = getattr(self.provider, "complete_bounded", None)
+        if not callable(bounded):
+            raise ProviderUnavailable("Research provider does not support the configured timeout.")
+        return self._call(lambda: bounded(messages, model=model, timeout=timeout), model)
+
+    def _call(self, invoke, model):
         identity = uuid.uuid4().hex
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -65,7 +76,7 @@ class Metered:
             _refresh(db, self.turn_id)
             db.commit()
         try:
-            completion = self.provider.complete(messages, model=model)
+            completion = invoke()
         except Exception:
             with self.store._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
