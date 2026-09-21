@@ -20,6 +20,7 @@ from pathlib import Path
 from . import artifacts, citations, memory_store, session_settings, submissions, tasks
 from . import drafts
 from . import context_summaries
+from . import attachments
 from .access import MaintenanceRequired, acquire
 from .store import FORGETTING_SCHEMA, Store
 
@@ -132,6 +133,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])
         context_summaries.redact(db, plan["session_ids"])
+        attachments.redact(db, plan["session_ids"])
         citations.redact(db, plan["session_ids"])
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])

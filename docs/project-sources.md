@@ -17,5 +17,6 @@ instructions between agent and session instructions. Later project edits cannot
 change a running turn. Selection does not import linked transcripts, memory or
 grants, including when privacy modes are enabled.
 
-File references remain unavailable until the attachment service establishes real
-file provenance. Runtime linked-content selection remains outstanding.
+File references now resolve through the attachment store's authoritative session
+and immutable privacy metadata. Removed/forgotten files become unavailable.
+Runtime linked-content selection remains outstanding.

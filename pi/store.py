@@ -29,6 +29,8 @@ from . import citations as message_citations
 from . import jobs
 from . import drafts
 from . import context_summaries
+from . import attachments
+from . import model_evaluations
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -246,6 +248,8 @@ class Store:
                 db.executescript(jobs.SCHEMA)
                 db.executescript(drafts.SCHEMA)
                 db.executescript(context_summaries.SCHEMA)
+                db.executescript(attachments.SCHEMA)
+                db.executescript(model_evaluations.SCHEMA)
         except BaseException:
             self.close()
             raise

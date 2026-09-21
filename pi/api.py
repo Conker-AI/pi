@@ -27,6 +27,8 @@ from .job_worker import JobWorker
 from . import project_sources
 from . import drafts_api
 from . import conversation_search
+from . import attachments_api
+from . import model_evaluations, model_evaluations_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -68,6 +70,7 @@ async def lifespan(app: FastAPI):
     # A turn that was running when the process died did not finish. Saying
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()
+    model_evaluations.recover_interrupted(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give
@@ -184,6 +187,11 @@ app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, 
 app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
 app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
+app.include_router(attachments_api.router(lambda: app.state.store, require_admin,
+                                         session_settings.source_privacy))
+app.include_router(model_evaluations_api.router(lambda: app.state.store, require_admin,
+    lambda: {adapter.name: adapter for adapter in (
+        getattr(app.state, "local", None), getattr(app.state, "hosted", None)) if adapter is not None}))
 app.include_router(jobs_api.router(lambda: app.state.store, require_admin,
                                   lambda: getattr(app.state, "job_executor", None)))
 

@@ -1,6 +1,6 @@
 """Live project metadata from Pi-owned sources, with authoritative privacy."""
 
-from . import session_settings
+from . import attachments, session_settings
 
 
 def resolve(store, reference):
@@ -17,6 +17,13 @@ def resolve(store, reference):
             if task is None:
                 return None
             session_id = task["session_id"]
+        elif kind == "file":
+            return attachments.project_source(
+                db,
+                reference.get("sessionId"),
+                reference.get("fileId"),
+                session_settings.source_privacy,
+            )
         else:
             # File provenance needs an attachment store; a filesystem path or
             # a client-provided session label cannot establish it.
