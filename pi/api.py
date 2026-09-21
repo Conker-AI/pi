@@ -38,6 +38,7 @@ from . import characters_api
 from . import system_inventory, system_inventory_api
 from . import filesystem_api, filesystem_reads
 from . import system_actions, system_actions_api
+from .direct_providers import configured as configured_direct_providers
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -81,6 +82,7 @@ async def lifespan(app: FastAPI):
         stt_model=os.environ.get("PI_STT_MODEL", "").strip(),
         tts_model=os.environ.get("PI_TTS_MODEL", "").strip(),
         voice=os.environ.get("PI_TTS_VOICE", "").strip(),
+        character_voice=os.environ.get("PI_SPEECH_CHARACTER_VOICE", "unsupported").strip(),
         timeout=_seconds("PI_SPEECH_TIMEOUT_S", 30.0),
     )
     store = Store(os.environ.get("PI_DB_PATH", "/data/pi.db"))
@@ -162,6 +164,8 @@ async def lifespan(app: FastAPI):
     app.state.interrupted_at_startup = interrupted
     app.state.router = Router(
         local_provider=local, hosted_provider=hosted,
+        providers=configured_direct_providers(
+            os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)),
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
     app.state.loop = Loop(
@@ -246,8 +250,7 @@ app.include_router(conversation_search.router(lambda: app.state.store, require_a
 app.include_router(attachments_api.router(lambda: app.state.store, require_admin,
                                          session_settings.source_privacy))
 app.include_router(model_evaluations_api.router(lambda: app.state.store, require_admin,
-    lambda: {adapter.name: adapter for adapter in (
-        getattr(app.state, "local", None), getattr(app.state, "hosted", None)) if adapter is not None}))
+    lambda: app.state.router.adapters()))
 app.include_router(jobs_api.router(lambda: app.state.store, require_admin,
                                   lambda: getattr(app.state, "job_executor", None)))
 
@@ -542,15 +545,19 @@ def models():
     """
     local = {"provider": app.state.local.name, "model": app.state.router.local_model,
              "free": True, "health": app.state.local.health()}
+    direct = {name: {"provider": name, "health": adapter.health(),
+                     "allow_paid": adapter.allow_paid, "discovery": "manual",
+                     "capabilities": ["text"]}
+              for name, adapter in app.state.router.providers.items()}
     if app.state.hosted is None:
-        return {"local": local, "hosted": {"status": "not_configured"}}
+        return {"local": local, "hosted": {"status": "not_configured"}, "direct": direct}
     try:
         catalogue = app.state.hosted.catalogue()
     except Exception as exc:
-        return {"local": local,
+        return {"local": local, "direct": direct,
                 "hosted": {"status": "unavailable", "reason": type(exc).__name__}}
     free = [m.id for m in app.state.hosted.free_models()]
-    return {"local": local, "hosted": {
+    return {"local": local, "direct": direct, "hosted": {
         "status": "ok", "provider": app.state.hosted.name,
         "allow_paid": app.state.hosted.allow_paid,
         "free_models": free, "free_count": len(free), "total_text_models": len(catalogue),

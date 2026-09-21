@@ -125,9 +125,7 @@ class Loop:
         configuration = execution.get("modelConfiguration") if execution else None
         override = (execution.get("configuration") or {}).get("modelId") if execution else None
         if configuration is not None:
-            adapters = {adapter.name: adapter for adapter in (
-                getattr(self.router, "local", None), getattr(self.router, "hosted", None)
-            ) if adapter is not None}
+            adapters = self.router.adapters()
             from . import team_execution
             adapters = team_execution.metered_providers(self.store, execution, adapters)
             result = model_roles.dispatch(configuration, role, messages, adapters,
@@ -491,9 +489,7 @@ class Loop:
             calls.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
-            adapters = {adapter.name: adapter for adapter in (
-                getattr(self.router, "local", None), getattr(self.router, "hosted", None)
-            ) if adapter is not None}
+            adapters = self.router.adapters()
             context_retrieval.resolve(self.store, session_id, identity, adapters)
             history = self._history(session_id, execution=execution, request_id=identity)
             outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars

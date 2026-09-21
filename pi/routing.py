@@ -65,11 +65,18 @@ class TurnContext:
 
 class Router:
     def __init__(self, *, local_provider=None, hosted_provider=None,
-                 local_model: str = "", escalate_above_chars: int = 12_000) -> None:
+                 local_model: str = "", escalate_above_chars: int = 12_000,
+                 providers: dict | None = None) -> None:
         self.local = local_provider
         self.hosted = hosted_provider
         self.local_model = local_model
         self.escalate_above_chars = escalate_above_chars
+        self.providers = dict(providers or {})
+
+    def adapters(self) -> dict:
+        """Registered explicit roles plus the existing legacy route adapters."""
+        return {**self.providers, **{p.name: p for p in (self.local, self.hosted)
+                                    if p is not None}}
 
     # --- the policy -------------------------------------------------------
 
