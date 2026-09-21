@@ -29,6 +29,7 @@ class Enqueue(BaseModel):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     text: str = Field(min_length=1, max_length=4000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=5)
+    model_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class Edit(BaseModel):
@@ -40,6 +41,10 @@ class Edit(BaseModel):
 class Revision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=1)
+
+
+class Review(Revision):
+    model_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class QueueRevision(BaseModel):
@@ -67,6 +72,9 @@ def _source(db, sid, *, open_required=True):
 
 
 def _files(db, sid, payload, snapshot):
+    session_settings.validate_answer_model(
+        json.loads(snapshot)["execution"], payload.get("model_id")
+    )
     ids = payload["attachment_ids"]
     if len(ids) != len(set(ids)):
         raise tasks.TaskError("invalid_attachments", "Select distinct attachments.", 422)
@@ -157,6 +165,8 @@ def enqueue(store, sid, body):
     if not body.text.strip():
         raise tasks.TaskError("empty_message", "Write a message for the queued turn.", 422)
     payload = {"text": body.text, "attachment_ids": body.attachment_ids}
+    if body.model_id is not None:
+        payload["model_id"] = body.model_id
     digest = hashlib.sha256(_encode(payload).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -201,6 +211,8 @@ def change(store, sid, identity, body, operation):
                 raise tasks.TaskError("empty_message", "Write a message.", 422)
             payload["text"] = body.text
         elif operation == "review":
+            if "model_id" in body.model_fields_set:
+                payload["model_id"] = body.model_id
             snapshot = _snapshot(db, sid)
             _files(db, sid, payload, snapshot)
         elif operation == "remove":
@@ -251,7 +263,7 @@ def submission_identity(identity, revision):
     return "queue_" + hashlib.sha256(f"{identity}:{revision}".encode()).hexdigest()
 
 
-def admit(db, sid, identity, revision, request_id, text, attachment_ids):
+def admit(db, sid, identity, revision, request_id, text, attachment_ids, model_id=None):
     """Called inside the submission writer transaction, never a separate claim."""
     _source(db, sid)
     row = _entry(db, sid, identity, revision)
@@ -265,6 +277,7 @@ def admit(db, sid, identity, revision, request_id, text, attachment_ids):
         request_id != submission_identity(identity, revision)
         or text != payload["text"]
         or (attachment_ids or []) != payload["attachment_ids"]
+        or model_id != payload.get("model_id")
     ):
         raise tasks.TaskError("queue_changed", "Execution does not match the queued message.")
     validate(db, row)
@@ -330,6 +343,7 @@ def run_next(store, loop, sid):
             entry["payload"]["text"],
             request_id=submission_identity(entry["id"], entry["revision"]),
             attachment_ids=entry["payload"]["attachment_ids"],
+            model_id=entry["payload"].get("model_id"),
             queued_entry=(entry["id"], entry["revision"]),
         )
     except (tasks.TaskError, agents.AgentError, attachments.AttachmentError) as exc:
@@ -374,7 +388,7 @@ def router(get_store, owner, get_loop=None):
         return change(get_store(), sid, identity, body, "edit")
 
     @api.post("/sessions/{sid}/queue/{identity}/review")
-    def review(sid: str, identity: str, body: Revision):
+    def review(sid: str, identity: str, body: Review):
         return change(get_store(), sid, identity, body, "review")
 
     @api.post("/sessions/{sid}/queue/{identity}/remove")

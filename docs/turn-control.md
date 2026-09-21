@@ -38,3 +38,14 @@ effects must first be reconciled. Existing call privacy guards still apply.
 Remaining P9 work: queued future turns, steering, and reviewed
 per-message retry/fork. These routes are independent backend contracts; browser
 wiring remains deferred for owner review.
+
+## Per-request model selection
+
+Ordinary POST /sessions/{id}/turns accepts optional model_id. It must identify an
+enabled model/provider eligible for the answer role in the configured catalogue.
+The selection is part of the request identity and immutable submission/turn
+snapshot, taking precedence over the agent's default answer model. Invalid choices
+roll back admission; failures do not fall back to a different model. Helpers retain
+their independently assigned roles. Call/team model controls remain separate.
+This selection also applies to reply-only recovery of that turn. Selecting another
+model for an existing response requires the still-pending per-message retry flow.

@@ -124,7 +124,8 @@ class Loop:
         is returned and recorded on the turn.
         """
         configuration = execution.get("modelConfiguration") if execution else None
-        override = (execution.get("configuration") or {}).get("modelId") if execution else None
+        override = (execution.get("answerModelId") or
+                    (execution.get("configuration") or {}).get("modelId")) if execution else None
         if configuration is not None:
             adapters = self.router.adapters()
             from . import team_execution
@@ -479,7 +480,7 @@ class Loop:
     def run_turn(self, session_id: str, user_text: str, context: dict | None = None, *,
                  request_id: str | None = None, task_id: str | None = None,
                  task_expected_revision: int | None = None, draft_revision: int | None = None,
-                 attachment_ids: list[str] | None = None, queued_entry=None) -> dict:
+                 attachment_ids: list[str] | None = None, queued_entry=None, model_id=None) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
         The session id may change: if history has outgrown the window the turn
@@ -501,7 +502,8 @@ class Loop:
                                                    context or {}, task_id, task_expected_revision,
                                                    **({"draft_revision": draft_revision} if draft_revision is not None else {}),
                                                    **({"attachment_ids": attachment_ids} if attachment_ids else {}),
-                                                   **({"queued_entry": queued_entry} if queued_entry else {}))
+                                                   **({"queued_entry": queued_entry} if queued_entry else {}),
+                                                   **({"model_id": model_id} if model_id is not None else {}))
         except tasks.TaskError as exc:
             if explicit:
                 raise

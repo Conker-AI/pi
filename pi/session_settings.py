@@ -129,9 +129,29 @@ def save(store, identity, body):
         return result
 
 
-def reserve(db, request_id, identity):
+def validate_answer_model(snapshot, model_id):
+    if model_id is None:
+        return
+    if snapshot.get("callExecution") or snapshot["kind"] == "team-role":
+        raise agents.AgentError("model_scope", "Use the call or team model controls.", 422)
+    from . import model_roles
+    raw = snapshot.get("modelConfiguration")
+    if not raw:
+        raise agents.AgentError("model_unconfigured", "Configure the model catalogue first.", 422)
+    config = model_roles.Configuration.model_validate(raw)
+    answer = config.roleSettings.roles["answer"]
+    if (not answer.enabled or not isinstance(model_id, str) or model_id not in answer.eligibleModelIds
+        or not any(m.id == model_id and m.enabled and any(
+            p.id == m.providerId and p.enabled for p in config.providers) for m in config.models)):
+        raise agents.AgentError("model_unavailable", "Choose an enabled, eligible answer model.", 422)
+
+
+def reserve(db, request_id, identity, model_id=None):
     from . import project_context
     snapshot = _snapshot(db, identity)
+    validate_answer_model(snapshot, model_id)
+    if model_id is not None:
+        snapshot["answerModelId"] = model_id
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
 

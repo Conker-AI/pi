@@ -3,7 +3,8 @@
 Owner-only endpoints manage ordinary conversation queues:
 
 - GET/POST `/sessions/{id}/queue`: inspect/enqueue, with a retained request ID,
-  text (1-4000 characters) and at most five extracted-text attachment IDs.
+  text (1-4000 characters), optional model_id and at most five extracted-text
+  attachment IDs.
 - PATCH `/sessions/{id}/queue/{entry}`: edit text using expected_revision.
 - POST `/sessions/{id}/queue/{entry}/review`: explicitly recapture current choices.
 - POST `/sessions/{id}/queue/{entry}/remove`: remove an unclaimed entry.
@@ -36,6 +37,11 @@ never automatically reruns submitted work. Completion surviving a lost response
 retires its queue entry without another provider call. Pause affects future
 admission; use Stop to cancel the currently executing turn.
 
-Additional frontend fields (per-entry model override, reply target and research
-controls) need the corresponding execution contracts; they are not silently
+The optional model_id selects an enabled eligible answer model from the captured
+catalogue. It is bound into the immutable submission snapshot and never silently
+falls back. Explicit queue review may select a different model (or null for the
+normal configured route). Invalid models roll back before submission reservation.
+
+Additional frontend fields (reply target and research controls) need the
+corresponding execution contracts; they are not silently
 accepted or ignored. Final browser wiring remains deferred to owner review.
