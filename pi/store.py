@@ -35,6 +35,7 @@ from . import context_retrieval
 from . import project_context
 from . import team_execution
 from . import memory_proposals
+from . import continuity
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -249,6 +250,7 @@ class Store:
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)
+                db.executescript(continuity.SCHEMA)
                 db.executescript(submissions.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)

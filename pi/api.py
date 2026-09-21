@@ -32,6 +32,7 @@ from . import model_evaluations, model_evaluations_api
 from . import context_retrieval
 from . import team_execution, team_execution_api
 from . import memory_corrections, memory_proposals, memory_proposals_api
+from . import continuity_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -202,6 +203,7 @@ def require_admin(identity: str = Depends(require_key)) -> None:
 app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
+app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
 app.include_router(memory_proposals_api.router(lambda: app.state.store,
     lambda: getattr(app.state, 'memory_corrections', None), require_admin))
