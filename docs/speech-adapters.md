@@ -103,8 +103,8 @@ artwork and reference audio do not enter the synthesis request.
 This is instruction transport, not a calibrated expressiveness control, emotion
 inference or a guarantee of consistent voice identity. `/calls/capabilities`
 reports these limits under `speech.character_voice`. Empty designs, non-English
-languages and reference-source voices fail explicitly before HTTP. Reference
-cloning needs a separately supported model/adapter and remains unsupported here.
+languages and reference-source voices fail explicitly before HTTP with the design
+adapter. Reference voices use the separate Base adapter below.
 An ordinary request without a character still uses the configured default voice.
 There is no fallback from an unsupported character voice to that default.
 
@@ -114,6 +114,30 @@ designed speech. No additional media persistence or server-side retention
 guarantee is introduced. `tests/test_character_speech.py` verifies request payloads,
 mode/identity freezing, future edits, explicit rejection, replay and interruption
 using synthetic PCM, mock HTTP and temporary SQLite only.
+
+## Character reference voice
+
+`PI_SPEECH_CHARACTER_VOICE=qwen3-base` selects the documented vLLM-Omni Qwen3 Base
+contract, with a separately configured Base model ID. Each server serves its
+configured model; this option does not automatically switch or launch models.
+Design-source profiles fail explicitly with this adapter, and reference-source
+profiles fail with the design adapter. No default speaker fallback is used.
+
+At call acceptance Pi captures the selected reference in memory, separately from
+the media-free character snapshot. Editing the profile affects the next request.
+Reference bytes are not added to request preferences, model context or call output.
+Pause/end guards and once-only receipts apply as for designed speech. The original
+reference remains in the owner-authored character package and version history.
+
+The adapter validates embedded reference audio and sends a PCM data URL as
+`ref_audio`, with `task_type=Base` and `language=English`. An authored transcript
+becomes `ref_text`; without one, `x_vector_only_mode=true` explicitly selects
+speaker-embedding-only synthesis. Compressed references need the optional decoder.
+External URLs and filesystem references are refused. Base mode does not claim
+emotion/style instruction support. Natural delivery, likeness and latency are
+model-dependent and remain unverified without a real configured server. The
+configured speech server may cache reference audio; Pi cannot guarantee remote
+deletion or retention policy. No permanent voice-upload endpoint is called.
 
 ## Boundaries
 

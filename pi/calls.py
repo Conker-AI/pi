@@ -643,6 +643,14 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
 
         agent_id = session_settings._load(db, session_id)["settings"]["agentId"]
         accepted = {**settings, "character": characters.runtime_snapshot(db, agent_id)}
+        # Keep reference bytes in this invocation only, never in request preferences
+        # or the model context. Capture before model work so edits cannot swap voices.
+        voice_reference = None
+        if settings["channels"]["voice"] and accepted["character"]:
+            voice = accepted["character"]["profile"]["studio"]["voice"]
+            if voice["source"] == "reference":
+                full = characters.snapshot(db, agent_id)
+                voice_reference = full["profile"]["studio"]["voice"]["reference"]
         db.execute(
             "INSERT INTO "
             "call_requests(request_id,call_id,generation,payload_hash,input_kind,state,"
@@ -701,7 +709,12 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                     if accepted["character"] is None:
                         output = speech.synthesize(message["content"])
                     else:
-                        output = speech.synthesize(message["content"], presentation=accepted)
+                        extra = (
+                            {"reference": voice_reference} if voice_reference is not None else {}
+                        )
+                        output = speech.synthesize(
+                            message["content"], presentation=accepted, **extra
+                        )
                     guard(store, {"callExecution": {"id": identity, "generation": generation}})
                     speech_status = "generated-transient"
                 except Exception as exc:

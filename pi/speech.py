@@ -1,5 +1,7 @@
 """Bounded English speech transport to an explicitly configured compatible server."""
 
+import base64
+import binascii
 import json
 import math
 import struct
@@ -102,7 +104,7 @@ class SpeechClient:
         character_voice="unsupported",
         audio_decoder="",
     ):
-        if character_voice not in ("unsupported", "qwen3-design"):
+        if character_voice not in ("unsupported", "qwen3-design", "qwen3-base"):
             _fail("invalid_configuration", 503, "Unsupported character speech adapter.")
         if not isinstance(url, str) or len(url) > 2048:
             _fail("invalid_configuration", 503, "Speech configuration is invalid.")
@@ -151,7 +153,7 @@ class SpeechClient:
         self._state = {
             "stt": "configured" if url and stt_model else "unconfigured",
             "tts": "configured"
-            if url and tts_model and (voice or character_voice == "qwen3-design")
+            if url and tts_model and (voice or character_voice in ("qwen3-design", "qwen3-base"))
             else "unconfigured",
         }
 
@@ -174,7 +176,9 @@ class SpeechClient:
                 "design": "instructions"
                 if self._character_voice == "qwen3-design"
                 else "unsupported",
-                "reference": "unsupported",
+                "reference": "audio-reference"
+                if self._character_voice == "qwen3-base"
+                else "unsupported",
                 "delivery": "authored-instructions"
                 if self._character_voice == "qwen3-design"
                 else "unsupported",
@@ -418,7 +422,49 @@ class SpeechClient:
             ) from None
         return {"task_type": "VoiceDesign", "language": "English", "instructions": instructions}
 
-    def synthesize(self, text: str, *, presentation=None):
+    def _reference(self, presentation, reference):
+        from .characters import Voice
+
+        try:
+            raw = dict(presentation["character"]["profile"]["studio"]["voice"])
+            raw["reference"] = reference
+            voice = Voice.model_validate(raw)
+            if (
+                voice.source != "reference"
+                or voice.reference is None
+                or voice.language != "English"
+            ):
+                raise ValueError("Unsupported reference")
+            prefix, encoded = voice.reference.src.split(",", 1)
+            mime = prefix[5:].split(";", 1)[0]
+            audio = base64.b64decode(encoded, validate=True)
+            if mime == "audio/mp3":
+                mime = "audio/mpeg"
+            if mime not in WAV_TYPES:
+                from .audio_decode import decode
+
+                audio = decode(audio, mime, self._audio_decoder)
+                mime = "audio/wav"
+            validate_wav(audio, mime)
+            transcript = voice.transcript.strip()
+            if "\x00" in transcript:
+                raise ValueError("Invalid reference transcript")
+            transcript.encode("utf-8")
+        except (ValueError, TypeError, KeyError, binascii.Error):
+            raise SpeechError(
+                "invalid_voice_reference",
+                422,
+                "Provide supported English reference audio and valid settings.",
+            ) from None
+        return {
+            "task_type": "Base",
+            "language": "English",
+            "ref_audio": "data:audio/wav;base64," + base64.b64encode(audio).decode("ascii"),
+            "ref_text": transcript or None,
+            "x_vector_only_mode": not bool(transcript),
+        }
+
+    def synthesize(self, text: str, *, presentation=None, reference=None):
         self._configured("tts")
         if not isinstance(text, str) or not text.strip() or "\x00" in text:
             _fail("invalid_speech_text", 422, "Provide nonblank speech text without NUL.")
@@ -437,7 +483,11 @@ class SpeechClient:
             "response_format": "wav",
         }
         if presentation is not None:
-            payload.update(self._presentation(presentation))
+            payload.update(
+                self._reference(presentation, reference)
+                if self._character_voice == "qwen3-base"
+                else self._presentation(presentation)
+            )
             # VoiceDesign has no preset speaker; do not silently request another identity.
             payload.pop("voice")
         elif not self._voice:
