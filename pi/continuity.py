@@ -53,6 +53,7 @@ BEGIN SELECT RAISE(ABORT,'continuity events are append-only'); END;
 STATES = {
     "complete",
     "completed",
+    "cancelled",
     "failed",
     "blocked",
     "awaiting_approval",
@@ -101,7 +102,7 @@ def _item(db, entry):
         "status": entry["to_status"],
         "occurredAt": entry["occurred_at"],
         "provenance": entry["provenance"],
-        "needsAttention": entry["to_status"] not in ("complete", "completed"),
+        "needsAttention": entry["to_status"] not in ("complete", "completed", "cancelled"),
     }
     if entry["scheduled_run_id"]:
         run = db.execute(

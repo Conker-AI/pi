@@ -164,7 +164,8 @@ def update(store, identity, body, now=None):
 
 def _claim(db, row, now, request_id=None):
     if db.execute(
-        "SELECT 1 FROM scheduled_runs WHERE job_id=? AND status NOT IN ('completed','failed')",
+        "SELECT 1 FROM scheduled_runs WHERE job_id=? "
+        "AND status NOT IN ('completed','failed','cancelled')",
         (row["id"],),
     ).fetchone():
         return None
@@ -375,3 +376,20 @@ def bind_budget(store, identity, body, adapter):
         db.execute("UPDATE scheduled_runs SET status='ready' WHERE id=?", (identity,))
         db.commit()
         return {"run_id": identity, "budget_id": body.budget_id, "replayed": False}
+
+
+def cancel_run(store, identity):
+    """Withdraw undispatched work; never claim an uncertain effect was cancelled."""
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        if row is None:
+            raise JobError("Run not found.")
+        if row["status"] == "cancelled":
+            return {"status": "cancelled", "replayed": True}
+        if row["status"] not in ("ready", "awaiting_budget", "awaiting_approval"):
+            raise JobError("Only waiting work can be cancelled; reconcile dispatched work first.")
+        # Preserve any saved approval receipt and spending binding as evidence.
+        db.execute("UPDATE scheduled_runs SET status='cancelled' WHERE id=?", (identity,))
+        db.commit()
+        return {"status": "cancelled", "replayed": False}

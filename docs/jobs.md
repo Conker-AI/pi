@@ -65,3 +65,20 @@ quiet hours should not silently cancel a deliberately scheduled operation.
 Manual run admission records `ready`; execution requires the worker to be enabled.
 Browser gateway/frontend integration is deferred
 until owner review. Tests use temporary databases and no external effects.
+
+
+## Withdrawing waiting runs
+
+Owner-only `POST /jobs/runs/{id}/cancel` withdraws runs in `ready`,
+`awaiting_budget`, or `awaiting_approval`. It requires no execution adapter and
+shares the dispatch transaction lock: once dispatch is claimed, cancellation
+fails and the owner must reconcile the outcome. Unknown effects cannot be made
+safe by relabeling them cancelled. Repeated cancellation is idempotent, survives
+restart, preserves receipts/budget bindings, and releases schedule overlap.
+Future scheduled occurrences are unaffected; disable the definition to stop them.
+Continuity treats cancellation as a resolved status rather than an attention alert.
+
+This operation withdraws Pi's dispatch only. It does not revoke a ToolGate approval
+or return a spending grant to a reusable pool. Saved approvals remain evidence;
+ToolGate authority outside this scheduler is administered separately. No browser
+route or frontend adapter was wired in this phase.
