@@ -46,6 +46,10 @@ def router(store, authorize, executor=None):
             raise HTTPException(503, "Scheduled execution adapter is not configured.")
         return adapter
 
+    @routes.post("/runs/{identity}/budget")
+    def budget(identity: str, body: jobs.BudgetBinding):
+        return call(jobs.bind_budget, identity, body, execution_adapter())
+
     @routes.post("/runs/{identity}/resume")
     def resume(identity: str):
         try:

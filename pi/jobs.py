@@ -45,6 +45,7 @@ class Definition(StrictModel):
     enabled: bool
     target: Target
     overlap: Literal["skip"] = "skip"
+    requireBudget: bool = False
 
     @field_validator("timeZone")
     @classmethod
@@ -78,6 +79,10 @@ CREATE TABLE IF NOT EXISTS scheduled_runs (
  job_revision INTEGER NOT NULL, definition TEXT NOT NULL, scheduled_at REAL NOT NULL,
  started_at REAL NOT NULL, status TEXT NOT NULL, receipt TEXT, request_id TEXT UNIQUE,
  UNIQUE(job_id,scheduled_at,request_id)
+);
+CREATE TABLE IF NOT EXISTS scheduled_run_budgets (
+ run_id TEXT PRIMARY KEY REFERENCES scheduled_runs(id), budget_id TEXT NOT NULL UNIQUE,
+ bound_at REAL NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS scheduled_once ON scheduled_runs(job_id,scheduled_at)
  WHERE request_id IS NULL;
@@ -169,6 +174,8 @@ def _claim(db, row, now, request_id=None):
         "INSERT INTO scheduled_runs VALUES (?,?,?,?,?,?,'ready',NULL,?)",
         (run, row["id"], row["revision"], row["definition"], scheduled, now, request_id),
     )
+    if json.loads(row["definition"]).get("requireBudget", False):
+        db.execute("UPDATE scheduled_runs SET status='awaiting_budget' WHERE id=?", (run,))
     return {
         "id": run,
         "job_id": row["id"],
@@ -249,7 +256,9 @@ def runs(store, identity):
                 "receipt": json.loads(row["receipt"]) if row["receipt"] else None,
             }
             for row in db.execute(
-                "SELECT * FROM scheduled_runs WHERE job_id=? ORDER BY started_at DESC LIMIT 100",
+                "SELECT r.*, b.budget_id AS spending_budget_id FROM scheduled_runs r "
+                "LEFT JOIN scheduled_run_budgets b ON b.run_id=r.id "
+                "WHERE r.job_id=? ORDER BY r.started_at DESC LIMIT 100",
                 (identity,),
             )
         ]
@@ -276,6 +285,13 @@ def dispatch_claim(store, run, invoke, *, resume=False):
             approval["approval_request_id"] = request_id
         db.execute("UPDATE scheduled_runs SET status='dispatching' WHERE id=?", (saved["id"],))
         definition = json.loads(saved["definition"])
+        budget = db.execute(
+            "SELECT budget_id FROM scheduled_run_budgets WHERE run_id=?", (saved["id"],)
+        ).fetchone()
+        if definition.get("requireBudget", False) and not budget:
+            raise JobError("Bind an owner budget before dispatch.")
+        if budget:
+            approval["spending_job_id"] = budget["budget_id"]
         db.commit()
     try:
         outcome = invoke(
@@ -319,3 +335,43 @@ def reconcile(store, identity, adapter):
             (status, encoded, identity),
         )
         return db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()[0]
+
+
+class BudgetBinding(StrictModel):
+    budget_id: str = Field(pattern=r"^job_[a-f0-9]{32}$")
+
+
+def bind_budget(store, identity, body, adapter):
+    body = BudgetBinding.model_validate(body.model_dump())
+    with store._connect() as db:
+        row = db.execute("SELECT * FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        if row is None:
+            raise JobError("Run not found.")
+        definition = json.loads(row["definition"])
+    if not adapter.validate_budget(
+        body.budget_id, action_id=identity, agent_id=definition["agentId"]
+    ):
+        raise JobError("Budget unavailable or does not belong to this agent and run.")
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        existing = db.execute(
+            "SELECT budget_id FROM scheduled_run_budgets WHERE run_id=?", (identity,)
+        ).fetchone()
+        if existing:
+            if existing["budget_id"] != body.budget_id:
+                raise JobError("This run already has a different budget.")
+            return {"run_id": identity, "budget_id": body.budget_id, "replayed": True}
+        row = db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        if row["status"] != "awaiting_budget":
+            raise JobError("Only a run waiting for its budget can be bound.")
+        if db.execute(
+            "SELECT 1 FROM scheduled_run_budgets WHERE budget_id=?", (body.budget_id,)
+        ).fetchone():
+            raise JobError("Budget already belongs to another run.")
+        db.execute(
+            "INSERT INTO scheduled_run_budgets VALUES (?,?,?)",
+            (identity, body.budget_id, time.time()),
+        )
+        db.execute("UPDATE scheduled_runs SET status='ready' WHERE id=?", (identity,))
+        db.commit()
+        return {"run_id": identity, "budget_id": body.budget_id, "replayed": False}

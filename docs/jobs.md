@@ -47,9 +47,19 @@ approval is valid. A timeout is held for read-only reconciliation. Owner-only
 companion execution credential provisions the companion adapter; other agent IDs
 require separate server provisioning and cannot borrow it.
 
-Paid execution still requires ToolGate's existing budget envelope; this worker
-does not create one or provide an administrative credential. Provisioning bounded
-paid grants and proactive owner-budget reservations remains outstanding. Explicit
+Definitions can set `requireBudget: true`. Each admitted occurrence then waits in
+`awaiting_budget` and blocks overlap without making any effect request. The owner
+creates a ToolGate spending job bound to the provisioned execution actor and the
+saved Pi run ID, then calls `POST /jobs/runs/{id}/budget` with `{budget_id}`.
+Pi verifies the budget through the agent-scoped read endpoint, saves the binding
+once, and releases that run to `ready`. Listing exposes `spending_budget_id`.
+Approval resume retains the same binding; a different or reused budget is rejected.
+ToolGate still validates actor/root identity and reserves costs at actual dispatch.
+This binding does not promise available credit or bypass current policy/price checks.
+
+The worker never creates budgets or receives an administrative credential. Every
+later occurrence needs its own owner-authorized budget; automatically provisioning
+recurring grants and proactive owner-budget reservations remains outstanding. Explicit
 owner schedules are distinct from unsolicited proactive suggestions; notification
 quiet hours should not silently cancel a deliberately scheduled operation.
 Manual run admission records `ready`; execution requires the worker to be enabled.

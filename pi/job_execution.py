@@ -15,7 +15,9 @@ class PublishedJobs:
         self.clients = dict(clients)
         self.transport = transport
 
-    def __call__(self, target, *, action_id, agent_id, approval_request_id=None):
+    def __call__(
+        self, target, *, action_id, agent_id, approval_request_id=None, spending_job_id=None
+    ):
         target = Target.model_validate(target)
         client = self.clients.get(agent_id)
         if client is None or not client.execution_key:
@@ -31,6 +33,8 @@ class PublishedJobs:
             "published_version": target.publishedVersion,
             "expected_publication_digest": target.digest,
         }
+        if spending_job_id is not None:
+            payload["job_id"] = spending_job_id
         if approval_request_id is not None:
             payload["approval_request_id"] = approval_request_id
         try:
@@ -61,6 +65,24 @@ class PublishedJobs:
         if response.status_code != 200:
             return self.unknown()
         return self.outcome(response, target, action_id)
+
+    def validate_budget(self, budget_id, *, action_id, agent_id):
+        client = self.clients.get(agent_id)
+        if client is None or not client.execution_key:
+            return False
+        try:
+            response = self._request(client, "GET", f"/v2/agent/spending/jobs/{budget_id}")
+            body = response.json()
+            return (
+                response.status_code == 200
+                and isinstance(body, dict)
+                and body.get("job_id") == budget_id
+                and body.get("root_action_id") == action_id
+                and type(body.get("cap")) is int
+                and body["cap"] > 0
+            )
+        except (httpx.HTTPError, ValueError):
+            return False
 
     def _request(self, gate, method, path, **kwargs):
         # Receipts are metadata; never buffer arbitrary tool output or inherit
