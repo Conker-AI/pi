@@ -1,5 +1,6 @@
 """Companion continuity from real events; reading never acknowledges or sends anything."""
 
+import json
 import time
 from datetime import UTC, datetime
 
@@ -11,6 +12,40 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS continuity_seen (
  event_id TEXT PRIMARY KEY REFERENCES activity_events(id), seen_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS continuity_order (
+ sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
+ activity_event_id TEXT UNIQUE REFERENCES activity_events(id),
+ scheduled_run_id TEXT REFERENCES scheduled_runs(id),
+ from_status TEXT, to_status TEXT, occurred_at REAL NOT NULL,
+ provenance TEXT NOT NULL,
+ CHECK ((activity_event_id IS NULL) != (scheduled_run_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS continuity_order_job ON continuity_order(scheduled_run_id,sequence);
+CREATE TABLE IF NOT EXISTS continuity_ack (
+ event_id TEXT PRIMARY KEY REFERENCES continuity_order(event_id), seen_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS continuity_migrations (id TEXT PRIMARY KEY);
+CREATE TRIGGER IF NOT EXISTS continuity_activity AFTER INSERT ON activity_events
+BEGIN
+ INSERT INTO continuity_order
+ (event_id,activity_event_id,from_status,to_status,occurred_at,provenance)
+ VALUES(NEW.id,NEW.id,NEW.from_status,NEW.to_status,NEW.occurred_at,'recorded-event');
+END;
+CREATE TRIGGER IF NOT EXISTS continuity_job_status AFTER UPDATE OF status ON scheduled_runs
+WHEN NEW.status != OLD.status
+BEGIN
+ INSERT INTO continuity_order
+ (event_id,scheduled_run_id,from_status,to_status,occurred_at,provenance)
+ VALUES('jobevt_' || lower(hex(randomblob(16))),NEW.id,OLD.status,NEW.status,
+ (julianday('now')-2440587.5)*86400.0,'recorded-event');
+END;
+CREATE TRIGGER IF NOT EXISTS continuity_order_no_update BEFORE UPDATE ON continuity_order
+BEGIN SELECT RAISE(ABORT,'continuity events are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS continuity_order_no_delete BEFORE DELETE ON continuity_order
+BEGIN SELECT RAISE(ABORT,'continuity events are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS continuity_order_no_replace BEFORE INSERT ON continuity_order
+WHEN EXISTS(SELECT 1 FROM continuity_order WHERE event_id=NEW.event_id OR sequence=NEW.sequence)
+BEGIN SELECT RAISE(ABORT,'continuity events are append-only'); END;
 """
 STATES = {
     "complete",
@@ -27,6 +62,85 @@ STATES = {
 
 class Acknowledge(agents.StrictModel):
     event_ids: list[str] = Field(min_length=1, max_length=100)
+
+
+def initialize(db):
+    """Preserve seen state; historical jobs are observations, not invented events."""
+    # Install triggers and backfill under one writer lock: another process must
+    # not allocate feed sequence 1 while historical sequence 1 is being copied.
+    db.executescript("BEGIN IMMEDIATE;\n" + SCHEMA)
+    if not db.execute("SELECT 1 FROM continuity_migrations WHERE id='jobs-v1'").fetchone():
+        db.execute("""INSERT INTO continuity_order
+            (sequence,event_id,activity_event_id,from_status,to_status,occurred_at,provenance)
+            SELECT sequence,id,id,from_status,to_status,occurred_at,'recorded-event'
+            FROM activity_events e WHERE NOT EXISTS
+            (SELECT 1 FROM continuity_order c WHERE c.activity_event_id=e.id) ORDER BY sequence""")
+        db.execute(
+            """INSERT INTO continuity_order
+            (event_id,scheduled_run_id,to_status,occurred_at,provenance)
+            SELECT 'jobevt_' || lower(hex(randomblob(16))),id,status,?,'state-observed'
+            FROM scheduled_runs r WHERE NOT EXISTS
+            (SELECT 1 FROM continuity_order c WHERE c.scheduled_run_id=r.id)
+            ORDER BY started_at,id""",
+            (time.time(),),
+        )
+        db.execute("INSERT INTO continuity_ack SELECT event_id,seen_at FROM continuity_seen")
+        db.execute("INSERT INTO continuity_migrations VALUES ('jobs-v1')")
+    db.commit()
+
+
+def _item(db, entry):
+    if entry["to_status"] not in STATES:
+        return None
+    common = {
+        "eventId": entry["event_id"],
+        "sequence": entry["sequence"],
+        "status": entry["to_status"],
+        "occurredAt": entry["occurred_at"],
+        "provenance": entry["provenance"],
+        "needsAttention": entry["to_status"] not in ("complete", "completed"),
+    }
+    if entry["scheduled_run_id"]:
+        run = db.execute(
+            "SELECT * FROM scheduled_runs WHERE id=?", (entry["scheduled_run_id"],)
+        ).fetchone()
+        if run is None:
+            return None
+        return {
+            **common,
+            "kind": "job_status",
+            "title": json.loads(run["definition"])["name"],
+            "sessionId": None,
+            "taskId": None,
+            "runId": None,
+            "jobId": run["job_id"],
+            "scheduledRunId": run["id"],
+            "jobRevision": run["job_revision"],
+            "source": {"kind": "scheduled-run", "jobId": run["job_id"], "runId": run["id"]},
+        }
+    event = db.execute(
+        "SELECT * FROM activity_events WHERE id=?", (entry["activity_event_id"],)
+    ).fetchone()
+    if (
+        event is None
+        or event["kind"] not in ("task_status", "run_status")
+        or not _eligible(db, event)
+    ):
+        return None
+    session = db.execute("SELECT title FROM sessions WHERE id=?", (event["session_id"],)).fetchone()
+    task = (
+        db.execute("SELECT outcome FROM tasks WHERE id=?", (event["task_id"],)).fetchone()
+        if event["task_id"]
+        else None
+    )
+    return {
+        **common,
+        "kind": event["kind"],
+        "title": task[0] if task else session[0] or "Conversation",
+        "sessionId": event["session_id"],
+        "taskId": event["task_id"],
+        "runId": event["run_id"],
+    }
 
 
 def _eligible(db, row):
@@ -55,47 +169,30 @@ def briefing(store, *, limit=30, before=None, now=None):
             reasons.append("quiet_hours")
         # Select only the latest status per entity. Resolved blockers are not stale alerts.
         rows = db.execute(
-            """SELECT e.* FROM activity_events e
-            WHERE e.kind IN ('run_status','task_status')
-            AND NOT EXISTS(SELECT 1 FROM continuity_seen s WHERE s.event_id=e.id)
-            AND NOT EXISTS(SELECT 1 FROM activity_events later WHERE later.sequence>e.sequence
-                AND later.kind IN ('run_status','run_started','task_status')
+            """SELECT c.* FROM continuity_order c
+            LEFT JOIN activity_events e ON e.id=c.activity_event_id
+            WHERE NOT EXISTS(SELECT 1 FROM continuity_ack s WHERE s.event_id=c.event_id)
+            AND (
+              (c.scheduled_run_id IS NOT NULL AND NOT EXISTS(
+                SELECT 1 FROM continuity_order later WHERE later.sequence>c.sequence
+                AND later.scheduled_run_id=c.scheduled_run_id))
+              OR (e.kind IN ('run_status','task_status') AND NOT EXISTS(
+                SELECT 1 FROM activity_events later WHERE later.sequence>e.sequence
                 AND ((e.kind='run_status' AND later.run_id=e.run_id
                       AND later.kind IN ('run_status','run_started'))
                   OR (e.kind='task_status' AND later.task_id=e.task_id
-                      AND later.kind='task_status')))
-            AND (? IS NULL OR e.sequence<?) ORDER BY e.sequence DESC LIMIT 1000""",
+                      AND later.kind='task_status')))))
+            AND (? IS NULL OR c.sequence<?) ORDER BY c.sequence DESC LIMIT 1000""",
             (before, before),
         ).fetchall()
         items = []
         examined = None
-        for event in rows:
-            examined = event["sequence"]
-            if event["to_status"] not in STATES or not _eligible(db, event):
+        for entry in rows:
+            examined = entry["sequence"]
+            item = _item(db, entry)
+            if item is None:
                 continue
-            session = db.execute(
-                "SELECT title FROM sessions WHERE id=?", (event["session_id"],)
-            ).fetchone()
-            task = (
-                db.execute("SELECT outcome FROM tasks WHERE id=?", (event["task_id"],)).fetchone()
-                if event["task_id"]
-                else None
-            )
-            items.append(
-                {
-                    "eventId": event["id"],
-                    "sequence": event["sequence"],
-                    "status": event["to_status"],
-                    "kind": event["kind"],
-                    "title": task[0] if task else session[0] or "Conversation",
-                    "sessionId": event["session_id"],
-                    "taskId": event["task_id"],
-                    "runId": event["run_id"],
-                    "occurredAt": event["occurred_at"],
-                    "provenance": "recorded-event",
-                    "needsAttention": event["to_status"] not in ("complete", "completed"),
-                }
-            )
+            items.append(item)
             if len(items) == limit:
                 break
         return {
@@ -119,19 +216,14 @@ def acknowledge(store, body):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         for identity in ids:
-            row = db.execute("SELECT * FROM activity_events WHERE id=?", (identity,)).fetchone()
-            if (
-                row is None
-                or row["kind"] not in ("run_status", "task_status")
-                or row["to_status"] not in STATES
-                or not _eligible(db, row)
-            ):
+            row = db.execute(
+                "SELECT * FROM continuity_order WHERE event_id=?", (identity,)
+            ).fetchone()
+            if row is None or _item(db, row) is None:
                 raise agents.AgentError(
                     "event_unavailable", "A selected continuity event is unavailable.", 404
                 )
         for identity in ids:
-            db.execute(
-                "INSERT OR IGNORE INTO continuity_seen VALUES (?,?)", (identity, time.time())
-            )
+            db.execute("INSERT OR IGNORE INTO continuity_ack VALUES (?,?)", (identity, time.time()))
         db.commit()
     return {"acknowledged": ids}
