@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from . import context_controls as controls
+from . import context_summaries as summaries
 
 
 def router(store, authorize):
@@ -27,5 +28,17 @@ def router(store, authorize):
     @routes.post("/{session_id}/fork")
     def fork(session_id: str, body: controls.ReviewedFork):
         return invoke(controls.reviewed_fork, session_id, body)
+
+    @routes.get("/{session_id}/summary")
+    def summary(session_id: str):
+        return invoke(summaries.load, session_id)
+
+    @routes.post("/{session_id}/summary")
+    def edit_summary(session_id: str, body: summaries.Edit):
+        return invoke(summaries.save, session_id, body)
+
+    @routes.post("/{session_id}/summary/restore")
+    def restore_summary(session_id: str, body: summaries.Restore):
+        return invoke(summaries.save, session_id, body)
 
     return routes

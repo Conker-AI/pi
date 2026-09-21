@@ -28,6 +28,7 @@ from . import actions, agents, artifacts, collaboration, context_controls, memor
 from . import citations as message_citations
 from . import jobs
 from . import drafts
+from . import context_summaries
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -244,6 +245,7 @@ class Store:
                 db.executescript(model_roles.SCHEMA)
                 db.executescript(jobs.SCHEMA)
                 db.executescript(drafts.SCHEMA)
+                db.executescript(context_summaries.SCHEMA)
         except BaseException:
             self.close()
             raise
