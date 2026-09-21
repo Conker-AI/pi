@@ -3,6 +3,7 @@
 import sqlite3
 from contextlib import closing
 
+import pytest
 from test_jobs import definition
 from test_loop import Recorder, loop_with
 
@@ -84,3 +85,30 @@ def test_restore_preserves_uncertainty_and_does_not_restart_effects(tmp_path):
         worker.tick(now=3600)
         assert effects == []
         assert jobs.runs(restored, job["id"])[0]["status"] == "dispatching"
+
+
+def test_restored_auth_requires_revocation_before_serving(tmp_path):
+    from gateway.store import AuthError, AuthStore
+
+    password = "synthetic recovery drill passphrase"
+    source = AuthStore(tmp_path / "auth-source.db")
+    source.set_password(password, initial=True)
+    anonymous = source.anonymous()
+    session = source.login(anonymous["token"], password, "local")
+    proof = source.verify(session["token"], password, "local", "restore-drill")
+    target = tmp_path / "auth-restored.db"
+    snapshot(source.path, target)
+
+    restored = AuthStore(target)
+    # A database copy retains valid authority: startup alone is not a restore gate.
+    assert restored.session(session["token"])["authenticated"]
+    restored.revoke()  # Same primitive as the host's documented revoke-all command.
+    restarted = AuthStore(target)
+    with pytest.raises(AuthError):
+        restarted.session(session["token"])
+    with pytest.raises(AuthError):
+        restarted.consume(session["token"], proof["verification_token"], "restore-drill")
+    with restarted.transaction() as db:
+        assert db.execute("SELECT COUNT(*) FROM verification_proofs").fetchone()[0] == 0
+    fresh = restarted.anonymous()
+    assert restarted.login(fresh["token"], password, "local")["authenticated"]

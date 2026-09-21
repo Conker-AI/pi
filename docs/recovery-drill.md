@@ -10,7 +10,14 @@ a preparation interrupted before dispatch and an uncertain scheduled effect:
 startup recovery does not resubmit the preparation, and the scheduler does not
 retry the effect or admit overlapping work.
 
-This is evidence for Pi snapshot recovery, not a production restore utility or a
+A third scenario snapshots the gateway auth database, demonstrates that restored
+cookies remain valid until revocation, then applies the existing host `revoke-all`
+primitive. After reopening the database, old cookies and verification proofs fail,
+proof rows are absent, and the original password can create a fresh session.
+This step must run before exposing a restored gateway; normal startup deliberately
+does not revoke sessions on every restart.
+
+This is evidence for Pi snapshot recovery and explicit auth revocation, not a production restore utility or a
 cross-service recovery guarantee. Use SQLite backup tooling rather than copying
 only a running database's main file; committed pages may still be in its WAL.
 
