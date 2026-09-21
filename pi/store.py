@@ -211,6 +211,14 @@ def _message(row: sqlite3.Row) -> dict:
     return item
 
 
+def _message_with_attachments(db, row):
+    item = _message(row)
+    files = attachments.message_views(db, item["id"], session_settings.source_privacy)
+    if files:
+        item["attachments"] = files
+    return item
+
+
 class Store:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path).resolve()
@@ -343,16 +351,18 @@ class Store:
 
     def messages(self, session_id: str) -> list[dict]:
         with self._connect() as db:
+            db.execute("BEGIN")
             rows = db.execute(
                 MESSAGE_LOOKUP + " WHERE m.session_id=? ORDER BY m.seq", (session_id,)
             ).fetchall()
-        return [_message(r) for r in rows]
+            return [_message_with_attachments(db, row) for row in rows]
 
     def get_message(self, message_id: str) -> dict | None:
         """Resolve an evidence citation, including its content-free tombstone."""
         with self._connect() as db:
+            db.execute("BEGIN")
             row = db.execute(MESSAGE_LOOKUP + " WHERE m.id=?", (message_id,)).fetchone()
-        return _message(row) if row else None
+            return _message_with_attachments(db, row) if row else None
 
     # --- turns ------------------------------------------------------------
 

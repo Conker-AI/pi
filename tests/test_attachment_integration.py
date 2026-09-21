@@ -17,6 +17,10 @@ def test_file_project_source_and_forgetting_use_real_hooks(tmp_path):
             resolve=session_settings.source_privacy,
         )
         reference = {"kind": "file", "sessionId": sid, "fileId": file["id"]}
+        message = store.append_message(sid, "user", "Read attachment")
+        with store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            attachments.bind(db, sid, message["id"], [file["id"]])
 
         def resolve(ref):
             return project_sources.resolve(store, ref)
@@ -46,6 +50,9 @@ def test_file_project_source_and_forgetting_use_real_hooks(tmp_path):
     forgetting.forget(path, sid, forgetting.preview(path, sid)["confirmation"])
     with closing(Store(path)) as store:
         assert project_sources.resolve(store, reference) is None
+        forgotten = store.get_message(message["id"])
+        assert forgotten["content"] is None
+        assert forgotten["attachments"][0]["name"] == "Unavailable attachment"
     for file in tmp_path.iterdir():
         if file.is_file():
             assert secret not in file.read_bytes()

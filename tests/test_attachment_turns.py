@@ -41,6 +41,9 @@ def test_attachment_reaches_model_bound_to_exact_input(tmp_path):
         )
         assert any("Attachment content 42" in message.content for message in provider.calls[0])
         assert store.get_turn(result["turn_id"])["status"] == "complete"
+        input_message = next(message for message in store.messages(sid) if message["role"] == "user")
+        assert input_message["attachments"][0]["id"] == identity
+        assert store.get_message(input_message["id"])["attachments"] == input_message["attachments"]
         loop.run_turn(
             sid, "Read this", request_id="attachment_request_1", attachment_ids=[identity]
         )

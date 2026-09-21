@@ -12,6 +12,9 @@ preparation releases reservations. History assembly adds selected messages' file
 as untrusted source text, including IDs and names, and rechecks privacy/integrity.
 Context exclusions therefore also exclude that message's attachments. File text is
 not copied into user transcripts or automatically ingested into MemoryGate.
+Message reads return bound attachment metadata in the same database snapshot as
+the message. Forgotten files retain an unavailable reference without their name
+or bytes, so reopening history cannot revive removed content.
 
 This path supports UTF-8 plaintext only. Other uploads remain downloadable and
 return an explicit unsupported-input error if submitted to a model. Automatic
