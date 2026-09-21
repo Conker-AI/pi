@@ -39,6 +39,7 @@ from . import continuity
 from . import calls
 from . import characters
 from . import system_inventory
+from . import filesystem_reads
 from . import system_actions
 from .access import MaintenanceRequired, acquire
 
@@ -275,6 +276,7 @@ class Store:
                 db.executescript(calls.SCHEMA)
                 db.executescript(characters.SCHEMA)
                 db.executescript(system_inventory.SCHEMA)
+                db.executescript(filesystem_reads.SCHEMA)
                 db.executescript(system_actions.SCHEMA)
         except BaseException:
             self.close()
