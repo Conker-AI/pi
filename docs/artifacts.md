@@ -101,3 +101,27 @@ session settings, followed by Store reopen and raw database/sidecar byte inspect
 source text, private title, and derived versions disappear while unrelated
 owner-authored artifacts survive. The artifact and forgetting suites pass together
 (36 tests).
+
+
+## Downloadable deliverables
+
+`GET /artifacts/{id}/download?version=N&format=native|docx|xlsx` performs the same
+live source/provenance checks as export and returns an authenticated attachment
+with no-store and nosniff headers. Native formats match the existing JSON export
+contract (including formula-protected CSV and inert HTML text). Unknown/missing
+source privacy blocks download; a known private origin may still be explicitly
+exported by its owner under the existing artifact contract.
+
+Markdown artifacts support editable DOCX: headings and paragraphs, with other
+Markdown retained as literal text and the existing source-reference appendix
+preserved. This is not a full Markdown layout engine. Table artifacts support XLSX
+with a frozen/filterable header, wrapping and fixed column widths. Every cell is
+stored as a string, including formula-looking text and leading zeros; exports
+contain no formulas, macros, or fetched external resources. Office exports reject
+invalid XML text and files over 2 MiB; DOCX is limited to 5000 paragraphs. No export
+is written into the server filesystem. Other artifact/format pairs return 422.
+
+Runtime dependencies are pinned to [python-docx 1.2.0](https://pypi.org/project/python-docx/1.2.0/)
+and [openpyxl 3.1.5](https://pypi.org/project/openpyxl/3.1.5/). Tests reopen the actual
+Office packages and verify values, structure, auth, safe filenames, source checks,
+version errors, and inert content. No dashboard/gateway wiring is implied.

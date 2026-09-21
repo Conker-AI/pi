@@ -494,7 +494,7 @@ def mutate(store, identity, body, resolve=None):
         return result
 
 
-def export(store, identity, version=None, resolve=None):
+def export(store, identity, version=None, resolve=None, *, format="native"):
     view = get(store, identity, resolve)
     if view["availability"] not in ("available", "source-archived"):
         raise ArtifactError("source_unavailable", "Source privacy or availability blocks export.")
@@ -509,6 +509,14 @@ def export(store, identity, version=None, resolve=None):
         raise ArtifactError("invalid_version", "Choose an existing version.", 422)
     data, mime, extension = selected["content"], "text/plain;charset=utf-8", "txt"
     kind = data["kind"]
+    if (
+        format not in ("native", "docx", "xlsx")
+        or (format == "docx" and kind != "markdown")
+        or (format == "xlsx" and kind != "table")
+    ):
+        raise ArtifactError(
+            "unsupported_format", "Choose a format supported by this artifact.", 422
+        )
     if kind == "table":
         output = io.StringIO(newline="")
         writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
@@ -578,6 +586,16 @@ def export(store, identity, version=None, resolve=None):
     )
     if re.fullmatch(r"con|prn|aux|nul|com[0-9]|lpt[0-9]", base, re.I):
         base = "artifact-" + base
+    if format != "native":
+        from .office_exports import render
+
+        content = render(data, text, format)
+        return {
+            "filename": f"{base}-v{selected['version']}.{format}",
+            "mime": "application/vnd.openxmlformats-officedocument."
+            + ("spreadsheetml.sheet" if format == "xlsx" else "wordprocessingml.document"),
+            "content": content,
+        }
     return {
         "artifactId": identity,
         "version": selected["version"],

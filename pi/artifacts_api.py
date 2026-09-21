@@ -1,6 +1,8 @@
 """Independent owner-only artifact routes; no gateway allowlist changes."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from . import artifacts
 
@@ -47,5 +49,23 @@ def router(store, authorize, resolve=None):
     @routes.get("/{identity}/export")
     def export(identity: str, version: int | None = Query(default=None, ge=1)):
         return run(artifacts.export, identity, version)
+
+    @routes.get("/{identity}/download")
+    def download(
+        identity: str,
+        version: int | None = Query(default=None, ge=1),
+        format: Literal["native", "docx", "xlsx"] = "native",
+    ):
+        result = run(artifacts.export, identity, version, format=format)
+        content = result["text"].encode("utf-8") if format == "native" else result["content"]
+        return Response(
+            content,
+            media_type=result["mime"],
+            headers={
+                "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     return routes
