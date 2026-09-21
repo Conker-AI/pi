@@ -26,6 +26,7 @@ from .job_execution import PublishedJobs
 from .job_worker import JobWorker
 from . import project_sources
 from . import drafts_api
+from . import conversation_search
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -182,6 +183,7 @@ app.include_router(session_settings_api.router(lambda: app.state.store, require_
 app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
 app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
+app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
 app.include_router(jobs_api.router(lambda: app.state.store, require_admin,
                                   lambda: getattr(app.state, "job_executor", None)))
 
