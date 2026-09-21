@@ -90,7 +90,9 @@ class RevisionConflict(Exception):
 
 
 def initialize(db):
+    from . import proactive_budget
     db.executescript(SCHEMA)
+    db.executescript(proactive_budget.SCHEMA)
     db.execute("INSERT OR IGNORE INTO owner_preferences VALUES (1,1,?)",
                (json.dumps(DEFAULT),))
 

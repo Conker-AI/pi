@@ -1,11 +1,27 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from . import continuity
+from . import continuity, proactive_budget
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/continuity", dependencies=[Depends(authorize)])
+
+    @routes.get("/budget")
+    def budget():
+        return JSONResponse(proactive_budget.status(store()), headers={"Cache-Control": "no-store"})
+
+    @routes.post("/budget/reserve")
+    def reserve(body: proactive_budget.Request):
+        try:
+            value = proactive_budget.reserve(store(), body)
+            return JSONResponse(value, headers={"Cache-Control": "no-store"})
+        except proactive_budget.Denied as exc:
+            return JSONResponse(
+                {"code": "proactive_admission_denied", "reasons": exc.reasons},
+                status_code=409,
+                headers={"Cache-Control": "no-store"},
+            )
 
     @routes.get("")
     def read(
