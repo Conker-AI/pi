@@ -81,7 +81,12 @@ Focus includes name and the owner's Focus text instructions; Character additiona
 includes personality, speaking style, soul, backstory, relationship and details.
 This controls new presentation instructions, not deletion of earlier conversation
 history or guaranteed model compliance. Stored voice delivery preferences are not
-silently converted into unsupported synthesis parameters.
+silently converted into unsupported synthesis parameters. The explicit Qwen3
+VoiceDesign speech adapter now consumes frozen voice identity, pronunciation and
+the selected mode's voice/expressiveness notes as instructions. Reference voices,
+non-English calls and generic speech adapters report explicit unsupported errors;
+see [speech-adapters.md](speech-adapters.md). Model compliance and identity
+consistency remain unverified; no reference audio is added to runtime snapshots.
 
 Session settings accept optional `presentationMode`; null follows the profile's
 default. Accepted turns freeze the reduced profile. Calls freeze it before STT,

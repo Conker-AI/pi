@@ -90,8 +90,19 @@ def _label(value):
 
 class SpeechClient:
     def __init__(
-        self, url="", key="", stt_model="", tts_model="", voice="", *, timeout=30, transport=None
+        self,
+        url="",
+        key="",
+        stt_model="",
+        tts_model="",
+        voice="",
+        *,
+        timeout=30,
+        transport=None,
+        character_voice="unsupported",
     ):
+        if character_voice not in ("unsupported", "qwen3-design"):
+            _fail("invalid_configuration", 503, "Unsupported character speech adapter.")
         if not isinstance(url, str) or len(url) > 2048:
             _fail("invalid_configuration", 503, "Speech configuration is invalid.")
         if url:
@@ -134,9 +145,12 @@ class SpeechClient:
         self._url, self._key = url.rstrip("/"), key
         self._stt_model, self._tts_model, self._voice = stt_model, tts_model, voice
         self._timeout, self._transport = timeout, transport
+        self._character_voice = character_voice
         self._state = {
             "stt": "configured" if url and stt_model else "unconfigured",
-            "tts": "configured" if url and tts_model and voice else "unconfigured",
+            "tts": "configured"
+            if url and tts_model and (voice or character_voice == "qwen3-design")
+            else "unconfigured",
         }
 
     def capabilities(self):
@@ -153,6 +167,19 @@ class SpeechClient:
             "segment_timestamps": "only_when_returned",
             "word_timestamps": False,
             "emotion_control": False,
+            "character_voice": {
+                "design": "instructions"
+                if self._character_voice == "qwen3-design"
+                else "unsupported",
+                "reference": "unsupported",
+                "delivery": "authored-instructions"
+                if self._character_voice == "qwen3-design"
+                else "unsupported",
+                "expressiveness": "instruction-only; not a calibrated control"
+                if self._character_voice == "qwen3-design"
+                else "unsupported",
+                "identity_consistency": "model-dependent; not guaranteed",
+            },
             "streaming": False,
             "availability_basis": "configuration_and_last_operation",
         }
@@ -289,7 +316,70 @@ class SpeechClient:
             "duration_seconds": measured["duration_seconds"],
         }
 
-    def synthesize(self, text: str):
+    def _presentation(self, presentation):
+        """Map a frozen, media-free character snapshot to explicit server extensions."""
+        if self._character_voice != "qwen3-design":
+            _fail(
+                "character_voice_unsupported",
+                422,
+                "Configured speech adapter cannot honor character voice settings.",
+            )
+        from .characters import Mode, Voice
+
+        try:
+            studio = presentation["character"]["profile"]["studio"]
+            selected = presentation["mode"]
+            if selected not in ("focus", "character"):
+                raise ValueError("Invalid mode")
+            # Reference audio is deliberately absent from runtime snapshots and this adapter.
+            raw_voice = dict(studio["voice"])
+            if raw_voice.get("source") == "reference":
+                _fail(
+                    "character_reference_unsupported",
+                    422,
+                    "Reference voice synthesis is unsupported by this adapter.",
+                )
+            raw_voice["reference"] = None
+            voice = Voice.model_validate(raw_voice)
+            delivery = Mode.model_validate(studio["modes"][selected])
+        except (KeyError, TypeError, ValueError):
+            raise SpeechError(
+                "invalid_character_voice", 422, "Character speech settings are invalid."
+            ) from None
+        if voice.language != "English":
+            _fail(
+                "character_language_unsupported",
+                422,
+                "Call speech currently supports English only.",
+            )
+        if not voice.description.strip():
+            _fail(
+                "character_design_required",
+                422,
+                "Describe the character voice before synthesizing its design.",
+            )
+        instructions = (
+            "Voice identity: " + voice.description + "\n"
+            "Pronunciation guidance: " + voice.pronunciation + "\n"
+            "Delivery mode: " + selected + "\n"
+            "Delivery guidance: " + delivery.voice + "\n"
+            f"Authored expressiveness preference (0 restrained, 100 expressive): "
+            f"{delivery.expressiveness:g}.\n"
+            "Preserve the voice identity and speak only the supplied input text."
+        )
+        if selected == "focus":
+            instructions += " Use clear, restrained, natural delivery without character flourishes."
+        if "\x00" in instructions:
+            _fail("invalid_character_voice", 422, "Character speech settings contain NUL.")
+        try:
+            instructions.encode("utf-8")
+        except UnicodeError:
+            raise SpeechError(
+                "invalid_character_voice", 422, "Character speech settings must be valid Unicode."
+            ) from None
+        return {"task_type": "VoiceDesign", "language": "English", "instructions": instructions}
+
+    def synthesize(self, text: str, *, presentation=None):
         self._configured("tts")
         if not isinstance(text, str) or not text.strip() or "\x00" in text:
             _fail("invalid_speech_text", 422, "Provide nonblank speech text without NUL.")
@@ -301,16 +391,23 @@ class SpeechClient:
             raise SpeechError(
                 "invalid_speech_text", 422, "Speech text must be valid Unicode."
             ) from None
+        payload = {
+            "model": self._tts_model,
+            "voice": self._voice,
+            "input": text,
+            "response_format": "wav",
+        }
+        if presentation is not None:
+            payload.update(self._presentation(presentation))
+            # VoiceDesign has no preset speaker; do not silently request another identity.
+            payload.pop("voice")
+        elif not self._voice:
+            _fail("speech_unconfigured", 503, "Configure a default voice for ordinary synthesis.")
         body, media = self._request(
             "tts",
             "/audio/speech",
             MAX_AUDIO_BYTES,
-            json={
-                "model": self._tts_model,
-                "voice": self._voice,
-                "input": text,
-                "response_format": "wav",
-            },
+            json=payload,
         )
         try:
             measured = validate_wav(body, media)

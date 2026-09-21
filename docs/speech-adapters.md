@@ -75,6 +75,37 @@ STT/TTS statuses are `unconfigured`, `configured` (not yet verified), `available
 a continuously refreshed health check. Emotion controls, word timestamps and
 streaming are explicitly unsupported by this adapter.
 
+## Character voice design
+
+`SpeechClient(..., character_voice="qwen3-design")` explicitly opts the configured
+server into the documented vLLM-Omni Qwen3 VoiceDesign contract. The default is
+`unsupported`; selecting a Qwen model name alone does not enable extensions.
+The operator must separately serve a compatible VoiceDesign model and configure
+its model ID. This implementation does not install or launch it.
+
+`synthesize(text, presentation=accepted_call_preferences)` uses the character
+snapshot frozen at request acceptance. Voice description, pronunciation guidance,
+selected mode's voice notes and expressiveness preference become `instructions`;
+the request selects `task_type=VoiceDesign`, `language=English` and WAV output.
+No preset `voice` is sent for design. Focus adds restrained delivery guidance;
+both modes retain the authored identity description. Personality/backstory,
+artwork and reference audio do not enter the synthesis request.
+
+This is instruction transport, not a calibrated expressiveness control, emotion
+inference or a guarantee of consistent voice identity. `/calls/capabilities`
+reports these limits under `speech.character_voice`. Empty designs, non-English
+languages and reference-source voices fail explicitly before HTTP. Reference
+cloning needs a separately supported model/adapter and remains unsupported here.
+An ordinary request without a character still uses the configured default voice.
+There is no fallback from an unsupported character voice to that default.
+
+Calls retain text success and record a static speech error code if synthesis
+fails. Existing interruption checks and once-only request receipts apply to
+designed speech. No additional media persistence or server-side retention
+guarantee is introduced. `tests/test_character_speech.py` verifies request payloads,
+mode/identity freezing, future edits, explicit rejection, replay and interruption
+using synthetic PCM, mock HTTP and temporary SQLite only.
+
 ## Boundaries
 
 - PCM WAV only: RIFF/WAVE, integer PCM, one format/data chunk, mono/stereo,

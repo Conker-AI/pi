@@ -98,13 +98,17 @@ speech_factory=None)`.
   speech/model work runs off the ASGI event loop so pause/end can arrive.
 
 The `SpeechClient` interface is `transcribe(audio, mime)` returning text metadata
-and `synthesize(text)` returning audio/mime/duration metadata. Calls guard both
+and `synthesize(text, presentation=...)` returning audio/mime/duration metadata.
+Calls with a saved character pass its frozen acceptance snapshot and mode; calls
+without a character use `synthesize(text)`. Calls guard both
 sides of each invocation. The adapter owns WAV validation, duration/byte limits,
 timeouts, credentials, configured capability reporting and no-retry behavior.
 No speech adapter means typed text still works and voice is explicitly unavailable.
 Pi configures the optional adapter with `PI_SPEECH_URL` (including the server's
 API base path), `PI_SPEECH_KEY`, `PI_STT_MODEL`, `PI_TTS_MODEL`, and
 `PI_TTS_VOICE`. `PI_SPEECH_TIMEOUT_S` defaults to 30 seconds. There is no default
+character adapter: `PI_SPEECH_CHARACTER_VOICE=qwen3-design` explicitly enables
+the documented VoiceDesign extension; its default is `unsupported`. There is no default
 speech host or downloaded model. Configuration is validated before opening Pi's
 database; capability reporting distinguishes configuration from actual success.
 Speech response audio is base64 in a transient JSON envelope, not a persisted file
@@ -122,3 +126,9 @@ future-only model changes, parent forgetting/byte erasure and owner API smoke.
 Scoped Ruff checks pass. Parent integration tests separately cover its shared
 hooks and generic child-settings protection; this is not a live device/service
 validation or a declaration that every P13 frontend capability is connected.
+
+Character voice design transport is covered separately by ten synthetic tests in
+`tests/test_character_speech.py`. See [speech-adapters.md](speech-adapters.md) for
+the explicit Qwen3 VoiceDesign opt-in and its unsupported reference/language and
+quality boundaries. Call capabilities defer to the configured speech adapter.
+Speech failures populate `errorCode` while preserving `textStatus: complete`.

@@ -244,7 +244,7 @@ def _view(db, row):
             "camera": "unavailable",
             "perception": "unavailable",
             "emotion": "unavailable",
-            "characterVoice": "not-implemented",
+            "characterVoice": "adapter-dependent; inspect /calls/capabilities",
             "channels": "preferences; no device capture",
             "rawMediaRetention": "none",
             "audioReplay": "unavailable",
@@ -353,6 +353,7 @@ def start(store, body: Start):
             (json.dumps(selected), child),
         )
         from . import character_context, characters
+
         presentation = {
             "presentationMode": selected.get("presentationMode"),
             "character": characters.runtime_snapshot(db, selected["agentId"]),
@@ -639,6 +640,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             )
         generation, session_id = row["generation"], row["session_id"]
         from . import characters
+
         agent_id = session_settings._load(db, session_id)["settings"]["agentId"]
         accepted = {**settings, "character": characters.runtime_snapshot(db, agent_id)}
         db.execute(
@@ -658,7 +660,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
         )
         db.execute("UPDATE calls SET phase='thinking' WHERE id=?", (identity,))
         db.commit()
-    speech_status, output = "not-requested", None
+    speech_status, output, speech_error = "not-requested", None, None
     try:
         text = body.text
         if audio is not None:
@@ -683,17 +685,25 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             else:
                 try:
                     _stage(store, identity, body.request_id, generation, "synthesizing")
-                    output = speech.synthesize(message["content"])
+                    if accepted["character"] is None:
+                        output = speech.synthesize(message["content"])
+                    else:
+                        output = speech.synthesize(message["content"], presentation=accepted)
                     guard(store, {"callExecution": {"id": identity, "generation": generation}})
                     speech_status = "generated-transient"
-                except Exception:
+                except Exception as exc:
                     # The transcript already committed; speech failure must not erase text success.
                     output, speech_status = None, "failed-or-interrupted"
+                    from .speech import SpeechError
+
+                    if isinstance(exc, SpeechError):
+                        speech_error = exc.code
         _finish(
             store,
             identity,
             body.request_id,
             "complete" if message else "held",
+            error=speech_error,
             speech_status=speech_status,
         )
     except Exception as exc:
