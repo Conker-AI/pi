@@ -49,9 +49,11 @@ queue: it is part of the receiver's deduplication namespace. Missing configurati
 is reported as degraded memory, and partial configuration refuses startup with
 the missing variable names. The transcript remains useful without MemoryGate.
 
-The existing MemoryGate bootstrap read-key helper can reactivate revoked keys.
-Use a separately issued key and remove its bootstrap configuration; correcting
-that helper is a separate security fix.
+Current MemoryGate bootstrap initialization retains a permanent key identity;
+restart preserves revocation, rename, rotation and namespace changes. Legacy
+unmatched keys require owner review rather than automatic recreation. Use an
+owner-issued key and remove bootstrap configuration after setup; see MemoryGate's
+`docs/bootstrap-authority.md` for the upgrade behavior.
 
 ## Interface contract
 
