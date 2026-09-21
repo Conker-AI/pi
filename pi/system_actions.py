@@ -1,5 +1,6 @@
 """Durable owner system actions; only ToolGate can authorize or execute effects."""
 
+import ipaddress
 import json
 import re
 import time
@@ -12,6 +13,7 @@ from .toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 
 TOOL = "system.container-control"
 SERVICE_TOOL = "system.process-control"
+PORT_TOOL = "system.port-control"
 SERVICE_PATTERN = (
     r"^(user|system):[A-Za-z0-9_][A-Za-z0-9_.-]*(?:@[A-Za-z0-9_][A-Za-z0-9_.-]*)?\.service$"
 )
@@ -36,6 +38,12 @@ class ServiceRequest(StrictModel):
     action: Literal["start", "stop", "restart"]
 
 
+class PortRequest(StrictModel):
+    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
+    container_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    review_id: str = Field(pattern=r"^[a-f0-9]{48}$")
+
+
 class ActionError(RuntimeError):
     def __init__(self, code, message, status=409):
         super().__init__(message)
@@ -55,6 +63,8 @@ def _row(db, identity):
 
 
 def _args(row):
+    if _port(row):
+        return {"container_id": row["container_id"], "review_id": row["action"][6:]}
     return {
         "service_id" if _service(row) else "container_id": row["container_id"],
         "action": row["action"],
@@ -67,7 +77,13 @@ def _service(row):
     return ":" in row["container_id"]
 
 
+def _port(row):
+    return row["action"].startswith("ports:")
+
+
 def _tool(row):
+    if _port(row):
+        return PORT_TOOL
     return SERVICE_TOOL if _service(row) else TOOL
 
 
@@ -76,7 +92,8 @@ def _view(row):
         "requestId": row["id"],
         "actionId": "pi_system_" + row["id"],
         "serviceId" if _service(row) else "containerId": row["container_id"],
-        "action": row["action"],
+        "action": "ports" if _port(row) else row["action"],
+        **({"reviewId": row["action"][6:]} if _port(row) else {}),
         "state": row["state"],
         "approval": json.loads(row["approval"]) if row["approval"] else None,
         "errorCode": row["error_code"],
@@ -88,6 +105,8 @@ def _view(row):
 
 
 def _observation(value, row):
+    if _port(row):
+        return _port_observation(value, row)
     target_key = "serviceId" if _service(row) else "containerId"
     if (
         not isinstance(value, dict)
@@ -149,6 +168,64 @@ def _observation(value, row):
     return result
 
 
+def _port_observation(value, row):
+    if not isinstance(value, dict) or value.get("containerId") != row["container_id"]:
+        raise ValueError("receipt mismatch")
+    if value.get("outcome") == "unchanged":
+        if value.get("replacementId") is not None or value.get("dispatched") is not False:
+            raise ValueError("invalid unchanged receipt")
+        return {
+            "containerId": row["container_id"],
+            "replacementId": None,
+            "outcome": "unchanged",
+            "dispatched": False,
+        }
+    replacement, snapshot = value.get("replacementId"), value.get("snapshotImage")
+    if (
+        value.get("outcome") != "observed"
+        or value.get("dispatched") is not True
+        or value.get("originalRetained") is not True
+        or not isinstance(replacement, str)
+        or not re.fullmatch(r"[a-f0-9]{64}", replacement)
+        or replacement == row["container_id"]
+        or not isinstance(snapshot, str)
+        or not re.fullmatch(r"sha256:[a-f0-9]{64}", snapshot)
+    ):
+        raise ValueError("invalid replacement receipt")
+    bindings = value.get("bindings")
+    if not isinstance(bindings, list) or len(bindings) > 200:
+        raise ValueError("invalid bindings")
+    projected, seen = [], set()
+    for item in bindings:
+        if not isinstance(item, dict) or item.get("protocol") not in ("tcp", "udp"):
+            raise ValueError("invalid binding")
+        if not isinstance(item.get("hostAddress"), str):
+            raise ValueError("invalid address")
+        address = str(ipaddress.ip_address(item["hostAddress"]))
+        for field in ("hostPort", "containerPort"):
+            if type(item.get(field)) is not int or not 1 <= item[field] <= 65535:
+                raise ValueError("invalid port")
+        identity = (address, item["hostPort"], item["containerPort"], item["protocol"])
+        if identity in seen:
+            raise ValueError("duplicate binding")
+        seen.add(identity)
+        projected.append(
+            {
+                "hostAddress": address,
+                **{key: item[key] for key in ("hostPort", "containerPort", "protocol")},
+            }
+        )
+    return {
+        "containerId": row["container_id"],
+        "replacementId": replacement,
+        "snapshotImage": snapshot,
+        "originalRetained": True,
+        "outcome": "observed",
+        "dispatched": True,
+        "bindings": projected,
+    }
+
+
 def _record(store, identity, outcome):
     observation, approval, code = None, None, None
     with store._connect() as db:
@@ -206,14 +283,21 @@ def _dispatch(store, gate, row, approval=None):
 
 def request(store, gate, body):
     _configured(gate)
-    model = ServiceRequest if isinstance(body, ServiceRequest) else Request
+    model = (
+        PortRequest
+        if isinstance(body, PortRequest)
+        else ServiceRequest
+        if isinstance(body, ServiceRequest)
+        else Request
+    )
     body = model.model_validate(body.model_dump())
     target = body.service_id if isinstance(body, ServiceRequest) else body.container_id
+    action = "ports:" + body.review_id if isinstance(body, PortRequest) else body.action
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute("SELECT * FROM system_actions WHERE id=?", (body.request_id,)).fetchone()
         if row:
-            if row["container_id"] != target or row["action"] != body.action:
+            if row["container_id"] != target or row["action"] != action:
                 raise ActionError(
                     "request_conflict", "Request ID is bound to another system action."
                 )
@@ -221,7 +305,7 @@ def request(store, gate, body):
         now = time.time()
         db.execute(
             "INSERT INTO system_actions VALUES (?,?,?,'dispatching',NULL,NULL,?,?)",
-            (body.request_id, target, body.action, now, now),
+            (body.request_id, target, action, now, now),
         )
         row = _row(db, body.request_id)
         db.commit()

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from . import system_actions as actions
-from . import system_targets
+from . import system_port_reviews, system_targets
 
 
 def router(store, gate, authorize):
@@ -24,6 +24,10 @@ def router(store, gate, authorize):
     def request_service(body: actions.ServiceRequest):
         return invoke(actions.request, body)
 
+    @routes.post("/ports")
+    def request_ports(body: actions.PortRequest):
+        return invoke(actions.request, body)
+
     @routes.get("")
     def history(limit: int = Query(default=50, ge=1, le=100)):
         return {"results": actions.history(store(), limit)}
@@ -41,6 +45,26 @@ def router(store, gate, authorize):
 
 def targets_router(gate, authorize):
     routes = APIRouter(prefix="/system", dependencies=[Depends(authorize)])
+
+    @routes.post("/port-reviews")
+    def create_port_review(body: system_port_reviews.Request):
+        try:
+            return JSONResponse(
+                system_port_reviews.fetch(gate(), request=body),
+                headers={"Cache-Control": "no-store"},
+            )
+        except actions.ActionError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+
+    @routes.get("/port-reviews/{review_id}")
+    def get_port_review(review_id: str):
+        try:
+            return JSONResponse(
+                system_port_reviews.fetch(gate(), review_id=review_id),
+                headers={"Cache-Control": "no-store"},
+            )
+        except actions.ActionError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
 
     @routes.get("/targets")
     def targets():
