@@ -23,12 +23,12 @@ import json
 import time
 import uuid
 
-from . import actions, context_controls, memory_store, session_settings, submissions, tasks
+from . import actions, context_controls, memory_store, model_roles, session_settings, submissions, tasks
 from . import tools as tool_protocol
 from .memory import Memory
 from .openrouter import ModelUnusable
 from .providers import Message, ProviderUnavailable
-from .routing import Router, TurnContext
+from .routing import Reason, Route, Router, Tier, TurnContext
 from .store import Store
 from .toolgate import (
     ApprovalRequired,
@@ -104,14 +104,26 @@ class Loop:
             # works, and the model is simply offered nothing.
             return []
 
-    def _call(self, messages: list[Message], ctx: TurnContext, execution=None):
+    def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
         """Route, then call, falling through models that refuse to serve us.
 
         The loop never picks a model itself - it walks the order the router
         gave. Falling through is not a silent retry: what was skipped and why
         is returned and recorded on the turn.
         """
-        if execution and (execution.get("configuration") or {}).get("modelId"):
+        configuration = execution.get("modelConfiguration") if execution else None
+        override = (execution.get("configuration") or {}).get("modelId") if execution else None
+        if configuration is not None:
+            adapters = {adapter.name: adapter for adapter in (
+                getattr(self.router, "local", None), getattr(self.router, "hosted", None)) if adapter is not None}
+            result = model_roles.dispatch(configuration, role, messages, adapters,
+                harness_disabled=execution["privacy"]["harnessDisabled"],
+                override=override if role == "answer" else None)
+            completion = result["completion"]
+            evidence = {"role": role, "modelConfigurationRevision": execution["modelConfigurationRevision"],
+                        "modelId": result["modelId"], "attempts": result["attempts"]}
+            return Route(Tier.CONFIGURED, Reason.CONFIGURED, result["providerId"], completion.model), completion, [json.dumps(evidence)]
+        if override:
             raise ProviderUnavailable("Explicit agent model mapping is not configured; no fallback was attempted.")
         # The current router is deterministic policy, not a helper model call.
         # No-harness excludes auxiliary models, not hosted answer providers.
@@ -183,7 +195,7 @@ class Loop:
 
     # --- forking ----------------------------------------------------------
 
-    def _summarise(self, messages: list[Message]) -> str:
+    def _summarise(self, messages: list[Message], execution=None) -> str:
         """Ask the model to summarise, and fall back to a truthful marker.
 
         If summarising fails the fork still happens: the alternative is a
@@ -199,7 +211,7 @@ class Loop:
         ]
         try:
             # Summarising is analysis, not conversation, so it routes as such.
-            _, completion, _ = self._call(ask, TurnContext(is_analysis=True))
+            _, completion, _ = self._call(ask, TurnContext(is_analysis=True), execution, role="summarization")
             return completion.text.strip()
         except (ProviderUnavailable, RuntimeError) as exc:
             reason = getattr(exc, "reason", type(exc).__name__)
@@ -214,7 +226,7 @@ class Loop:
             raise TurnFailed("No harness excludes automatic summarization; use a reviewed fork.")
         if context_controls.load(self.store, session_id)["policy"] is not None:
             raise TurnFailed("Review explicit context policy before forking; pins cannot be silently summarized.")
-        summary = self._summarise(history)
+        summary = self._summarise(history, execution)
         parent = self.store.get_session(session_id) or {}
         self.store.close_session(session_id, "forked", summary=summary)
         return self.store.create_session(
@@ -347,6 +359,7 @@ class Loop:
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,
             latency_ms=int((time.monotonic() - started) * 1000),
             route_tier=route.tier.value, route_reason=route.reason.value,
+            detail="; ".join(_skipped) or None,
         )
         return {"session_id": session_id, "turn_id": turn_id, "status": "complete",
                 "acted": acted, "message": message,
@@ -399,7 +412,7 @@ class Loop:
                     if receipt["final_message_id"] else None}
         try:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
-            if (execution.get("configuration") or {}).get("modelId"):
+            if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
             history = self._history(session_id, execution=execution)
             outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
@@ -410,7 +423,7 @@ class Loop:
             if outgrown and task_id:
                 raise submissions.SubmissionError("task_fork_required", "This task needs its "
                     "original conversation. Create a child task before continuing after a fork.")
-            summary = self._summarise(history) if outgrown else None
+            summary = self._summarise(history, execution) if outgrown else None
             receipt = submissions.bind(self.store, identity, fork_summary=summary)
         except Exception as exc:
             submissions.fail_preparation(self.store, identity,

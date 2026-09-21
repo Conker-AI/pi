@@ -6,4 +6,14 @@ The backend catalogue stores stable owner model IDs, provider binding IDs and ac
 
 Existing Ollama and OpenRouter adapters now expose `complete_bounded` for request-specific timeout, without mutating shared adapter settings. HTTP inactivity timeout does not guarantee cancellation of remote computation or total wall-clock duration. Credentials and endpoint provisioning remain owned by host/provider setup; the catalogue contains neither API keys nor browser-supplied endpoints.
 
-The owner-only router is ready for Store/API mounting. Per-turn configuration capture and Loop role dispatch integration are still required. Frontend gateway wiring remains deferred. Tests cover strict configuration, revision persistence, manual lock/no substitution, server-filtered eligibility, replaceable router choice, malformed decisions, explicit fallback and privacy. Model roles plus existing model readiness/audit/routing suites: 51 passed.
+The owner-only `/models/configuration` API is mounted. Submission reservation freezes the catalogue and role configuration revision with the agent/session selections; turn binding retains it. Loop answer calls and summary helpers dispatch through that snapshot. Provider IDs resolve only against the existing server-owned local/hosted adapters by their adapter names. Unsupported provider bindings fail closed. No direct provider SDKs or browser-provided endpoints are added.
+
+The answer role's selected model is authoritative. `defaultModelId` remains a catalogue default; it does not silently override an explicitly configured role. A selected agent `modelId` is an explicit answer override within that role's eligibility. Manual locks and agent overrides never invoke a routing helper or substitute another model after failure. No-harness permits manual hosted answers but blocks helper routing and summarization. Legacy deterministic routing remains only for snapshots without any saved role configuration, including turns reserved before the first catalogue save.
+
+Successful configured answers record `route_tier= configured`, `route_reason=configured`, and JSON attempt evidence in the turn detail (configuration revision, role, selected stable ID, requested route and actual returned model). This evidence is not a claim that final-completion token/cost fields aggregate all helper calls. Snapshot lookup verifies the turn's session or submission's original session before returning data. Frontend gateway wiring remains deferred.
+
+Validation:
+
+```sh
+python -m pytest tests/test_model_role_execution.py tests/test_model_roles.py tests/test_session_settings.py tests/test_loop.py tests/test_submissions.py tests/test_tool_turns.py -q
+```

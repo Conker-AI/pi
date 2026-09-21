@@ -20,12 +20,14 @@ from .providers import ProviderUnavailable
 
 
 class Tier(StrEnum):
+    CONFIGURED = "configured"  # explicit owner role selection, no inferred price tier
     LOCAL = "local"      # free, on the box, no network
     CHEAP = "cheap"      # free tier, hosted
     STRONG = "strong"    # the best available under the current spend policy
 
 
 class Reason(StrEnum):
+    CONFIGURED = "configured"
     DEFAULT = "default"
     TOOLS_REQUIRED = "tools_required"
     RETRY_AFTER_FAILURE = "retry_after_failure"

@@ -39,8 +39,9 @@ Specialist execution now receives the frozen instructions and only the intersect
 of selected tool IDs and current ToolGate availability. Approval resumes check that
 intersection before a new invocation; reconciliation of an uncertain prior action
 remains possible without dispatching it again. ToolGate still owns authorization.
-An explicit agent model ID currently fails closed before dispatch because stable
-provider mapping is a separate package; it never silently falls back.
+An explicit agent model ID resolves through the frozen model-role catalogue and
+server-owned adapters. Missing mappings fail closed; manual overrides never silently
+fall back. See [model-roles.md](model-roles.md) for dispatch and evidence details.
 
 Specialist memory currently stays disabled: a stored agent ID is not an authorized
 MemoryGate namespace mapping. Companion sessions with saved settings use the scoped

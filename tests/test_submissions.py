@@ -98,7 +98,7 @@ def test_crash_during_preparation_retains_input_and_never_automatically_reexecut
         session = store.create_session()
         store.append_message(session, "user", "x" * 200)
         loop = loop_with(store, Recorder(), fork_threshold_chars=100)
-        loop._summarise = lambda _: (_ for _ in ()).throw(Crash())
+        loop._summarise = lambda _, execution=None: (_ for _ in ()).throw(Crash())
         with pytest.raises(Crash):
             loop.run_turn(session, "still saved", request_id=REQUEST)
         assert submissions.get(store, REQUEST)["pending_text"] == "still saved"

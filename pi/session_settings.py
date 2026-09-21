@@ -65,7 +65,10 @@ def _snapshot(db, identity):
     agent = agents._get(db, value["settings"]["agentId"])
     if agent["archived_at"] is not None:
         raise agents.AgentError("agent_archived", "Restore or select an active agent before starting work.")
+    models = db.execute("SELECT revision,configuration FROM model_role_settings WHERE singleton=1").fetchone()
     return {**value, "agentId": agent["id"], "agentVersion": agent["revision"],
+            "modelConfigurationRevision": models["revision"] if models else 0,
+            "modelConfiguration": json.loads(models["configuration"]) if models else None,
             "configuration": agent["configuration"], "kind": agent["kind"],
             "privacy": value["settings"]["privacy"], "authority": "none"}
 
@@ -105,6 +108,14 @@ def execution(store, identity, turn_id=None, request_id=None):
     with store._connect() as db:
         _load(db, identity)
         if turn_id or request_id:
+            if turn_id and request_id:
+                raise agents.AgentError("invalid_execution_identity", "Choose one execution identity.", 422)
+            if turn_id:
+                origin = db.execute("SELECT session_id FROM turns WHERE id=?", (turn_id,)).fetchone()
+            else:
+                origin = db.execute("SELECT requested_session_id FROM turn_submissions WHERE request_id=?", (request_id,)).fetchone()
+            if origin is None or origin[0] != identity:
+                raise agents.AgentError("foreign_execution", "Execution does not belong to this conversation.", 404)
             table, key, value = ("turn_settings", "turn_id", turn_id) if turn_id else ("submission_settings", "request_id", request_id)
             row = db.execute(f"SELECT snapshot FROM {table} WHERE {key}=?", (value,)).fetchone()
             if row:

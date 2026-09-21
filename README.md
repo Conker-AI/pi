@@ -189,8 +189,9 @@ and walking the catalogue would be slow and would blame the models.
 
 [Session privacy and agent selections](docs/session-settings.md) now govern future
 turns with immutable snapshots and memory queue exclusions. Specialist instructions
-and tool selections are enforced; explicit model mapping and specialist memory
-namespace authorization remain separate prerequisites.
+and tool selections are enforced. Model-role catalogue snapshots now dispatch
+through configured server adapters; specialist memory namespace authorization
+remains a separate prerequisite.
 
 [Templates and team preparations](docs/collaboration.md) are durable, versioned
 configuration with bounded role selections and budgets. Publishing and preparing
