@@ -92,8 +92,9 @@ class MemoryClient:
 
 
 class Memory:
-    def __init__(self, store, client=None):
+    def __init__(self, store, client=None, *, read_clients=None):
         self.store, self.client = store, client
+        self.read_clients = dict(read_clients or {})
         self.stop_event = threading.Event()
         self.thread = None
 
@@ -104,17 +105,18 @@ class Memory:
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
+        client = self.client if selected["kind"] == "companion" else self.read_clients.get(selected["agentId"])
         if memory_store.pending_deletions(self.store):
             state = "unavailable"
-        elif self.client:
+        elif client:
             try:
                 # Legacy Companion behavior remains unchanged unless settings were explicitly saved.
                 if selected.get("revision", 0) == 0:
-                    package = self.client.retrieve(query)
+                    package = client.retrieve(query)
                 else:
                     configuration = selected["configuration"]
                     scope = configuration["memory"]["scope"]
-                    package = self.client.retrieve(query, scope=scope,
+                    package = client.retrieve(query, scope=scope,
                         session_id=turn["session_id"] if scope == "conversation" else None,
                         memory_ids=configuration["memory"]["memoryIds"] if scope == "selected" else [])
                 state = (
@@ -224,3 +226,5 @@ class Memory:
             self.thread.join()
         if self.client:
             self.client.close()
+        for client in self.read_clients.values():
+            client.close()

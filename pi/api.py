@@ -140,6 +140,18 @@ async def lifespan(app: FastAPI):
     memory = Memory(store, MemoryClient(memory_url, ingest_key, read_key,
         os.environ.get("PI_MEMORYGATE_AGENT_ID", "default"),
         timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)) if memory_url else None)
+    from . import memory_authority
+    try:
+        bindings = os.environ.get("PI_MEMORY_AGENT_READ_BINDINGS", "").strip()
+        if bindings and not memory_url:
+            raise ValueError("Configure MemoryGate before specialist memory bindings.")
+        memory.read_clients = memory_authority.clients(bindings, os.environ,
+            lambda namespace, key: MemoryClient(memory_url, "", key, namespace,
+                timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)))
+    except ValueError:
+        memory.close()
+        store.close()
+        raise
     app.state.memory = memory
     correction_values = [os.environ.get(name, '').strip() for name in (
         'PI_MEMORY_CORRECTION_URL', 'PI_MEMORY_CORRECTION_KEY', 'PI_MEMORY_CORRECTION_AGENT_ID')]

@@ -179,5 +179,5 @@ def source_privacy(db, identity):
 
 
 def memory_allowed(snapshot):
-    # Specialist namespace/authority mapping is deliberately not guessed.
-    return not snapshot["privacy"]["memoryDisabled"] and snapshot["kind"] == "companion"
+    # Retrieval authority is resolved separately by Memory's operator-owned map.
+    return not snapshot["privacy"]["memoryDisabled"] and snapshot["kind"] in ("companion", "agent")

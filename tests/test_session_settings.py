@@ -135,7 +135,7 @@ def test_agent_instructions_tool_intersection_and_unmapped_model_fail_closed(tmp
         assert [t.id for t in loop._available_tools(execution)] == ["read"]
         result = loop.run_turn(sid, "Read")
         assert any(m.content == "Use only cited evidence." for m in provider.calls[0][0])
-        assert result["memory"]["retrieval"]["status"] == "disabled"
+        assert result["memory"]["retrieval"]["status"] == "not_configured"
         agents.update(store, agent["id"], agents.UpdateAgent(expected_revision=1, configuration=config(modelId="unmapped")))
         with pytest.raises(TurnFailed, match="mapping"):
             loop.run_turn(sid, "Do not silently switch")
@@ -192,6 +192,7 @@ def test_privacy_does_not_force_local_answer_provider(tmp_path):
         change(store, sid, memory=True, harness=True)
         provider = Provider()
         class HostedRoute:
+            def adapters(self): return {"test": provider}
             def candidates(self, ctx): return [Route(Tier.STRONG, Reason.OWNER_ASKED, "test", "frontier-answer")]
             def provider_for(self, route): return provider
         result = Loop(store, HostedRoute()).run_turn(sid, "Answer remotely")
