@@ -11,5 +11,10 @@ Offline forgetting deletes drafts for the forgotten session tree and physically
 scrubs database/WAL copies. Forgotten or nonexistent sessions cannot read/write
 drafts. Task prompts cannot cross conversation boundaries.
 
-Attachment drafts, send-time draft consumption, and browser gateway/frontend
-integration are separate work; this increment supplies independent storage/API.
+Turn requests optionally carry `draft_revision`. Reservation verifies that exact
+revision and text; binding the input message clears it atomically. Failed
+preparation preserves the draft. New text saved during preparation survives, and
+replayed submissions cannot clear it. Task-bound requests consume only their task
+draft. Omitting the revision leaves drafts unchanged for existing clients.
+
+Attachment drafts and browser gateway/frontend integration remain separate work.

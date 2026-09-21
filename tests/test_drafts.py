@@ -3,7 +3,7 @@ from contextlib import closing
 
 import pytest
 
-from pi import drafts, forgetting, tasks
+from pi import drafts, forgetting, submissions, tasks
 from pi.store import Store
 
 
@@ -61,3 +61,31 @@ def test_restart_and_offline_forgetting_scrubs_drafts(tmp_path):
     for file in tmp_path.iterdir():
         if file.is_file():
             assert secret.encode() not in file.read_bytes()
+
+
+@pytest.mark.parametrize("edit_after_reservation", [False, True])
+def test_bind_clears_only_the_submitted_revision(tmp_path, edit_after_reservation):
+    with closing(Store(tmp_path / "draft.db")) as store:
+        sid = store.create_session()
+        drafts.save(store, sid, drafts.Save(expected_revision=0, text="Send me"))
+        request = "draft_submit_request"
+        submissions.reserve(store, request, sid, "Send me", {}, draft_revision=1)
+        assert drafts.load(store, sid)["text"] == "Send me"
+        if edit_after_reservation:
+            drafts.save(store, sid, drafts.Save(expected_revision=1, text="Newer text"))
+        submissions.bind(store, request)
+        assert drafts.load(store, sid)["text"] == ("Newer text" if edit_after_reservation else "")
+        _, created = submissions.reserve(store, request, sid, "Send me", {}, draft_revision=1)
+        assert not created
+
+
+def test_mismatched_draft_does_not_reserve_a_turn(tmp_path):
+    with closing(Store(tmp_path / "draft.db")) as store:
+        sid = store.create_session()
+        drafts.save(store, sid, drafts.Save(expected_revision=0, text="Actual"))
+        with pytest.raises(submissions.SubmissionError, match="no longer matches"):
+            submissions.reserve(store, "draft_submit_request", sid, "Wrong", {}, draft_revision=1)
+        assert drafts.load(store, sid)["text"] == "Actual"
+        assert store.messages(sid) == []
+        with store._connect() as db:
+            assert db.execute("SELECT COUNT(*) FROM turn_submissions").fetchone()[0] == 0

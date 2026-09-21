@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS conversation_drafts (
  revision INTEGER NOT NULL, text TEXT NOT NULL, updated_at REAL NOT NULL,
  PRIMARY KEY(session_id,scope)
 );
+CREATE TABLE IF NOT EXISTS submitted_drafts (
+ request_id TEXT PRIMARY KEY REFERENCES turn_submissions(request_id),
+ session_id TEXT NOT NULL, scope TEXT NOT NULL, revision INTEGER NOT NULL
+);
 """
 
 
@@ -76,3 +80,29 @@ def redact(db, session_ids):
         return
     for identity in session_ids:
         db.execute("DELETE FROM conversation_drafts WHERE session_id=?", (identity,))
+        db.execute("DELETE FROM submitted_drafts WHERE session_id=?", (identity,))
+
+
+def reserve(db, request_id, session_id, task_id, revision, text):
+    scope = _scope(db, session_id, task_id)
+    draft = _read(db, session_id, scope)
+    if (
+        type(revision) is not int
+        or revision < 1
+        or draft["revision"] != revision
+        or draft["text"] != text
+    ):
+        raise DraftError("Submitted text no longer matches the saved draft revision.")
+    db.execute(
+        "INSERT INTO submitted_drafts VALUES(?,?,?,?)", (request_id, session_id, scope, revision)
+    )
+
+
+def consume(db, request_id):
+    row = db.execute("SELECT * FROM submitted_drafts WHERE request_id=?", (request_id,)).fetchone()
+    if row:
+        db.execute(
+            "UPDATE conversation_drafts SET text='',revision=revision+1,updated_at=? "
+            "WHERE session_id=? AND scope=? AND revision=?",
+            (time.time(), row["session_id"], row["scope"], row["revision"]),
+        )

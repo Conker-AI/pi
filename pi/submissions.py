@@ -200,7 +200,7 @@ def _task(db, task_id, revision, session_id):
                               "Restore and reopen the task before submitting work.")
 
 
-def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None):
+def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError("invalid_request",
                               "Provide a valid submission request identity.", 422)
@@ -210,10 +210,13 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
         raise SubmissionError("invalid_task", "Task identity and revision belong together.", 422)
     if task_revision is not None and (type(task_revision) is not int or task_revision < 1):
         raise SubmissionError("invalid_task", "Provide the current task revision.", 422)
-    digest = hashlib.sha256(json.dumps({
+    payload = {
         "session_id": session_id, "text": text, "context": context,
         "task_id": task_id, "task_revision": task_revision,
-    }, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+    }
+    if draft_revision is not None:
+        payload["draft_revision"] = draft_revision
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         prior = db.execute("SELECT * FROM turn_submissions WHERE request_id=?",
@@ -238,6 +241,12 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
         session_settings.reserve(db, request_id, session_id)
+        if draft_revision is not None:
+            from . import drafts
+            try:
+                drafts.reserve(db, request_id, session_id, task_id, draft_revision, text)
+            except drafts.DraftError as exc:
+                raise SubmissionError("draft_changed", str(exc)) from exc
         result = _view(db, _row(db, request_id))
         db.commit()
         return result, True
@@ -297,6 +306,8 @@ def bind(store, request_id, *, fork_summary=None):
                    "input_message_id=?,"
                    "state='bound',pending_text=NULL,updated_at=? WHERE request_id=?",
                    (session_id, turn_id, message["id"], now, request_id))
+        from . import drafts
+        drafts.consume(db, request_id)
         result = _view(db, _row(db, request_id))
         db.commit()
         return result
