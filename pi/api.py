@@ -35,6 +35,7 @@ from . import memory_corrections, memory_proposals, memory_proposals_api
 from . import continuity_api
 from . import calls, calls_api, speech
 from . import characters_api
+from . import system_inventory, system_inventory_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI):
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
     calls.recover(store)
+    system_inventory.recover(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give
@@ -217,6 +219,8 @@ app.include_router(projects_api.router(lambda: app.state.store, require_admin,
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_admin))
+app.include_router(system_inventory_api.router(lambda: app.state.store,
+    lambda: getattr(app.state, "toolgate", None), require_admin))
 app.include_router(calls_api.router(lambda: app.state.store, lambda: app.state.loop,
     require_admin, lambda: getattr(app.state, "speech", None)))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
