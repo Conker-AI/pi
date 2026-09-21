@@ -1,5 +1,15 @@
 # Owner terminal backend
 
+`gateway.terminals.Terminals` manages ephemeral browser-session leases. Creation
+requires validation and an authorization callback before spawning. A repeated request
+ID returns the same terminal, including after closure; it never respawns it. Access
+is bound to the originating browser session. A periodic sweep revalidates sessions
+and closes revoked leases without client polling. Limits are one live terminal per
+browser session, four globally and 1000 retained request identities per gateway
+lifetime. Shutdown closes all leases. Two synthetic lease tests cover replay,
+cross-session denial, revoked authorization and denied creation. HTTP routes and
+the real AuthStore callbacks still need integration.
+
 `pi.owner_terminal.Terminal` is an ephemeral Linux Bash PTY primitive. It is not
 exposed through HTTP, tools or SystemGate. Authenticated owner admission, session
 ownership and gateway expiry/revocation integration remain required before use.
