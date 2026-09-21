@@ -15,7 +15,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 
-from pi.browser_contract import runtime_allowed
+from pi.browser_contract import runtime_allowed, owner_allowed
 from pi.owner_terminal import Terminal, TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
@@ -38,8 +38,11 @@ class Config:
     idle_timeout_seconds: int = 1800
     terminal_shell: str = ""
     terminal_directory: str = ""
+    pi_owner_key: str = ""
 
     def validate(self) -> None:
+        if self.pi_owner_key and (len(self.pi_owner_key) < 32 or self.pi_owner_key in {self.pi_key, self.owner_key}):
+            raise ValueError("Provision a distinct Pi owner-control key of at least 32 characters.")
         if bool(self.terminal_shell) != bool(self.terminal_directory):
             raise ValueError("Configure terminal shell and directory together.")
         if self.terminal_shell and (
@@ -96,6 +99,7 @@ class Config:
             int(os.environ.get("GATEWAY_IDLE_TIMEOUT_SECONDS", "1800")),
             os.environ.get("GATEWAY_TERMINAL_SHELL", ""),
             os.environ.get("GATEWAY_TERMINAL_DIRECTORY", ""),
+            os.environ.get("GATEWAY_PI_OWNER_KEY", ""),
         )
 
 
@@ -473,6 +477,23 @@ def create_app(
             body,
             request.scope["query_string"],
         )
+
+    @app.get("/api/control/pi/{path:path}", operation_id="control_read")
+    @app.post("/api/control/pi/{path:path}", operation_id="control_write")
+    async def control(path: str, request: Request):
+        session(request)
+        target = "/" + path
+        if not owner_allowed(request.method, target):
+            raise AuthError("This owner operation is not available through the gateway.", 403)
+        if not app.state.config.pi_owner_key:
+            raise AuthError("Pi owner-control connection is not configured.", 503)
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            admit_write(request, body)
+        from starlette.concurrency import run_in_threadpool
+        return await run_in_threadpool(forward, request.method,
+            app.state.config.pi_url.rstrip("/") + target, "X-Pi-Owner-Key",
+            app.state.config.pi_owner_key, body, request.scope["query_string"])
 
     @app.get("/api/owner/requests")
     def owner_requests(request: Request):

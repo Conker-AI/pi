@@ -79,6 +79,18 @@ class MemoryClient:
     def close(self):
         self.http.close()
 
+    def inspect(self, operation, payload):
+        if operation not in {"library", "explore"}:
+            raise ValueError("Unsupported memory inspection operation")
+        response = self.http.post("/runtime/" + operation, headers=self.read_headers, json=payload)
+        response.raise_for_status()
+        if len(response.content) > 512 * 1024:
+            raise ValueError("Memory inspection exceeded response budget")
+        result = response.json()
+        if not isinstance(result, dict) or result.get("scope") != payload.get("scope", "all"):
+            raise ValueError("Memory inspection scope was not acknowledged")
+        return result
+
     def health(self):
         try:
             response = self.http.get("/health")

@@ -5,7 +5,7 @@ import json
 import math
 import re
 
-from pi.browser_contract import runtime_allowed
+from pi.browser_contract import runtime_allowed, owner_allowed
 
 from .store import AuthError
 
@@ -62,6 +62,7 @@ def fingerprint(method: str, path: str, body: dict) -> str:
         and len(path) <= 512
         and (
             (path.startswith("/api/pi/") and runtime_allowed(method, path[len("/api/pi") :]))
+            or (path.startswith("/api/control/pi/") and owner_allowed(method, path[len("/api/control/pi") :]))
             or re.fullmatch(r"/api/owner/requests/[A-Za-z0-9_-]+/decision", path)
             or path == "/api/terminal"
         )

@@ -62,6 +62,10 @@ _health_cache: dict = {}
 async def lifespan(app: FastAPI):
     admin_key = os.environ.get("PI_ADMIN_KEY", "").strip()
     runtime_hash = os.environ.get("PI_GATEWAY_KEY_SHA256", "").strip()
+    owner_hash = os.environ.get("PI_OWNER_KEY_SHA256", "").strip()
+    if owner_hash and (len(owner_hash) != 64 or any(c not in "0123456789abcdef" for c in owner_hash)
+                       or owner_hash in {runtime_hash, hashlib.sha256(admin_key.encode()).hexdigest()}):
+        raise RuntimeError("PI_OWNER_KEY_SHA256 must identify a distinct owner-control credential.")
     if runtime_hash and (
         len(runtime_hash) != 64 or any(c not in "0123456789abcdef" for c in runtime_hash)
     ):
@@ -171,6 +175,7 @@ async def lifespan(app: FastAPI):
     memory.start()
     app.state.admin_key = admin_key
     app.state.gateway_key_hash = runtime_hash
+    app.state.owner_key_hash = owner_hash
     app.state.store = store
     app.state.local = local
     app.state.hosted = hosted
@@ -247,6 +252,20 @@ def require_admin(identity: str = Depends(require_key)) -> None:
         raise HTTPException(403, "Owner administration credential required.")
 
 
+def require_owner(request: Request, owner_key: str | None = Header(None, alias="X-Pi-Owner-Key"),
+                  x_pi_key: str | None = Header(None, alias="X-Pi-Key")) -> None:
+    from .browser_contract import owner_allowed
+    expected = getattr(app.state, "owner_key_hash", "")
+    if (owner_key and len(expected) == 64 and secrets.compare_digest(
+            hashlib.sha256(owner_key.encode()).hexdigest(), expected)):
+        if owner_allowed(request.method, request.url.path):
+            return
+        raise HTTPException(403, "Owner-control credential cannot perform this operation.")
+    if x_pi_key and secrets.compare_digest(x_pi_key.encode(), app.state.admin_key.encode()):
+        return
+    raise HTTPException(401, "Missing or invalid owner-control credential.")
+
+
 app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
@@ -269,7 +288,9 @@ app.include_router(team_execution_api.create_router(
     lambda: app.state.store, lambda: app.state.loop, require_admin))
 app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
 app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
-app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
+app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
+from . import memory_explorer_api
+app.include_router(memory_explorer_api.router(lambda: app.state.memory, require_owner))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
 app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
 app.include_router(attachments_api.router(lambda: app.state.store, require_admin,
