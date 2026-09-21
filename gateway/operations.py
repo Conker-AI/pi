@@ -63,6 +63,7 @@ def fingerprint(method: str, path: str, body: dict) -> str:
         and (
             (path.startswith("/api/pi/") and runtime_allowed(method, path[len("/api/pi") :]))
             or re.fullmatch(r"/api/owner/requests/[A-Za-z0-9_-]+/decision", path)
+            or path == "/api/terminal"
         )
     )
     if not allowed or not isinstance(body, dict):

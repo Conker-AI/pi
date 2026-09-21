@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hmac
 import os
 import re
@@ -11,14 +12,16 @@ from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 
 from pi.browser_contract import runtime_allowed
+from pi.owner_terminal import Terminal, TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .operations import fingerprint, parse_object
 from .store import AuthError, AuthStore
+from .terminals import Terminals
 
 COOKIE = "__Host-conker"
 
@@ -33,8 +36,16 @@ class Config:
     owner_key: str = ""
     dashboard_dir: str = ""
     idle_timeout_seconds: int = 1800
+    terminal_shell: str = ""
+    terminal_directory: str = ""
 
     def validate(self) -> None:
+        if bool(self.terminal_shell) != bool(self.terminal_directory):
+            raise ValueError("Configure terminal shell and directory together.")
+        if self.terminal_shell and (
+            not os.path.isabs(self.terminal_shell) or not os.path.isabs(self.terminal_directory)
+        ):
+            raise ValueError("Terminal configuration requires absolute paths.")
         if (
             type(self.idle_timeout_seconds) is not int
             or not 60 <= self.idle_timeout_seconds <= 86400
@@ -83,6 +94,8 @@ class Config:
             os.environ.get("GATEWAY_TOOLGATE_OWNER_KEY", ""),
             os.environ.get("GATEWAY_DASHBOARD_DIR", ""),
             int(os.environ.get("GATEWAY_IDLE_TIMEOUT_SECONDS", "1800")),
+            os.environ.get("GATEWAY_TERMINAL_SHELL", ""),
+            os.environ.get("GATEWAY_TERMINAL_DIRECTORY", ""),
         )
 
 
@@ -91,6 +104,7 @@ def create_app(
     *,
     store: AuthStore | None = None,
     transport: httpx.BaseTransport | None = None,
+    terminal_factory=Terminal,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -103,11 +117,22 @@ def create_app(
         app.state.auth = store or AuthStore(
             settings.database, idle_seconds=settings.idle_timeout_seconds
         )
+        app.state.terminals = (
+            Terminals(
+                settings.terminal_shell, settings.terminal_directory, factory=terminal_factory
+            )
+            if settings.terminal_shell
+            else None
+        )
         with httpx.Client(
             transport=transport, timeout=660, follow_redirects=False, trust_env=False
         ) as client:
             app.state.client = client
-            yield
+            try:
+                yield
+            finally:
+                if app.state.terminals:
+                    app.state.terminals.close()
 
     app = FastAPI(
         title="Conker browser gateway",
@@ -121,6 +146,10 @@ def create_app(
     async def auth_error(request: Request, exc: AuthError):
         detail = {"code": exc.code, "message": str(exc)} if exc.code else str(exc)
         return JSONResponse({"detail": detail}, status_code=exc.status)
+
+    @app.exception_handler(TerminalError)
+    async def terminal_error(request: Request, exc: TerminalError):
+        return JSONResponse({"detail": str(exc)}, status_code=409)
 
     @app.middleware("http")
     async def boundary(request: Request, call_next):
@@ -367,6 +396,62 @@ def create_app(
             binding,
         )
 
+    def terminal_access(request):
+        owner = session(request)
+        if app.state.terminals is None:
+            raise AuthError("Owner terminal is not configured.", 503)
+        return owner, app.state.terminals
+
+    @app.post("/api/terminal")
+    async def terminal_create(request: Request):
+        owner, manager = terminal_access(request)
+        body = await json_body(request)
+        if set(body) != {"requestId"} or request.scope["query_string"]:
+            raise AuthError("Supply only a terminal requestId.", 422)
+        token = request.cookies.get(COOKIE, "")
+
+        def validate():
+            current = app.state.auth.session(token)
+            if current["id"] != owner["id"]:
+                raise AuthError("Terminal session identity changed.")
+
+        return manager.create(
+            owner["id"], body["requestId"], validate, lambda: admit_write(request, body)
+        )
+
+    @app.get("/api/terminal/{identity}")
+    def terminal_read(identity: str, request: Request, cursor: int = Query(default=0, ge=0)):
+        owner, manager = terminal_access(request)
+        result = manager.use(owner["id"], identity, "read", cursor)
+        return {
+            **result,
+            "data": base64.b64encode(result["data"]).decode("ascii"),
+            "encoding": "base64",
+        }
+
+    @app.post("/api/terminal/{identity}/{operation}")
+    async def terminal_write(identity: str, operation: str, request: Request):
+        owner, manager = terminal_access(request)
+        body = await json_body(request)
+        if request.scope["query_string"]:
+            raise AuthError("Terminal writes cannot include query parameters.", 422)
+        if operation == "input" and set(body) == {"data"} and isinstance(body["data"], str):
+            try:
+                data = base64.b64decode(body["data"], validate=True)
+            except ValueError:
+                raise AuthError("Use base64 terminal input.", 422) from None
+            return {
+                "acceptedBytes": manager.use(owner["id"], identity, "write", data),
+                "automaticReplay": False,
+            }
+        if operation == "resize" and set(body) == {"rows", "columns"}:
+            manager.use(owner["id"], identity, "resize", body["rows"], body["columns"])
+            return {"resized": True}
+        if operation == "close" and not body:
+            manager.use(owner["id"], identity, "close")
+            return {"closed": True}
+        raise AuthError("Invalid terminal operation.", 422)
+
     @app.get("/api/pi/{path:path}", operation_id="runtime_read")
     @app.post("/api/pi/{path:path}", operation_id="runtime_write")
     async def runtime(path: str, request: Request):
@@ -399,11 +484,9 @@ def create_app(
             raise AuthError("Use only owner request pagination parameters.", 422)
         limit, cursor = request.query_params.get("limit"), request.query_params.get("cursor")
         if (
-            (limit is not None
-            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 200))
-            or (cursor is not None
-            and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cursor))
-        ):
+            limit is not None
+            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 200)
+        ) or (cursor is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cursor)):
             raise AuthError("Use valid owner request pagination parameters.", 422)
         return forward(
             "GET",

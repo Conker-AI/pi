@@ -7,12 +7,20 @@ is bound to the originating browser session. A periodic sweep revalidates sessio
 and closes revoked leases without client polling. Limits are one live terminal per
 browser session, four globally and 1000 retained request identities per gateway
 lifetime. Shutdown closes all leases. Two synthetic lease tests cover replay,
-cross-session denial, revoked authorization and denied creation. HTTP routes and
-the real AuthStore callbacks still need integration.
+cross-session denial, revoked authorization and denied creation. The routes below
+integrate real AuthStore callbacks and exact password proofs.
 
-`pi.owner_terminal.Terminal` is an ephemeral Linux Bash PTY primitive. It is not
-exposed through HTTP, tools or SystemGate. Authenticated owner admission, session
-ownership and gateway expiry/revocation integration remain required before use.
+Enable only through operator configuration: `GATEWAY_TERMINAL_SHELL=/bin/bash` and
+`GATEWAY_TERMINAL_DIRECTORY=/an/explicit/workspace`. Default is disabled. The shell
+runs on the gateway host/container with its OS permissions, not inside SystemGate.
+POST `/api/terminal` with `{requestId}` requires an exact `/auth/verify` password
+proof. This grants an interactive lease, not a proof for each keystroke. GET
+`/api/terminal/{id}?cursor=0` returns base64 bytes, cursor and dropped-byte count.
+POST suffix `/input` accepts `{data}` in base64; `/resize` accepts `{rows,columns}`;
+`/close` accepts `{}`. All require the same authenticated browser session; writes
+also require same-origin CSRF. No token is placed in a URL. Auth expiry/revocation
+closes sessions through the background sweep; gateway shutdown closes all sessions.
+No frontend terminal transport is connected yet.
 
 The operator supplies an absolute shell path and directory. The child receives a
 small explicit environment, no Pi/provider/gate credentials, no Bash startup files,

@@ -40,7 +40,12 @@ class Terminals:
                 raise TerminalError("Close this browser session's existing terminal first.")
             validate()
             authorize()
-            terminal = self.factory(self.shell, self.directory)
+            try:
+                terminal = self.factory(self.shell, self.directory)
+            except (OSError, ValueError):
+                raise TerminalError(
+                    "Terminal could not start. Check operator configuration."
+                ) from None
             self.entries[identity] = {"owner": owner, "terminal": terminal, "validate": validate}
             return {"id": identity, "closed": False, "replayed": False}
 
