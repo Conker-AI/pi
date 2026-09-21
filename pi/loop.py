@@ -681,7 +681,7 @@ class Loop:
                 if call is None:
                     break
                 if web_research:
-                    research.validate_call(call)
+                    research.validate_call(call, self.store, turn_id)
                 ran = False
                 try:
                     action = actions.prepare(self.store, turn_id, call.tool_id, call.args,

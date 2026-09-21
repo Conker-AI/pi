@@ -35,12 +35,17 @@ These are fetched evidence, not a claim that every source was cited or verified.
 Forgotten turns cannot expose this receipt. Answer retries remain narration-only.
 
 Deep research now saves a validated public plan as a turn-associated intermediate
-message. It adaptively queries research.web from prior results, with at most four
-searches (or the configured lower tool-step limit), then synthesizes. Plans and
+message. It adaptively queries research.web and reads research.fetch excerpts from prior
+results, with at most four combined actions (or the configured lower tool-step
+limit), then synthesizes. Fetch requires a result ID from a successful search in
+the same turn and at most 12000 characters. Arbitrary URLs and foreign handles
+are rejected before dispatch; ToolGate still applies its own destination, expiry
+and content protections. Fetch is offered only when the selected scope allows it. Plans and
 source/action receipts survive reopening and approval continuation. Refusals remain
 visible, and reply-only recovery does not restart research. Forgetting scrubs the
-plan with the existing message lifecycle. This is bounded snippet research; full
-page reading and live-search verification are not implied.
+plan with the existing message lifecycle. Fetched documents are bounded excerpts and may be truncated; complete page
+coverage and live-search verification are not implied. Without fetch capability,
+only snippets are available and the prompt requires that limitation to be stated.
 
 Provider attempts within the bound research turn are now recorded separately,
 without prompts or responses. Turn totals sum planning, query selection, synthesis
@@ -65,3 +70,5 @@ approval, single-search ceiling, provider failure, Stop, lost-receipt recovery a
 refusal. Tests use scripted providers and ToolGate doubles, not a live search service.
 
 Deep research verification: 70 focused research/tool/recovery/steering tests pass, including stop during planning and forgetting. No live provider/search calls were made.
+
+Source-reading verification: 32 focused research tests pass, plus nine fetch checks after adding cross-conversation and lost-receipt cases. No live external search or page fetch was performed.
