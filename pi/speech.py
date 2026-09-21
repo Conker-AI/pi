@@ -100,6 +100,7 @@ class SpeechClient:
         timeout=30,
         transport=None,
         character_voice="unsupported",
+        audio_decoder="",
     ):
         if character_voice not in ("unsupported", "qwen3-design"):
             _fail("invalid_configuration", 503, "Unsupported character speech adapter.")
@@ -146,6 +147,7 @@ class SpeechClient:
         self._stt_model, self._tts_model, self._voice = stt_model, tts_model, voice
         self._timeout, self._transport = timeout, transport
         self._character_voice = character_voice
+        self._audio_decoder = audio_decoder
         self._state = {
             "stt": "configured" if url and stt_model else "unconfigured",
             "tts": "configured"
@@ -159,7 +161,8 @@ class SpeechClient:
             "stt": {"status": self._state["stt"]},
             "tts": {"status": self._state["tts"]},
             "language": "en",
-            "input_mime_types": ["audio/wav"],
+            "input_mime_types": ["audio/wav"]
+            + (["audio/webm", "audio/ogg", "audio/mpeg"] if self._audio_decoder else []),
             "output_mime_types": ["audio/wav"],
             "max_audio_bytes": MAX_AUDIO_BYTES,
             "max_audio_seconds": MAX_AUDIO_SECONDS,
@@ -252,6 +255,19 @@ class SpeechClient:
 
     def transcribe(self, audio: bytes, mime: str):
         self._configured("stt")
+        media = mime.split(";", 1)[0].strip().lower() if isinstance(mime, str) else ""
+        if media not in WAV_TYPES and self._audio_decoder:
+            from .audio_decode import DecodeError, decode
+
+            try:
+                audio = decode(audio, mime, self._audio_decoder)
+                mime = "audio/wav"
+            except DecodeError:
+                raise SpeechError(
+                    "audio_decode_failed",
+                    422,
+                    "Audio could not be decoded within the supported limits.",
+                ) from None
         measured = validate_wav(audio, mime)
         body, media = self._request(
             "stt",

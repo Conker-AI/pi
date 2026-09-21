@@ -85,6 +85,7 @@ async def lifespan(app: FastAPI):
         tts_model=os.environ.get("PI_TTS_MODEL", "").strip(),
         voice=os.environ.get("PI_TTS_VOICE", "").strip(),
         character_voice=os.environ.get("PI_SPEECH_CHARACTER_VOICE", "unsupported").strip(),
+        audio_decoder=os.environ.get("PI_AUDIO_DECODER_PATH", "").strip(),
         timeout=_seconds("PI_SPEECH_TIMEOUT_S", 30.0),
     )
     store = Store(os.environ.get("PI_DB_PATH", "/data/pi.db"))

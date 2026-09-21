@@ -120,8 +120,19 @@ using synthetic PCM, mock HTTP and temporary SQLite only.
 - PCM WAV only: RIFF/WAVE, integer PCM, one format/data chunk, mono/stereo,
   8000–192000 Hz, 8/16/24/32-bit samples; checked frame alignment, byte rate and
   container/chunk lengths. Accepted WAV MIME aliases are normalized to `audio/wav`.
-  Compressed WAV, float WAV, MP3, Ogg and browser MediaRecorder WebM are rejected.
-  Future browser capture needs a PCM encoder or a separately reviewed decoder.
+  Compressed WAV and float WAV are rejected. By default other containers are
+  rejected too. `PI_AUDIO_DECODER_PATH` may explicitly name an installed FFmpeg
+  executable (absolute path) to accept WebM, Ogg and MP3. No automatic installation
+  or PATH lookup occurs in the runtime. This does not activate browser recording.
+  The decoder receives bytes on stdin, forces the selected demuxer, enables only
+  the pipe protocol, strips video/subtitles/data, and emits mono 16 kHz PCM.
+  Decoding is limited to two concurrent processes, ten seconds wall time, 10 MiB
+  input and 120 seconds output. Longer audio fails instead of silently truncating.
+  Audio and diagnostics are not written to files; environment credentials are
+  not forwarded. The 32 MiB FFmpeg allocation limit is per allocation, not a total
+  process memory sandbox. Run a patched decoder under normal service isolation.
+  See [FFmpeg protocol controls](https://ffmpeg.org/ffmpeg-protocols.html) and
+  [duration/output options](https://ffmpeg.org/ffmpeg.html).
 - Audio input/output: at most 10 MiB and 120 measured seconds. TTS input: at most
   4000 nonblank characters. STT JSON: at most 256 KiB, 16000 transcript characters,
   and 1000 segments with 16000 total segment-text characters.
