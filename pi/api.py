@@ -24,6 +24,7 @@ from .browser_contract import runtime_allowed
 from . import jobs_api
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
+from . import project_sources
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -172,7 +173,8 @@ def require_admin(identity: str = Depends(require_key)) -> None:
         raise HTTPException(403, "Owner administration credential required.")
 
 
-app.include_router(projects_api.router(lambda: app.state.store, require_admin))
+app.include_router(projects_api.router(lambda: app.state.store, require_admin,
+    lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
 app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
