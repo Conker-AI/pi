@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import turn_control, turn_queue, message_forks, turn_context
+from . import turn_control, turn_queue, message_forks, turn_context, response_versions
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
@@ -225,6 +225,11 @@ def _message(row: sqlite3.Row) -> dict:
 def _message_with_attachments(db, row):
     item = _message(row)
     if item.get("content_status") != "forgotten":
+        version = db.execute("SELECT v.root_message_id,v.retry_of,f.selected_message_id,f.revision "
+            "FROM response_versions v JOIN response_families f "
+            "ON f.root_message_id=v.root_message_id WHERE v.message_id=?", (item["id"],)).fetchone()
+        if version:
+            item["response_family"] = dict(version)
         binding = db.execute("SELECT s.snapshot FROM turn_messages tm JOIN turn_settings s "
                              "ON s.turn_id=tm.turn_id WHERE tm.message_id=? AND tm.purpose='input'",
                              (item["id"],)).fetchone()
@@ -267,6 +272,7 @@ class Store:
                 db.executescript(turn_queue.SCHEMA)
                 db.executescript(message_forks.SCHEMA)
                 db.executescript(turn_context.SCHEMA)
+                db.executescript(response_versions.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)

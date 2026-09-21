@@ -138,6 +138,14 @@ def save(store, identity, body: Update):
         if revision != body.expected_revision:
             raise ContextError("revision_conflict", "Context policy changed; reload before saving.")
         for message_id in body.policy.messagePolicies:
+            inactive = db.execute(
+                "SELECT 1 FROM response_versions v JOIN response_families f "
+                "ON f.root_message_id=v.root_message_id WHERE v.message_id=? "
+                "AND f.session_id=? AND f.selected_message_id!=v.message_id",
+                (message_id, identity),
+            ).fetchone()
+            if inactive:
+                raise ContextError("inactive_version", "Select this response version before setting its context rule.")
             message = db.execute(
                 "SELECT session_id FROM messages WHERE id=?", (message_id,)
             ).fetchone()
@@ -242,7 +250,10 @@ def history(store, identity):
         if row is None or row.get("content_status") == "forgotten":
             raise ContextError("unavailable_pin", "An inherited source was forgotten.")
         rows.append(row)
-    return rows + store.messages(identity)
+    from . import response_versions
+    own = store.messages(identity)
+    with store._connect() as db:
+        return rows + response_versions.project(db, identity, own)
 
 
 def reviewed_fork(store, identity, body: ReviewedFork):
