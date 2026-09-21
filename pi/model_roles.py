@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .providers import Message, ProviderUnavailable
+from .providers import Message, ProviderUnavailable, require_images
 
 ROLES = ("answer", "routing", "context-selection", "summarization")
 
@@ -236,6 +236,7 @@ def dispatch(
         if guard is not None:
             guard()
         try:
+            require_images(adapter, messages)
             completion = adapter.complete_bounded(
                 messages, model=model.route, timeout=assignment.timeoutMs / 1000
             )

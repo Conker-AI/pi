@@ -51,6 +51,7 @@ class Metered:
     def __init__(self, store, turn_id, provider, role):
         self.store, self.turn_id, self.provider, self.role = store, turn_id, provider, role
         self.name = provider.name
+        self.supports_images = getattr(provider, "supports_images", False)
 
     def health(self):
         return self.provider.health()

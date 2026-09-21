@@ -9,7 +9,7 @@ from collections.abc import Mapping
 
 import httpx
 
-from .providers import Completion, Message, ProviderUnavailable
+from .providers import Completion, Message, ProviderUnavailable, chat_content
 
 
 def _count(value):
@@ -17,6 +17,7 @@ def _count(value):
 
 
 class _DirectProvider:
+    supports_images = True
     def __init__(self, api_key: str, *, allow_paid: bool = False, timeout: float = 180.0):
         self.api_key = api_key.strip()
         self.allow_paid = allow_paid
@@ -65,7 +66,7 @@ class OpenAIProvider(_DirectProvider):
 
     def _payload(self, messages, model):
         return {"model": model, "messages": [
-            {"role": m.role, "content": m.content} for m in messages], "store": False}
+            {"role": m.role, "content": chat_content(m)} for m in messages], "store": False}
 
     def _completion(self, body, model):
         choice = body["choices"][0]
@@ -103,12 +104,17 @@ class AnthropicProvider(_DirectProvider):
         # Only leading system instructions can be lifted without changing order.
         system, turns = [], []
         for message in messages:
+            if message.images and message.role != "user":
+                raise ProviderUnavailable("Images require a user attachment message.")
             if message.role == "system":
                 if turns:
                     raise ProviderUnavailable("system instructions must precede conversation")
                 system.append({"type": "text", "text": message.content})
             else:
-                turns.append({"role": message.role, "content": message.content})
+                content = ([{"type": "image", "source": {"type": "base64",
+                    "media_type": image.media_type, "data": image.data}} for image in message.images]
+                    + [{"type": "text", "text": message.content}]) if message.images else message.content
+                turns.append({"role": message.role, "content": content})
         if not turns:
             raise ProviderUnavailable("direct text request requires conversation messages")
         payload = {"model": model, "messages": turns, "max_tokens": self.max_tokens}

@@ -37,3 +37,34 @@ Other uploads remain downloadable and return an explicit unsupported-input error
 submitted to a model. Automatic
 forking with pending uploads is rejected: create the fork and upload to its new
 session first. Browser gateway/frontend wiring remains deferred.
+
+## Image input
+
+Explicit message attachments can supply still PNG, JPEG and WebP bytes to vision
+models through Ollama, OpenRouter, direct OpenAI and direct Anthropic adapters.
+Validation checks the actual raster format, single-frame status, successful decode,
+5 MiB size, 8192-pixel side limit and 4,194,304 total pixels. Original bytes are sent
+as base64; Pi never fetches image URLs, executes SVG, or substitutes a text filename
+for the image. Raster validation does not interpret the image or provide OCR.
+
+Images retain their original attachment/session identity. History exclusion removes
+the corresponding images from subsequent input; exact response replay reloads the
+original attachments with current privacy/integrity checks. Text summaries do not
+describe image contents. No base64 is copied into message text or frozen instruction
+prefixes. Image sources do not gain fabricated text-passage citations. Extraction
+status remains unsupported for text extraction, with a reason identifying vision
+availability; that status does not mean the image was interpreted by a model.
+
+Unknown adapters refuse image input instead of silently ignoring it. OpenRouter
+additionally checks its model catalogue's image-input modality. Other providers can
+reject unsupported models at their API; adapter support does not imply every model
+supports vision. The normal paid-provider opt-in and fallback policy still apply.
+Requests are bounded to 20 contextual images and 25 MiB original bytes (base64
+equivalent). Context estimates reserve 4096 tokens per image, an explicit heuristic,
+not a provider-specific token count or a billing estimate. Provider usage remains
+the source of recorded actual tokens/cost. No live paid image calls were performed.
+
+Provider wire formats follow the official [OpenAI image guide](https://developers.openai.com/api/docs/guides/images-vision),
+[Anthropic vision guide](https://platform.claude.com/docs/en/build-with-claude/vision),
+[OpenRouter image guide](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)
+and [Ollama vision guide](https://docs.ollama.com/capabilities/vision).

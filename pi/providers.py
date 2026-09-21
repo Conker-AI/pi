@@ -21,9 +21,36 @@ from . import citations as message_citations
 
 
 @dataclass(frozen=True)
+class ImageInput:
+    media_type: str
+    data: str = field(repr=False)
+    attachment_id: str = ""
+
+
+@dataclass(frozen=True)
 class Message:
     role: str
     content: str
+    images: tuple[ImageInput, ...] = ()
+
+
+def require_images(provider, messages):
+    images = [image for message in messages for image in message.images]
+    if (len(images) > 20 or sum(len(image.data) for image in images) > 34_952_536
+            or any(message.images and message.role != "user" for message in messages)):
+        raise ProviderUnavailable("Image context exceeds supported limits; review included messages.")
+    if any(message.images for message in messages) and not getattr(provider, "supports_images", False):
+        raise ProviderUnavailable("Selected provider adapter cannot receive images.")
+
+
+def chat_content(message):
+    if not message.images:
+        return message.content
+    if message.role != "user":
+        raise ProviderUnavailable("Images require a user attachment message.")
+    return [{"type": "text", "text": message.content}] + [
+        {"type": "image_url", "image_url": {"url": f"data:{image.media_type};base64,{image.data}"}}
+        for image in message.images]
 
 
 @dataclass(frozen=True)
@@ -89,6 +116,7 @@ class OllamaProvider:
     """
 
     name = "ollama"
+    supports_images = True
 
     def __init__(self, base_url: str, timeout: float = 120.0, model: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
@@ -103,7 +131,9 @@ class OllamaProvider:
     def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
         payload = {
             "model": model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [{"role": m.role, "content": m.content,
+                          **({"images": [image.data for image in m.images]} if m.images else {})}
+                         for m in messages],
             "stream": False,
         }
         try:

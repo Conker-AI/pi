@@ -24,7 +24,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from . import citations
-from .providers import Completion, Message, ProviderUnavailable
+from .providers import Completion, Message, ProviderUnavailable, chat_content
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -39,6 +39,7 @@ class ModelInfo:
     completion_usd_per_token: float | None
     supports_tools: bool
     pricing: dict | None = None
+    supports_images: bool = False
 
     @property
     def is_free(self) -> bool:
@@ -83,6 +84,7 @@ class ModelUnusable(ProviderUnavailable):
 
 class OpenRouterProvider:
     name = "openrouter"
+    supports_images = True
 
     def __init__(self, api_key: str, *, allow_paid: bool = False, timeout: float = 120.0) -> None:
         self.api_key = api_key
@@ -123,6 +125,7 @@ class OpenRouterProvider:
                 completion_usd_per_token=_price(pricing, "completion"),
                 supports_tools="tools" in (entry.get("supported_parameters") or []),
                 pricing=pricing,
+                supports_images="image" in inputs,
             )
         self._catalogue = catalogue
         self._fetched_at = now
@@ -162,10 +165,12 @@ class OpenRouterProvider:
         return self.complete_bounded(messages, model=model, timeout=self.timeout)
 
     def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
-        self._guard_cost(model)
+        info = self._guard_cost(model)
+        if any(message.images for message in messages) and not info.supports_images:
+            raise ModelUnusable("Selected model does not advertise image input.")
         payload = {
             "model": model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
         }
         try:
             response = httpx.post(CHAT_URL, json=payload, headers=self._headers(),

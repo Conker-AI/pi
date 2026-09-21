@@ -159,7 +159,7 @@ def replay(store, turn_id):
                 store, row["session_id"], identity, execution["privacy"]
             )
             if attached:
-                messages.append(Message("user", attached))
+                messages.append(attached)
     except (agents.AgentError, attachments.AttachmentError) as exc:
         raise context_controls.ContextError(
             exc.detail["code"], exc.detail["message"], exc.status

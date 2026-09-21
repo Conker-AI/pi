@@ -212,7 +212,7 @@ def check_budget(policy, messages):
         return
     value = Policy.model_validate(policy)
     count = (
-        sum(estimate(message.content) for message in messages)
+        sum(estimate(message.content) + 4096 * len(message.images) for message in messages)
         + value.budget.otherInputTokens
         + value.budget.outputReserveTokens
     )

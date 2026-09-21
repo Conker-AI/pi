@@ -171,6 +171,8 @@ class Loop:
             provider = research_usage.wrap(self.store, execution, provider, role)
             turn_control.guard(self.store, execution)
             try:
+                from .providers import require_images
+                require_images(provider, messages)
                 completion = provider.complete(messages, model=route.model)
             except ModelUnusable as exc:
                 turn_control.guard(self.store, execution)
@@ -267,7 +269,7 @@ class Loop:
             except attachments.AttachmentError as exc:
                 raise context_controls.ContextError(exc.detail["code"], exc.detail["message"], exc.status) from exc
             if attached:
-                messages.append(Message("user", attached))
+                messages.append(attached)
         context_controls.check_budget(policy, messages)
         if turn_id:
             turn_context.capture(self.store, turn_id, selected_history, prefix_messages, reply_to)
@@ -276,7 +278,7 @@ class Loop:
         return messages
 
     def _history_size(self, messages: list[Message]) -> int:
-        return sum(len(m.content) for m in messages)
+        return sum(len(m.content) + 16384 * len(m.images) for m in messages)
 
     # --- forking ----------------------------------------------------------
 

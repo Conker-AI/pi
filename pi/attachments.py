@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from . import attachment_passages, document_text, pdf_text
+from . import attachment_passages, document_text, image_input, pdf_text
 
 MAX_FILES = 5
 MAX_BYTES = 10 * 1024 * 1024
@@ -224,6 +224,12 @@ def _view(db, row, resolve):
 
 def _extract(raw, media_type):
     media_type = media_type.lower().strip()
+    if media_type in image_input.FORMATS:
+        try:
+            image_input.prepare(raw, media_type, "")
+        except ValueError as error:
+            return None, "unsupported", str(error)
+        return None, "unsupported", "No text extraction; this image can be sent to a vision model."
     if media_type == "application/pdf":
         try:
             text = pdf_text.extract(raw, MAX_TEXT_CHARACTERS)

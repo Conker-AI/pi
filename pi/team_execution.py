@@ -300,6 +300,7 @@ class _Metered:
     def __init__(self, store, adapter, step_id):
         self.store, self.adapter, self.step_id = store, adapter, step_id
         self.name = adapter.name
+        self.supports_images = getattr(adapter, "supports_images", False)
 
     def complete_bounded(self, messages, *, model, timeout):
         identity, started = "teamcall_" + uuid.uuid4().hex, time.monotonic()
