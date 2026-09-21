@@ -181,6 +181,9 @@ def start(store, team_id, body):
             current = collaboration._get(db, team_id, "team", body.expected_revision, active=True)
             definition = collaboration.Team.model_validate(current["definition"])
             profiles = collaboration._team_agents(db, definition)
+            from . import characters
+            for profile in profiles:
+                profile["character"] = characters.runtime_snapshot(db, profile["agentId"])
             tasks._source(db, body.source_session_id, open_required=True)
             base = session_settings._snapshot(db, body.source_session_id)
             if base.get("teamExecution"):
@@ -440,6 +443,8 @@ def execute(store, runtime, identity, body):
             **snapshot["base"],
             "agentId": profile["agentId"],
             "agentVersion": profile["agentVersion"],
+            "character": profile.get("character"),
+            "presentationMode": None,
             "kind": "team-role",
             "project": None,
             "projectContext": [],

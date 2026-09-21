@@ -1,5 +1,6 @@
 """Future-turn privacy and immutable execution selections; no permission grants."""
 import json
+from typing import Literal
 from pydantic import Field, model_validator
 from . import agents, projects
 
@@ -14,6 +15,7 @@ class Settings(agents.StrictModel):
     privacy: Privacy
     projectId: str | None = Field(default=None, min_length=1, max_length=200)
     projectSources: list[projects.Reference] = Field(default_factory=list, max_length=20)
+    presentationMode: Literal["focus", "character"] | None = None
 
     @model_validator(mode="after")
     def project_sources(self):
@@ -74,7 +76,7 @@ def _snapshot(db, identity):
     frozen = team_execution.session_snapshot(db, identity)
     if frozen is not None:
         return frozen
-    from . import calls, project_context
+    from . import calls, characters, project_context
     value = _load(db, identity)
     agent = agents._get(db, value["settings"]["agentId"])
     if agent["archived_at"] is not None:
@@ -85,6 +87,8 @@ def _snapshot(db, identity):
             "modelConfigurationRevision": models["revision"] if models else 0,
             "modelConfiguration": json.loads(models["configuration"]) if models else None,
             "configuration": agent["configuration"], "kind": agent["kind"],
+            "character": characters.runtime_snapshot(db, agent["id"]),
+            "presentationMode": value["settings"].get("presentationMode"),
             "privacy": value["settings"]["privacy"], "project": project, "authority": "none",
             "projectContext": project_context.capture(db, identity, value["settings"])}
     return calls.execution_snapshot(db, identity, snapshot)

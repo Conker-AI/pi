@@ -37,6 +37,7 @@ from . import team_execution
 from . import memory_proposals
 from . import continuity
 from . import calls
+from . import characters
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -270,6 +271,7 @@ class Store:
                 db.executescript(attachments.SCHEMA)
                 db.executescript(model_evaluations.SCHEMA)
                 db.executescript(calls.SCHEMA)
+                db.executescript(characters.SCHEMA)
         except BaseException:
             self.close()
             raise

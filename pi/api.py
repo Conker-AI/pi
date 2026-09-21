@@ -34,6 +34,7 @@ from . import team_execution, team_execution_api
 from . import memory_corrections, memory_proposals, memory_proposals_api
 from . import continuity_api
 from . import calls, calls_api, speech
+from . import characters_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -215,6 +216,7 @@ app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
+app.include_router(characters_api.router(lambda: app.state.store, require_admin))
 app.include_router(calls_api.router(lambda: app.state.store, lambda: app.state.loop,
     require_admin, lambda: getattr(app.state, "speech", None)))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))

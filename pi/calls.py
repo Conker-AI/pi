@@ -352,9 +352,14 @@ def start(store, body: Start):
             "UPDATE session_settings SET settings=? WHERE session_id=?",
             (json.dumps(selected), child),
         )
+        from . import character_context, characters
+        presentation = {
+            "presentationMode": selected.get("presentationMode"),
+            "character": characters.runtime_snapshot(db, selected["agentId"]),
+        }
         settings = {
             "channels": Channels().model_dump(),
-            "mode": "character",
+            "mode": character_context.mode(presentation),
             "modelId": None,
             "privacy": flags,
         }
@@ -505,7 +510,10 @@ def execution_snapshot(db, session_id, base):
         (row["id"],),
     ).fetchone()
     settings = json.loads(active[0] if active and active[0] else row["settings"])
+    if "character" in settings:
+        value["character"] = settings["character"]
     value["callExecution"] = {"id": row["id"], "generation": row["generation"]}
+    value["presentationMode"] = settings["mode"]
     value["privacy"] = {
         "memoryDisabled": settings["privacy"]["memory"],
         "harnessDisabled": settings["privacy"]["harness"],
@@ -630,6 +638,9 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                 "call_busy", "Wait for the current request to settle before sending another."
             )
         generation, session_id = row["generation"], row["session_id"]
+        from . import characters
+        agent_id = session_settings._load(db, session_id)["settings"]["agentId"]
+        accepted = {**settings, "character": characters.runtime_snapshot(db, agent_id)}
         db.execute(
             "INSERT INTO "
             "call_requests(request_id,call_id,generation,payload_hash,input_kind,state,"
@@ -642,7 +653,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                 "text" if body.text is not None else "audio",
                 now,
                 now,
-                json.dumps(settings),
+                json.dumps(accepted),
             ),
         )
         db.execute("UPDATE calls SET phase='thinking' WHERE id=?", (identity,))

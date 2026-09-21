@@ -13,4 +13,8 @@ def router(store_provider, authorize):
     def save(identity: str, body: settings.Update):
         return settings.save(store_provider(), identity, body)
 
+    @result.get("/{identity}/settings/turns/{turn_id}")
+    def execution(identity: str, turn_id: str):
+        return settings.execution(store_provider(), identity, turn_id=turn_id)
+
     return result

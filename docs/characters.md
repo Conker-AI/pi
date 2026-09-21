@@ -76,6 +76,21 @@ affect future requests. Runtime mode comes from `presentationMode` (or the profi
 default), with accepted call mode overriding conversation mode. Separate runtime
 integration owns instruction selection; profile text never grants tools or memory.
 
+The integrated Loop adds the authored text settings to actual model context.
+Focus includes name and the owner's Focus text instructions; Character additionally
+includes personality, speaking style, soul, backstory, relationship and details.
+This controls new presentation instructions, not deletion of earlier conversation
+history or guaranteed model compliance. Stored voice delivery preferences are not
+silently converted into unsupported synthesis parameters.
+
+Session settings accept optional `presentationMode`; null follows the profile's
+default. Accepted turns freeze the reduced profile. Calls freeze it before STT,
+and teams freeze each role's profile when the team run is created. Editing the
+profile later does not rewrite accepted turns or team snapshots. Owner inspection
+at `GET /sessions/{id}/settings/turns/{turn_id}` returns the saved execution
+selection, including character revision and selected presentation mode. Model
+credentials and embedded character assets are absent from that snapshot.
+
 Validation: `pytest tests/test_characters.py -q` exercises restart persistence,
 immutable versions, CAS races, restoration, archived/Companion boundaries, reduced
 snapshots, package/media/history limits, rejected URLs/animated images/references,

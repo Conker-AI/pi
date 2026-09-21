@@ -26,6 +26,7 @@ import uuid
 from . import (
     actions,
     calls,
+    character_context,
     context_controls,
     context_retrieval,
     memory_store,
@@ -191,6 +192,7 @@ class Loop:
             messages.append(Message("system", self.system_prompt))
         if execution["kind"] != "companion":
             messages.append(Message("system", execution["configuration"]["instructions"]))
+        messages.extend(character_context.messages(execution))
         project = execution.get("project")
         if project and project["instructions"].strip():
             messages.append(Message("system", project["instructions"]))
