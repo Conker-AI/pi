@@ -27,6 +27,7 @@ from typing import Any
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
+from . import drafts
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -242,6 +243,7 @@ class Store:
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
                 db.executescript(jobs.SCHEMA)
+                db.executescript(drafts.SCHEMA)
         except BaseException:
             self.close()
             raise
