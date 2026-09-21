@@ -21,6 +21,7 @@ def test_file_project_source_and_forgetting_use_real_hooks(tmp_path):
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             attachments.bind(db, sid, message["id"], [file["id"]])
+            db.commit()
 
         def resolve(ref):
             return project_sources.resolve(store, ref)
