@@ -8,6 +8,8 @@ import httpx
 
 from .system_actions import ActionError
 
+MAX_ROOT_BYTES = 512 * 1024  # Fits ToolGate's 32,768-character config even JSON-escaped.
+
 
 def _path(value):
     return (
@@ -51,7 +53,7 @@ def read(gate, *, transport=None):
                 raise ValueError("unavailable")
             raw = bytearray()
             for chunk in response.iter_raw():
-                if len(raw) + len(chunk) > 64000 or time.monotonic() > deadline:
+                if len(raw) + len(chunk) > MAX_ROOT_BYTES or time.monotonic() > deadline:
                     raise ValueError("response limit")
                 raw.extend(chunk)
             if time.monotonic() > deadline:

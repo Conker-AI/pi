@@ -14,8 +14,9 @@ is accessed by Pi. Configured roots are distinct from observed directory results
 The transport validates metadata-only capabilities, safe root IDs/absolute paths
 and uniqueness; it rejects redirects, compressed responses and oversized replies.
 Unavailable configuration remains explicit. Responses use `Cache-Control: no-store`.
-Its 64 KB response cap may reject larger configured catalogues; it never truncates
-them into apparent success. A checked 10-second deadline can overrun during an
+Its 512 KiB response cap accommodates ToolGate's bounded configuration even with
+JSON-escaped Unicode paths; it never truncates oversized replies into success.
+A checked 10-second deadline can overrun during an
 in-progress five-second network read.
 
 `POST /system/files/listings`, `GET /system/files/listings/{request_id}` and
