@@ -179,5 +179,9 @@ def source_privacy(db, identity):
 
 
 def memory_allowed(snapshot):
+    if snapshot["kind"] == "team-role":
+        read = snapshot.get("memoryRead", {})
+        return (read.get("disabled") is False and bool(read.get("sourceSessionId"))
+                and snapshot["configuration"]["memory"]["scope"] != "none")
     # Retrieval authority is resolved separately by Memory's operator-owned map.
     return not snapshot["privacy"]["memoryDisabled"] and snapshot["kind"] in ("companion", "agent")

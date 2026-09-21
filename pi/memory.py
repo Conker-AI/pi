@@ -101,23 +101,31 @@ class Memory:
     def prepare(self, turn_id, query):
         turn = self.store.get_turn(turn_id)
         selected = session_settings.execution(self.store, turn["session_id"], turn_id)
+        team_source = None
+        if selected["kind"] == "team-role":
+            team_source = selected.get("memoryRead", {}).get("sourceSessionId")
+            with self.store._connect() as db:
+                live_privacy = session_settings.source_privacy(db, team_source)
+            if live_privacy is None or live_privacy["memoryDisabled"]:
+                memory_store.save_context(self.store, turn_id, "disabled")
+                return
         if not session_settings.memory_allowed(selected):
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
-        client = self.client if selected["kind"] == "companion" else self.read_clients.get(selected["agentId"])
+        client = self.client if selected["agentId"] == "companion" else self.read_clients.get(selected["agentId"])
         if memory_store.pending_deletions(self.store):
             state = "unavailable"
         elif client:
             try:
                 # Legacy Companion behavior remains unchanged unless settings were explicitly saved.
-                if selected.get("revision", 0) == 0:
+                if selected.get("revision", 0) == 0 and selected["kind"] == "companion":
                     package = client.retrieve(query)
                 else:
                     configuration = selected["configuration"]
                     scope = configuration["memory"]["scope"]
                     package = client.retrieve(query, scope=scope,
-                        session_id=turn["session_id"] if scope == "conversation" else None,
+                        session_id=(team_source or turn["session_id"]) if scope == "conversation" else None,
                         memory_ids=configuration["memory"]["memoryIds"] if scope == "selected" else [])
                 state = (
                     "ok"

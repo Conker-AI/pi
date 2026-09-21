@@ -195,11 +195,12 @@ def start(store, team_id, body):
                 for key in ("privacy", "modelConfiguration", "modelConfigurationRevision")
             }
             base.update(authority="none", project=None, projectContext=[])
+            source_privacy = session_settings.source_privacy(db, body.source_session_id)
+            base["memoryRead"] = {
+                "sourceSessionId": body.source_session_id,
+                "disabled": source_privacy is None or source_privacy["memoryDisabled"],
+            }
             for role in definition.roles:
-                if role.memory.scope != "none":
-                    _error(
-                        "memory_unavailable", "Team memory authority is unavailable; select none."
-                    )
                 for source in role.context.sourceIds:
                     _source(db, source, body.source_session_id)
             snapshot = {

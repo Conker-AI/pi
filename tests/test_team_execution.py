@@ -83,7 +83,7 @@ def configure(store):
     model_roles.save(store, model_roles.Update(expected_revision=0, configuration=configuration))
 
 
-def setup(store, source_ids=None, tokens=100, cost=100):
+def setup(store, source_ids=None, tokens=100, cost=100, memory_scope="none"):
     configure(store)
     agent = agents.create(
         store,
@@ -93,7 +93,7 @@ def setup(store, source_ids=None, tokens=100, cost=100):
             instructions="Frozen agent instructions",
             modelId="answer",
             toolIds=["read", "write"],
-            memory=agents.MemorySelection(scope="none", memoryIds=[]),
+            memory=agents.MemorySelection(scope=memory_scope, memoryIds=[]),
         ),
     )
     roles = [
@@ -103,7 +103,7 @@ def setup(store, source_ids=None, tokens=100, cost=100):
             "agentId": agent["id"],
             "instructions": "Role " + identity,
             "toolIds": ["read"] if identity == "first" else [],
-            "memory": {"scope": "none", "memoryIds": []},
+            "memory": {"scope": memory_scope, "memoryIds": []},
             "context": {
                 "mode": "selected" if source_ids else "task_only",
                 "sourceIds": source_ids or [],

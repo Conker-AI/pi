@@ -14,7 +14,12 @@ bound namespace, and memory-disabled privacy prevents reads. Specialist clients
 have no ingestion credential and do not participate in Companion's delivery worker.
 No keys or namespaces were provisioned by this change.
 
-Team-role memory remains unavailable pending explicit source-privacy handling.
-This change does not grant team access, add specialist ingestion, or wire the UI.
+Team-role reads use the assigned agent's binding and the role's existing narrowed
+memory selection. Conversation scope uses the original owner conversation, not a
+new team-step session. Read privacy is frozen from that source at team preparation;
+current source privacy is checked again before retrieval, so later disabling or
+forgetting the source blocks reads. Team-step transcripts retain memory-disabled
+flags and are not ingested. Older prepared teams without read policy stay disabled.
+This does not add specialist ingestion or wire the UI.
 Fourteen focused authority and existing memory tests passed using synthetic clients
 and temporary stores; no real MemoryGate deployment was contacted.
