@@ -28,6 +28,7 @@ class Model(Strict):
     name: str = Field(min_length=1, max_length=160)
     route: str = Field(min_length=1, max_length=300)
     enabled: bool
+    routingDescription: str = Field(default="", max_length=240)
 
 
 class Assignment(Strict):
@@ -190,7 +191,8 @@ def dispatch(
                 json.dumps(
                     {
                         "allowedModelIds": list(eligible),
-                        "modelDescriptions": {key: model.name for key, model in eligible.items()},
+                        "modelDescriptions": {key: model.routingDescription or model.name
+                                              for key, model in eligible.items()},
                         "task": [{"role": m.role, "content": m.content} for m in messages],
                     },
                     ensure_ascii=False,

@@ -92,9 +92,10 @@ class MemoryClient:
 
 
 class Memory:
-    def __init__(self, store, client=None, *, read_clients=None):
+    def __init__(self, store, client=None, *, read_clients=None, ranker=None):
         self.store, self.client = store, client
         self.read_clients = dict(read_clients or {})
+        self.ranker = ranker
         self.stop_event = threading.Event()
         self.thread = None
 
@@ -127,6 +128,8 @@ class Memory:
                     package = client.retrieve(query, scope=scope,
                         session_id=(team_source or turn["session_id"]) if scope == "conversation" else None,
                         memory_ids=configuration["memory"]["memoryIds"] if scope == "selected" else [])
+                if self.ranker is not None and not selected.get("privacy", {}).get("harnessDisabled", False):
+                    package = self.ranker.rank_memories(query, package)
                 state = (
                     "ok"
                     if selected.get("revision", 0) != 0 or package["retrieval"].get("semantic", {}).get("status") == "ok"

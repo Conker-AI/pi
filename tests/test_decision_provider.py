@@ -27,13 +27,15 @@ def test_real_dispatch_uses_typed_service_and_retains_manual_privacy():
     def handler(request):
         calls.append(json.loads(request.content))
         assert request.headers["x-decision-key"] == "x" * 32
-        return httpx.Response(200, json={"choice": "b", "confidence": 0.8, "model": "laya-pinned"})
+        return httpx.Response(200, json={"choice": "b", "confidence": 0.8, "model": "laya-pinned",
+                                        "probabilities": {"a": 0.2, "b": 0.8}})
     value, decision = setup(httpx.MockTransport(handler))
+    value["models"][0]["routingDescription"] = "Fast simple answers"
     providers = {"decisions": decision, "one": Adapter(), "two": Adapter()}
     result = model_roles.dispatch(value, "answer", [Message("user", "Explain this")], providers)
     assert result["modelId"] == "b"
     assert result["attempts"][0]["actualModel"] == "laya-pinned"
-    assert calls[0]["choices"] == {"a": "A", "b": "B"}
+    assert calls[0]["choices"] == {"a": "Fast simple answers", "b": "B"}
     with pytest.raises(ProviderUnavailable):
         model_roles.dispatch(value, "answer", [Message("user", "Private")], providers, harness_disabled=True)
     result = model_roles.dispatch(value, "answer", [], providers, override="a", harness_disabled=True)
@@ -62,3 +64,44 @@ def test_adapter_refuses_text_answering_and_unapproved_choices():
     for url in ["http://evil.example", "http://localhost/?key=foo", "http://user:pass@localhost"]:
         with pytest.raises(ValueError):
             DecisionProvider(url, "x" * 32)
+
+
+def test_memory_ranking_preserves_records_and_falls_back_without_dropping_evidence():
+    calls = []
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json={"choice": "m1", "confidence": 0.8, "model": "local",
+                                        "probabilities": {"m0": 0.2, "m1": 0.8}})
+    _, decision = setup(httpx.MockTransport(handler))
+    package = {"memories": [{"id": "one", "text": "Original first", "confidence": "low"},
+                            {"id": "two", "text": "Original second", "source_id": "proof"}],
+               "scope": "selected", "retrieval": {"semantic": {"status": "ok"}}}
+    result = decision.rank_memories("query", package)
+    assert result["memories"] == list(reversed(package["memories"]))
+    assert result["scope"] == "selected" and result["retrieval"]["semantic"] == {"status": "ok"}
+    assert result["retrieval"]["reranking"]["status"] == "ranked"
+    assert calls[0]["choices"] == {"m0": "Memory m0", "m1": "Memory m1"}
+    decision.transport = httpx.MockTransport(lambda request: httpx.Response(503))
+    result = decision.rank_memories("query", package)
+    assert result["memories"] == package["memories"]
+    assert result["retrieval"]["reranking"]["status"] == "fallback"
+
+
+def test_memory_no_harness_never_calls_ranker(monkeypatch):
+    from pi import memory, memory_store, session_settings
+    from types import SimpleNamespace
+    selected = {"kind": "companion", "agentId": "companion", "revision": 0,
+                "privacy": {"harnessDisabled": True}}
+    monkeypatch.setattr(session_settings, "execution", lambda *args: selected)
+    monkeypatch.setattr(session_settings, "memory_allowed", lambda value: True)
+    monkeypatch.setattr(memory_store, "pending_deletions", lambda store: False)
+    saved = []
+    monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args))
+    package = {"memories": [], "retrieval": {"semantic": {"status": "ok"}}}
+    client = SimpleNamespace(retrieve=lambda query: package)
+    def prohibited(*args):
+        pytest.fail("No-harness context reached the decision service")
+    worker = memory.Memory(SimpleNamespace(get_turn=lambda identity: {"session_id": "session"}),
+                           client, ranker=SimpleNamespace(rank_memories=prohibited))
+    worker.prepare("turn", "private")
+    assert saved[-1][-1] is package

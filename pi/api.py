@@ -183,6 +183,10 @@ async def lifespan(app: FastAPI):
             os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)),
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
+    if os.environ.get("PI_MEMORY_RERANK_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        memory.ranker = app.state.router.providers.get("decisions")
+        if memory.ranker is None:
+            raise RuntimeError("Memory reranking requires the configured decision service.")
     app.state.loop = Loop(
         store, app.state.router,
         system_prompt=os.environ.get("PI_SYSTEM_PROMPT", ""),
@@ -587,7 +591,7 @@ def models():
              "free": True, "health": app.state.local.health()}
     direct = {name: {"provider": name, "health": adapter.health(),
                      "allow_paid": adapter.allow_paid, "discovery": "manual",
-                     "capabilities": ["text"]}
+                     "capabilities": getattr(adapter, "capabilities", ["text"])}
               for name, adapter in app.state.router.providers.items()}
     if app.state.hosted is None:
         return {"local": local, "hosted": {"status": "not_configured"}, "direct": direct}
