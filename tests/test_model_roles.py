@@ -122,3 +122,50 @@ def test_storage_revision_validation_and_restart(tmp_path):
     value["roleSettings"]["roles"]["answer"]["fallbackModelId"] = "b"
     with pytest.raises(ValidationError):
         r.Configuration.model_validate(value)
+
+
+@pytest.mark.parametrize("provider_fails", [False, True])
+def test_interruption_during_attempt_does_not_fall_back(provider_fails):
+    value = config()
+    value["roleSettings"]["roles"]["summarization"] = {
+        **value["roleSettings"]["roles"]["answer"],
+        "failure": "fallback",
+        "fallbackModelId": "b",
+    }
+    first, second = Adapter(fail=provider_fails), Adapter()
+
+    def guard():
+        if first.calls:
+            raise ProviderUnavailable("Call interrupted")
+
+    with pytest.raises(ProviderUnavailable, match="Call interrupted"):
+        r.dispatch(value, "summarization", [], {"one": first, "two": second}, guard=guard)
+    assert len(first.calls) == 1
+    assert second.calls == []
+
+
+def test_interruption_during_router_prevents_answer():
+    value = config()
+    value["roleSettings"]["answerMode"] = "router"
+    value["roleSettings"]["roles"]["routing"] = {**value["roleSettings"]["roles"]["answer"]}
+    first, second = Adapter('{"modelId":"b"}'), Adapter()
+
+    def guard():
+        if first.calls:
+            raise ProviderUnavailable("Call interrupted")
+
+    with pytest.raises(ProviderUnavailable, match="Call interrupted"):
+        r.dispatch(value, "answer", [], {"one": first, "two": second}, guard=guard)
+    assert len(first.calls) == 1
+    assert not second.calls
+
+
+def test_interruption_before_provider_prevents_call():
+    adapter = Adapter()
+
+    def guard():
+        raise ProviderUnavailable("Call paused")
+
+    with pytest.raises(ProviderUnavailable, match="Call paused"):
+        r.dispatch(config(), "answer", [], {"one": adapter}, guard=guard)
+    assert not adapter.calls

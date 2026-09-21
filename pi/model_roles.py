@@ -147,6 +147,7 @@ def dispatch(
     harness_disabled=False,
     override=None,
     allowed_model_ids=None,
+    guard=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
@@ -201,6 +202,7 @@ def dispatch(
             route_messages,
             providers,
             allowed_model_ids=allowed_model_ids,
+            guard=guard,
         )
         attempts.extend(decision["attempts"])
         try:
@@ -229,13 +231,21 @@ def dispatch(
         ):
             attempts.append({"role": role, "modelId": candidate, "status": "unavailable"})
             continue
+        # Cancellation is execution state, not a provider outage. Keep these
+        # checks outside the fallback handler so it cannot start another call.
+        if guard is not None:
+            guard()
         try:
             completion = adapter.complete_bounded(
                 messages, model=model.route, timeout=assignment.timeoutMs / 1000
             )
         except ProviderUnavailable:
+            if guard is not None:
+                guard()
             attempts.append({"role": role, "modelId": candidate, "status": "unavailable"})
             continue
+        if guard is not None:
+            guard()
         attempts.append(
             {
                 "role": role,
