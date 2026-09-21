@@ -162,6 +162,30 @@ def test_restart_preserves_ready_run_and_snapshot(store):
         )
 
 
+def test_reconciliation_resolves_without_dispatch(store):
+    jobs.create(store, definition(), now=0)
+    run = jobs.claim_due(store, now=3600)[0]
+    jobs.dispatch_claim(store, run, lambda *a, **kw: {"status": "outcome_unknown"})
+
+    class Receipts:
+        result = {"status": "outcome_unknown"}
+        calls = []
+
+        def reconcile(self, target, **kw):
+            self.calls.append((target, kw))
+            return self.result
+
+    adapter = Receipts()
+    assert jobs.reconcile(store, run["id"], adapter) == "outcome_unknown"
+    assert not jobs.claim_due(store, now=7200)
+    adapter.result = {"status": "completed", "action_id": run["id"]}
+    assert jobs.reconcile(store, run["id"], adapter) == "completed"
+    assert jobs.reconcile(store, run["id"], adapter) == "completed"
+    assert len(adapter.calls) == 2
+    assert adapter.calls[0][1] == {"action_id": run["id"], "agent_id": "companion"}
+    assert len(jobs.claim_due(store, now=10800)) == 1
+
+
 def test_api_authorization_validation_and_receipts(store):
     from fastapi import FastAPI, HTTPException
     from fastapi.testclient import TestClient

@@ -284,3 +284,30 @@ def dispatch_claim(store, run, invoke):
         outcome = {"reason": "Dispatch outcome is unconfirmed; reconcile before another run."}
     finish(store, saved["id"], status, outcome)
     return status
+
+
+def reconcile(store, identity, adapter):
+    """Resolve held dispatches from authoritative receipts, without invoking again."""
+    with store._connect() as db:
+        row = db.execute("SELECT * FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        if row is None:
+            raise JobError("Run not found.")
+        if row["status"] not in ("dispatching", "outcome_unknown"):
+            return row["status"]
+        definition = json.loads(row["definition"])
+    outcome = adapter.reconcile(
+        definition["target"], action_id=identity, agent_id=definition["agentId"]
+    )
+    status = outcome.get("status")
+    if status not in ("completed", "failed"):
+        return row["status"]
+    encoded = json.dumps(outcome, allow_nan=False)
+    if len(encoded) > 100000:
+        raise JobError("Receipt exceeds limit.")
+    with store._connect() as db:
+        db.execute(
+            "UPDATE scheduled_runs SET status=?,receipt=? WHERE id=? "
+            "AND status IN ('dispatching','outcome_unknown')",
+            (status, encoded, identity),
+        )
+        return db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()[0]

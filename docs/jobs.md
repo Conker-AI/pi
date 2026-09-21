@@ -24,8 +24,12 @@ the run held for reconciliation; an exception never means an effect did not occu
 ## Remaining integration within the backend
 
 The schedule store and owner API are implemented. No timer worker is started yet.
-`dispatch_claim` accepts a server-owned adapter; the actual scoped ToolGate adapter,
-approval resume/reconciliation, grants and owner budget admission must be connected
+`PublishedJobs` invokes pinned publications with server-provisioned per-agent scoped
+ToolGate clients. Unknown agents fail without borrowing the companion credential.
+It verifies action identity, version and digest before accepting completion. Its
+reconciliation path only reads ToolGate receipts; missing receipts never allow a
+retry. `jobs.reconcile` saves resolved outcomes without overwriting final states.
+The timer lifecycle, approval resume, grants and owner budget admission must be connected
 before enabling automatic work. Manual run admission currently records `ready`
 and does not promise execution. Browser gateway/frontend integration is deferred
 until owner review. Tests use temporary databases and no external effects.
