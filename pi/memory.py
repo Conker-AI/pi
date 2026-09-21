@@ -144,7 +144,9 @@ class Memory:
                     package = self.ranker.rank_memories(query, package)
                 state = (
                     "ok"
-                    if selected.get("revision", 0) != 0 or package["retrieval"].get("semantic", {}).get("status") == "ok"
+                    if (package["retrieval"].get("semantic", {}).get("status") == "ok"
+                        or (package["retrieval"].get("mode") == "explicit-scope"
+                            and package["retrieval"].get("semantic", {}).get("status") == "not-used"))
                     and not package["retrieval"].get("pending_conversation_index")
                     else "degraded"
                 )
