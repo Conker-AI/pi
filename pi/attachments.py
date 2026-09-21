@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from . import document_text
+from . import attachment_passages, document_text
 
 MAX_FILES = 5
 MAX_BYTES = 10 * 1024 * 1024
@@ -346,9 +346,26 @@ def extract(store, session_id, identity, resolve=None):
         return {
             "attachment": view,
             "text": text,
+            "passages": attachment_passages.split(identity, text),
             "trust": "untrusted-source",
             "execution": "not-wired",
         }
+
+
+def passage(store, session_id, identity, index, resolve=None):
+    if type(index) is not int or index < 0:
+        raise AttachmentError("invalid_passage", "Choose a non-negative passage index.", 422)
+    value = extract(store, session_id, identity, resolve)
+    if index >= len(value["passages"]):
+        raise AttachmentError("not_found", "Passage is unavailable.", 404)
+    return {
+        "attachmentId": identity,
+        "name": value["attachment"]["name"],
+        "passage": value["passages"][index],
+        "trust": "untrusted-source",
+        "offsetUnit": "unicode-codepoints",
+        "source": "extracted-text",
+    }
 
 
 def bind(db, session_id, message_id, attachment_ids):

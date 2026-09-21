@@ -3,6 +3,7 @@
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 
 from . import attachments
 
@@ -79,5 +80,12 @@ def router(store, authorize, resolve=None):
     @routes.get("/{identity}/text")
     def extract(session_id: str, identity: str):
         return run(attachments.extract, session_id, identity)
+
+    @routes.get("/{identity}/passages/{index}")
+    def passage(session_id: str, identity: str, index: int):
+        return JSONResponse(
+            run(attachments.passage, session_id, identity, index),
+            headers={"Cache-Control": "no-store"},
+        )
 
     return routes
