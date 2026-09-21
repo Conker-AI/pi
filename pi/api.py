@@ -23,6 +23,7 @@ from . import activity, agents, artifacts_api, collaboration_api, context_api, c
 from .browser_contract import runtime_allowed
 from . import jobs_api
 from .job_execution import PublishedJobs
+from .job_worker import JobWorker
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -126,9 +127,19 @@ async def lifespan(app: FastAPI):
         system_prompt=os.environ.get("PI_SYSTEM_PROMPT", ""),
         toolgate=toolgate, memory=memory,
     )
+    scheduler = None
+    if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        if app.state.job_executor is None:
+            memory.close()
+            store.close()
+            raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
+        scheduler = JobWorker(store, app.state.job_executor)
+        scheduler.start()
     try:
         yield
     finally:
+        if scheduler:
+            scheduler.close()
         memory.close()
         store.close()
 

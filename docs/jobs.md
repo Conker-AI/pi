@@ -23,7 +23,12 @@ the run held for reconciliation; an exception never means an effect did not occu
 
 ## Remaining integration within the backend
 
-The schedule store and owner API are implemented. No timer worker is started yet.
+The schedule store, owner API and opt-in timer worker are implemented.
+`PI_SCHEDULER_ENABLED=true` starts the worker only when a scoped ToolGate credential
+is configured. It processes automatic and manual ready admissions, including those
+retained across restart. Multiple workers share transactional dispatch claims.
+Shutdown waits for the in-flight bounded adapter before closing the store.
+This setting has not been enabled on the user's services.
 `PublishedJobs` invokes pinned publications with server-provisioned per-agent scoped
 ToolGate clients. Unknown agents fail without borrowing the companion credential.
 It verifies action identity, version and digest before accepting completion. Its
@@ -36,7 +41,11 @@ approval is valid. A timeout is held for read-only reconciliation. Owner-only
 companion execution credential provisions the companion adapter; other agent IDs
 require separate server provisioning and cannot borrow it.
 
-The timer lifecycle, grants and owner budget admission must be connected
-before enabling automatic work. Manual run admission currently records `ready`
-and does not promise execution. Browser gateway/frontend integration is deferred
+Paid execution still requires ToolGate's existing budget envelope; this worker
+does not create one or provide an administrative credential. Provisioning bounded
+paid grants and proactive owner-budget reservations remains outstanding. Explicit
+owner schedules are distinct from unsolicited proactive suggestions; notification
+quiet hours should not silently cancel a deliberately scheduled operation.
+Manual run admission records `ready`; execution requires the worker to be enabled.
+Browser gateway/frontend integration is deferred
 until owner review. Tests use temporary databases and no external effects.
