@@ -43,3 +43,19 @@ Requires ToolGate's fixed executor and configured managed-target allowlist. No
 daemon or keys are configured automatically. Process controls, port-mapping edits,
 terminal and files remain separate backend work. Tests use temporary SQLite and
 synthetic gate responses; no real containers or service deployment are exercised.
+
+## Managed target discovery
+
+`GET /system/targets` is owner-only and reads ToolGate's scoped configuration
+catalogue with no effect dispatch or local persistence. The transport rejects
+redirects/compressed responses, bounds the response to 200 KB and 2,000 unique
+full IDs, and validates the fixed lifecycle/approval contract. A checked 10-second
+deadline can overrun by an in-progress 5-second read timeout. Failure is unavailable,
+never an empty successful inventory; valid unconfigured/disabled states remain
+explicit. Both service responses use `Cache-Control: no-store`.
+
+`observed=false` is mandatory. IDs are operator-configured targets, not evidence
+of container existence, running state or daemon health. SystemGate's observed
+inventory may describe a different daemon; consumers must not infer an identity
+match solely from configuration discovery or enable arbitrary process actions.
+All actual dispatches still recheck ToolGate's current authority and allowlist.

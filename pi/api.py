@@ -225,6 +225,8 @@ app.include_router(system_inventory_api.router(lambda: app.state.store,
     lambda: getattr(app.state, "toolgate", None), require_admin))
 app.include_router(system_actions_api.router(lambda: app.state.store,
     lambda: getattr(app.state, "toolgate", None), require_admin))
+app.include_router(system_actions_api.targets_router(
+    lambda: getattr(app.state, "toolgate", None), require_admin))
 app.include_router(calls_api.router(lambda: app.state.store, lambda: app.state.loop,
     require_admin, lambda: getattr(app.state, "speech", None)))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))

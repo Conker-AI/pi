@@ -1,8 +1,10 @@
 """Owner system controls use the existing gate approval path, never direct Docker."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from . import system_actions as actions
+from . import system_targets
 
 
 def router(store, gate, authorize):
@@ -29,5 +31,18 @@ def router(store, gate, authorize):
     @routes.post("/{identity}/resume")
     def resume(identity: str):
         return invoke(actions.resume, identity)
+
+    return routes
+
+
+def targets_router(gate, authorize):
+    routes = APIRouter(prefix="/system", dependencies=[Depends(authorize)])
+
+    @routes.get("/targets")
+    def targets():
+        try:
+            return JSONResponse(system_targets.read(gate()), headers={"Cache-Control": "no-store"})
+        except actions.ActionError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
 
     return routes
