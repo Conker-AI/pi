@@ -425,7 +425,7 @@ class Store:
             (status, time.time(), *fields.values(), turn_id, expected_status),
         ).rowcount == 1
 
-    def complete_turn(self, turn_id, text, *, citations=None, **fields):
+    def complete_turn(self, turn_id, text, *, citations=None, reply_request_id=None, **fields):
         """A final reply and terminal state are one commit, including exact message provenance."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -436,7 +436,7 @@ class Store:
             snapshot = db.execute("SELECT snapshot FROM turn_settings WHERE turn_id=?",
                                   (turn_id,)).fetchone()
             calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
-            turn_control.guard_db(db, turn_id)
+            turn_control.guard_db(db, turn_id, reply_request_id)
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
             from . import attachment_passages

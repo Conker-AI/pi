@@ -25,7 +25,16 @@ a late summary from creating a fork. The terminal preparation receipt uses
 ID only replays the receipt; an intentional resend requires a new ID. A helper
 already in flight may finish remotely, but cannot dispatch the answer.
 
-Remaining P9 work: explicit consent
-for reply-only recovery after a stop, queued future turns, steering, and reviewed
+`POST /turns/{turn_id}/reply-only` with an owner credential and a fresh
+`request_id` permits narration of an acted_no_reply turn whose action outcomes
+are all resolved. Claiming and recording the request are atomic. Reusing the ID
+only inspects status; a failed attempt needs an intentional new ID. The original
+action and cancellation evidence remain. The model receives the saved history
+and a reply-only instruction without available tools; recovery never dispatches
+action requests. A new Stop invalidates the old consent at provider checkpoints
+and final persistence. Normal resume does not inherit this permission. Unknown
+effects must first be reconciled. Existing call privacy guards still apply.
+
+Remaining P9 work: queued future turns, steering, and reviewed
 per-message retry/fork. These routes are independent backend contracts; browser
 wiring remains deferred for owner review.

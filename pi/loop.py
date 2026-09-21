@@ -396,9 +396,32 @@ class Loop:
             actions.record(self.store, action, outcome)
             acted = acted or outcome.ok
 
+        return self._finish_reply(turn_id, session_id, execution, acted, started)
+
+    def recover_reply(self, turn_id, request_id):
+        turn, created = turn_control.claim_reply(self.store, turn_id, request_id)
+        if not created:
+            return {"turn_id": turn_id, "session_id": turn["session_id"],
+                    "request_id": request_id, "status": turn["status"],
+                    "acted": bool(turn["acted"]), "replayed": True}
         try:
-            available = self._available_tools(execution)
+            execution = session_settings.execution(self.store, turn["session_id"], turn_id)
+            execution["replyRecoveryId"] = request_id
+            return {**self._finish_reply(turn_id, turn["session_id"], execution, True,
+                                        time.monotonic(), request_id),
+                    "request_id": request_id, "replayed": False}
+        except Exception:
+            self.store.finish_turn(turn_id, "acted_no_reply", acted=1)
+            raise
+
+    def _finish_reply(self, turn_id, session_id, execution, acted, started,
+                      reply_request_id=None):
+        try:
+            available = [] if reply_request_id else self._available_tools(execution)
             history = self._history(session_id, tools=available, turn_id=turn_id)
+            if reply_request_id:
+                history.append(Message("system", "Report only the recorded action results. "
+                    "Do not request or repeat any tool action. State uncertainty honestly."))
             ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
             route, completion, _skipped = self._call(history, ctx, execution)
             turn_control.guard(self.store, execution)
@@ -416,6 +439,7 @@ class Loop:
 
         message = self._complete_turn(
             turn_id, completion.text, citations=completion.citations, acted=int(acted),
+            reply_request_id=reply_request_id,
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,

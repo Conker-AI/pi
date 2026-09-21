@@ -674,3 +674,15 @@ def cancel_turn(turn_id: str):
 @app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_admin)])
 def cancel_submission(request_id: str):
     return turn_control.cancel_submission(app.state.store, request_id)
+
+
+class ReplyRecoveryRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+@app.post("/turns/{turn_id}/reply-only", dependencies=[Depends(require_admin)])
+def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
+    try:
+        return app.state.loop.recover_reply(turn_id, body.request_id)
+    except ActedWithoutReply as exc:
+        return {**_acted_without_reply(exc), "request_id": body.request_id}
