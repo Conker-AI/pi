@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, submissions, tasks
+from . import activity, owner_preferences, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -151,6 +151,25 @@ def require_key(request: Request, x_pi_key: str | None = Header(None, alias="X-P
     raise HTTPException(
         401, "Missing or invalid runtime credential. Check gateway provisioning on the host."
     )
+
+
+def require_admin(identity: str = Depends(require_key)) -> None:
+    if identity != "recovery":
+        raise HTTPException(403, "Owner administration credential required.")
+
+
+@app.get("/owner/preferences", dependencies=[Depends(require_admin)])
+def get_owner_preferences():
+    return owner_preferences.load(app.state.store)
+
+
+@app.post("/owner/preferences", dependencies=[Depends(require_admin)])
+def save_owner_preferences(body: owner_preferences.UpdatePreferences):
+    try:
+        return owner_preferences.save(app.state.store, body)
+    except owner_preferences.RevisionConflict as exc:
+        raise HTTPException(409, {"code": "revision_conflict", "message": str(exc),
+                                  "current_revision": exc.current_revision}) from exc
 
 
 class NewSession(BaseModel):

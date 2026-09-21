@@ -187,6 +187,10 @@ and walking the catalogue would be slow and would blame the models.
 
 ## Not here yet
 
+Owner preference configuration and its current enforcement limits are documented in
+[owner-preferences.md](docs/owner-preferences.md). The admin-only API persists validated
+preferences; it does not start a scheduler, grant permissions, or change gateway idle locking.
+
 Tool calls through ToolGate are [#29](https://github.com/alexeybe1kin/conker/issues/29). Jobs and
 cron come with C2.
 
