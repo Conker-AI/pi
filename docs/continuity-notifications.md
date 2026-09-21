@@ -18,9 +18,17 @@ does not mark the event read; `/continuity/seen` remains the separate read actio
 A lost delivery acknowledgement may cause redelivery with the same ID. This is
 at-least-once delivery, not a claim of exactly-once network delivery.
 
-Quiet hours and disabled/unsupported urgency modes suppress delivery without
+Quiet hours and disabled urgency modes suppress delivery without
 consuming events. Completed work replaces older blockers through existing status
 selection. No title/content copies are stored in delivery records, so privacy and
 forgetting continue to apply at projection time. No external notification provider,
 background browser push, model-generated prose, or final UI wiring is configured.
 This channel makes no paid model calls and does not consume suggestion budgets.
+
+Urgency is grounded in status: `outcome_unknown` is urgent because an external
+effect needs reconciliation before a safe retry. Ordinary failures, approvals and
+completed work are meaningful but not automatically urgent. `urgent_only` filters
+each event; `urgentExceptions` bypasses quiet hours only for urgent events. `off`
+still suppresses all delivery. Briefings retain all inspectable events and report
+per-event suppression separately. No LLM or message content determines urgency.
+Cancelled updates are counted separately from completed/attention updates.

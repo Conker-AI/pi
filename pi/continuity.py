@@ -64,6 +64,15 @@ STATES = {
 }
 
 
+def urgency(status):
+    # An uncertain external effect needs reconciliation before safe retries.
+    # Ordinary failures/approvals are attention-worthy, not automatically urgent.
+    return {
+        "urgent": status == "outcome_unknown",
+        "basis": "uncertain-external-effect" if status == "outcome_unknown" else "status-update",
+    }
+
+
 class Acknowledge(agents.StrictModel):
     event_ids: list[str] = Field(min_length=1, max_length=100)
 
@@ -103,6 +112,7 @@ def _item(db, entry):
         "occurredAt": entry["occurred_at"],
         "provenance": entry["provenance"],
         "needsAttention": entry["to_status"] not in ("complete", "completed", "cancelled"),
+        "urgency": urgency(entry["to_status"]),
     }
     if entry["scheduled_run_id"]:
         run = db.execute(
@@ -165,12 +175,7 @@ def briefing(store, *, limit=30, before=None, now=None):
         ).fetchone()
         prefs = owner_preferences.OwnerPreferences.model_validate_json(row["preferences"])
         reasons = []
-        if prefs.urgency != "meaningful":
-            reasons.append(
-                "proactivity_off" if prefs.urgency == "off" else "no_urgent_event_classification"
-            )
-        if owner_preferences.quiet_now(prefs, now):
-            reasons.append("quiet_hours")
+        quiet = owner_preferences.quiet_now(prefs, now)
         # Select only the latest status per entity. Resolved blockers are not stale alerts.
         rows = db.execute(
             """SELECT c.* FROM continuity_order c
@@ -190,12 +195,22 @@ def briefing(store, *, limit=30, before=None, now=None):
             (before, before),
         ).fetchall()
         items = []
+        suppression = {}
         examined = None
         for entry in rows:
             examined = entry["sequence"]
             item = _item(db, entry)
             if item is None:
                 continue
+            suppressed = []
+            urgent = item["urgency"]["urgent"]
+            if prefs.urgency == "off":
+                suppressed.append("proactivity_off")
+            elif prefs.urgency == "urgent_only" and not urgent:
+                suppressed.append("urgent_only")
+            if quiet and not (urgent and prefs.quietHours.urgentExceptions):
+                suppressed.append("quiet_hours")
+            suppression[item["eventId"]] = suppressed
             items.append(item)
             if len(items) == limit:
                 break
@@ -205,11 +220,19 @@ def briefing(store, *, limit=30, before=None, now=None):
             and (len(rows) == 1000 or (examined is not None and examined != rows[-1]["sequence"]))
             else None
         )
+        if items:
+            reasons = sorted({reason for values in suppression.values() for reason in values})
+        elif prefs.urgency == "off":
+            reasons = ["proactivity_off"]
+        elif quiet:
+            reasons = ["quiet_hours"]
         return {
             "items": items,
             "nextCursor": next_cursor,
             "preferenceRevision": row["revision"],
-            "notificationSuppressed": bool(reasons),
+            "notificationSuppressed": bool(reasons)
+            and not any(not values for values in suppression.values()),
+            "notificationSuppressionByEvent": suppression,
             "suppressionReasons": reasons,
             "notificationDelivery": "owner-poll; explicit delivery acknowledgement",
             "summaryGeneration": "recorded-status-summary; no model",
@@ -221,12 +244,15 @@ def briefing(store, *, limit=30, before=None, now=None):
 def summarize(items, *, more=False):
     """Summarize visible status updates, never infer task completion or total history."""
     finished = sum(item["status"] in ("complete", "completed") for item in items)
-    attention = len(items) - finished
+    attention = sum(item["needsAttention"] for item in items)
+    cancelled = sum(item["status"] == "cancelled" for item in items)
     if not items:
         text = "No unseen work updates on this page." if more else "No unseen work updates."
     else:
         text = f"{len(items)} unseen work update{'s' if len(items) != 1 else ''}: "
         text += f"{finished} completed, {attention} needing attention."
+        if cancelled:
+            text += f" {cancelled} cancelled."
         if more:
             text += " More updates are available."
     return {
@@ -235,6 +261,7 @@ def summarize(items, *, more=False):
         "hasMore": more,
         "completedUpdates": finished,
         "attentionUpdates": attention,
+        "cancelledUpdates": cancelled,
         "eventIds": [item["eventId"] for item in items],
         "highlights": [
             {
@@ -294,11 +321,12 @@ def notifications(store, *, limit=30, before=None, now=None):
             if identities
             else set()
         )
-    items = (
-        []
-        if feed["notificationSuppressed"]
-        else [item for item in feed["items"] if item["eventId"] not in delivered]
-    )
+    items = [
+        item
+        for item in feed["items"]
+        if item["eventId"] not in delivered
+        and not feed["notificationSuppressionByEvent"][item["eventId"]]
+    ]
     return {
         "items": items,
         "nextCursor": feed["nextCursor"],

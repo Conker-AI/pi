@@ -3,13 +3,50 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pi import agents
+from pi import agents, owner_preferences
 from pi import continuity as c
 from pi.store import Store
 from tests.test_continuity import event
 
 DAY = datetime(2026, 9, 21, 10, tzinfo=UTC)
 NIGHT = datetime(2026, 9, 21, 21, tzinfo=UTC)
+
+
+def test_urgent_exceptions_are_per_event_and_off_still_wins(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        event(store, status="outcome_unknown")
+        event(store, status="complete")
+        prefs = owner_preferences.load(store)
+        prefs["preferences"]["urgency"] = "urgent_only"
+        prefs["preferences"]["quietHours"]["urgentExceptions"] = True
+        owner_preferences.save(
+            store,
+            owner_preferences.UpdatePreferences(
+                expected_revision=prefs["revision"], preferences=prefs["preferences"]
+            ),
+        )
+        feed = c.notifications(store, now=NIGHT)
+        assert len(feed["items"]) == 1
+        assert feed["items"][0]["urgency"] == {"urgent": True, "basis": "uncertain-external-effect"}
+        assert feed["items"][0]["status"] == "outcome_unknown"
+        prefs = owner_preferences.load(store)
+        prefs["preferences"]["urgency"] = "off"
+        owner_preferences.save(
+            store,
+            owner_preferences.UpdatePreferences(
+                expected_revision=prefs["revision"], preferences=prefs["preferences"]
+            ),
+        )
+        assert c.notifications(store, now=NIGHT)["items"] == []
+        assert len(c.briefing(store, now=NIGHT)["items"]) == 2
+
+
+def test_cancelled_work_is_not_attention_or_completed(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        event(store, status="cancelled")
+        summary = c.briefing(store, now=DAY)["summary"]
+        assert summary["attentionUpdates"] == summary["completedUpdates"] == 0
+        assert summary["cancelledUpdates"] == 1
 
 
 def test_delivery_is_repeatable_until_ack_but_does_not_mark_read(tmp_path):
