@@ -49,3 +49,15 @@ container identities remain distinct from missing containers or failed reads.
 and synthetic transport. Scoped lint/diff pass, with the existing test-client
 deprecation warning. ToolGate has since implemented managed replacement lineage;
 corrective recovery/finalization, retention and real Docker verification remain.
+# Verified receipt recovery
+
+POST `/system/actions/{identity}/recovery/finalize` accepts an optional
+`approval_request_id`. The owner-authenticated route calls ToolGate's fixed
+finalization endpoint for the original saved port action. A new recovery approval
+is returned separately and remains discoverable in ToolGate's durable owner Inbox;
+it does not replace the original execution approval. After owner approval, submit
+that ID to the same route. Pi verifies the action identity, target, completion and
+replacement receipt before updating the original ledger entry. Lost responses leave
+the action available for receipt inspection; no Docker operation is dispatched.
+Only fully verified ToolGate replacements qualify. Partial-effect correction and
+frontend wiring remain separate work. All response projections omit extra fields.
