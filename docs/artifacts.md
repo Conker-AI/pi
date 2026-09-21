@@ -63,10 +63,26 @@ forgotten, changed, incomplete, or privacy-unknown sources hide title and all ve
 bodies. Export and edit fail closed. Task references are resolved from real tasks,
 checked against active originating sessions at creation, and rechecked on reads.
 
-Pi's current transcript stores text, not the frontend's supplied citation records.
-This increment therefore does not invent citations or claim citation retention;
-`preserveCitations` is accepted for contract shape but has no effect until an
-authoritative citation store is introduced. Privacy must come from an internal
+Supplied assistant citations use `pi.citations`: strict IDs/labels/optional
+HTTP(S) hrefs/excerpts, up to 100 entries and 100,000 serialized characters. They
+are stored immutably beside exact final-message provenance, never inferred from
+retrieved memory. Artifacts copy this exact evidence; Markdown edits preserve it
+unless `preserveCitations` is false, non-Markdown edits drop it, and restore copies
+the historical evidence. Source evidence changes hide stale artifact bodies.
+Markdown export includes an explicitly unverified JSON appendix with escaped
+backticks. Offline forgetting must redact message evidence and artifact history
+in the same transaction. These metadata references are never fetched or executed.
+`Completion.citations` validates supplied evidence; both final-response loop paths
+pass it to `Store.complete_turn`, which commits citations atomically with message
+and turn completion. Transcript reads return nonempty citations. OpenRouter's
+actual `message.annotations` URL citations map to stable message-local IDs,
+labels, links, and optional excerpts, following its
+[documented response shape](https://openrouter.ai/docs/guides/features/plugins/web-search#parsing-web-search-results).
+This adapter does not enable search/plugins or infer evidence from Markdown.
+Providers without explicit annotations return no citations. Malformed metadata
+fails the provider result; atomic persistence failure cannot leave a completed
+turn with uncommitted evidence. Actual loop, Store rollback, provider mapping,
+artifact propagation, forgetting, and raw-file erasure have regression coverage. Privacy must come from an internal
 session settings resolver; no session privacy is inferred from global configuration
 or source text. This library does not enforce memory/harness privacy in execution.
 

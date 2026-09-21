@@ -23,6 +23,7 @@ from decimal import Decimal, InvalidOperation
 
 import httpx
 
+from . import citations
 from .providers import Completion, Message, ProviderUnavailable
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
@@ -191,6 +192,12 @@ class OpenRouterProvider:
         if not isinstance(text, str):
             raise ProviderUnavailable("provider returned no message content")
 
+        try:
+            evidence = citations.from_openrouter_annotations(
+                (choices[0].get("message") or {}).get("annotations")
+            )
+        except ValueError as exc:
+            raise ProviderUnavailable("provider returned invalid citation metadata") from exc
         usage = body.get("usage") or {}
         prompt_tokens = usage.get("prompt_tokens")
         completion_tokens = usage.get("completion_tokens")
@@ -207,6 +214,7 @@ class OpenRouterProvider:
             cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
             cost_usd=cost,
             raw={"finish_reason": choices[0].get("finish_reason")},
+            citations=evidence,
         )
 
     def health(self) -> dict:

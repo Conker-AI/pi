@@ -17,6 +17,8 @@ from typing import Protocol
 
 import httpx
 
+from . import citations as message_citations
+
 
 @dataclass(frozen=True)
 class Message:
@@ -37,6 +39,14 @@ class Completion:
     # which would read as free.
     cost_usd: float | None = None
     raw: dict = field(default_factory=dict)
+    # Explicit supplied evidence only, never inferred from retrieved context.
+    citations: list[dict] = field(default_factory=list)
+
+    def __post_init__(self):
+        try:
+            object.__setattr__(self, "citations", message_citations.normalize(self.citations))
+        except ValueError as exc:
+            raise ProviderUnavailable("provider returned invalid citation metadata") from exc
 
 
 class ProviderUnavailable(RuntimeError):

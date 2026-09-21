@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
+from . import citations as message_citations
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -182,16 +183,22 @@ BEGIN SELECT RAISE(ABORT, 'session is forgotten'); END;
 """
 
 MESSAGE_LOOKUP = """
-SELECT m.*, r.id AS receipt_id, r.forgotten_at
+SELECT m.*, r.id AS receipt_id, r.forgotten_at, c.body AS citation_body
 FROM messages m
 LEFT JOIN forgotten_sessions f ON f.session_id=m.session_id
 LEFT JOIN forgetting_receipts r ON r.id=f.receipt_id
+LEFT JOIN message_citations c ON c.message_id=m.id AND c.redacted=0
 """
 
 
 def _message(row: sqlite3.Row) -> dict:
     item = dict(row)
     item["content"] = json.loads(item["content"])
+    evidence = item.pop("citation_body", None)
+    if evidence and item["receipt_id"] is None:
+        value = message_citations.normalize(json.loads(evidence))
+        if value:
+            item["citations"] = value
     if item["receipt_id"] is None:
         del item["receipt_id"], item["forgotten_at"]
     else:
@@ -225,6 +232,7 @@ class Store:
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)
                 db.executescript(submissions.SCHEMA)
+                db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)
                 db.executescript(projects.SCHEMA)
@@ -371,7 +379,7 @@ class Store:
             (status, time.time(), *fields.values(), turn_id, expected_status),
         ).rowcount == 1
 
-    def complete_turn(self, turn_id, text, **fields):
+    def complete_turn(self, turn_id, text, *, citations=None, **fields):
         """A final reply and terminal state are one commit, including exact message provenance."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -381,6 +389,9 @@ class Store:
                 raise RuntimeError("Turn is no longer claimed by this caller")
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
+            evidence = message_citations.save(db, message["id"], citations)
+            if evidence:
+                message["citations"] = evidence
             if not self._finish_turn(db, turn_id, "complete", **fields):
                 raise RuntimeError("Turn is no longer claimed by this caller")
             db.commit()

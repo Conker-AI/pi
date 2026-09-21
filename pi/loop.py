@@ -353,7 +353,7 @@ class Loop:
             raise TurnFailed(reason, turn_id) from exc
 
         message = self.store.complete_turn(
-            turn_id, completion.text, acted=int(acted),
+            turn_id, completion.text, citations=completion.citations, acted=int(acted),
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,
@@ -546,7 +546,7 @@ class Loop:
             raise TurnFailed(reason, turn_id=turn_id) from exc
 
         message = self.store.complete_turn(
-            turn_id, completion.text,
+            turn_id, completion.text, citations=completion.citations,
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
             cached_tokens=completion.cached_tokens, cost_usd=completion.cost_usd,

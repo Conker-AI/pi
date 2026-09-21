@@ -14,6 +14,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
+from . import citations
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -273,6 +275,12 @@ def _task(db, task_id):
 
 
 def _view(db, row, resolve):
+    versions = [
+        json.loads(v[0])
+        for v in db.execute(
+            "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version", (row["id"],)
+        )
+    ]
     availability, privacy, private = "available", None, False
     source = None
     if row["source_session_id"]:
@@ -286,16 +294,18 @@ def _view(db, row, resolve):
             "privacy-unknown",
         ):
             availability = "source-changed"
+        if availability in ("available", "source-archived", "privacy-unknown"):
+            try:
+                current = citations.read(db, source["messageId"])
+                original = citations.normalize(versions[0].get("citations", []) if versions else [])
+                if current != original:
+                    availability = "source-changed"
+            except ValueError:
+                availability = "source-changed"
         private = bool(privacy and any(privacy.values()))
     readable = availability in ("available", "source-archived")
     if not readable:
         privacy, private = None, None
-    versions = [
-        json.loads(v[0])
-        for v in db.execute(
-            "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version", (row["id"],)
-        )
-    ]
     task, task_availability = None, "none"
     if row["task_id"]:
         task = {"taskId": row["task_id"], "originSessionId": row["task_session_id"]}
@@ -404,6 +414,10 @@ def create(store, body, resolve=None):
             "author": "source-copy" if copied else "owner",
             "note": "Explicit copy of a completed response." if copied else "Created by owner.",
         }
+        if copied:
+            evidence = citations.read(db, source_message)
+            if evidence:
+                version["citations"] = evidence
         db.execute("INSERT INTO artifact_versions VALUES(?,?,?)", (identity, 1, encoded(version)))
         result = _view(db, _row(db, identity), resolve)
         db.commit()
@@ -453,8 +467,14 @@ def mutate(store, identity, body, resolve=None):
                 "createdAt": now,
                 "author": "owner",
             }
+            evidence = []
             if isinstance(body, Restore):
                 version["restoredFromVersion"] = body.version
+                evidence = selected.get("citations", [])
+            elif data["kind"] == "markdown" and body.preserveCitations:
+                evidence = versions[-1].get("citations", [])
+            if evidence:
+                version["citations"] = evidence
             if (
                 len(versions) >= 100
                 or len(encoded([*versions, version]).encode("utf-16-le")) // 2 > 4_000_000
@@ -515,6 +535,15 @@ def export(store, identity, version=None, resolve=None):
         )
     else:
         text = data["text"]
+        if kind == "markdown" and selected.get("citations"):
+            appendix = json.dumps(selected["citations"], ensure_ascii=False, indent=2).replace(
+                "`", "\\u0060"
+            )
+            text += (
+                "\n\n## Supplied source references\n\n"
+                "These references were supplied with the source response; "
+                "they were not independently verified.\n\n```json\n" + appendix + "\n```\n"
+            )
         extensions = {
             "javascript": "js",
             "js": "js",
