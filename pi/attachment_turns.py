@@ -20,7 +20,7 @@ def _text(db, session_id, identity, privacy):
     if status != "extracted":
         raise attachments.AttachmentError(
             "unsupported_model_input",
-            "Only extracted UTF-8 plaintext is supported by this model path.",
+            "This attachment has no supported extracted text for model input.",
             415,
         )
     return {"attachmentId": identity, "name": view["name"], "text": text}

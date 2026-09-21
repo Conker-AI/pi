@@ -10,6 +10,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from . import document_text
+
 MAX_FILES = 5
 MAX_BYTES = 10 * 1024 * 1024
 MAX_MESSAGE_BYTES = 25 * 1024 * 1024
@@ -221,8 +223,25 @@ def _view(db, row, resolve):
 
 
 def _extract(raw, media_type):
-    if media_type.lower().strip() != "text/plain":
-        return None, "unsupported", "Only UTF-8 text/plain extraction is supported."
+    media_type = media_type.lower().strip()
+    if media_type == document_text.DOCX:
+        try:
+            text = document_text.docx(raw, MAX_TEXT_CHARACTERS)
+        except Exception:
+            return None, "unsupported", "DOCX body text could not be safely extracted."
+        if any((ord(c) < 32 and c not in "\t\r\n") or ord(c) == 127 for c in text):
+            return None, "unsupported", "Unsupported document control characters."
+        return (
+            text,
+            "extracted",
+            "DOCX body text only; images, layout, headers and footnotes are not extracted.",
+        )
+    if media_type not in ("text/plain", "text/markdown", "text/csv", "application/json"):
+        return (
+            None,
+            "unsupported",
+            "Supported text extraction: plain text, Markdown, CSV, JSON and DOCX body text.",
+        )
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
