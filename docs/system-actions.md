@@ -59,3 +59,23 @@ of container existence, running state or daemon health. SystemGate's observed
 inventory may describe a different daemon; consumers must not infer an identity
 match solely from configuration discovery or enable arbitrary process actions.
 All actual dispatches still recheck ToolGate's current authority and allowlist.
+
+## Managed services
+
+`POST /system/actions/services` accepts `request_id`, scoped `service_id` such as
+`user:worker.service` or `system:worker.service`, and start/stop/restart `action`.
+The shared history, receipt inspection and approval-resume routes handle these
+requests too. ToolGate's separate `system.process-control` scope is required;
+container authority is not reused. `GET /system/services` reads its separate
+configured-target catalogue, capped at 600 KB and 2,000 service IDs.
+
+Service scope is part of the stable target and approval. Caller-controlled command
+lines, arbitrary PIDs, wildcard names and unscoped service names are rejected.
+Service receipts validate target, action, exact unit ID and before/after state;
+only load/active/sub-state and observed main PID are projected. A PID in a receipt
+grants no signal authority. Existing container requests retain their action IDs,
+payloads and ToolGate source. The legacy SQL `container_id` column stores the
+target identity for both disjoint grammars without rewriting old receipts.
+
+Frontend transport is unchanged. These routes do not provision systemd units,
+change service definitions or claim general process control or live Linux tests.

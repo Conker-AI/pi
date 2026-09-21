@@ -20,6 +20,10 @@ def router(store, gate, authorize):
     def request(body: actions.Request):
         return invoke(actions.request, body)
 
+    @routes.post("/services")
+    def request_service(body: actions.ServiceRequest):
+        return invoke(actions.request, body)
+
     @routes.get("")
     def history(limit: int = Query(default=50, ge=1, le=100)):
         return {"results": actions.history(store(), limit)}
@@ -42,6 +46,15 @@ def targets_router(gate, authorize):
     def targets():
         try:
             return JSONResponse(system_targets.read(gate()), headers={"Cache-Control": "no-store"})
+        except actions.ActionError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+
+    @routes.get("/services")
+    def services():
+        try:
+            return JSONResponse(
+                system_targets.read(gate(), services=True), headers={"Cache-Control": "no-store"}
+            )
         except actions.ActionError as exc:
             raise HTTPException(exc.status, exc.detail) from exc
 
