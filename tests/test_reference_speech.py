@@ -52,31 +52,31 @@ def test_invalid_references_never_contact_server(ref):
 
 
 def test_call_reference_is_frozen_transient_and_not_in_model_context(request):
-    store = request.getfixturevalue("store")
+    database = request.getfixturevalue("store")
     value = presentation()["character"]["profile"]
     value["studio"]["voice"].update(
         source="reference", reference=reference(), transcript="Original"
     )
-    save(store, value=value)
-    call, seen = start(store), []
-    loop, provider = runtime(store)
+    save(database, value=value)
+    call, seen = start(database), []
+    loop, provider = runtime(database)
 
     def edit():
         updated = copy.deepcopy(value)
         updated["studio"]["voice"].update(reference=reference(0.25), transcript="Edited")
-        save(store, 1, updated)
+        save(database, 1, updated)
 
     provider.callback = edit
     service = client(seen, "qwen3-base")
-    result = send(store, loop, call, speech=service)
+    result = send(database, loop, call, speech=service)
     assert result["audio"] is not None
     assert seen[0]["ref_audio"] == reference()["src"] and seen[0]["ref_text"] == "Original"
-    with store._connect() as db:
+    with database._connect() as db:
         preferences = db.execute("SELECT preferences FROM call_requests").fetchone()[0]
     assert "data:audio" not in preferences and "data:audio" not in str(provider.seen)
     assert "data:audio" not in json.dumps(result["call"])
-    send(store, loop, call, speech=service)
+    send(database, loop, call, speech=service)
     assert len(seen) == 1
     provider.callback = None
-    send(store, loop, call, number=2, speech=service)
+    send(database, loop, call, number=2, speech=service)
     assert seen[1]["ref_audio"] == reference(0.25)["src"] and seen[1]["ref_text"] == "Edited"
