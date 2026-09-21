@@ -229,6 +229,9 @@ class Loop:
                     + json.dumps(saved["package"], ensure_ascii=False)))
         if tools:
             messages.append(Message("system", tool_protocol.describe(tools)))
+        from . import research
+        messages.extend(research.instructions(execution,
+            bool(turn_id and execution.get("researchMode") == "web" and research.action_count(self.store, turn_id))))
         # A forked child carries its parent's summary as context, not its
         # parent's messages. The messages are still there, in the parent, and
         # still readable - they are simply not resent.
@@ -444,13 +447,15 @@ class Loop:
     def _finish_reply(self, turn_id, session_id, execution, acted, started,
                       reply_request_id=None):
         try:
-            available = [] if reply_request_id else self._available_tools(execution)
+            available = [] if reply_request_id or execution.get("researchMode") == "web" else self._available_tools(execution)
             history = self._history(session_id, tools=available, turn_id=turn_id)
             if reply_request_id:
                 history.append(Message("system", "Report only the recorded action results. "
                     "Do not request or repeat any tool action. State uncertainty honestly."))
             ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
             route, completion, _skipped = self._call(history, ctx, execution)
+            from . import research
+            research.validate_narration(execution, completion.text)
             turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             reason = getattr(exc, "reason", type(exc).__name__)
@@ -553,7 +558,9 @@ class Loop:
         try:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
             from . import research
-            research.require_runtime(execution)
+            research.require_runtime(execution,
+                self._available_tools(execution) if execution.get("researchMode") == "web" else (),
+                self.max_tool_steps)
             turn_control.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
@@ -628,7 +635,8 @@ class Loop:
         intent = user_text
         started = time.monotonic() if started is None else started
 
-        available = self._available_tools(execution)
+        from . import research
+        available = research.tools(execution, self._available_tools(execution))
         allowed = {t.id for t in available}
         acted = bool(self.store.get_turn(turn_id)['acted'])
         context = dict(context or {})
@@ -639,14 +647,20 @@ class Loop:
         try:
             route, completion, skipped = self._call(history, ctx, execution)
 
+            web_research = execution.get("researchMode") == "web"
+            if web_research and not research.action_count(self.store, turn_id):
+                research.validate_call(tool_protocol.parse(completion.text, allowed))
+
             # Act, then think again, up to a ceiling. Every action goes through
             # ToolGate; Pi runs nothing itself.
             with self.store._connect() as db:
                 used = db.execute('SELECT COUNT(*) FROM tool_actions WHERE turn_id=?', (turn_id,)).fetchone()[0]
-            for _ in range(max(0, self.max_tool_steps - used)):
+            for _ in range(max(0, (1 if web_research else self.max_tool_steps) - used)):
                 call = tool_protocol.parse(completion.text, allowed)
                 if call is None:
                     break
+                if web_research:
+                    research.validate_call(call)
                 ran = False
                 try:
                     action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
@@ -710,8 +724,9 @@ class Loop:
                     # Written before the next model call, which can fail.
                     self.store.mark_acted(turn_id)
                     acted = True
-                history = self._history(session_id, tools=available, turn_id=turn_id)
+                history = self._history(session_id, tools=[] if web_research else available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)
+            research.validate_narration(execution, completion.text)
             turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             # The user's message stays. It was said, and a transcript that drops

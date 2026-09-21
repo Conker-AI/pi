@@ -510,6 +510,12 @@ def get_submission(request_id: str):
     return submissions.get(app.state.store, request_id)
 
 
+@app.get("/turns/{turn_id}/research", dependencies=[Depends(require_key)])
+def get_research_receipt(turn_id: str):
+    from . import research
+    return research.receipt(app.state.store, turn_id)
+
+
 @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_key)])
 def list_pending_submissions(session_id: str, limit: int = Query(default=50, ge=1, le=200),
                              cursor: str | None = Query(default=None, max_length=128)):

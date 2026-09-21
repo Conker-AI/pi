@@ -14,15 +14,31 @@ Draft saves accept the same field, sharing the text revision. Submission must
 match both saved text and mode. Consuming that revision clears both, without
 clearing a newer draft. Existing text-only draft storage migrates additively.
 
-## Implementation boundary
+## Web execution
 
-The bounded research executor is not implemented yet. Web/deep requests currently
-fail preparation with `research_unavailable` before retrieval or generation.
-The receipt and requested choice remain inspectable; retrying the same request ID
-only reads its state. No ordinary answer is silently substituted.
+Web requires the selected agent and ToolGate key to expose `research.web`, with
+at least one allowed tool step. It offers only that capability for this turn.
+The selected answer model produces a validated bounded query (3-240 characters,
+at most eight results, recency 1-3650 days), then synthesizes one recorded search.
+No full-page reading is implied. Invalid/missing queries fail before dispatch;
+additional tool requests cannot run. Off preserves ordinary tool availability.
 
-Next: reuse ToolGate research capabilities through normal scoped action receipts;
-add bounded planning, collection, synthesis, provenance, cancellation and recovery.
-Do not enable paid fallbacks, duplicate the search engine, or claim that a fixed
-multi-source bundle is an iterative deep-research run. Answer retries must use
-saved evidence rather than repeat searches. Final dashboard wiring is deferred.
+Searches use existing action identities, approvals, budget holds, cancellation,
+unknown-outcome reconciliation and reply-only recovery. After a lost receipt,
+resume checks the same action rather than repeating search. A stopped in-flight
+search may finish and retain its result; no synthesis runs after Stop, and its
+status honestly remains acted_no_reply rather than pretending nothing happened.
+
+Authenticated GET `/turns/{turn_id}/research` projects status, action arguments,
+source message references and original tool observations from the existing ledger.
+These are fetched evidence, not a claim that every source was cited or verified.
+Forgotten turns cannot expose this receipt. Answer retries remain narration-only.
+
+Deep research still reports `research_unavailable` before retrieval/generation.
+Its bounded iterative plan, progress, collection and synthesis remain unfinished.
+No paid fallback was enabled and final dashboard wiring remains deferred.
+
+Verification: 61 focused tests across web execution, selections, ordinary tool
+turns, reply recovery and steering. Includes scope/missing-query failures, bounds,
+approval, single-search ceiling, provider failure, Stop, lost-receipt recovery and
+refusal. Tests use scripted providers and ToolGate doubles, not a live search service.
