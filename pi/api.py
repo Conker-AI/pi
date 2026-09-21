@@ -29,6 +29,7 @@ from . import drafts_api
 from . import conversation_search
 from . import attachments_api
 from . import model_evaluations, model_evaluations_api
+from . import context_retrieval
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()
     model_evaluations.recover_interrupted(store)
+    context_retrieval.recover_interrupted(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give

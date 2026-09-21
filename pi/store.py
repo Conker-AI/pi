@@ -31,6 +31,7 @@ from . import drafts
 from . import context_summaries
 from . import attachments
 from . import model_evaluations
+from . import context_retrieval
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -250,6 +251,7 @@ class Store:
                 agents.initialize(db)
                 db.executescript(projects.SCHEMA)
                 db.executescript(context_controls.SCHEMA)
+                db.executescript(context_retrieval.SCHEMA)
                 db.executescript(collaboration.SCHEMA)
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
