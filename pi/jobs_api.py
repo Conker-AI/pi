@@ -11,7 +11,7 @@ class RunRequest(StrictModel):
     request_id: str = Field(min_length=16, max_length=128)
 
 
-def router(store, authorize):
+def router(store, authorize, executor=None):
     routes = APIRouter(prefix="/jobs", dependencies=[Depends(authorize)])
 
     def call(function, *args):
@@ -39,5 +39,25 @@ def router(store, authorize):
     @routes.post("/{identity}/run", status_code=202)
     def run(identity: str, body: RunRequest):
         return call(jobs.run_now, identity, body.request_id)
+
+    def execution_adapter():
+        adapter = executor() if executor else None
+        if adapter is None:
+            raise HTTPException(503, "Scheduled execution adapter is not configured.")
+        return adapter
+
+    @routes.post("/runs/{identity}/resume")
+    def resume(identity: str):
+        try:
+            status = jobs.dispatch_claim(
+                store(), {"id": identity}, execution_adapter(), resume=True
+            )
+            return {"status": status}
+        except jobs.JobError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @routes.post("/runs/{identity}/reconcile")
+    def reconcile(identity: str):
+        return {"status": call(jobs.reconcile, identity, execution_adapter())}
 
     return routes

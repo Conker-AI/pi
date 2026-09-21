@@ -12,7 +12,7 @@ class PublishedJobs:
         # Agent names in job definitions never select credentials from the request.
         self.clients = dict(clients)
 
-    def __call__(self, target, *, action_id, agent_id):
+    def __call__(self, target, *, action_id, agent_id, approval_request_id=None):
         target = Target.model_validate(target)
         client = self.clients.get(agent_id)
         if client is None or not client.execution_key:
@@ -28,6 +28,8 @@ class PublishedJobs:
             "published_version": target.publishedVersion,
             "expected_publication_digest": target.digest,
         }
+        if approval_request_id is not None:
+            payload["approval_request_id"] = approval_request_id
         try:
             response = httpx.post(
                 client.base_url + path,

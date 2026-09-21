@@ -255,7 +255,7 @@ def runs(store, identity):
         ]
 
 
-def dispatch_claim(store, run, invoke):
+def dispatch_claim(store, run, invoke, *, resume=False):
     """Injected server adapter invokes the exact publication; never retries an uncertain effect."""
     # Acquire the dispatch right before invoking. Only identity comes from the
     # caller; a stale or modified claim cannot replace the stored snapshot.
@@ -264,14 +264,22 @@ def dispatch_claim(store, run, invoke):
         saved = db.execute("SELECT * FROM scheduled_runs WHERE id=?", (run["id"],)).fetchone()
         if saved is None:
             raise JobError("Run not found.")
-        if saved["status"] != "ready":
+        expected = "awaiting_approval" if resume else "ready"
+        if saved["status"] != expected:
             return saved["status"]
+        approval = {}
+        if resume:
+            receipt = json.loads(saved["receipt"] or "{}")
+            request_id = receipt.get("request_id")
+            if not isinstance(request_id, str) or not request_id:
+                raise JobError("Run has no saved approval request.")
+            approval["approval_request_id"] = request_id
         db.execute("UPDATE scheduled_runs SET status='dispatching' WHERE id=?", (saved["id"],))
         definition = json.loads(saved["definition"])
         db.commit()
     try:
         outcome = invoke(
-            definition["target"], action_id=saved["id"], agent_id=definition["agentId"]
+            definition["target"], action_id=saved["id"], agent_id=definition["agentId"], **approval
         )
         status = outcome.get("status")
         if status not in ("completed", "failed", "awaiting_approval"):

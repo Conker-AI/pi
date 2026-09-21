@@ -104,6 +104,24 @@ def test_reconciliation_is_read_only_and_missing_is_unknown(monkeypatch):
     )
 
 
+def test_resume_transports_exact_approval_reference(monkeypatch):
+    seen = []
+
+    def post(*args, **kwargs):
+        seen.append(kwargs["json"])
+        return httpx.Response(200, json=receipt())
+
+    monkeypatch.setattr(httpx, "post", post)
+    assert (
+        adapter()(
+            target(), action_id="run-1", agent_id="companion", approval_request_id="saved-approval"
+        )["status"]
+        == "completed"
+    )
+    assert seen[0]["approval_request_id"] == "saved-approval"
+    assert seen[0]["action_id"] == "run-1"
+
+
 def test_transport_failure_not_retried(monkeypatch):
     calls = []
 

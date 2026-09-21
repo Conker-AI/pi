@@ -186,6 +186,56 @@ def test_reconciliation_resolves_without_dispatch(store):
     assert len(jobs.claim_due(store, now=10800)) == 1
 
 
+def test_approval_resume_uses_saved_identity_once(store):
+    job = jobs.create(store, definition(), now=0)
+    run = jobs.claim_due(store, now=3600)[0]
+    jobs.dispatch_claim(
+        store,
+        run,
+        lambda *a, **kw: {"status": "awaiting_approval", "request_id": "approval-original"},
+    )
+    jobs.update(
+        store,
+        job["id"],
+        jobs.Update(expected_revision=1, definition=definition(agentId="changed")),
+        now=3601,
+    )
+    calls = []
+
+    def invoke(target, **kwargs):
+        calls.append((target, kwargs))
+        return {"status": "completed"}
+
+    with ThreadPoolExecutor(2) as pool:
+        list(pool.map(lambda _: jobs.dispatch_claim(store, run, invoke, resume=True), range(2)))
+    assert len(calls) == 1
+    assert calls[0][1] == {
+        "action_id": run["id"],
+        "agent_id": "companion",
+        "approval_request_id": "approval-original",
+    }
+    assert jobs.runs(store, job["id"])[0]["status"] == "completed"
+
+
+def test_approval_resume_timeout_never_resubmits(store):
+    jobs.create(store, definition(), now=0)
+    run = jobs.claim_due(store, now=3600)[0]
+    jobs.dispatch_claim(
+        store,
+        run,
+        lambda *a, **kw: {"status": "awaiting_approval", "request_id": "approval-original"},
+    )
+    calls = []
+
+    def timeout(*args, **kwargs):
+        calls.append(kwargs)
+        raise TimeoutError("possibly executed")
+
+    assert jobs.dispatch_claim(store, run, timeout, resume=True) == "outcome_unknown"
+    assert jobs.dispatch_claim(store, run, timeout, resume=True) == "outcome_unknown"
+    assert len(calls) == 1
+
+
 def test_api_authorization_validation_and_receipts(store):
     from fastapi import FastAPI, HTTPException
     from fastapi.testclient import TestClient
@@ -202,7 +252,10 @@ def test_api_authorization_validation_and_receipts(store):
     app.include_router(router(lambda: store, authorize))
     with TestClient(app) as client:
         assert client.get("/jobs").status_code == 403
+        assert client.post("/jobs/runs/unknown/resume").status_code == 403
+        assert client.post("/jobs/runs/unknown/reconcile").status_code == 403
         allowed = True
+        assert client.post("/jobs/runs/unknown/resume").status_code == 503
         invalid = definition().model_dump()
         invalid["timeZone"] = "invalid/zone"
         assert client.post("/jobs", json=invalid).status_code == 422

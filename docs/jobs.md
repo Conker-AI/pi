@@ -29,7 +29,14 @@ ToolGate clients. Unknown agents fail without borrowing the companion credential
 It verifies action identity, version and digest before accepting completion. Its
 reconciliation path only reads ToolGate receipts; missing receipts never allow a
 retry. `jobs.reconcile` saves resolved outcomes without overwriting final states.
-The timer lifecycle, approval resume, grants and owner budget admission must be connected
+Approval resume uses the saved request ID, action ID, agent and published inputs.
+Its transactional claim prevents concurrent resumes; ToolGate decides whether the
+approval is valid. A timeout is held for read-only reconciliation. Owner-only
+`/jobs/runs/{id}/resume` and `/reconcile` routes expose these operations. The existing
+companion execution credential provisions the companion adapter; other agent IDs
+require separate server provisioning and cannot borrow it.
+
+The timer lifecycle, grants and owner budget admission must be connected
 before enabling automatic work. Manual run admission currently records `ready`
 and does not promise execution. Browser gateway/frontend integration is deferred
 until owner review. Tests use temporary databases and no external effects.

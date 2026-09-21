@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
 from .browser_contract import runtime_allowed
 from . import jobs_api
+from .job_execution import PublishedJobs
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -114,6 +115,7 @@ async def lifespan(app: FastAPI):
     app.state.local = local
     app.state.hosted = hosted
     app.state.toolgate = toolgate
+    app.state.job_executor = PublishedJobs({"companion": toolgate}) if toolgate else None
     app.state.interrupted_at_startup = interrupted
     app.state.router = Router(
         local_provider=local, hosted_provider=hosted,
@@ -165,7 +167,8 @@ app.include_router(collaboration_api.create_router(lambda: app.state.store, requ
 app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
 app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
 app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
-app.include_router(jobs_api.router(lambda: app.state.store, require_admin))
+app.include_router(jobs_api.router(lambda: app.state.store, require_admin,
+                                  lambda: getattr(app.state, "job_executor", None)))
 
 
 @app.exception_handler(context_controls.ContextError)
