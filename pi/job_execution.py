@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from .jobs import Target
 
 
 class PublishedJobs:
-    def __init__(self, clients):
+    def __init__(self, clients, *, transport=None):
         # Agent names in job definitions never select credentials from the request.
         self.clients = dict(clients)
+        self.transport = transport
 
     def __call__(self, target, *, action_id, agent_id, approval_request_id=None):
         target = Target.model_validate(target)
@@ -31,13 +34,13 @@ class PublishedJobs:
         if approval_request_id is not None:
             payload["approval_request_id"] = approval_request_id
         try:
-            response = httpx.post(
-                client.base_url + path,
+            response = self._request(
+                client,
+                "POST",
+                path,
                 json=payload,
-                headers=client._headers(),
-                timeout=client.timeout,
             )
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):
             return self.unknown()
         return self.outcome(response, target, action_id)
 
@@ -48,16 +51,45 @@ class PublishedJobs:
         if client is None or not client.execution_key:
             return self.unknown()
         try:
-            response = httpx.get(
-                client.base_url + f"/v2/agent/actions/{action_id}",
-                headers=client._headers(),
-                timeout=client.timeout,
+            response = self._request(
+                client,
+                "GET",
+                f"/v2/agent/actions/{action_id}",
             )
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):
             return self.unknown()
         if response.status_code != 200:
             return self.unknown()
         return self.outcome(response, target, action_id)
+
+    def _request(self, gate, method, path, **kwargs):
+        # Receipts are metadata; never buffer arbitrary tool output or inherit
+        # proxy credentials/configuration from the worker's environment.
+        deadline = time.monotonic() + gate.timeout
+        with (
+            httpx.Client(
+                transport=self.transport,
+                trust_env=False,
+                follow_redirects=False,
+                timeout=gate.timeout,
+            ) as client,
+            client.stream(
+                method,
+                gate.base_url + path,
+                headers={**gate._headers(), "Accept-Encoding": "identity"},
+                **kwargs,
+            ) as response,
+        ):
+            if response.headers.get("content-encoding", "identity") != "identity":
+                raise ValueError("Encoded receipt is unsupported")
+            raw = bytearray()
+            for chunk in response.iter_raw():
+                if len(raw) + len(chunk) > 256 * 1024 or time.monotonic() > deadline:
+                    raise ValueError("Receipt limit exceeded")
+                raw.extend(chunk)
+            if time.monotonic() > deadline:
+                raise ValueError("Receipt deadline exceeded")
+            return httpx.Response(response.status_code, content=bytes(raw))
 
     @staticmethod
     def unknown():

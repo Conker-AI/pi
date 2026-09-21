@@ -34,6 +34,12 @@ ToolGate clients. Unknown agents fail without borrowing the companion credential
 It verifies action identity, version and digest before accepting completion. Its
 reconciliation path only reads ToolGate receipts; missing receipts never allow a
 retry. `jobs.reconcile` saves resolved outcomes without overwriting final states.
+Execution and reconciliation disable inherited proxy settings and redirects, request
+identity encoding, and cap receipt bodies at 256 KiB with an elapsed-time check
+using the configured client timeout. Each blocking read also has the HTTP timeout;
+this is not a preemptive wall-clock cancellation of an in-flight socket read.
+Encoded, oversized, late, malformed, and transport-failed responses remain unknown,
+not permission to retry. The adapter closes streams on success and failure.
 Approval resume uses the saved request ID, action ID, agent and published inputs.
 Its transactional claim prevents concurrent resumes; ToolGate decides whether the
 approval is valid. A timeout is held for read-only reconciliation. Owner-only
