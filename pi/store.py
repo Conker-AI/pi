@@ -24,6 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from . import turn_control
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
@@ -256,6 +257,7 @@ class Store:
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)
                 db.executescript(submissions.SCHEMA)
+                db.executescript(turn_control.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)
@@ -412,6 +414,10 @@ class Store:
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"unknown turn fields: {sorted(unknown)}")
+        if status == "failed" and db.execute(
+            "SELECT 1 FROM turn_cancellations WHERE turn_id=?", (turn_id,)
+        ).fetchone():
+            status = "cancelled"
         sets = ", ".join(f"{k}=?" for k in fields)
         clause = f", {sets}" if sets else ""
         return db.execute(
@@ -430,6 +436,7 @@ class Store:
             snapshot = db.execute("SELECT snapshot FROM turn_settings WHERE turn_id=?",
                                   (turn_id,)).fetchone()
             calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
+            turn_control.guard_db(db, turn_id)
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
             from . import attachment_passages

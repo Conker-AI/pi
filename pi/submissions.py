@@ -135,6 +135,9 @@ def _view(db, row):
                                    if ref["purpose"] == "final"), None),
         "state": row["state"], "status": turn["status"] if turn else row["state"],
         "acted": bool(turn["acted"]) if turn else False, "message_refs": refs,
+        "cancel_requested": bool(db.execute(
+            "SELECT 1 FROM turn_cancellations WHERE turn_id=?", (row["turn_id"],)
+        ).fetchone()),
         "pending_text": row["pending_text"] if available else None,
         "failure_code": row["failure_code"] if available else None,
         "created_at": row["created_at"], "updated_at": row["updated_at"],

@@ -34,6 +34,7 @@ from . import (
     session_settings,
     submissions,
     tasks,
+    turn_control,
 )
 from . import tools as tool_protocol
 from .memory import Memory
@@ -131,7 +132,7 @@ class Loop:
             result = model_roles.dispatch(configuration, role, messages, adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None,
-                guard=lambda: calls.guard(self.store, execution))
+                guard=lambda: turn_control.guard(self.store, execution))
             completion = result["completion"]
             evidence = {"role": role, "modelConfigurationRevision": execution["modelConfigurationRevision"],
                         "modelId": result["modelId"], "attempts": result["attempts"]}
@@ -149,21 +150,21 @@ class Loop:
             if route.unavailable_reason:
                 skipped.append(route.unavailable_reason)
             provider = self.router.provider_for(route)
-            calls.guard(self.store, execution)
+            turn_control.guard(self.store, execution)
             try:
                 completion = provider.complete(messages, model=route.model)
             except ModelUnusable as exc:
-                calls.guard(self.store, execution)
+                turn_control.guard(self.store, execution)
                 skipped.append(exc.reason)
                 continue
             except ProviderUnavailable as exc:
-                calls.guard(self.store, execution)
+                turn_control.guard(self.store, execution)
                 # A provider outage or bad key affects all its catalogue models.
                 # Keep the local candidate without repeating the same hosted failure.
                 skipped.append(exc.reason)
                 unavailable_providers.add(route.provider)
                 continue
-            calls.guard(self.store, execution)
+            turn_control.guard(self.store, execution)
             return route, completion, skipped
         raise ProviderUnavailable(
             "; ".join(skipped) if skipped else "no candidate model could be reached"
@@ -312,6 +313,8 @@ class Loop:
         if session and session["status"] == "forgotten":
             raise TurnFailed("session is forgotten; this turn cannot resume")
         execution = session_settings.execution(self.store, session_id, turn_id)
+        # A stopped action may still need read-only receipt reconciliation.
+        # Dispatch and provider checkpoints below retain the stop guard.
         calls.guard(self.store, execution)
         if not self.store.claim_turn(turn_id, turn["status"]):
             raise TurnFailed("Another caller already resumed this turn", turn_id)
@@ -339,7 +342,7 @@ class Loop:
                             self.store.finish_turn(turn_id, turn["status"])
                             raise TurnFailed(str(exc), turn_id) from exc
                         action["job_id"] = job_id
-                    calls.guard(self.store, execution)
+                    turn_control.guard(self.store, execution)
                     actions.state(self.store, action["id"], "dispatching")
                     outcome = self.toolgate.invoke(action["tool_id"], action["args"],
                         approval_request_id=turn["approval_request_id"],
@@ -398,7 +401,7 @@ class Loop:
             history = self._history(session_id, tools=available, turn_id=turn_id)
             ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
             route, completion, _skipped = self._call(history, ctx, execution)
-            calls.guard(self.store, execution)
+            turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             reason = getattr(exc, "reason", type(exc).__name__)
             # Not "failed". The tool ran, and a record saying otherwise would
@@ -486,7 +489,7 @@ class Loop:
                     if receipt["final_message_id"] else None}
         try:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
-            calls.guard(self.store, execution)
+            turn_control.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
             adapters = self.router.adapters()
@@ -530,7 +533,7 @@ class Loop:
 
     def _run_bound(self, session_id, user_text, turn_id, context, forked_from):
         execution = session_settings.execution(self.store, session_id, turn_id)
-        calls.guard(self.store, execution)
+        turn_control.guard(self.store, execution)
         self.memory.prepare(turn_id, user_text)
         # Held for the whole turn: if this parks on an approval, the owner needs
         # to see what they asked for next to what it produced.
@@ -561,7 +564,7 @@ class Loop:
                 action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
                                          ToolGateClient.new_action_id())
                 try:
-                    calls.guard(self.store, execution)
+                    turn_control.guard(self.store, execution)
                     outcome = self.toolgate.invoke(call.tool_id, call.args,
                                                    action_id=action["id"], job_id=action["job_id"])
                 except ToolRefused as refusal:
@@ -618,7 +621,7 @@ class Loop:
                     acted = True
                 history = self._history(session_id, tools=available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)
-            calls.guard(self.store, execution)
+            turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             # The user's message stays. It was said, and a transcript that drops
             # what was said because the answer failed is not a transcript.

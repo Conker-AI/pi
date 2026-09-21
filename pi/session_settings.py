@@ -159,10 +159,13 @@ def execution(store, identity, turn_id=None, request_id=None):
             table, key, value = ("turn_settings", "turn_id", turn_id) if turn_id else ("submission_settings", "request_id", request_id)
             row = db.execute(f"SELECT snapshot FROM {table} WHERE {key}=?", (value,)).fetchone()
             if row:
-                return json.loads(row[0])
+                snapshot = json.loads(row[0])
+                if turn_id:
+                    snapshot["turnExecutionId"] = turn_id
+                return snapshot
             # Legacy turns had only the Companion, without runtime privacy settings.
             return {"agentId": "companion", "kind": "companion", "configuration": None,
-                    "privacy": DEFAULT["privacy"], "legacy": True}
+                    "privacy": DEFAULT["privacy"], "legacy": True, "turnExecutionId": turn_id}
         return _snapshot(db, identity)
 
 

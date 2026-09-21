@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
 from .browser_contract import runtime_allowed
-from . import jobs_api
+from . import jobs_api, turn_control
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
 from . import project_sources
@@ -475,6 +475,13 @@ def run_turn(session_id: str, body: TurnRequest):
             result["submission"] = submissions.get(app.state.store, body.request_id)
         return result
     except TurnFailed as exc:
+        turn = app.state.store.get_turn(exc.turn_id) if exc.turn_id else None
+        if turn and turn["status"] == "cancelled":
+            result = {"turn_id": exc.turn_id, "session_id": turn["session_id"],
+                      "status": "cancelled", "acted": bool(turn["acted"]), "message": None}
+            if body.request_id:
+                result["submission"] = submissions.get(app.state.store, body.request_id)
+            return result
         # 503, not 500: the provider did not answer, which is a state the caller
         # can act on. The user's message is already stored either way.
         raise HTTPException(503, {"message": f"turn failed: {exc.reason}",
@@ -657,3 +664,8 @@ def list_events(limit: int = Query(default=50, ge=1, le=200),
                 task_id: str | None = Query(default=None, max_length=128),
                 run_id: str | None = Query(default=None, max_length=128)):
     return activity.list_events(app.state.store, limit, cursor, session_id, task_id, run_id)
+
+
+@app.post("/turns/{turn_id}/cancel", dependencies=[Depends(require_admin)])
+def cancel_turn(turn_id: str):
+    return turn_control.cancel(app.state.store, turn_id)
