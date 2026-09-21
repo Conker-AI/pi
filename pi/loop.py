@@ -190,6 +190,13 @@ class Loop:
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             messages.append(Message(row["role"], text))
+            from . import attachment_turns, attachments
+            try:
+                attached = attachment_turns.context(self.store, row["session_id"], row["id"], execution["privacy"])
+            except attachments.AttachmentError as exc:
+                raise context_controls.ContextError(exc.detail["code"], exc.detail["message"], exc.status) from exc
+            if attached:
+                messages.append(Message("user", attached))
         context_controls.check_budget(policy, messages)
         return messages
 
@@ -383,7 +390,8 @@ class Loop:
 
     def run_turn(self, session_id: str, user_text: str, context: dict | None = None, *,
                  request_id: str | None = None, task_id: str | None = None,
-                 task_expected_revision: int | None = None, draft_revision: int | None = None) -> dict:
+                 task_expected_revision: int | None = None, draft_revision: int | None = None,
+                 attachment_ids: list[str] | None = None) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
         The session id may change: if history has outgrown the window the turn
@@ -403,7 +411,8 @@ class Loop:
         try:
             receipt, created = submissions.reserve(self.store, identity, session_id, user_text,
                                                    context or {}, task_id, task_expected_revision,
-                                                   **({"draft_revision": draft_revision} if draft_revision is not None else {}))
+                                                   **({"draft_revision": draft_revision} if draft_revision is not None else {}),
+                                                   **({"attachment_ids": attachment_ids} if attachment_ids else {}))
         except tasks.TaskError as exc:
             if explicit:
                 raise

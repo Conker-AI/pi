@@ -200,7 +200,7 @@ def _task(db, task_id, revision, session_id):
                               "Restore and reopen the task before submitting work.")
 
 
-def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None):
+def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError("invalid_request",
                               "Provide a valid submission request identity.", 422)
@@ -216,6 +216,8 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
     }
     if draft_revision is not None:
         payload["draft_revision"] = draft_revision
+    if attachment_ids:
+        payload["attachment_ids"] = attachment_ids
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -241,6 +243,12 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
         session_settings.reserve(db, request_id, session_id)
+        if attachment_ids:
+            from . import attachment_turns, attachments
+            try:
+                attachment_turns.reserve(db, request_id, session_id, attachment_ids)
+            except attachments.AttachmentError as exc:
+                raise SubmissionError(exc.detail["code"], exc.detail["message"], exc.status) from exc
         if draft_revision is not None:
             from . import drafts
             try:
@@ -260,6 +268,8 @@ def fail_preparation(store, request_id, code="preparation_failed"):
         db.execute("UPDATE turn_submissions SET state='preparation_failed',failure_code=?,"
                    "updated_at=? WHERE request_id=? AND state='preparing'",
                    (code, time.time(), request_id))
+        from . import attachment_turns
+        attachment_turns.release(db, request_id)
 
 
 def bind(store, request_id, *, fork_summary=None):
@@ -277,6 +287,8 @@ def bind(store, request_id, *, fork_summary=None):
             raise SubmissionError("source_changed", "The conversation changed during preparation.")
         now = time.time()
         if fork_summary is not None:
+            if db.execute("SELECT 1 FROM attachment_reservations WHERE request_id=?", (request_id,)).fetchone():
+                raise SubmissionError("attachment_fork_required", "Fork first, then upload attachments to the new conversation.")
             if row["task_id"]:
                 raise SubmissionError("task_fork_required", "Task-bound turns require the original "
                                       "conversation. Create a task for the child first.")
@@ -294,6 +306,8 @@ def bind(store, request_id, *, fork_summary=None):
         session_settings.bind(db, turn_id, session_id, request_id)
         message = append(db, session_id, "user", row["pending_text"],
                          turn_id=turn_id, purpose="input")
+        from . import attachment_turns
+        attachment_turns.bind(db, request_id, session_id, message["id"])
         if row["task_id"]:
             ids = [r[0] for r in db.execute("SELECT run_id FROM task_runs WHERE task_id=?",
                                            (row["task_id"],))]
@@ -314,9 +328,13 @@ def bind(store, request_id, *, fork_summary=None):
 
 
 def recover_preparations(db):
-    return db.execute("UPDATE turn_submissions SET state='preparation_interrupted',"
+    changed = db.execute("UPDATE turn_submissions SET state='preparation_interrupted',"
                       "failure_code='preparation_interrupted',updated_at=? WHERE state='preparing'",
                       (time.time(),)).rowcount
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='attachment_reservations'").fetchone():
+        db.execute("DELETE FROM attachment_reservations WHERE request_id IN "
+                   "(SELECT request_id FROM turn_submissions WHERE state='preparation_interrupted')")
+    return changed
 
 
 def redact(db, session_ids):

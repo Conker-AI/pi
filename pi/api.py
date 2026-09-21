@@ -273,6 +273,7 @@ class TurnRequest(BaseModel):
     task_id: str | None = Field(default=None, min_length=1, max_length=128)
     task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
     draft_revision: int | None = Field(default=None, ge=1, strict=True)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
 
     @model_validator(mode="after")
     def task_submission(self):
@@ -391,7 +392,8 @@ def run_turn(session_id: str, body: TurnRequest):
             "owner_requested_strong": body.owner_requested_strong,
         }, request_id=body.request_id, task_id=body.task_id,
             task_expected_revision=body.task_expected_revision,
-            **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}))
+            **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}),
+            **({"attachment_ids": body.attachment_ids} if body.attachment_ids else {}))
     except ActedWithoutReply as exc:
         # Deliberately not an error status. A tool ran, so this request did the
         # thing that actually matters, and the one detail missing is what the
