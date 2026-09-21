@@ -38,3 +38,15 @@ The stdlib `tests/owner_terminal_linux_check.py` ran under WSL Ubuntu Python 3.1
 against a temporary directory and synthetic commands. It checked actual PTY I/O,
 controlling-terminal job control, omitted synthetic credentials, close and expiry.
 No owner files/commands, terminal API, frontend wiring or deployment were used.
+
+
+## Combined Linux gateway verification
+
+`python -m pytest tests/test_gateway_terminal_linux.py -q` runs the actual gateway
+with a real Bash controlling PTY on Linux and temporary auth/shell storage. It
+checks password-proof admission, CSRF, stable-request replay without another shell,
+resize/output cursor/base64 transport, stripped inherited environment, and automatic
+process closure after owner-session revocation. No listener, installed service,
+ToolGate effect, or user file is used; HTTP requests stay inside TestClient.
+The test skips on non-Linux systems. It passed under WSL with real password hashing.
+Browser terminal rendering and deployment remain separate acceptance work.
