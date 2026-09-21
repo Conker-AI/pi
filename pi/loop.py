@@ -163,6 +163,9 @@ class Loop:
             messages.append(Message("system", self.system_prompt))
         if execution["kind"] != "companion":
             messages.append(Message("system", execution["configuration"]["instructions"]))
+        project = execution.get("project")
+        if project and project["instructions"].strip():
+            messages.append(Message("system", project["instructions"]))
         if policy and policy["sessionInstructions"].strip():
             messages.append(Message("system", policy["sessionInstructions"]))
         if turn_id:

@@ -12,6 +12,7 @@ class Privacy(agents.StrictModel):
 class Settings(agents.StrictModel):
     agentId: str = Field(min_length=1, max_length=200)
     privacy: Privacy
+    projectId: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class Update(agents.StrictModel):
@@ -66,11 +67,22 @@ def _snapshot(db, identity):
     if agent["archived_at"] is not None:
         raise agents.AgentError("agent_archived", "Restore or select an active agent before starting work.")
     models = db.execute("SELECT revision,configuration FROM model_role_settings WHERE singleton=1").fetchone()
+    project = _project(db, value["settings"].get("projectId"))
     return {**value, "agentId": agent["id"], "agentVersion": agent["revision"],
             "modelConfigurationRevision": models["revision"] if models else 0,
             "modelConfiguration": json.loads(models["configuration"]) if models else None,
             "configuration": agent["configuration"], "kind": agent["kind"],
-            "privacy": value["settings"]["privacy"], "authority": "none"}
+            "privacy": value["settings"]["privacy"], "project": project, "authority": "none"}
+
+
+def _project(db, identity):
+    if identity is None:
+        return None
+    row = db.execute("SELECT revision,fields,archived_at FROM projects WHERE id=?", (identity,)).fetchone()
+    if row is None or row["archived_at"] is not None:
+        raise agents.AgentError("project_unavailable", "Select an active project before starting work.")
+    return {"id": identity, "revision": row["revision"],
+            "instructions": json.loads(row["fields"])["instructions"]}
 
 
 def save(store, identity, body):
@@ -88,6 +100,7 @@ def save(store, identity, body):
         agent = agents._get(db, body.settings.agentId)
         if agent["archived_at"] is not None:
             raise agents.AgentError("agent_archived", "Select an active agent.")
+        _project(db, body.settings.projectId)
         db.execute("INSERT INTO session_settings VALUES (?,?,?) ON CONFLICT(session_id) DO UPDATE SET revision=excluded.revision,settings=excluded.settings",
                    (identity, current["revision"] + 1, body.settings.model_dump_json()))
         result = _load(db, identity)
