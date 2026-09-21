@@ -2,13 +2,16 @@
 
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from . import calls
 
 
 def router(store, loop, authorize, speech=None):
-    routes = APIRouter(prefix="/calls", dependencies=[Depends(authorize)])
+    def no_cache(response: Response):
+        response.headers["Cache-Control"] = "no-store"
+
+    routes = APIRouter(prefix="/calls", dependencies=[Depends(authorize), Depends(no_cache)])
 
     def execute(fn, *args, **kwargs):
         try:
@@ -20,7 +23,7 @@ def router(store, loop, authorize, speech=None):
 
     def response(result):
         audio = result.get("audio")
-        if audio is not None:
+        if audio is not None or result.get("transcription") is not None:
             from .providers import ProviderUnavailable
 
             try:
@@ -35,7 +38,9 @@ def router(store, loop, authorize, speech=None):
                 )
             except ProviderUnavailable:
                 result["audio"] = None
+                result["transcription"] = None
                 return result
+        if audio is not None:
             result["audio"] = {
                 "base64": base64.b64encode(audio["audio"]).decode("ascii"),
                 "mime": audio["mime"],

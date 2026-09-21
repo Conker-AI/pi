@@ -624,7 +624,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                 raise CallError(
                     "request_conflict", "Call request identity is already bound to different input."
                 )
-            return {"call": _view(db, row), "replayed": True, "audio": None}
+            return {"call": _view(db, row), "replayed": True, "audio": None, "transcription": None}
         _live(db, row)
         settings = json.loads(row["settings"])
         channel = "keyboard" if body.text is not None else "microphone"
@@ -661,6 +661,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
         db.execute("UPDATE calls SET phase='thinking' WHERE id=?", (identity,))
         db.commit()
     speech_status, output, speech_error = "not-requested", None, None
+    transcription = None
     try:
         text = body.text
         if audio is not None:
@@ -675,6 +676,13 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                     "Speech transcript exceeds the supported call text contract.",
                     422,
                 )
+            transcription = {
+                "text": text,
+                "segments": transcript.get("segments"),
+                "durationSeconds": transcript.get("duration_seconds"),
+                "timing": "provider-segments" if transcript.get("segments") else "unavailable",
+                "retention": "transient-response-only",
+            }
         _stage(store, identity, body.request_id, generation, "model")
         result = loop.run_turn(session_id, text, request_id=body.request_id)
         guard(store, {"callExecution": {"id": identity, "generation": generation}})
@@ -723,8 +731,14 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
         output = None
     current = get(store, identity)
     if current["paused"] or current["endedAt"] or current["generation"] != generation:
-        output = None
-    return {"call": current, "replayed": False, "audio": output, "audioGeneration": generation}
+        output, transcription = None, None
+    return {
+        "call": current,
+        "replayed": False,
+        "audio": output,
+        "audioGeneration": generation,
+        "transcription": transcription,
+    }
 
 
 def recover(store):

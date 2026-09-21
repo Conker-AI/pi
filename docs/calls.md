@@ -111,6 +111,14 @@ character adapter: `PI_SPEECH_CHARACTER_VOICE=qwen3-design` explicitly enables
 the documented VoiceDesign extension; its default is `unsupported`. There is no default
 speech host or downloaded model. Configuration is validated before opening Pi's
 database; capability reporting distinguishes configuration from actual success.
+Audio-input turns also return `transcription` with text, provider segment times,
+measured duration and an explicit timing availability label. This is returned only
+with the original response; replay/history contain no segment copy. Pause/end and
+generation checks discard stale transcription alongside audio, including when
+voice output is off. This is completed-turn segment timing, not streaming captions,
+word alignment, or a timestamped recording. Successful owner call responses use
+`Cache-Control: no-store`.
+
 Speech response audio is base64 in a transient JSON envelope, not a persisted file
 or a browser playback claim. Precise playback/word alignment, live streaming,
 client devices, echo suppression, reconnect UI, incoming calls and cross-device

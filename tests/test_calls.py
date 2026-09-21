@@ -435,6 +435,7 @@ def test_owner_only_api_factory_capabilities_and_typed_request(store):
     assert client.get("/calls/capabilities").status_code == 403
     capabilities = client.get("/calls/capabilities", headers={"key": "owner"})
     assert capabilities.status_code == 200
+    assert capabilities.headers["cache-control"] == "no-store"
     assert capabilities.json()["camera"] == "unavailable"
     source = store.create_session()
     call = client.post(
@@ -451,3 +452,50 @@ def test_owner_only_api_factory_capabilities_and_typed_request(store):
     assert result.status_code == 200
     assert result.json()["call"]["requests"][0]["textStatus"] == "complete"
     assert len(provider.seen) == 1
+
+
+@pytest.mark.parametrize("pause", [False, True])
+def test_caption_segments_are_transient_and_generation_bound(store, pause):
+    call = start(store)
+    call = c.update(
+        store,
+        call["id"],
+        c.Update(
+            expected_revision=1,
+            channels=c.ChannelUpdate(microphone=True, voice=False),
+        ),
+    )
+    segments = [{"start": 0.25, "end": 0.75, "text": "spoken question"}]
+
+    class TimedSpeech(Speech):
+        def transcribe(self, raw, mime):
+            result = super().transcribe(raw, mime)
+            result["segments"] = segments
+            return result
+
+    def interrupt():
+        if pause:
+            current = c.get(store, call["id"])
+            c.update(
+                store, call["id"], c.Update(expected_revision=current["revision"], paused=True)
+            )
+
+    speech = TimedSpeech(callback=interrupt)
+    loop, provider = runtime(store)
+    body = c.Send(request_id="timed_caption_request")
+    result = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
+    assert result["audio"] is None
+    if pause:
+        assert result["transcription"] is None
+        assert not provider.seen
+    else:
+        assert result["transcription"] == {
+            "text": "spoken question",
+            "segments": segments,
+            "durationSeconds": 1,
+            "timing": "provider-segments",
+            "retention": "transient-response-only",
+        }
+        replay = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
+        assert replay["transcription"] is None and speech.stt == 1
+        assert "segments" not in str(c.get(store, call["id"]))
