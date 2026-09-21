@@ -7,3 +7,4 @@ cryptography==50.0.0
 tzdata==2026.3
 openpyxl==3.1.5
 python-docx==1.2.0
+pypdf==6.18.1

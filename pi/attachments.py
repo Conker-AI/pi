@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from . import attachment_passages, document_text
+from . import attachment_passages, document_text, pdf_text
 
 MAX_FILES = 5
 MAX_BYTES = 10 * 1024 * 1024
@@ -224,6 +224,12 @@ def _view(db, row, resolve):
 
 def _extract(raw, media_type):
     media_type = media_type.lower().strip()
+    if media_type == "application/pdf":
+        try:
+            text = pdf_text.extract(raw, MAX_TEXT_CHARACTERS)
+        except pdf_text.PDFError as error:
+            return None, "unsupported", str(error)
+        return text, "extracted", "PDF text layer with page labels; images, layout and OCR are not extracted."
     if media_type == document_text.DOCX:
         try:
             text = document_text.docx(raw, MAX_TEXT_CHARACTERS)
@@ -240,7 +246,7 @@ def _extract(raw, media_type):
         return (
             None,
             "unsupported",
-            "Supported text extraction: plain text, Markdown, CSV, JSON and DOCX body text.",
+            "Supported text extraction: plain text, Markdown, CSV, JSON, DOCX body text and PDF text layers.",
         )
     try:
         text = raw.decode("utf-8-sig")
