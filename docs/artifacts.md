@@ -12,15 +12,15 @@ the frontend fixture client. Durable responses identify provenance as `pi`, not
 
 ## Integration boundary
 
-Store initialization must execute `artifacts.SCHEMA`. The owner API may include
-`artifacts_api.router(store_factory, owner_authorize, resolve)`; no gateway runtime
-allowlist entry is implied. The optional internal resolver has signature
+Store initialization executes `artifacts.SCHEMA`. The owner API includes
+`artifacts_api.router(store_factory, owner_authorize, resolve)` with
+`session_settings.source_privacy`; no gateway runtime allowlist entry is implied. The optional internal resolver has signature
 `resolve(db, session_id)` and returns the authoritative boolean fields
 `memoryDisabled`, `harnessDisabled`, and optional `incognito`. It must use the
 provided transaction snapshot and must not accept client privacy assertions.
 Absent, failing, or malformed resolvers fail closed for conversation copies.
 
-`artifacts.redact(db, session_ids)` must run in the existing offline forgetting
+`artifacts.redact(db, session_ids)` runs in the existing offline forgetting
 transaction before its vacuum/checkpoint completion. It irreversibly clears the
 source snapshot, title, and **all** versions (including owner edits/restores derived
 from that source). Normal version UPDATE/REPLACE/DELETE operations are blocked by
@@ -80,6 +80,8 @@ editing, project context selection, or broader deliverable generation.
 restart persistence, database immutable history, competing revision writes,
 restore/archive, strict schemas and size bounds, source privacy/provenance changes,
 source archive/read/export, irreversible derived-content purge, task origins,
-formula-safe CSV, inert HTML export, and authenticated route validation. Integration
-with the real offline forgetting command and authoritative settings resolver must
-also be tested when those hooks are wired into Pi.
+formula-safe CSV, inert HTML export, and authenticated route validation. The actual offline forgetting entry point is also exercised using authoritative
+session settings, followed by Store reopen and raw database/sidecar byte inspection:
+source text, private title, and derived versions disappear while unrelated
+owner-authored artifacts survive. The artifact and forgetting suites pass together
+(36 tests).

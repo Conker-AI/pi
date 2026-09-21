@@ -299,3 +299,66 @@ def test_missing_source_and_resolver_failure_hide_every_version(store):
     view = a.get(store, identity, privacy)
     assert view["availability"] == "source-unavailable" and view["versions"] == []
     assert "private source" not in str(view) and "private title" not in str(view)
+
+
+def test_actual_forgetting_purges_artifact_bytes_and_reopen(tmp_path):
+    from pi import forgetting, session_settings
+
+    path = tmp_path / "forget-artifacts.db"
+    secret = "artifact-private-8573-source"
+    derived = "artifact-private-8573-derived"
+    private_title = "artifact-private-8573-title"
+    value = Store(path)
+    # No schema setup here: this regression exercises actual Store integration.
+    session = value.create_session()
+    session_settings.save(
+        value,
+        session,
+        session_settings.Update(
+            expected_revision=0,
+            settings=session_settings.Settings(
+                agentId="companion",
+                privacy=session_settings.Privacy(memoryDisabled=True, harnessDisabled=True),
+            ),
+        ),
+    )
+    turn = value.start_turn(session)
+    message = value.complete_turn(turn, secret)
+    copied = a.create(
+        value,
+        a.FromMessage(title=private_title, sessionId=session, messageId=message["id"]),
+        session_settings.source_privacy,
+    )
+    assert copied["privateOrigin"] is True
+    a.mutate(
+        value,
+        copied["id"],
+        a.Append(expected_revision=1, content={"kind": "markdown", "text": derived}),
+        session_settings.source_privacy,
+    )
+    kept = owner(value)
+    value.close()
+    confirmation = forgetting.preview(path, session)["confirmation"]
+    receipt = forgetting.forget(path, session, confirmation)
+    assert receipt["session_ids"] == [session]
+    reopened = Store(path)
+    try:
+        hidden = a.get(reopened, copied["id"], session_settings.source_privacy)
+        assert hidden["availability"] == "source-redacted"
+        assert hidden["versions"] == []
+        assert a.get(reopened, kept["id"])["versions"] == kept["versions"]
+        with pytest.raises(a.ArtifactError):
+            a.export(reopened, copied["id"], resolve=session_settings.source_privacy)
+        with reopened._connect() as db:
+            assert (
+                db.execute(
+                    "SELECT COUNT(*) FROM artifact_versions WHERE artifact_id=?", (copied["id"],)
+                ).fetchone()[0]
+                == 0
+            )
+    finally:
+        reopened.close()
+    for file in path.parent.glob("forget-artifacts.db*"):
+        raw = file.read_bytes()
+        for text in (secret, derived, private_title):
+            assert text.encode() not in raw, file.name
