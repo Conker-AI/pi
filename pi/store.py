@@ -432,6 +432,8 @@ class Store:
             calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
+            from . import attachment_passages
+            citations = attachment_passages.citations(db, turn_id, text, citations)
             evidence = message_citations.save(db, message["id"], citations)
             if evidence:
                 message["citations"] = evidence

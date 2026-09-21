@@ -6,8 +6,13 @@ IDs alongside the exact text. Owner-authenticated GET
 `/sessions/{session_id}/attachments/{identity}/passages/{index}` resolves a passage
 through current integrity, privacy and availability checks, with no-store responses.
 Removal makes references unavailable. Offsets describe extracted text, not DOCX pages.
-This provides inspectable source references; it does not yet validate free-form model
-citation syntax or prove the model used a supplied source.
+Final answers may use `[[attachment_<id>:pN]]`. Pi records only references to existing
+passages in that turn's bound input attachments; unknown/out-of-range IDs do not
+become structured citations. The reserved attachment ID prefix cannot be forged
+through provider citation metadata. References retain no copied filename/excerpt;
+the current passage resolver governs inspection. This validates source identity,
+not whether the source supports the answer's claim. References to earlier-turn
+attachments are not yet promoted to structured citations.
 
 Attachment extraction supports UTF-8 plain text, Markdown, CSV and JSON as inert
 source text. JSON is not executed and CSV formulas are not evaluated. Declared

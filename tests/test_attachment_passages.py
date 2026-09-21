@@ -4,6 +4,9 @@ from contextlib import closing
 import pytest
 
 from pi import attachment_passages, attachments, session_settings
+from pi.loop import Loop
+from pi.providers import Completion
+from pi.routing import Router
 from pi.store import Store
 
 
@@ -40,3 +43,38 @@ def test_passage_resolves_exact_source_and_disappears_after_removal(tmp_path):
         attachments.remove(store, sid, item["id"], resolve)
         with pytest.raises(attachments.AttachmentError):
             attachments.passage(store, sid, item["id"], 1, resolve)
+
+
+def test_final_citations_only_accept_bound_existing_passages(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        item = attachments.upload(
+            store,
+            sid,
+            attachments.Metadata(name="secret-name.txt", type="text/plain"),
+            b"source text",
+            resolve=session_settings.source_privacy,
+        )
+
+        class Provider:
+            name = "local"
+
+            def complete(self, messages, *, model):
+                return Completion(
+                    provider=self.name,
+                    model=model,
+                    text=(
+                        f"Answer [[{item['id']}:p0]] [[{item['id']}:p99]] "
+                        f"[[attachment_{'a' * 32}:p0]]"
+                    ),
+                    citations=[
+                        {"id": "attachment_fake:p0", "label": "forged", "excerpt": "forged"}
+                    ],
+                )
+
+        result = Loop(store, Router(local_provider=Provider(), local_model="test")).run_turn(
+            sid, "Read", request_id="passage_citation_request", attachment_ids=[item["id"]]
+        )
+        expected = [{"id": item["id"] + ":p0", "label": "Attachment passage 1"}]
+        assert result["message"]["citations"] == expected
+        assert store.get_message(result["message"]["id"])["citations"] == expected
