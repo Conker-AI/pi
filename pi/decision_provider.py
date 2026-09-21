@@ -81,13 +81,26 @@ class DecisionProvider:
             if (not isinstance(allowed, list) or not 2 <= len(allowed) <= 8
                     or len(set(allowed)) != len(allowed) or set(descriptions) != set(allowed)):
                 raise ValueError()
-            state = json.dumps(envelope["task"], ensure_ascii=False)
+            # A small classifier routes the current request, not the answer's
+            # entire system prompt, retrieved memory and conversation history.
+            # Keep this projection explicit; never silently cut an oversized
+            # request. Context-dependent follow-ups may need the configured
+            # general-model fallback or a manual answer selection.
+            task = envelope["task"]
+            if not isinstance(task, list):
+                raise ValueError()
+            latest = next((item.get("content") for item in reversed(task)
+                           if isinstance(item, dict) and item.get("role") == "user"), None)
+            if not isinstance(latest, str) or not latest.strip() or len(latest) > 1600:
+                raise ValueError()
+            state = json.dumps([{"role": "user", "content": latest}], ensure_ascii=False)
             data = self.choose(state, "Choose the model best suited to this task using the capability descriptions.",
                                descriptions, timeout=timeout)
             return Completion(text=json.dumps({"modelId": data["choice"]}),
                               model=data["model"], provider=self.name,
-                              raw={"decision": {key: data.get(key) for key in
-                                   ("choice", "confidence", "elapsed_ms", "provider", "model")}})
+                              raw={"decision": {**{key: data.get(key) for key in
+                                   ("choice", "confidence", "elapsed_ms", "provider", "model")},
+                                   "inputScope": "latest-user-request", "inputCharacters": len(latest)}})
         except (ValueError, TypeError, KeyError, httpx.HTTPError):
             raise ProviderUnavailable("Typed decision service unavailable or input unsupported.") from None
 

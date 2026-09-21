@@ -51,6 +51,28 @@ def test_service_failure_uses_only_explicit_helper_fallback():
     assert result["attempts"][1]["modelId"] == "a"
 
 
+def test_routing_projection_excludes_system_memory_and_old_history_without_truncating_request():
+    calls = []
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json={"choice": "b", "confidence": 0.8, "model": "laya-pinned",
+                                        "probabilities": {"a": 0.2, "b": 0.8}})
+    _, decision = setup(httpx.MockTransport(handler))
+    envelope = {"allowedModelIds": ["a", "b"], "modelDescriptions": {"a": "Simple", "b": "Complex"},
+                "task": [{"role": "system", "content": "private system and retrieved memory" * 100},
+                         {"role": "user", "content": "old private question"},
+                         {"role": "assistant", "content": "old answer"},
+                         {"role": "user", "content": "Current task"}]}
+    invoke = lambda: decision.complete_bounded([Message("system", "route"), Message("user", json.dumps(envelope))], model="model-routing", timeout=1)
+    result = invoke()
+    assert json.loads(calls[0]["state"]) == [{"role": "user", "content": "Current task"}]
+    assert result.raw["decision"]["inputScope"] == "latest-user-request"
+    envelope["task"][-1]["content"] = "x" * 1601
+    with pytest.raises(ProviderUnavailable):
+        invoke()
+    assert len(calls) == 1
+
+
 def test_adapter_refuses_text_answering_and_unapproved_choices():
     _, decision = setup(httpx.MockTransport(lambda request: httpx.Response(200, json={
         "choice": "unapproved", "confidence": 1, "model": "laya"})))

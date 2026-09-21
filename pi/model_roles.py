@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -109,6 +110,20 @@ CREATE TABLE IF NOT EXISTS model_role_settings (
 
 class SelectionError(ProviderUnavailable):
     pass
+
+
+def decision_evidence(completion):
+    value = (completion.raw or {}).get("decision")
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    for key in ("confidence", "elapsed_ms", "inputCharacters"):
+        item = value.get(key)
+        if type(item) in (int, float) and math.isfinite(item) and item >= 0:
+            result[key] = item
+    if value.get("inputScope") == "latest-user-request":
+        result["inputScope"] = "latest-user-request"
+    return {"decision": result} if result else {}
 
 
 def load(store):
@@ -258,6 +273,7 @@ def dispatch(
                 "requestedModel": model.route,
                 "actualModel": completion.model,
                 "status": "completed",
+                **decision_evidence(completion),
             }
         )
         return {
