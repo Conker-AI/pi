@@ -127,6 +127,8 @@ def _view(db, row):
     turn = db.execute("SELECT status,acted FROM turns WHERE id=?",
                       (row["turn_id"],)).fetchone()
     refs = message_refs(db, row["turn_id"]) if row["turn_id"] else []
+    selection = db.execute("SELECT snapshot FROM submission_settings WHERE request_id=?",
+                           (row["request_id"],)).fetchone()
     return {
         "request_id": row["request_id"], "requested_session_id": row["requested_session_id"],
         "effective_session_id": row["effective_session_id"], "turn_id": row["turn_id"],
@@ -143,6 +145,8 @@ def _view(db, row):
         "failure_code": row["failure_code"] if available else None,
         "created_at": row["created_at"], "updated_at": row["updated_at"],
         "content_status": "available" if available else "forgotten",
+        "research_mode": (json.loads(selection[0]).get("researchMode", "off")
+                          if available and selection else None),
     }
 
 
@@ -204,7 +208,7 @@ def _task(db, task_id, revision, session_id):
                               "Restore and reopen the task before submitting work.")
 
 
-def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None, queued_entry=None, model_id=None, reply_to=None):
+def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None, queued_entry=None, model_id=None, reply_to=None, research_mode="off"):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError("invalid_request",
                               "Provide a valid submission request identity.", 422)
@@ -214,10 +218,14 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
         raise SubmissionError("invalid_task", "Task identity and revision belong together.", 422)
     if task_revision is not None and (type(task_revision) is not int or task_revision < 1):
         raise SubmissionError("invalid_task", "Provide the current task revision.", 422)
+    from . import research
+    research.validate(research_mode)
     payload = {
         "session_id": session_id, "text": text, "context": context,
         "task_id": task_id, "task_revision": task_revision,
     }
+    if research_mode != "off":
+        payload["research_mode"] = research_mode
     if model_id is not None:
         payload["model_id"] = model_id
     if reply_to is not None:
@@ -250,7 +258,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
             raise SubmissionError("session_busy", "This conversation already has work in progress.")
         if queued_entry is not None:
             from . import turn_queue
-            turn_queue.admit(db, session_id, *queued_entry, request_id, text, attachment_ids, model_id, reply_to)
+            turn_queue.admit(db, session_id, *queued_entry, request_id, text, attachment_ids, model_id, reply_to, research_mode)
         head = db.execute("SELECT COALESCE(MAX(seq),0) FROM messages WHERE session_id=?",
                           (session_id,)).fetchone()[0]
         now = time.time()
@@ -258,7 +266,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "task_expected_revision,state,payload_hash,pending_text,history_seq,"
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
-        session_settings.reserve(db, request_id, session_id, model_id, reply_to)
+        session_settings.reserve(db, request_id, session_id, model_id, reply_to, research_mode)
         context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:
             from . import attachment_turns, attachments
@@ -269,7 +277,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
         if draft_revision is not None:
             from . import drafts
             try:
-                drafts.reserve(db, request_id, session_id, task_id, draft_revision, text)
+                drafts.reserve(db, request_id, session_id, task_id, draft_revision, text, research_mode)
             except drafts.DraftError as exc:
                 raise SubmissionError("draft_changed", str(exc)) from exc
         result = _view(db, _row(db, request_id))
@@ -279,7 +287,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
 
 def fail_preparation(store, request_id, code="preparation_failed"):
     # Static codes only; provider exceptions and request text must not enter a second log.
-    if code not in {"preparation_failed", "task_fork_required", "source_changed"}:
+    if code not in {"preparation_failed", "task_fork_required", "source_changed", "research_unavailable"}:
         code = "preparation_failed"
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")

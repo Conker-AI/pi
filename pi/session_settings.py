@@ -166,9 +166,13 @@ def validate_reply(db, identity, reply_to):
         raise agents.AgentError("reply_excluded", "Include this message in context before replying.", 422)
 
 
-def reserve(db, request_id, identity, model_id=None, reply_to=None):
+def reserve(db, request_id, identity, model_id=None, reply_to=None, research_mode="off"):
     from . import project_context
     snapshot = _snapshot(db, identity)
+    from . import research
+    research.validate(research_mode, snapshot)
+    if research_mode != "off":
+        snapshot["researchMode"] = research_mode
     validate_answer_model(snapshot, model_id)
     validate_reply(db, identity, reply_to)
     if reply_to is not None:

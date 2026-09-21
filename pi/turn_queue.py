@@ -3,6 +3,7 @@
 import hashlib
 import json
 import time
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +32,7 @@ class Enqueue(BaseModel):
     attachment_ids: list[str] = Field(default_factory=list, max_length=5)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
+    research_mode: Literal["off", "web", "deep"] = "off"
 
 
 class Edit(BaseModel):
@@ -74,6 +76,8 @@ def _source(db, sid, *, open_required=True):
 
 
 def _files(db, sid, payload, snapshot):
+    from . import research
+    research.validate(payload.get("research_mode", "off"), json.loads(snapshot)["execution"])
     session_settings.validate_answer_model(
         json.loads(snapshot)["execution"], payload.get("model_id")
     )
@@ -172,6 +176,8 @@ def enqueue(store, sid, body):
         payload["model_id"] = body.model_id
     if body.reply_to is not None:
         payload["reply_to"] = body.reply_to
+    if body.research_mode != "off":
+        payload["research_mode"] = body.research_mode
     digest = hashlib.sha256(_encode(payload).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -271,7 +277,7 @@ def submission_identity(identity, revision):
 
 
 def admit(
-    db, sid, identity, revision, request_id, text, attachment_ids, model_id=None, reply_to=None
+    db, sid, identity, revision, request_id, text, attachment_ids, model_id=None, reply_to=None, research_mode="off"
 ):
     """Called inside the submission writer transaction, never a separate claim."""
     _source(db, sid)
@@ -288,6 +294,7 @@ def admit(
         or (attachment_ids or []) != payload["attachment_ids"]
         or model_id != payload.get("model_id")
         or reply_to != payload.get("reply_to")
+        or research_mode != payload.get("research_mode", "off")
     ):
         raise tasks.TaskError("queue_changed", "Execution does not match the queued message.")
     validate(db, row)
@@ -355,6 +362,7 @@ def run_next(store, loop, sid):
             attachment_ids=entry["payload"]["attachment_ids"],
             model_id=entry["payload"].get("model_id"),
             reply_to=entry["payload"].get("reply_to"),
+            **({"research_mode": entry["payload"]["research_mode"]} if entry["payload"].get("research_mode", "off") != "off" else {}),
             queued_entry=(entry["id"], entry["revision"]),
         )
     except (tasks.TaskError, agents.AgentError, attachments.AttachmentError) as exc:

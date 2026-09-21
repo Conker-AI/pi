@@ -514,7 +514,7 @@ class Loop:
     def run_turn(self, session_id: str, user_text: str, context: dict | None = None, *,
                  request_id: str | None = None, task_id: str | None = None,
                  task_expected_revision: int | None = None, draft_revision: int | None = None,
-                 attachment_ids: list[str] | None = None, queued_entry=None, model_id=None, reply_to=None) -> dict:
+                 attachment_ids: list[str] | None = None, queued_entry=None, model_id=None, reply_to=None, research_mode="off") -> dict:
         """One turn. Returns the assistant message and where it landed.
 
         The session id may change: if history has outgrown the window the turn
@@ -538,7 +538,8 @@ class Loop:
                                                    **({"attachment_ids": attachment_ids} if attachment_ids else {}),
                                                    **({"queued_entry": queued_entry} if queued_entry else {}),
                                                    **({"model_id": model_id} if model_id is not None else {}),
-                                                   **({"reply_to": reply_to} if reply_to is not None else {}))
+                                                   **({"reply_to": reply_to} if reply_to is not None else {}),
+                                                   **({"research_mode": research_mode} if research_mode != "off" else {}))
         except tasks.TaskError as exc:
             if explicit:
                 raise
@@ -551,6 +552,8 @@ class Loop:
                     if receipt["final_message_id"] else None}
         try:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
+            from . import research
+            research.require_runtime(execution)
             turn_control.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
