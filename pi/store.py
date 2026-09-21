@@ -251,6 +251,12 @@ class Store:
         try:
             with self._connect() as db:
                 if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name='recovery_deletion_hold'"
+                ).fetchone():
+                    raise MaintenanceRequired(
+                        "Recovered data is held pending coordinated deletion, effect and authority reconciliation."
+                    )
+                if db.execute(
                     "SELECT 1 FROM sqlite_master WHERE name='forgetting_maintenance'"
                 ).fetchone() and db.execute("SELECT 1 FROM forgetting_maintenance").fetchone():
                     raise MaintenanceRequired(
