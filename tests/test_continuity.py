@@ -24,10 +24,14 @@ def test_actual_events_seen_state_and_restart(tmp_path):
         item = first["items"][0]
         assert item["sessionId"] == sid and item["runId"] == turn
         assert item["provenance"] == "recorded-event" and not item["needsAttention"]
+        assert first["summary"]["eventIds"] == [item["eventId"]]
+        assert first["summary"]["highlights"][0]["runId"] == turn
+        assert first["summary"]["completedUpdates"] == 1
         assert c.briefing(store)["items"] == first["items"]
         c.acknowledge(store, c.Acknowledge(event_ids=[item["eventId"]]))
     with closing(Store(path)) as store:
         assert c.briefing(store)["items"] == []
+        assert c.briefing(store)["summary"]["highlights"] == []
 
 
 def test_new_status_replaces_old_blocker_but_is_not_marked_seen(tmp_path):
@@ -50,6 +54,10 @@ def test_paging_and_atomic_acknowledgement(tmp_path):
         first = c.briefing(store, limit=2)
         second = c.briefing(store, limit=2, before=first["nextCursor"])
         assert len(first["items"]) == 2 and len(second["items"]) == 1
+        assert first["summary"]["scope"] == "returned-page"
+        assert first["summary"]["hasMore"]
+        assert first["summary"]["completedUpdates"] == 2
+        assert not second["summary"]["hasMore"]
         with pytest.raises(agents.AgentError):
             c.acknowledge(store, c.Acknowledge(event_ids=[first["items"][0]["eventId"], "missing"]))
         assert len(c.briefing(store)["items"]) == 3
@@ -77,6 +85,7 @@ def test_private_and_forgotten_sources_do_not_surface(tmp_path):
     forgetting.forget(path, sid, forgetting.preview(path, sid)["confirmation"])
     with closing(Store(path)) as store:
         assert c.briefing(store)["items"] == []
+        assert c.briefing(store)["summary"]["eventIds"] == []
 
 
 def test_quiet_hours_suppress_notifications_not_owner_inspection(tmp_path):

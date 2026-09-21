@@ -198,19 +198,58 @@ def briefing(store, *, limit=30, before=None, now=None):
             items.append(item)
             if len(items) == limit:
                 break
-        return {
-            "items": items,
-            "nextCursor": examined
+        next_cursor = (
+            examined
             if rows
             and (len(rows) == 1000 or (examined is not None and examined != rows[-1]["sequence"]))
-            else None,
+            else None
+        )
+        return {
+            "items": items,
+            "nextCursor": next_cursor,
             "preferenceRevision": row["revision"],
             "notificationSuppressed": bool(reasons),
             "suppressionReasons": reasons,
             "notificationDelivery": "owner-poll; explicit delivery acknowledgement",
-            "summaryGeneration": "none",
+            "summaryGeneration": "recorded-status-summary; no model",
+            "summary": summarize(items, more=next_cursor is not None),
             "readMarksSeen": False,
         }
+
+
+def summarize(items, *, more=False):
+    """Summarize visible status updates, never infer task completion or total history."""
+    finished = sum(item["status"] in ("complete", "completed") for item in items)
+    attention = len(items) - finished
+    if not items:
+        text = "No unseen work updates on this page." if more else "No unseen work updates."
+    else:
+        text = f"{len(items)} unseen work update{'s' if len(items) != 1 else ''}: "
+        text += f"{finished} completed, {attention} needing attention."
+        if more:
+            text += " More updates are available."
+    return {
+        "text": text,
+        "scope": "returned-page",
+        "hasMore": more,
+        "completedUpdates": finished,
+        "attentionUpdates": attention,
+        "eventIds": [item["eventId"] for item in items],
+        "highlights": [
+            {
+                "eventId": item["eventId"],
+                "title": item["title"],
+                "status": item["status"],
+                "kind": item["kind"],
+                "sessionId": item.get("sessionId"),
+                "runId": item.get("runId"),
+                "taskId": item.get("taskId"),
+                "jobId": item.get("jobId"),
+                "scheduledRunId": item.get("scheduledRunId"),
+            }
+            for item in sorted(items, key=lambda item: not item["needsAttention"])[:5]
+        ],
+    }
 
 
 def acknowledge(store, body):
