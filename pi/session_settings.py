@@ -118,6 +118,12 @@ def save(store, identity, body):
         if db.execute("SELECT 1 FROM turn_submissions WHERE requested_session_id=? AND state='preparing'", (identity,)).fetchone() or db.execute(
                 "SELECT 1 FROM turns WHERE session_id=? AND (status NOT IN ('complete','failed','interrupted','cancelled') OR (status='interrupted' AND acted=1))", (identity,)).fetchone():
             raise agents.AgentError("session_busy", "Resolve current work before changing session settings.")
+        inherited = db.execute("SELECT MAX(p.memory_disabled),MAX(p.harness_disabled) "
+            "FROM context_inherited_messages i JOIN message_privacy p ON p.message_id=i.message_id "
+            "WHERE i.session_id=?", (identity,)).fetchone()
+        if ((inherited[0] and not body.settings.privacy.memoryDisabled)
+                or (inherited[1] and not body.settings.privacy.harnessDisabled)):
+            raise agents.AgentError("inherited_privacy", "Keep the inherited messages' privacy modes enabled.")
         agent = agents._get(db, body.settings.agentId)
         if agent["archived_at"] is not None:
             raise agents.AgentError("agent_archived", "Select an active agent.")
