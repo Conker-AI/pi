@@ -420,3 +420,20 @@ def test_the_queue_shows_intent_for_every_parked_turn(store):
 
     pending = store.awaiting_approval()
     assert {p["approval_intent"] for p in pending} == {"book the gym", "email my teacher"}
+
+
+def test_resumed_answer_receives_result_without_advertising_more_actions(store):
+    from pi import turn_context
+    gate = FakeGate(needs_approval=True)
+    loop, provider = build(store, [CALL, "the tool echoed hi"], gate)
+    sid = store.create_session()
+    parked = loop.run_turn(sid, "use the tool")
+    loop.resume_turn(parked["turn_id"])
+    prompt = provider.sent[-1]
+    assert any(message.role == "tool" and "echoed" in message.content for message in prompt)
+    instruction = next(message for message in prompt if "already finished" in message.content)
+    assert "Do not repeat a tool call" in instruction.content
+    assert not any(message.role == "system" and "t_echo" in message.content for message in prompt)
+    saved = turn_context.load(store, parked["turn_id"])
+    assert {"role": instruction.role, "content": instruction.content} in saved["prefix"]
+    assert len(gate.invocations) == 2  # initial approval request, then exact approved dispatch

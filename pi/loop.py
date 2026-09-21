@@ -194,7 +194,8 @@ class Loop:
     # --- context ----------------------------------------------------------
 
     def _history(
-        self, session_id: str, tools=None, turn_id=None, execution=None, request_id=None
+        self, session_id: str, tools=None, turn_id=None, execution=None, request_id=None,
+        reply_only=False,
     ) -> list[Message]:
         session = self.store.get_session(session_id)
         if session and session["status"] == "forgotten":
@@ -249,6 +250,12 @@ class Loop:
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
         messages.extend(calls.context_messages(self.store, execution))
+        if reply_only:
+            messages.append(Message("system",
+                "The requested tool action has already finished. Answer the latest user "
+                "request using the recorded tool result. Do not repeat a tool call or an "
+                "earlier answer. State only what the result supports; report failures or "
+                "uncertainty honestly."))
         prefix_messages = list(messages)
         known_history = context_controls.history(self.store, session_id)
         selected_history = context_controls.select_history(policy, known_history, retrieved_ids)
@@ -462,12 +469,10 @@ class Loop:
     def _finish_reply(self, turn_id, session_id, execution, acted, started,
                       reply_request_id=None):
         try:
-            available = [] if reply_request_id or execution.get("researchMode") in ("web", "deep") else self._available_tools(execution)
-            history = self._history(session_id, tools=available, turn_id=turn_id)
-            if reply_request_id or execution.get("researchMode") in ("web", "deep"):
-                history.append(Message("system", "Report only the recorded action results. "
-                    "Do not request or repeat any tool action. State uncertainty honestly."))
-            ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
+            # This path narrates an already recorded action. It never dispatches
+            # another tool, so advertising tools here misleads the answer model.
+            history = self._history(session_id, turn_id=turn_id, reply_only=True)
+            ctx = TurnContext(history_chars=self._history_size(history), needs_tools=False)
             route, completion, _skipped = self._call(history, ctx, execution)
             from . import research
             research.validate_narration(execution, completion.text)
