@@ -34,6 +34,23 @@ def test_pending_submission_blocks_summary_changes(tmp_path):
         assert summaries.load(store, sid)["summary"] == "Current"
 
 
+def test_automatic_fork_summary_is_versioned_after_owner_edit(tmp_path):
+    with closing(Store(tmp_path / "summary.db")) as store:
+        sid = store.create_session(summary="Initial")
+        summaries.save(store, sid, summaries.Edit(expected_revision=0, summary="Reviewed"))
+        store.close_session(sid, "forked", summary="Automatically summarized")
+        value = summaries.load(store, sid)
+        assert value["revision"] == 2
+        assert value["source_session_id"] == sid
+        assert [v["summary"] for v in value["versions"]] == [
+            "Automatically summarized",
+            "Reviewed",
+            "Initial",
+        ]
+        with pytest.raises(context_controls.ContextError, match="changed"):
+            summaries.save(store, sid, summaries.Edit(expected_revision=1, summary="Stale edit"))
+
+
 def test_forgotten_parent_scrubs_child_summary_history(tmp_path):
     path = tmp_path / "summary.db"
     secret = "private-summary-91fc7"

@@ -12,5 +12,7 @@ messages and exact-pin selections are never rewritten. Each saved version retain
 its parent-session source reference; no claim of sentence-level provenance is made.
 
 Offline forgetting removes the affected summary history and scrubs physical copies.
-These are owner-review versions; automatic summary generation remains the existing
-fork pipeline. Provider/helper evaluations and frontend wiring are separate work.
+Automatic summary changes from the existing fork pipeline also advance the version
+and retain the previous text. They cite the summarized session; restores retain the
+selected version's source reference. Provider/helper evaluations and frontend wiring
+are separate work.

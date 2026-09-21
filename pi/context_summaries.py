@@ -18,6 +18,19 @@ CREATE TRIGGER IF NOT EXISTS summary_version_no_replace BEFORE INSERT ON context
 WHEN EXISTS(SELECT 1 FROM context_summary_versions
  WHERE session_id=NEW.session_id AND revision=NEW.revision)
 BEGIN SELECT RAISE(ABORT,'summary version is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS capture_automatic_summary AFTER UPDATE OF summary ON sessions
+WHEN NEW.status != 'forgotten' AND NEW.summary IS NOT OLD.summary
+ AND NOT EXISTS(SELECT 1 FROM context_summary_versions
+ WHERE session_id=NEW.id AND revision=(SELECT MAX(revision) FROM context_summary_versions
+ WHERE session_id=NEW.id) AND summary IS NEW.summary)
+BEGIN
+ INSERT INTO context_summary_versions
+ SELECT NEW.id,0,OLD.summary,OLD.parent_id,strftime('%s','now'),NULL
+ WHERE NOT EXISTS(SELECT 1 FROM context_summary_versions WHERE session_id=NEW.id);
+ INSERT INTO context_summary_versions
+ SELECT NEW.id,MAX(revision)+1,NEW.summary,NEW.id,strftime('%s','now'),NULL
+ FROM context_summary_versions WHERE session_id=NEW.id;
+END;
 """
 
 
@@ -36,13 +49,15 @@ def _current(db, identity):
     session = db.execute(
         "SELECT summary,parent_id FROM sessions WHERE id=?", (identity,)
     ).fetchone()
-    revision = db.execute(
-        "SELECT MAX(revision) FROM context_summary_versions WHERE session_id=?", (identity,)
-    ).fetchone()[0]
+    latest = db.execute(
+        "SELECT revision,source_session_id FROM context_summary_versions WHERE session_id=? "
+        "ORDER BY revision DESC LIMIT 1",
+        (identity,),
+    ).fetchone()
     return {
-        "revision": revision or 0,
+        "revision": latest["revision"] if latest else 0,
         "summary": session["summary"],
-        "source_session_id": session["parent_id"],
+        "source_session_id": latest["source_session_id"] if latest else session["parent_id"],
     }
 
 
@@ -87,20 +102,23 @@ def save(store, identity, body):
                 (identity, current["summary"], current["source_session_id"], time.time()),
             )
         restored = body.revision if isinstance(body, Restore) else None
+        source = current["source_session_id"]
         if isinstance(body, Restore):
             previous = db.execute(
-                "SELECT summary FROM context_summary_versions WHERE session_id=? AND revision=?",
+                "SELECT summary,source_session_id FROM context_summary_versions "
+                "WHERE session_id=? AND revision=?",
                 (identity, body.revision),
             ).fetchone()
             if previous is None:
                 raise controls.ContextError("missing_revision", "Summary version unavailable.")
             text = previous[0]
+            source = previous[1]
         else:
             text = body.summary
         revision = current["revision"] + 1
         db.execute(
             "INSERT INTO context_summary_versions VALUES(?,?,?,?,?,?)",
-            (identity, revision, text, current["source_session_id"], time.time(), restored),
+            (identity, revision, text, source, time.time(), restored),
         )
         db.execute("UPDATE sessions SET summary=? WHERE id=?", (text, identity))
         db.commit()
