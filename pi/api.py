@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, agents, owner_preferences, projects_api, submissions, tasks
+from . import activity, agents, context_api, context_controls, owner_preferences, projects_api, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -159,6 +159,12 @@ def require_admin(identity: str = Depends(require_key)) -> None:
 
 
 app.include_router(projects_api.router(lambda: app.state.store, require_admin))
+app.include_router(context_api.router(lambda: app.state.store, require_admin))
+
+
+@app.exception_handler(context_controls.ContextError)
+async def context_error(request: Request, exc: context_controls.ContextError):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
 @app.get("/owner/preferences", dependencies=[Depends(require_admin)])

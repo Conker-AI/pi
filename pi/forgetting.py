@@ -125,6 +125,8 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
     try:
         # Transactional DDL keeps the exception invisible to every other connection.
         # The runtime lease prevents a provider response from arriving after deletion.
+        from . import context_controls
+        context_controls.redact(db, plan["session_ids"])
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])
         submissions.redact(db, plan["session_ids"])

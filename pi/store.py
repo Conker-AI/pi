@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import actions, agents, memory_store, owner_preferences, projects, submissions, tasks
+from . import actions, agents, context_controls, memory_store, owner_preferences, projects, submissions, tasks
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -227,6 +227,7 @@ class Store:
                 owner_preferences.initialize(db)
                 agents.initialize(db)
                 db.executescript(projects.SCHEMA)
+                db.executescript(context_controls.SCHEMA)
         except BaseException:
             self.close()
             raise

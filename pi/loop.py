@@ -23,7 +23,7 @@ import json
 import time
 import uuid
 
-from . import actions, memory_store, submissions, tasks
+from . import actions, context_controls, memory_store, submissions, tasks
 from . import tools as tool_protocol
 from .memory import Memory
 from .openrouter import ModelUnusable
@@ -136,9 +136,12 @@ class Loop:
         session = self.store.get_session(session_id)
         if session and session["status"] == "forgotten":
             raise TurnFailed("session is forgotten; start a new session")
+        policy = context_controls.load(self.store, session_id, turn_id)["policy"]
         messages: list[Message] = []
         if self.system_prompt:
             messages.append(Message("system", self.system_prompt))
+        if policy and policy["sessionInstructions"].strip():
+            messages.append(Message("system", policy["sessionInstructions"]))
         if turn_id:
             saved = memory_store.context(self.store, turn_id)
             if saved["package"]:
@@ -157,10 +160,11 @@ class Loop:
                 Message("assistant", "Untrusted model summary of earlier conversation; "
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
-        for row in self.store.messages(session_id):
+        for row in context_controls.select_history(policy, self.store.messages(session_id)):
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             messages.append(Message(row["role"], text))
+        context_controls.check_budget(policy, messages)
         return messages
 
     def _history_size(self, messages: list[Message]) -> int:
@@ -193,7 +197,10 @@ class Loop:
 
     def fork(self, session_id: str) -> str:
         """Close a session with a summary and open a child seeded by it."""
-        summary = self._summarise(self._history(session_id))
+        history = self._history(session_id)
+        if context_controls.load(self.store, session_id)["policy"] is not None:
+            raise TurnFailed("Review explicit context policy before forking; pins cannot be silently summarized.")
+        summary = self._summarise(history)
         parent = self.store.get_session(session_id) or {}
         self.store.close_session(session_id, "forked", summary=summary)
         return self.store.create_session(
@@ -375,6 +382,8 @@ class Loop:
         try:
             history = self._history(session_id)
             outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
+            if outgrown and context_controls.load(self.store, session_id)["policy"] is not None:
+                raise TurnFailed("Review context before forking; explicit pins and instructions remain intact.")
             if outgrown and task_id:
                 raise submissions.SubmissionError("task_fork_required", "This task needs its "
                     "original conversation. Create a child task before continuing after a fork.")
@@ -387,8 +396,12 @@ class Loop:
                 raise TurnFailed(str(exc)) from exc
             raise
         actual_session = receipt["effective_session_id"]
-        result = self._run_bound(actual_session, user_text, receipt["turn_id"], context,
-                                 session_id if actual_session != session_id else None)
+        try:
+            result = self._run_bound(actual_session, user_text, receipt["turn_id"], context,
+                                     session_id if actual_session != session_id else None)
+        except context_controls.ContextError as exc:
+            self.store.finish_turn(receipt["turn_id"], "failed", detail=str(exc))
+            raise TurnFailed(str(exc), turn_id=receipt["turn_id"]) from exc
         if explicit:
             result["submission"] = submissions.get(self.store, identity)
             result["replayed"] = False
