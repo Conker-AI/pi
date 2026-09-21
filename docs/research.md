@@ -42,9 +42,21 @@ visible, and reply-only recovery does not restart research. Forgetting scrubs th
 plan with the existing message lifecycle. This is bounded snippet research; full
 page reading and live-search verification are not implied.
 
-Remaining before research completion: aggregate provider usage across planning,
-query selection and synthesis; verify this accounting and integrated regression.
-The current loop's final-call usage must not be treated as whole-research cost.
+Provider attempts within the bound research turn are now recorded separately,
+without prompts or responses. Turn totals sum planning, query selection, synthesis
+and reply recovery. Failed, interrupted or unreported attempts keep affected totals
+unknown; they are never treated as free. Approval holds and completion preserve the
+same totals. Steering-discarded calls are counted once through this ledger.
+ToolGate service costs and pre-turn memory/context preparation are separate scopes;
+these totals do not claim an all-services bill. Legacy runs have no complete attempt
+ledger and cannot retroactively gain accurate totals.
+
+Five focused accounting cases pass: summed multi-call totals after reopening,
+failed-call recovery remaining unknown, independently known token totals, approval
+pause/resume, and process interruption retaining a pending receipt. Integrated Pi
+regression: 960 passed, 8 skipped, one existing test-client deprecation warning
+in 295.70 seconds. Skipped live-service/host-specific checks are not proven; no
+live provider/search proof is claimed.
 No paid fallback was enabled and final dashboard wiring remains deferred.
 
 Verification: 61 focused tests across web execution, selections, ordinary tool

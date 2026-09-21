@@ -144,6 +144,8 @@ class Loop:
             adapters = self.router.adapters()
             from . import team_execution
             adapters = team_execution.metered_providers(self.store, execution, adapters)
+            from . import research_usage
+            adapters = {key: research_usage.wrap(self.store, execution, provider, role) for key, provider in adapters.items()}
             result = model_roles.dispatch(configuration, role, messages, adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None,
@@ -165,6 +167,8 @@ class Loop:
             if route.unavailable_reason:
                 skipped.append(route.unavailable_reason)
             provider = self.router.provider_for(route)
+            from . import research_usage
+            provider = research_usage.wrap(self.store, execution, provider, role)
             turn_control.guard(self.store, execution)
             try:
                 completion = provider.complete(messages, model=route.model)

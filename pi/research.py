@@ -135,6 +135,7 @@ def save_plan(store, turn_id, text, limit):
 
 def receipt(store, turn_id):
     """Project existing action/message receipts; fetched sources are not claimed citations."""
+    from . import research_usage
     with store._connect() as db:
         db.execute("BEGIN")
         turn = db.execute("SELECT * FROM turns WHERE id=?", (turn_id,)).fetchone()
@@ -166,4 +167,7 @@ def receipt(store, turn_id):
                 "search_limit": 1 if mode == "web" else (plan(store, turn_id) or {}).get("search_limit"),
                 "plan": plan(store, turn_id) if mode == "deep" else None,
                 "actions": records, "evidence_kind": "untrusted_tool_results",
+                "usage": {"scope": "research_turn_provider_attempts", **research_usage.totals(db, turn_id),
+                          "attempts": [dict(row) for row in db.execute(
+                              "SELECT * FROM research_model_calls WHERE turn_id=? ORDER BY started_at,id", (turn_id,))]},
                 "notice": "Fetched evidence is not proof that the answer cited or verified it."}

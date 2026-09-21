@@ -29,6 +29,7 @@ from . import actions, agents, artifacts, collaboration, context_controls, memor
 from . import citations as message_citations
 from . import jobs
 from . import drafts
+from . import research_usage
 from . import context_summaries
 from . import attachments
 from . import model_evaluations
@@ -275,6 +276,7 @@ class Store:
                 db.executescript(response_versions.SCHEMA)
                 db.executescript(response_retries.SCHEMA)
                 db.executescript(turn_steering.SCHEMA)
+                db.executescript(research_usage.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)
@@ -424,6 +426,7 @@ class Store:
 
     @staticmethod
     def _finish_turn(db, turn_id, status, *, expected_status="running", **fields):
+        fields = research_usage.account(db, turn_id, fields)
         allowed = {"provider", "model", "input_tokens", "output_tokens", "cached_tokens",
                    "cost_usd", "latency_ms", "detail", "route_tier", "route_reason",
                    "approval_request_id", "approval_tool_id", "approval_args",
