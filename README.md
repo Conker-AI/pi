@@ -187,6 +187,10 @@ and walking the catalogue would be slow and would blame the models.
 
 ## Not here yet
 
+[Agent profiles](docs/agents.md) now have durable, revisioned configuration and immutable
+history through an admin-only API. Profiles are not yet bound to sessions or dispatched;
+tool and memory selections do not confer authority.
+
 Owner preference configuration and its current enforcement limits are documented in
 [owner-preferences.md](docs/owner-preferences.md). The admin-only API persists validated
 preferences; it does not start a scheduler, grant permissions, or change gateway idle locking.

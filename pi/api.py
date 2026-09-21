@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, owner_preferences, submissions, tasks
+from . import activity, agents, owner_preferences, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -170,6 +170,46 @@ def save_owner_preferences(body: owner_preferences.UpdatePreferences):
     except owner_preferences.RevisionConflict as exc:
         raise HTTPException(409, {"code": "revision_conflict", "message": str(exc),
                                   "current_revision": exc.current_revision}) from exc
+
+
+@app.exception_handler(agents.AgentError)
+async def agent_error(request: Request, exc: agents.AgentError):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+
+
+@app.get("/agents", dependencies=[Depends(require_admin)])
+def list_agents():
+    return agents.list_agents(app.state.store)
+
+
+@app.post("/agents", dependencies=[Depends(require_admin)])
+def create_agent(body: agents.AgentInput):
+    return agents.create(app.state.store, body)
+
+
+@app.get("/agents/{identity}", dependencies=[Depends(require_admin)])
+def get_agent(identity: str):
+    return agents.get(app.state.store, identity)
+
+
+@app.get("/agents/{identity}/versions", dependencies=[Depends(require_admin)])
+def agent_history(identity: str):
+    return agents.history(app.state.store, identity)
+
+
+@app.get("/agents/{identity}/versions/{revision}", dependencies=[Depends(require_admin)])
+def agent_version(identity: str, revision: int):
+    return agents.get(app.state.store, identity, revision)
+
+
+@app.post("/agents/{identity}/update", dependencies=[Depends(require_admin)])
+def update_agent(identity: str, body: agents.UpdateAgent):
+    return agents.update(app.state.store, identity, body)
+
+
+@app.post("/agents/{identity}/archive", dependencies=[Depends(require_admin)])
+def archive_agent(identity: str, body: agents.ArchiveAgent):
+    return agents.archive(app.state.store, identity, body)
 
 
 class NewSession(BaseModel):
