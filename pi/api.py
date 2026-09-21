@@ -24,6 +24,7 @@ from .browser_contract import runtime_allowed
 from . import jobs_api, turn_control, turn_queue
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
+from .queue_worker import QueueWorker
 from . import project_sources
 from . import drafts_api
 from . import conversation_search
@@ -195,9 +196,15 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
         scheduler = JobWorker(store, app.state.job_executor)
         scheduler.start()
+    queue_worker = None
+    if os.environ.get("PI_QUEUE_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        queue_worker = QueueWorker(store, app.state.loop)
+        queue_worker.start()
     try:
         yield
     finally:
+        if queue_worker:
+            queue_worker.close()
         if scheduler:
             scheduler.close()
         memory.close()
@@ -688,4 +695,4 @@ def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
         return {**_acted_without_reply(exc), "request_id": body.request_id}
 
 
-app.include_router(turn_queue.router(lambda: app.state.store, require_admin))
+app.include_router(turn_queue.router(lambda: app.state.store, require_admin, lambda: app.state.loop))

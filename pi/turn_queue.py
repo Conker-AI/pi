@@ -61,8 +61,8 @@ def _snapshot(db, sid):
     return _encode({"execution": value, "context": dict(context) if context else None})
 
 
-def _source(db, sid):
-    tasks._source(db, sid, open_required=True)
+def _source(db, sid, *, open_required=True):
+    tasks._source(db, sid, open_required=open_required)
     db.execute("INSERT OR IGNORE INTO conversation_queues(session_id) VALUES(?)", (sid,))
 
 
@@ -105,7 +105,8 @@ def _read(db, sid):
         "entries": [
             _view(row)
             for row in db.execute(
-                "SELECT * FROM queued_turns WHERE session_id=? AND state IN ('waiting','claimed') "
+                "SELECT * FROM queued_turns WHERE session_id=? "
+                "AND state IN ('waiting','claimed','failed') "
                 "ORDER BY created_at,id",
                 (sid,),
             )
@@ -132,7 +133,7 @@ def validate(db, row):
 def read(store, sid):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        _source(db, sid)
+        _source(db, sid, open_required=False)
         for row in db.execute(
             "SELECT * FROM queued_turns WHERE session_id=? AND state='waiting'", (sid,)
         ):
@@ -169,7 +170,7 @@ def enqueue(store, sid, body):
             return _view(prior)
         count = db.execute(
             "SELECT COUNT(*) FROM queued_turns WHERE session_id=? "
-            "AND state IN ('waiting','claimed')",
+            "AND state IN ('waiting','claimed','failed')",
             (sid,),
         ).fetchone()[0]
         if count >= 5:
@@ -192,7 +193,7 @@ def change(store, sid, identity, body, operation):
         db.execute("BEGIN IMMEDIATE")
         _source(db, sid)
         row = _entry(db, sid, identity, body.expected_revision)
-        if row["state"] != "waiting":
+        if row["state"] != "waiting" and not (operation == "remove" and row["state"] == "failed"):
             raise tasks.TaskError("queue_claimed", "This request is no longer editable.")
         payload, snapshot, state = json.loads(row["payload"]), row["snapshot"], row["state"]
         if operation == "edit":
@@ -226,6 +227,10 @@ def pause(store, sid, body, paused):
             raise tasks.TaskError("revision_conflict", "Queue changed; reload before continuing.")
         reason = "owner_paused" if paused else None
         if not paused:
+            if any(entry["state"] == "failed" for entry in current["entries"]):
+                raise tasks.TaskError(
+                    "queued_turn_failed", "Remove failed queued requests before resuming."
+                )
             for row in db.execute(
                 "SELECT * FROM queued_turns WHERE session_id=? AND state='waiting'", (sid,)
             ):
@@ -242,6 +247,103 @@ def pause(store, sid, body, paused):
         return result
 
 
+def submission_identity(identity, revision):
+    return "queue_" + hashlib.sha256(f"{identity}:{revision}".encode()).hexdigest()
+
+
+def admit(db, sid, identity, revision, request_id, text, attachment_ids):
+    """Called inside the submission writer transaction, never a separate claim."""
+    _source(db, sid)
+    row = _entry(db, sid, identity, revision)
+    queue = _read(db, sid)
+    if queue["paused"] or not queue["entries"] or queue["entries"][0]["id"] != identity:
+        raise tasks.TaskError("queue_paused", "Queue is paused or another message is first.")
+    if row["state"] != "waiting":
+        raise tasks.TaskError("queue_claimed", "This queued request has already been claimed.")
+    payload = json.loads(row["payload"])
+    if (
+        request_id != submission_identity(identity, revision)
+        or text != payload["text"]
+        or (attachment_ids or []) != payload["attachment_ids"]
+    ):
+        raise tasks.TaskError("queue_changed", "Execution does not match the queued message.")
+    validate(db, row)
+    db.execute(
+        "UPDATE queued_turns SET state='claimed',submission_id=?,updated_at=? WHERE id=?",
+        (request_id, time.time(), identity),
+    )
+    db.execute("UPDATE conversation_queues SET revision=revision+1 WHERE session_id=?", (sid,))
+
+
+def reconcile(store, sid):
+    """Inspect durable receipts only; never retry a submitted message."""
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        for row in db.execute(
+            "SELECT * FROM queued_turns WHERE session_id=? AND state='claimed'", (sid,)
+        ):
+            receipt = submissions._view(db, submissions._row(db, row["submission_id"]))
+            status = receipt["status"]
+            if status == "complete":
+                db.execute(
+                    "UPDATE queued_turns SET state='done',payload=NULL,snapshot=NULL,"
+                    "updated_at=? WHERE id=?",
+                    (time.time(), row["id"]),
+                )
+                db.execute(
+                    "UPDATE conversation_queues SET revision=revision+1 WHERE session_id=?", (sid,)
+                )
+                if receipt["effective_session_id"] != sid:
+                    _pause(db, sid, "conversation_forked")
+            elif (
+                status
+                in {
+                    "failed",
+                    "cancelled",
+                    "preparation_failed",
+                    "preparation_interrupted",
+                    "interrupted",
+                }
+                and not receipt["acted"]
+            ):
+                db.execute(
+                    "UPDATE queued_turns SET state='failed',updated_at=? WHERE id=?",
+                    (time.time(), row["id"]),
+                )
+                _pause(db, sid, "queued_turn_failed")
+            elif status not in {"running", "preparing"}:
+                _pause(db, sid, "turn_needs_review")
+        db.commit()
+
+
+def run_next(store, loop, sid):
+    reconcile(store, sid)
+    value = read(store, sid)
+    if value["paused"] or not value["entries"]:
+        return value
+    entry = value["entries"][0]
+    if entry["state"] != "waiting":
+        return value
+    try:
+        loop.run_turn(
+            sid,
+            entry["payload"]["text"],
+            request_id=submission_identity(entry["id"], entry["revision"]),
+            attachment_ids=entry["payload"]["attachment_ids"],
+            queued_entry=(entry["id"], entry["revision"]),
+        )
+    except (tasks.TaskError, agents.AgentError, attachments.AttachmentError) as exc:
+        # A busy ordinary turn is expected; wait without cancelling or steering it.
+        if exc.detail["code"] != "session_busy":
+            with store._connect() as db:
+                _pause(db, sid, exc.detail["code"])
+    except Exception:
+        with store._connect() as db:
+            _pause(db, sid, "queued_turn_failed")
+    reconcile(store, sid)
+    return read(store, sid)
+
+
 def redact(db, sessions):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='queued_turns'").fetchone():
         return
@@ -256,7 +358,7 @@ def redact(db, sessions):
         )
 
 
-def router(get_store, owner):
+def router(get_store, owner, get_loop=None):
     api = APIRouter(dependencies=[Depends(owner)])
 
     @api.get("/sessions/{sid}/queue")
@@ -286,5 +388,11 @@ def router(get_store, owner):
     @api.post("/sessions/{sid}/queue/resume")
     def resume(sid: str, body: QueueRevision):
         return pause(get_store(), sid, body, False)
+
+    if get_loop is not None:
+
+        @api.post("/sessions/{sid}/queue/run-next")
+        def next_entry(sid: str):
+            return run_next(get_store(), get_loop(), sid)
 
     return api

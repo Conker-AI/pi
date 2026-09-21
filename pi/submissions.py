@@ -204,7 +204,7 @@ def _task(db, task_id, revision, session_id):
                               "Restore and reopen the task before submitting work.")
 
 
-def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None):
+def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None, queued_entry=None):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError("invalid_request",
                               "Provide a valid submission request identity.", 422)
@@ -228,6 +228,11 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
         prior = db.execute("SELECT * FROM turn_submissions WHERE request_id=?",
                            (request_id,)).fetchone()
         if prior:
+            if queued_entry is not None:
+                from . import turn_queue
+                queued = turn_queue._entry(db, session_id, *queued_entry)
+                if queued["submission_id"] != request_id:
+                    raise SubmissionError("request_conflict", "Queue request identity was already used.")
             if prior["payload_hash"] != digest:
                 raise SubmissionError("request_conflict",
                                       "This submission identity was already used.")
@@ -239,6 +244,9 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
             (session_id,),
         ).fetchone():
             raise SubmissionError("session_busy", "This conversation already has work in progress.")
+        if queued_entry is not None:
+            from . import turn_queue
+            turn_queue.admit(db, session_id, *queued_entry, request_id, text, attachment_ids)
         head = db.execute("SELECT COALESCE(MAX(seq),0) FROM messages WHERE session_id=?",
                           (session_id,)).fetchone()[0]
         now = time.time()

@@ -479,7 +479,7 @@ class Loop:
     def run_turn(self, session_id: str, user_text: str, context: dict | None = None, *,
                  request_id: str | None = None, task_id: str | None = None,
                  task_expected_revision: int | None = None, draft_revision: int | None = None,
-                 attachment_ids: list[str] | None = None) -> dict:
+                 attachment_ids: list[str] | None = None, queued_entry=None) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
         The session id may change: if history has outgrown the window the turn
@@ -500,7 +500,8 @@ class Loop:
             receipt, created = submissions.reserve(self.store, identity, session_id, user_text,
                                                    context or {}, task_id, task_expected_revision,
                                                    **({"draft_revision": draft_revision} if draft_revision is not None else {}),
-                                                   **({"attachment_ids": attachment_ids} if attachment_ids else {}))
+                                                   **({"attachment_ids": attachment_ids} if attachment_ids else {}),
+                                                   **({"queued_entry": queued_entry} if queued_entry else {}))
         except tasks.TaskError as exc:
             if explicit:
                 raise

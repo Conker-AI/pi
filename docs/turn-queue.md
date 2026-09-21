@@ -19,9 +19,23 @@ rechecked; deleting an unused upload can pause its queued entry, retaining text.
 No credentials are supplied through these endpoints. Session forgetting scrubs
 queued text, configuration snapshots and original payload hashes.
 
-This commit provides durable lifecycle controls only. Queue execution/worker,
-atomic handoff into submission reservation, restart reconciliation and automatic
-draining are still pending. Pause/resume does not yet dispatch. Additional
-frontend fields (per-entry model override, reply target and research controls)
-need the corresponding execution contracts; they are not silently accepted or
-ignored. Final browser wiring is deferred to owner review.
+Queue execution uses `POST /sessions/{id}/queue/run-next` (owner-only), or the
+backend worker enabled with `PI_QUEUE_ENABLED=1`. The worker is disabled by
+default until explicitly configured. A tick processes at most one entry per
+selected conversation; subsequent ticks drain successful turns in FIFO order.
+Admission into the ordinary submission ledger atomically checks queue position,
+pause state, revision, payload, file availability and frozen settings. The durable
+submission ID derives from the queue identity and revision. Provider calls happen
+outside transactions and only the caller that reserves the submission executes.
+
+Busy ordinary turns are waited for. Approval/budget/unknown-effect holds pause
+following messages. Failed/stopped entries remain visible and must be removed
+before resuming; intentional retries use a new enqueue identity. Startup marks
+interrupted submissions before worker start; reconciliation inspects receipts and
+never automatically reruns submitted work. Completion surviving a lost response
+retires its queue entry without another provider call. Pause affects future
+admission; use Stop to cancel the currently executing turn.
+
+Additional frontend fields (per-entry model override, reply target and research
+controls) need the corresponding execution contracts; they are not silently
+accepted or ignored. Final browser wiring remains deferred to owner review.
