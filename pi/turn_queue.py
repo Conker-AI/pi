@@ -30,6 +30,7 @@ class Enqueue(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=5)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
+    reply_to: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class Edit(BaseModel):
@@ -44,6 +45,7 @@ class Revision(BaseModel):
 
 
 class Review(Revision):
+    reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
@@ -75,6 +77,7 @@ def _files(db, sid, payload, snapshot):
     session_settings.validate_answer_model(
         json.loads(snapshot)["execution"], payload.get("model_id")
     )
+    session_settings.validate_reply(db, sid, payload.get("reply_to"))
     ids = payload["attachment_ids"]
     if len(ids) != len(set(ids)):
         raise tasks.TaskError("invalid_attachments", "Select distinct attachments.", 422)
@@ -167,6 +170,8 @@ def enqueue(store, sid, body):
     payload = {"text": body.text, "attachment_ids": body.attachment_ids}
     if body.model_id is not None:
         payload["model_id"] = body.model_id
+    if body.reply_to is not None:
+        payload["reply_to"] = body.reply_to
     digest = hashlib.sha256(_encode(payload).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -211,6 +216,8 @@ def change(store, sid, identity, body, operation):
                 raise tasks.TaskError("empty_message", "Write a message.", 422)
             payload["text"] = body.text
         elif operation == "review":
+            if "reply_to" in body.model_fields_set:
+                payload["reply_to"] = body.reply_to
             if "model_id" in body.model_fields_set:
                 payload["model_id"] = body.model_id
             snapshot = _snapshot(db, sid)
@@ -263,7 +270,9 @@ def submission_identity(identity, revision):
     return "queue_" + hashlib.sha256(f"{identity}:{revision}".encode()).hexdigest()
 
 
-def admit(db, sid, identity, revision, request_id, text, attachment_ids, model_id=None):
+def admit(
+    db, sid, identity, revision, request_id, text, attachment_ids, model_id=None, reply_to=None
+):
     """Called inside the submission writer transaction, never a separate claim."""
     _source(db, sid)
     row = _entry(db, sid, identity, revision)
@@ -278,6 +287,7 @@ def admit(db, sid, identity, revision, request_id, text, attachment_ids, model_i
         or text != payload["text"]
         or (attachment_ids or []) != payload["attachment_ids"]
         or model_id != payload.get("model_id")
+        or reply_to != payload.get("reply_to")
     ):
         raise tasks.TaskError("queue_changed", "Execution does not match the queued message.")
     validate(db, row)
@@ -344,6 +354,7 @@ def run_next(store, loop, sid):
             request_id=submission_identity(entry["id"], entry["revision"]),
             attachment_ids=entry["payload"]["attachment_ids"],
             model_id=entry["payload"].get("model_id"),
+            reply_to=entry["payload"].get("reply_to"),
             queued_entry=(entry["id"], entry["revision"]),
         )
     except (tasks.TaskError, agents.AgentError, attachments.AttachmentError) as exc:

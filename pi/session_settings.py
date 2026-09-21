@@ -146,10 +146,27 @@ def validate_answer_model(snapshot, model_id):
         raise agents.AgentError("model_unavailable", "Choose an enabled, eligible answer model.", 422)
 
 
-def reserve(db, request_id, identity, model_id=None):
+def validate_reply(db, identity, reply_to):
+    if reply_to is None:
+        return
+    row = db.execute("SELECT id FROM messages WHERE id=? AND role IN ('user','assistant') "
+        "AND session_id NOT IN (SELECT session_id FROM forgotten_sessions) "
+        "AND (session_id=? OR id IN (SELECT message_id FROM context_inherited_messages "
+        "WHERE session_id=?))", (reply_to, identity, identity)).fetchone()
+    if not row:
+        raise agents.AgentError("reply_unavailable", "Choose an available message in this conversation.", 422)
+    policy = db.execute("SELECT policy FROM context_policies WHERE session_id=?", (identity,)).fetchone()
+    if policy and json.loads(policy[0])["messagePolicies"].get(reply_to) == "exclude":
+        raise agents.AgentError("reply_excluded", "Include this message in context before replying.", 422)
+
+
+def reserve(db, request_id, identity, model_id=None, reply_to=None):
     from . import project_context
     snapshot = _snapshot(db, identity)
     validate_answer_model(snapshot, model_id)
+    validate_reply(db, identity, reply_to)
+    if reply_to is not None:
+        snapshot["replyToMessageId"] = reply_to
     if model_id is not None:
         snapshot["answerModelId"] = model_id
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))

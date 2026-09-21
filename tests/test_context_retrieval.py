@@ -332,3 +332,15 @@ def test_owner_stop_discards_late_selection_and_never_dispatches_answer(store):
     receipt = r.read(store, sid, request_id="selection_cancel_001")
     assert receipt["state"] == "interrupted" and not receipt["selectedIds"]
     assert len(store.messages(sid)) == 1
+
+
+def test_reply_to_unselected_retrieval_candidate_requires_context_review(store):
+    sid = store.create_session()
+    target = store.append_message(sid, "assistant", "Candidate answer")
+    policy(store, sid, {target["id"]: "retrieve"})
+    provider = Provider([])
+    with pytest.raises(c.ContextError, match="reply target"):
+        loop(store, provider).run_turn(sid, "Explain this", request_id="reply_retrieval_001",
+                                      reply_to=target["id"])
+    assert [call[0] for call in provider.calls] == ["selector"]
+    assert len(store.messages(sid)) == 1

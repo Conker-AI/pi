@@ -224,6 +224,12 @@ def _message(row: sqlite3.Row) -> dict:
 
 def _message_with_attachments(db, row):
     item = _message(row)
+    if item.get("content_status") != "forgotten":
+        binding = db.execute("SELECT s.snapshot FROM turn_messages tm JOIN turn_settings s "
+                             "ON s.turn_id=tm.turn_id WHERE tm.message_id=? AND tm.purpose='input'",
+                             (item["id"],)).fetchone()
+        if binding and (target := json.loads(binding[0]).get("replyToMessageId")):
+            item["reply_to"] = target
     files = attachments.message_views(db, item["id"], session_settings.source_privacy)
     if files:
         item["attachments"] = files

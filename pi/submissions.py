@@ -204,7 +204,7 @@ def _task(db, task_id, revision, session_id):
                               "Restore and reopen the task before submitting work.")
 
 
-def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None, queued_entry=None, model_id=None):
+def reserve(store, request_id, session_id, text, context, task_id=None, task_revision=None, draft_revision=None, attachment_ids=None, queued_entry=None, model_id=None, reply_to=None):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError("invalid_request",
                               "Provide a valid submission request identity.", 422)
@@ -220,6 +220,8 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
     }
     if model_id is not None:
         payload["model_id"] = model_id
+    if reply_to is not None:
+        payload["reply_to"] = reply_to
     if draft_revision is not None:
         payload["draft_revision"] = draft_revision
     if attachment_ids:
@@ -248,7 +250,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
             raise SubmissionError("session_busy", "This conversation already has work in progress.")
         if queued_entry is not None:
             from . import turn_queue
-            turn_queue.admit(db, session_id, *queued_entry, request_id, text, attachment_ids, model_id)
+            turn_queue.admit(db, session_id, *queued_entry, request_id, text, attachment_ids, model_id, reply_to)
         head = db.execute("SELECT COALESCE(MAX(seq),0) FROM messages WHERE session_id=?",
                           (session_id,)).fetchone()[0]
         now = time.time()
@@ -256,7 +258,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "task_expected_revision,state,payload_hash,pending_text,history_seq,"
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
-        session_settings.reserve(db, request_id, session_id, model_id)
+        session_settings.reserve(db, request_id, session_id, model_id, reply_to)
         context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:
             from . import attachment_turns, attachments

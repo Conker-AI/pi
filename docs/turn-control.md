@@ -49,3 +49,15 @@ roll back admission; failures do not fall back to a different model. Helpers ret
 their independently assigned roles. Call/team model controls remain separate.
 This selection also applies to reply-only recovery of that turn. Selecting another
 model for an existing response requires the still-pending per-message retry flow.
+
+## Reply targets
+
+Ordinary turn and queue creation accept optional reply_to, an existing user or
+assistant message in the conversation (including explicitly inherited context).
+Foreign, forgotten and excluded messages are rejected. The ID is part of the
+request identity and frozen snapshot; input-message reads expose reply_to. Model
+context marks the selected message as the reply target without elevating its
+contents to instructions or grants. The target must survive the explicit context
+selection; a retrieval helper omitting it stops the request for context review.
+Automatic summarization cannot silently discard it. Queue review can explicitly
+change or clear the target; Resume alone cannot do so.
