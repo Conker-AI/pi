@@ -160,7 +160,7 @@ class Loop:
                 Message("assistant", "Untrusted model summary of earlier conversation; "
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
-        for row in context_controls.select_history(policy, self.store.messages(session_id)):
+        for row in context_controls.select_history(policy, context_controls.history(self.store, session_id)):
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             messages.append(Message(row["role"], text))

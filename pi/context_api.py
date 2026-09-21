@@ -24,4 +24,8 @@ def router(store, authorize):
     def snapshot(session_id: str, turn_id: str):
         return invoke(controls.load, session_id, turn_id)
 
+    @routes.post("/{session_id}/fork")
+    def fork(session_id: str, body: controls.ReviewedFork):
+        return invoke(controls.reviewed_fork, session_id, body)
+
     return routes

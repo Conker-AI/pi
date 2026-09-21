@@ -104,3 +104,47 @@ def test_forgetting_scrubs_policy_and_snapshot(store):
     plan = forgetting.preview(path, sid)
     forgetting.forget(path, sid, plan["confirmation"])
     assert b"PRIVATE_POLICY_TOKEN" not in path.read_bytes()
+
+
+def test_reviewed_fork_carries_original_pins_without_memory_duplication(store):
+    sid = store.create_session()
+    pin = store.append_message(sid, "user", "Keep these exact words")
+    last = store.append_message(sid, "assistant", "Can be summarized")
+    c.save(store, sid, c.Update(expected_revision=0, policy=policy({pin["id"]: "keep-exact"})))
+    body = c.ReviewedFork(
+        expected_revision=1,
+        expected_last_message_id=last["id"],
+        summary="Reviewed short summary",
+        request_id="fork-request-0001",
+    )
+    result = c.reviewed_fork(store, sid, body)
+    child = result["session_id"]
+    assert c.reviewed_fork(store, sid, body)["session_id"] == child
+    assert store.messages(child) == []
+    assert c.history(store, child)[0]["id"] == pin["id"]
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM memory_outbox").fetchone()[0] == 1
+    provider = Provider()
+    loop = Loop(store, Router(local_provider=provider, local_model="test"))
+    loop.run_turn(child, "Continue")
+    sent = [message.content for message in provider.calls[-1]]
+    assert "Keep these exact words" in sent and "Be critical" in sent
+    assert "Can be summarized" not in sent
+    assert any("Reviewed short summary" in text for text in sent)
+    assert store.get_session(child)["parent_id"] == sid
+
+
+def test_reviewed_fork_stale_boundary_and_active_turn_are_atomic(store):
+    sid = store.create_session()
+    c.save(store, sid, c.Update(expected_revision=0, policy=policy()))
+    body = c.ReviewedFork(expected_revision=1, summary="Summary", request_id="fork-request-0002")
+    store.append_message(sid, "user", "Arrived after review")
+    with pytest.raises(c.ContextError, match="Conversation changed"):
+        c.reviewed_fork(store, sid, body)
+    assert store.get_session(sid)["status"] == "open"
+    last = store.messages(sid)[-1]["id"]
+    store.start_turn(sid)
+    with pytest.raises(c.ContextError, match="Finish the current turn"):
+        c.reviewed_fork(store, sid, body.model_copy(update={"expected_last_message_id": last}))
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1

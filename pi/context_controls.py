@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import time
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -45,7 +48,24 @@ class Update(Strict):
     policy: Policy
 
 
+class ReviewedFork(Strict):
+    expected_revision: int = Field(ge=1)
+    expected_last_message_id: str | None = Field(default=None, max_length=200)
+    summary: str = Field(max_length=16000)
+    request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS context_inherited_messages (
+ session_id TEXT NOT NULL REFERENCES sessions(id),
+ message_id TEXT NOT NULL REFERENCES messages(id), position INTEGER NOT NULL,
+ PRIMARY KEY(session_id,message_id)
+);
+CREATE TABLE IF NOT EXISTS context_fork_requests (
+ request_id TEXT PRIMARY KEY, source_session TEXT NOT NULL REFERENCES sessions(id),
+ child_session TEXT NOT NULL REFERENCES sessions(id), payload_hash TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS context_policies (
  session_id TEXT PRIMARY KEY REFERENCES sessions(id), revision INTEGER NOT NULL,
  policy TEXT NOT NULL
@@ -116,7 +136,11 @@ def save(store, identity, body: Update):
             message = db.execute(
                 "SELECT session_id FROM messages WHERE id=?", (message_id,)
             ).fetchone()
-            if message is None or message[0] != identity:
+            inherited = db.execute(
+                "SELECT 1 FROM context_inherited_messages WHERE session_id=? AND message_id=?",
+                (identity, message_id),
+            ).fetchone()
+            if message is None or (message[0] != identity and not inherited):
                 raise ContextError(
                     "outside_boundary", "Message does not belong to this conversation.", 422
                 )
@@ -187,3 +211,104 @@ def redact(db, session_ids):
         "CREATE TRIGGER turn_context_policy_no_update BEFORE UPDATE ON turn_context_policies "
         "BEGIN SELECT RAISE(ABORT,'turn context policy is immutable'); END;"
     )
+
+
+def history(store, identity):
+    """Resolve inherited exact pins by original identity, never transcript copies."""
+    with store._connect() as db:
+        inherited = db.execute(
+            "SELECT message_id FROM context_inherited_messages "
+            "WHERE session_id=? ORDER BY position",
+            (identity,),
+        ).fetchall()
+    rows = []
+    for item in inherited:
+        row = store.get_message(item[0])
+        if row is None or row.get("content_status") == "forgotten":
+            raise ContextError("unavailable_pin", "An inherited source was forgotten.")
+        rows.append(row)
+    return rows + store.messages(identity)
+
+
+def reviewed_fork(store, identity, body: ReviewedFork):
+    body = ReviewedFork.model_validate(body.model_dump())
+    digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        _session(db, identity)
+        previous = db.execute(
+            "SELECT * FROM context_fork_requests WHERE request_id=?", (body.request_id,)
+        ).fetchone()
+        if previous:
+            if previous["source_session"] != identity or previous["payload_hash"] != digest:
+                raise ContextError("request_conflict", "Fork request identity was reused.")
+            _session(db, previous["child_session"])
+            return {
+                "session_id": previous["child_session"],
+                "parent_id": identity,
+                "replayed": True,
+            }
+        parent = db.execute("SELECT * FROM sessions WHERE id=?", (identity,)).fetchone()
+        if parent["status"] != "open":
+            raise ContextError("session_closed", "Fork an open conversation.")
+        pending = db.execute(
+            "SELECT 1 FROM turns WHERE session_id=? AND status NOT IN "
+            "('complete','failed','interrupted') LIMIT 1",
+            (identity,),
+        ).fetchone()
+        if pending:
+            raise ContextError("turn_pending", "Finish the current turn before reviewing a fork.")
+        last = db.execute(
+            "SELECT id FROM messages WHERE session_id=? ORDER BY seq DESC LIMIT 1", (identity,)
+        ).fetchone()
+        if (last[0] if last else None) != body.expected_last_message_id:
+            raise ContextError("boundary_changed", "Conversation changed after the fork review.")
+        current = db.execute(
+            "SELECT * FROM context_policies WHERE session_id=?", (identity,)
+        ).fetchone()
+        if current is None or current["revision"] != body.expected_revision:
+            raise ContextError("revision_conflict", "Context changed after the fork review.")
+        policy = Policy.model_validate_json(current["policy"])
+        pins = [key for key, value in policy.messagePolicies.items() if value == "keep-exact"]
+        if "retrieve" in policy.messagePolicies.values():
+            raise ContextError("retrieval_pending", "Resolve retrieval before approving a summary.")
+        pin_chars = 0
+        for message_id in pins:
+            row = db.execute(
+                "SELECT m.content FROM messages m LEFT JOIN forgotten_sessions f "
+                "ON f.session_id=m.session_id WHERE m.id=? AND f.session_id IS NULL",
+                (message_id,),
+            ).fetchone()
+            if row is None:
+                raise ContextError("unavailable_pin", "Exact source unavailable.")
+            pin_chars += estimate(str(json.loads(row[0])))
+        cost = pin_chars + estimate(policy.sessionInstructions) + estimate(body.summary)
+        if (
+            cost + policy.budget.otherInputTokens + policy.budget.outputReserveTokens
+            > policy.budget.contextWindowTokens
+        ):
+            raise ContextError(
+                "budget_overflow", "Pins, instructions and summary exceed the estimated budget."
+            )
+        child, now = "ses_" + uuid.uuid4().hex[:16], time.time()
+        db.execute(
+            "INSERT INTO sessions(id,parent_id,title,status,created_at,summary) "
+            "VALUES (?,?,?,'open',?,?)",
+            (child, identity, parent["title"], now, body.summary),
+        )
+        carried = policy.model_copy(update={"messagePolicies": {key: "keep-exact" for key in pins}})
+        db.execute(
+            "INSERT INTO context_policies VALUES (?,1,?)", (child, carried.model_dump_json())
+        )
+        for position, message_id in enumerate(pins):
+            db.execute(
+                "INSERT INTO context_inherited_messages VALUES (?,?,?)",
+                (child, message_id, position),
+            )
+        db.execute("UPDATE sessions SET status='forked',closed_at=? WHERE id=?", (now, identity))
+        db.execute(
+            "INSERT INTO context_fork_requests VALUES (?,?,?,?)",
+            (body.request_id, identity, child, digest),
+        )
+        db.commit()
+    return {"session_id": child, "parent_id": identity, "replayed": False}
