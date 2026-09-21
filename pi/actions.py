@@ -15,12 +15,20 @@ CREATE INDEX IF NOT EXISTS tool_actions_turn ON tool_actions(turn_id);
 """
 
 
-def prepare(store, turn_id, tool_id, args, action_id, job_id=None):
+def prepare(store, turn_id, tool_id, args, action_id, job_id=None, *, proposal=None):
+    from . import turn_steering
     with store._connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        turn_steering.guard_db(db, turn_id)
+        if proposal is not None:
+            turn = db.execute('SELECT session_id FROM turns WHERE id=?', (turn_id,)).fetchone()
+            submissions.append(db, turn[0], 'assistant', proposal,
+                               turn_id=turn_id, purpose='intermediate')
         db.execute(
             "INSERT INTO tool_actions VALUES(?,?,?,?,?,'dispatching',?)",
             (action_id, turn_id, tool_id, json.dumps(args), job_id, time.time()),
         )
+        db.commit()
     return latest(store, turn_id)
 
 

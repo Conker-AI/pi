@@ -36,6 +36,7 @@ from . import (
     tasks,
     turn_control,
     turn_context,
+    turn_steering,
 )
 from . import tools as tool_protocol
 from .memory import Memory
@@ -118,6 +119,18 @@ class Loop:
             return []
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
+        if role == 'answer':
+            turn_steering.guard(self.store, execution)
+        result = self._call_once(messages, ctx, execution, role)
+        if role == 'answer':
+            try:
+                turn_steering.guard(self.store, execution)
+            except turn_steering.Pending:
+                turn_steering.discarded(self.store, execution['turnExecutionId'], result[1])
+                raise
+        return result
+
+    def _call_once(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
         """Route, then call, falling through models that refuse to serve us.
 
         The loop never picks a model itself - it walks the order the router
@@ -226,8 +239,8 @@ class Loop:
             )
         messages.extend(calls.context_messages(self.store, execution))
         prefix_messages = list(messages)
-        selected_history = context_controls.select_history(
-            policy, context_controls.history(self.store, session_id), retrieved_ids)
+        known_history = context_controls.history(self.store, session_id)
+        selected_history = context_controls.select_history(policy, known_history, retrieved_ids)
         reply_to = execution.get("replyToMessageId")
         if reply_to and not any(row["id"] == reply_to for row in selected_history):
             raise context_controls.ContextError("reply_excluded",
@@ -249,6 +262,8 @@ class Loop:
         context_controls.check_budget(policy, messages)
         if turn_id:
             turn_context.capture(self.store, turn_id, selected_history, prefix_messages, reply_to)
+            turn_steering.consume(self.store, turn_id, [row['id'] for row in selected_history],
+                                  {row['id'] for row in known_history})
         return messages
 
     def _history_size(self, messages: list[Message]) -> int:
@@ -478,6 +493,14 @@ class Loop:
         """A stop racing final persistence must leave a truthful terminal turn."""
         try:
             return self.store.complete_turn(turn_id, text, **fields)
+        except turn_steering.Pending:
+            from .providers import Completion
+            turn_steering.discarded(self.store, turn_id, Completion(
+                text='', model=fields.get('model', 'unknown'),
+                provider=fields.get('provider', 'unknown'),
+                **{key: fields.get(key) for key in
+                   ('input_tokens', 'output_tokens', 'cached_tokens', 'cost_usd')}))
+            raise
         except ProviderUnavailable as exc:
             acted = bool((self.store.get_turn(turn_id) or {}).get("acted"))
             self.store.finish_turn(turn_id, "acted_no_reply" if acted else "failed",
@@ -578,17 +601,33 @@ class Loop:
         return result
 
     def _run_bound(self, session_id, user_text, turn_id, context, forked_from):
+        turn_steering.active(self.store, turn_id, True)
+        continued = False
+        started = time.monotonic()
+        try:
+            while True:
+                try:
+                    return self._run_bound_attempt(session_id, user_text, turn_id, context,
+                                                   forked_from, continued, started)
+                except turn_steering.Pending:
+                    continued = True
+        finally:
+            turn_steering.active(self.store, turn_id, False)
+
+    def _run_bound_attempt(self, session_id, user_text, turn_id, context, forked_from,
+                           continued=False, started=None):
         execution = session_settings.execution(self.store, session_id, turn_id)
         turn_control.guard(self.store, execution)
-        self.memory.prepare(turn_id, user_text)
+        if not continued:
+            self.memory.prepare(turn_id, user_text)
         # Held for the whole turn: if this parks on an approval, the owner needs
         # to see what they asked for next to what it produced.
         intent = user_text
-        started = time.monotonic()
+        started = time.monotonic() if started is None else started
 
         available = self._available_tools(execution)
         allowed = {t.id for t in available}
-        acted = False
+        acted = bool(self.store.get_turn(turn_id)['acted'])
         context = dict(context or {})
         context.setdefault("needs_tools", bool(available))
         history = self._history(session_id, tools=available, turn_id=turn_id)
@@ -599,16 +638,19 @@ class Loop:
 
             # Act, then think again, up to a ceiling. Every action goes through
             # ToolGate; Pi runs nothing itself.
-            for _ in range(self.max_tool_steps):
+            with self.store._connect() as db:
+                used = db.execute('SELECT COUNT(*) FROM tool_actions WHERE turn_id=?', (turn_id,)).fetchone()[0]
+            for _ in range(max(0, self.max_tool_steps - used)):
                 call = tool_protocol.parse(completion.text, allowed)
                 if call is None:
                     break
-                self.store.append_message(session_id, "assistant", completion.text,
-                                          turn_id=turn_id, purpose="intermediate")
-
                 ran = False
-                action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
-                                         ToolGateClient.new_action_id())
+                try:
+                    action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
+                                             ToolGateClient.new_action_id(), proposal=completion.text)
+                except turn_steering.Pending:
+                    turn_steering.discarded(self.store, turn_id, completion)
+                    raise
                 try:
                     turn_control.guard(self.store, execution)
                     outcome = self.toolgate.invoke(call.tool_id, call.args,

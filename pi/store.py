@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import turn_control, turn_queue, message_forks, turn_context, response_versions, response_retries
+from . import turn_control, turn_queue, message_forks, turn_context, response_versions, response_retries, turn_steering
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
@@ -274,6 +274,7 @@ class Store:
                 db.executescript(turn_context.SCHEMA)
                 db.executescript(response_versions.SCHEMA)
                 db.executescript(response_retries.SCHEMA)
+                db.executescript(turn_steering.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)
@@ -453,6 +454,7 @@ class Store:
                                   (turn_id,)).fetchone()
             calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
             turn_control.guard_db(db, turn_id, reply_request_id)
+            turn_steering.guard_db(db, turn_id)
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
             from . import attachment_passages
@@ -460,6 +462,7 @@ class Store:
             evidence = message_citations.save(db, message["id"], citations)
             if evidence:
                 message["citations"] = evidence
+            fields = turn_steering.account(db, turn_id, fields)
             if not self._finish_turn(db, turn_id, "complete", **fields):
                 raise RuntimeError("Turn is no longer claimed by this caller")
             retry = db.execute("SELECT source_message_id FROM response_retries WHERE turn_id=?", (turn_id,)).fetchone()
