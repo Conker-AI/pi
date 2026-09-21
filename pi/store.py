@@ -34,6 +34,7 @@ from . import model_evaluations
 from . import context_retrieval
 from . import project_context
 from . import team_execution
+from . import memory_proposals
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -244,6 +245,7 @@ class Store:
                 db.executescript(FORGETTING_SCHEMA)
                 db.executescript(session_settings.SCHEMA)
                 db.executescript(memory_store.SCHEMA)
+                db.executescript(memory_proposals.SCHEMA)
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)

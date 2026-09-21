@@ -31,6 +31,7 @@ from . import attachments_api
 from . import model_evaluations, model_evaluations_api
 from . import context_retrieval
 from . import team_execution, team_execution_api
+from . import memory_corrections, memory_proposals, memory_proposals_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI):
     model_evaluations.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
+    memory_proposals.recover_interrupted(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give
@@ -119,6 +121,17 @@ async def lifespan(app: FastAPI):
         os.environ.get("PI_MEMORYGATE_AGENT_ID", "default"),
         timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)) if memory_url else None)
     app.state.memory = memory
+    correction_values = [os.environ.get(name, '').strip() for name in (
+        'PI_MEMORY_CORRECTION_URL', 'PI_MEMORY_CORRECTION_KEY', 'PI_MEMORY_CORRECTION_AGENT_ID')]
+    try:
+        if any(correction_values) and not all(correction_values):
+            raise ValueError('Configure correction URL, key and namespace together.')
+        correction = memory_corrections.Client(*correction_values) if all(correction_values) else None
+    except ValueError:
+        memory.close()
+        store.close()
+        raise RuntimeError('Set valid PI_MEMORY_CORRECTION_URL, KEY and AGENT_ID together.') from None
+    app.state.memory_corrections = correction
     memory.start()
     app.state.admin_key = admin_key
     app.state.gateway_key_hash = runtime_hash
@@ -140,6 +153,8 @@ async def lifespan(app: FastAPI):
     scheduler = None
     if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
         if app.state.job_executor is None:
+            if correction:
+                correction.close()
             memory.close()
             store.close()
             raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
@@ -151,6 +166,8 @@ async def lifespan(app: FastAPI):
         if scheduler:
             scheduler.close()
         memory.close()
+        if correction:
+            correction.close()
         store.close()
 
 
@@ -186,6 +203,8 @@ app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
+app.include_router(memory_proposals_api.router(lambda: app.state.store,
+    lambda: getattr(app.state, 'memory_corrections', None), require_admin))
 app.include_router(team_execution_api.create_router(
     lambda: app.state.store, lambda: app.state.loop, require_admin))
 app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
