@@ -190,6 +190,7 @@ def dispatch(
                 json.dumps(
                     {
                         "allowedModelIds": list(eligible),
+                        "modelDescriptions": {key: model.name for key, model in eligible.items()},
                         "task": [{"role": m.role, "content": m.content} for m in messages],
                     },
                     ensure_ascii=False,

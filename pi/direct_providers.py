@@ -148,7 +148,8 @@ class AnthropicProvider(_DirectProvider):
 def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dict:
     """Pure factory: never loads .env, contacts providers, or reads UI key drafts."""
     allowed = environment.get("PI_ALLOW_PAID_MODELS", "").strip() in {"1", "true", "yes"}
-    return {adapter.name: adapter(environment[key], allow_paid=allowed, timeout=timeout)
+    from .decision_provider import configured as decision_providers
+    return {**decision_providers(environment), **{adapter.name: adapter(environment[key], allow_paid=allowed, timeout=timeout)
             for key, adapter in (("PI_OPENAI_KEY", OpenAIProvider),
                                  ("PI_ANTHROPIC_KEY", AnthropicProvider))
-            if environment.get(key, "").strip()}
+            if environment.get(key, "").strip()}}
