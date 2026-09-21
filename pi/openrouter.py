@@ -158,6 +158,9 @@ class OpenRouterProvider:
         return info
 
     def complete(self, messages: list[Message], *, model: str) -> Completion:
+        return self.complete_bounded(messages, model=model, timeout=self.timeout)
+
+    def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
         self._guard_cost(model)
         payload = {
             "model": model,
@@ -165,7 +168,7 @@ class OpenRouterProvider:
         }
         try:
             response = httpx.post(CHAT_URL, json=payload, headers=self._headers(),
-                                  timeout=self.timeout)
+                                  timeout=timeout)
         except Exception as exc:
             raise ProviderUnavailable(type(exc).__name__) from exc
 

@@ -88,13 +88,16 @@ class OllamaProvider:
         self.model = model
 
     def complete(self, messages: list[Message], *, model: str) -> Completion:
+        return self.complete_bounded(messages, model=model, timeout=self.timeout)
+
+    def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": False,
         }
         try:
-            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
+            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=timeout)
             response.raise_for_status()
             body = response.json()
         except Exception as exc:
