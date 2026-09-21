@@ -187,6 +187,10 @@ and walking the catalogue would be slow and would blame the models.
 
 ## Not here yet
 
+[Templates and team preparations](docs/collaboration.md) are durable, versioned
+configuration with bounded role selections and budgets. Publishing and preparing
+do not dispatch work or grant authority; live team execution remains separate.
+
 [Agent profiles](docs/agents.md) now have durable, revisioned configuration and immutable
 history through an admin-only API. Profiles are not yet bound to sessions or dispatched;
 tool and memory selections do not confer authority.
