@@ -286,7 +286,7 @@ app.include_router(memory_proposals_api.router(lambda: app.state.store,
     lambda: getattr(app.state, 'memory_corrections', None), require_admin))
 app.include_router(team_execution_api.create_router(
     lambda: app.state.store, lambda: app.state.loop, require_admin))
-app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
+app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
 from . import memory_explorer_api

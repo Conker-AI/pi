@@ -40,9 +40,9 @@ def runtime_allowed(method: str, path: str) -> bool:
 # Separate owner-control credential; these capabilities are never added to the
 # conversation runtime credential. Expand only alongside the corresponding UI.
 OWNER_ROUTES = {
-    "GET": (r"/models/configuration", r"/memory/objects",
+    "GET": (r"/models/configuration", r"/sessions/[A-Za-z0-9_-]+/settings", r"/memory/objects",
             r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+"),
-    "POST": (r"/models/configuration",),
+    "POST": (r"/models/configuration", r"/sessions/[A-Za-z0-9_-]+/settings"),
 }
 
 

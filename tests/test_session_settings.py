@@ -164,8 +164,11 @@ def test_admin_settings_validation_cas_and_source_unavailable(tmp_path, monkeypa
         route, headers = f"/sessions/{sid}/settings", {"X-Pi-Key": "owner_admin_test_key"}
         body = {"expected_revision": 0, "settings": {"agentId": "companion", "privacy": {"memoryDisabled": True, "harnessDisabled": False}}}
         assert client.get(route).status_code == 401
-        assert client.post(route, json=body, headers={"X-Pi-Gateway-Key": "runtime_test_key"}).status_code == 403
-        assert client.post(route, json=body, headers=headers).status_code == 200
+        assert client.post(route, json=body, headers={"X-Pi-Gateway-Key": "runtime_test_key"}).status_code == 401
+        monkeypatch.setattr(api.app.state, "owner_key_hash", hashlib.sha256(b"owner_control_test_key").hexdigest(), raising=False)
+        owner_headers = {"X-Pi-Owner-Key": "owner_control_test_key"}
+        assert client.get(route, headers=owner_headers).json()["revision"] == 0
+        assert client.post(route, json=body, headers=owner_headers).status_code == 200
         assert client.post(route, json=body, headers=headers).status_code == 409
         body["settings"]["privacy"]["memoryDisabled"] = "true"
         assert client.post(route, json=body, headers=headers).status_code == 422

@@ -60,3 +60,12 @@ def test_pi_owner_key_cannot_be_used_as_runtime_or_recovery(monkeypatch):
     assert client.get("/models/configuration", headers={"X-Pi-Gateway-Key": "r" * 32}).status_code == 401
     assert client.get("/agents", headers={"X-Pi-Owner-Key": OWNER}).status_code == 401
     assert client.get("/sessions", headers={"X-Pi-Owner-Key": OWNER}).status_code == 401
+
+
+def test_owner_session_settings_scope_is_exact():
+    for method in ("GET", "POST"):
+        assert owner_allowed(method, "/sessions/ses_test/settings")
+        assert not runtime_allowed(method, "/sessions/ses_test/settings")
+        assert not owner_allowed(method, "/sessions/ses_test/settings/turns/trn_test")
+        assert not owner_allowed(method, "/sessions/ses_test/turns")
+    assert not owner_allowed("DELETE", "/sessions/ses_test/settings")
