@@ -25,6 +25,7 @@ import uuid
 
 from . import (
     actions,
+    calls,
     context_controls,
     context_retrieval,
     memory_store,
@@ -130,7 +131,8 @@ class Loop:
             adapters = team_execution.metered_providers(self.store, execution, adapters)
             result = model_roles.dispatch(configuration, role, messages, adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
-                override=override if role == "answer" else None)
+                override=override if role == "answer" else None,
+                guard=lambda: calls.guard(self.store, execution))
             completion = result["completion"]
             evidence = {"role": role, "modelConfigurationRevision": execution["modelConfigurationRevision"],
                         "modelId": result["modelId"], "attempts": result["attempts"]}
@@ -148,16 +150,22 @@ class Loop:
             if route.unavailable_reason:
                 skipped.append(route.unavailable_reason)
             provider = self.router.provider_for(route)
+            calls.guard(self.store, execution)
             try:
-                return route, provider.complete(messages, model=route.model), skipped
+                completion = provider.complete(messages, model=route.model)
             except ModelUnusable as exc:
+                calls.guard(self.store, execution)
                 skipped.append(exc.reason)
                 continue
             except ProviderUnavailable as exc:
+                calls.guard(self.store, execution)
                 # A provider outage or bad key affects all its catalogue models.
                 # Keep the local candidate without repeating the same hosted failure.
                 skipped.append(exc.reason)
                 unavailable_providers.add(route.provider)
+                continue
+            calls.guard(self.store, execution)
+            return route, completion, skipped
         raise ProviderUnavailable(
             "; ".join(skipped) if skipped else "no candidate model could be reached"
         )
@@ -213,6 +221,7 @@ class Loop:
                 Message("assistant", "Untrusted model summary of earlier conversation; "
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
+        messages.extend(calls.context_messages(self.store, execution))
         for row in context_controls.select_history(
             policy, context_controls.history(self.store, session_id), retrieved_ids
         ):
@@ -261,6 +270,8 @@ class Loop:
         """Close a session with a summary and open a child seeded by it."""
         history = self._history(session_id)
         execution = session_settings.execution(self.store, session_id)
+        if execution.get("callExecution"):
+            raise TurnFailed("End this call before creating a reviewed conversation fork.")
         if execution["privacy"]["harnessDisabled"]:
             raise TurnFailed("No harness excludes automatic summarization; use a reviewed fork.")
         if context_controls.load(self.store, session_id)["policy"] is not None:
@@ -301,6 +312,7 @@ class Loop:
         if session and session["status"] == "forgotten":
             raise TurnFailed("session is forgotten; this turn cannot resume")
         execution = session_settings.execution(self.store, session_id, turn_id)
+        calls.guard(self.store, execution)
         if not self.store.claim_turn(turn_id, turn["status"]):
             raise TurnFailed("Another caller already resumed this turn", turn_id)
         started = time.monotonic()
@@ -327,12 +339,19 @@ class Loop:
                             self.store.finish_turn(turn_id, turn["status"])
                             raise TurnFailed(str(exc), turn_id) from exc
                         action["job_id"] = job_id
+                    calls.guard(self.store, execution)
                     actions.state(self.store, action["id"], "dispatching")
                     outcome = self.toolgate.invoke(action["tool_id"], action["args"],
                         approval_request_id=turn["approval_request_id"],
                         action_id=action["id"], job_id=action["job_id"])
                 else:
                     outcome = self.toolgate.check_action(action["id"], action["tool_id"])
+            except ProviderUnavailable as exc:
+                self.store.finish_turn(turn_id, "acted_no_reply" if acted else "failed",
+                                       acted=int(acted), detail=exc.reason)
+                if acted:
+                    raise ActedWithoutReply(turn_id, exc.reason) from exc
+                raise TurnFailed(exc.reason, turn_id) from exc
             except (ToolRefused, ToolGateUnavailable) as exc:
                 if isinstance(exc, ToolRefused) and exc.code == "BUDGET_DENIED":
                     return self._hold(turn_id, ToolPending("awaiting_budget",
@@ -374,11 +393,12 @@ class Loop:
             actions.record(self.store, action, outcome)
             acted = acted or outcome.ok
 
-        available = self._available_tools(execution)
-        history = self._history(session_id, tools=available, turn_id=turn_id)
-        ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
         try:
+            available = self._available_tools(execution)
+            history = self._history(session_id, tools=available, turn_id=turn_id)
+            ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
             route, completion, _skipped = self._call(history, ctx, execution)
+            calls.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             reason = getattr(exc, "reason", type(exc).__name__)
             # Not "failed". The tool ran, and a record saying otherwise would
@@ -391,7 +411,7 @@ class Loop:
                 raise ActedWithoutReply(turn_id, reason) from exc
             raise TurnFailed(reason, turn_id) from exc
 
-        message = self.store.complete_turn(
+        message = self._complete_turn(
             turn_id, completion.text, citations=completion.citations, acted=int(acted),
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,
@@ -414,6 +434,18 @@ class Loop:
                 "message": None,
                 "notice": outcome.message,
                 "memory": self.memory.status(turn["session_id"], turn_id)}
+
+    def _complete_turn(self, turn_id, text, **fields):
+        """A stop racing final persistence must leave a truthful terminal turn."""
+        try:
+            return self.store.complete_turn(turn_id, text, **fields)
+        except ProviderUnavailable as exc:
+            acted = bool((self.store.get_turn(turn_id) or {}).get("acted"))
+            self.store.finish_turn(turn_id, "acted_no_reply" if acted else "failed",
+                                   acted=int(acted), detail=exc.reason)
+            if acted:
+                raise ActedWithoutReply(turn_id, exc.reason) from exc
+            raise TurnFailed(exc.reason, turn_id) from exc
 
     # --- the turn ---------------------------------------------------------
 
@@ -454,6 +486,7 @@ class Loop:
                     if receipt["final_message_id"] else None}
         try:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
+            calls.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
             adapters = {adapter.name: adapter for adapter in (
@@ -462,6 +495,8 @@ class Loop:
             context_retrieval.resolve(self.store, session_id, identity, adapters)
             history = self._history(session_id, execution=execution, request_id=identity)
             outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
+            if outgrown and execution.get("callExecution"):
+                raise TurnFailed("Call context is full; end the call and review a conversation fork.")
             if outgrown and execution["privacy"]["harnessDisabled"]:
                 raise TurnFailed("No harness excludes automatic summarization; use a reviewed fork.")
             if outgrown and context_controls.load(
@@ -483,8 +518,12 @@ class Loop:
         try:
             result = self._run_bound(actual_session, user_text, receipt["turn_id"], context,
                                      session_id if actual_session != session_id else None)
-        except context_controls.ContextError as exc:
-            self.store.finish_turn(receipt["turn_id"], "failed", detail=str(exc))
+        except (context_controls.ContextError, ProviderUnavailable) as exc:
+            acted = bool((self.store.get_turn(receipt["turn_id"]) or {}).get("acted"))
+            self.store.finish_turn(receipt["turn_id"], "acted_no_reply" if acted else "failed",
+                                   acted=int(acted), detail=str(exc))
+            if acted:
+                raise ActedWithoutReply(receipt["turn_id"], str(exc)) from exc
             raise TurnFailed(str(exc), turn_id=receipt["turn_id"]) from exc
         if explicit:
             result["submission"] = submissions.get(self.store, identity)
@@ -493,6 +532,7 @@ class Loop:
 
     def _run_bound(self, session_id, user_text, turn_id, context, forked_from):
         execution = session_settings.execution(self.store, session_id, turn_id)
+        calls.guard(self.store, execution)
         self.memory.prepare(turn_id, user_text)
         # Held for the whole turn: if this parks on an approval, the owner needs
         # to see what they asked for next to what it produced.
@@ -523,6 +563,7 @@ class Loop:
                 action = actions.prepare(self.store, turn_id, call.tool_id, call.args,
                                          ToolGateClient.new_action_id())
                 try:
+                    calls.guard(self.store, execution)
                     outcome = self.toolgate.invoke(call.tool_id, call.args,
                                                    action_id=action["id"], job_id=action["job_id"])
                 except ToolRefused as refusal:
@@ -579,6 +620,7 @@ class Loop:
                     acted = True
                 history = self._history(session_id, tools=available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)
+            calls.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             # The user's message stays. It was said, and a transcript that drops
             # what was said because the answer failed is not a transcript.
@@ -593,7 +635,7 @@ class Loop:
             self.store.finish_turn(turn_id, "failed", detail=reason, latency_ms=latency)
             raise TurnFailed(reason, turn_id=turn_id) from exc
 
-        message = self.store.complete_turn(
+        message = self._complete_turn(
             turn_id, completion.text, citations=completion.citations,
             provider=completion.provider, model=completion.model,
             input_tokens=completion.input_tokens, output_tokens=completion.output_tokens,

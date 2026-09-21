@@ -3,7 +3,7 @@
 import json
 import time
 
-from . import context_controls, model_roles, session_settings
+from . import calls, context_controls, model_roles, session_settings
 from .providers import Message
 
 SCHEMA = """
@@ -251,6 +251,7 @@ def resolve(store, session_id, request_id, providers):
             ],
             providers,
             harness_disabled=False,
+            guard=lambda: calls.guard(store, execution),
         )
         selected = _selected(result["completion"].text, ids)
         evidence = {

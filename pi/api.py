@@ -33,6 +33,7 @@ from . import context_retrieval
 from . import team_execution, team_execution_api
 from . import memory_corrections, memory_proposals, memory_proposals_api
 from . import continuity_api
+from . import calls, calls_api, speech
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -70,6 +71,14 @@ async def lifespan(app: FastAPI):
             '    echo "PI_ADMIN_KEY=$(openssl rand -base64 24)" >> .env\n'
             "    docker compose up -d pi\n"
         )
+    speech_client = speech.SpeechClient(
+        url=os.environ.get("PI_SPEECH_URL", "").strip(),
+        key=os.environ.get("PI_SPEECH_KEY", "").strip(),
+        stt_model=os.environ.get("PI_STT_MODEL", "").strip(),
+        tts_model=os.environ.get("PI_TTS_MODEL", "").strip(),
+        voice=os.environ.get("PI_TTS_VOICE", "").strip(),
+        timeout=_seconds("PI_SPEECH_TIMEOUT_S", 30.0),
+    )
     store = Store(os.environ.get("PI_DB_PATH", "/data/pi.db"))
     # A turn that was running when the process died did not finish. Saying
     # nothing would leave the owner looking at a request that vanished.
@@ -78,6 +87,7 @@ async def lifespan(app: FastAPI):
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
+    calls.recover(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give
@@ -133,6 +143,7 @@ async def lifespan(app: FastAPI):
         store.close()
         raise RuntimeError('Set valid PI_MEMORY_CORRECTION_URL, KEY and AGENT_ID together.') from None
     app.state.memory_corrections = correction
+    app.state.speech = speech_client
     memory.start()
     app.state.admin_key = admin_key
     app.state.gateway_key_hash = runtime_hash
@@ -204,6 +215,8 @@ app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
+app.include_router(calls_api.router(lambda: app.state.store, lambda: app.state.loop,
+    require_admin, lambda: getattr(app.state, "speech", None)))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
 app.include_router(memory_proposals_api.router(lambda: app.state.store,
     lambda: getattr(app.state, 'memory_corrections', None), require_admin))

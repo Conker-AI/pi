@@ -74,19 +74,20 @@ def _snapshot(db, identity):
     frozen = team_execution.session_snapshot(db, identity)
     if frozen is not None:
         return frozen
-    from . import project_context
+    from . import calls, project_context
     value = _load(db, identity)
     agent = agents._get(db, value["settings"]["agentId"])
     if agent["archived_at"] is not None:
         raise agents.AgentError("agent_archived", "Restore or select an active agent before starting work.")
     models = db.execute("SELECT revision,configuration FROM model_role_settings WHERE singleton=1").fetchone()
     project = _project(db, value["settings"].get("projectId"))
-    return {**value, "agentId": agent["id"], "agentVersion": agent["revision"],
+    snapshot = {**value, "agentId": agent["id"], "agentVersion": agent["revision"],
             "modelConfigurationRevision": models["revision"] if models else 0,
             "modelConfiguration": json.loads(models["configuration"]) if models else None,
             "configuration": agent["configuration"], "kind": agent["kind"],
             "privacy": value["settings"]["privacy"], "project": project, "authority": "none",
             "projectContext": project_context.capture(db, identity, value["settings"])}
+    return calls.execution_snapshot(db, identity, snapshot)
 
 
 def _project(db, identity):
@@ -104,6 +105,8 @@ def save(store, identity, body):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         current = _load(db, identity)
+        if db.execute("SELECT 1 FROM calls WHERE session_id=?", (identity,)).fetchone():
+            raise agents.AgentError("call_settings", "Change call preferences through the call controls.")
         if current["revision"] != body.expected_revision:
             raise agents.AgentError("revision_conflict", "Session settings changed.", current_revision=current["revision"])
         if db.execute("SELECT 1 FROM sessions WHERE id=? AND status!='open'", (identity,)).fetchone():

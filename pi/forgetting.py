@@ -22,6 +22,7 @@ from . import drafts
 from . import context_summaries
 from . import attachments
 from . import memory_proposals
+from . import calls
 from .access import MaintenanceRequired, acquire
 from .store import FORGETTING_SCHEMA, Store
 
@@ -142,6 +143,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         context_summaries.redact(db, plan["session_ids"])
         attachments.redact(db, plan["session_ids"])
         memory_proposals.redact(db, plan["session_ids"])
+        calls.redact(db, plan["session_ids"])
         citations.redact(db, plan["session_ids"])
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])

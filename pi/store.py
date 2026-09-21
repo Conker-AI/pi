@@ -36,6 +36,7 @@ from . import project_context
 from . import team_execution
 from . import memory_proposals
 from . import continuity
+from . import calls
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -268,6 +269,7 @@ class Store:
                 db.executescript(context_summaries.SCHEMA)
                 db.executescript(attachments.SCHEMA)
                 db.executescript(model_evaluations.SCHEMA)
+                db.executescript(calls.SCHEMA)
         except BaseException:
             self.close()
             raise
@@ -417,6 +419,9 @@ class Store:
                              (turn_id,)).fetchone()
             if row is None or row["status"] != "running":
                 raise RuntimeError("Turn is no longer claimed by this caller")
+            snapshot = db.execute("SELECT snapshot FROM turn_settings WHERE turn_id=?",
+                                  (turn_id,)).fetchone()
+            calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
             message = submissions.append(db, row["session_id"], "assistant", text,
                                          turn_id=turn_id, purpose="final")
             evidence = message_citations.save(db, message["id"], citations)

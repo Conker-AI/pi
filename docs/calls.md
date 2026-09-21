@@ -102,6 +102,11 @@ and `synthesize(text)` returning audio/mime/duration metadata. Calls guard both
 sides of each invocation. The adapter owns WAV validation, duration/byte limits,
 timeouts, credentials, configured capability reporting and no-retry behavior.
 No speech adapter means typed text still works and voice is explicitly unavailable.
+Pi configures the optional adapter with `PI_SPEECH_URL` (including the server's
+API base path), `PI_SPEECH_KEY`, `PI_STT_MODEL`, `PI_TTS_MODEL`, and
+`PI_TTS_VOICE`. `PI_SPEECH_TIMEOUT_S` defaults to 30 seconds. There is no default
+speech host or downloaded model. Configuration is validated before opening Pi's
+database; capability reporting distinguishes configuration from actual success.
 Speech response audio is base64 in a transient JSON envelope, not a persisted file
 or a browser playback claim. Precise playback/word alignment, live streaming,
 client devices, echo suppression, reconnect UI, incoming calls and cross-device
