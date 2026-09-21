@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import actions, agents, collaboration, context_controls, memory_store, owner_preferences, projects, submissions, tasks
+from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -219,6 +219,7 @@ class Store:
                 db.executescript(SCHEMA)
                 self._migrate(db)
                 db.executescript(FORGETTING_SCHEMA)
+                db.executescript(session_settings.SCHEMA)
                 db.executescript(memory_store.SCHEMA)
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
@@ -229,6 +230,8 @@ class Store:
                 db.executescript(projects.SCHEMA)
                 db.executescript(context_controls.SCHEMA)
                 db.executescript(collaboration.SCHEMA)
+                db.executescript(artifacts.SCHEMA)
+                db.executescript(model_roles.SCHEMA)
         except BaseException:
             self.close()
             raise
@@ -338,10 +341,13 @@ class Store:
     def start_turn(self, session_id: str) -> str:
         turn_id = f"trn_{uuid.uuid4().hex[:16]}"
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             db.execute(
                 "INSERT INTO turns (id, session_id, status, started_at) VALUES (?,?, 'running', ?)",
                 (turn_id, session_id, time.time()),
             )
+            session_settings.bind(db, turn_id, session_id)
+            db.commit()
         return turn_id
 
     def finish_turn(self, turn_id: str, status: str, *, expected_status: str = "running",

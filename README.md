@@ -187,6 +187,11 @@ and walking the catalogue would be slow and would blame the models.
 
 ## Not here yet
 
+[Session privacy and agent selections](docs/session-settings.md) now govern future
+turns with immutable snapshots and memory queue exclusions. Specialist instructions
+and tool selections are enforced; explicit model mapping and specialist memory
+namespace authorization remain separate prerequisites.
+
 [Templates and team preparations](docs/collaboration.md) are durable, versioned
 configuration with bounded role selections and budgets. Publishing and preparing
 do not dispatch work or grant authority; live team execution remains separate.

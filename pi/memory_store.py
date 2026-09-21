@@ -5,7 +5,13 @@ import time
 
 MAX_CONTENT_CHARACTERS = 16000
 
-SCHEMA = """
+_MESSAGE_SETTINGS = """COALESCE(
+ (SELECT x.snapshot FROM turn_settings x JOIN turns t ON t.id=x.turn_id
+  WHERE t.session_id=NEW.session_id AND t.status='running' ORDER BY t.started_at DESC LIMIT 1),
+ (SELECT settings FROM session_settings WHERE session_id=NEW.session_id),
+ '{"agentId":"companion","privacy":{"memoryDisabled":false,"harnessDisabled":false}}')"""
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS memory_outbox (
     message_id TEXT PRIMARY KEY REFERENCES messages(id),
     operation TEXT NOT NULL CHECK(operation IN ('ingest','delete')),
@@ -21,16 +27,27 @@ CREATE TABLE IF NOT EXISTS memory_contexts (
     package TEXT,
     recorded_at REAL NOT NULL
 );
-CREATE TRIGGER IF NOT EXISTS messages_queue_memory
-AFTER INSERT ON messages WHEN NEW.role='user'
+DROP TRIGGER IF EXISTS messages_queue_memory;
+CREATE TRIGGER messages_queue_memory AFTER INSERT ON messages
 BEGIN
-    INSERT INTO memory_outbox(message_id, operation) VALUES (NEW.id, 'ingest');
+    INSERT INTO message_privacy VALUES (NEW.id,
+      json_extract({_MESSAGE_SETTINGS},'$.privacy.memoryDisabled'),
+      json_extract({_MESSAGE_SETTINGS},'$.privacy.harnessDisabled'),
+      NOT json_extract({_MESSAGE_SETTINGS},'$.privacy.memoryDisabled')
+      AND json_extract({_MESSAGE_SETTINGS},'$.agentId')='companion');
+    INSERT INTO memory_outbox(message_id, operation)
+    SELECT NEW.id,'ingest' FROM message_privacy
+    WHERE message_id=NEW.id AND allow_ingest=1 AND NEW.role='user';
 END;
+-- Existing messages predate privacy controls; retain their original eligibility.
+INSERT INTO message_privacy
+SELECT id,0,0,1 FROM messages WHERE NOT EXISTS(SELECT 1 FROM message_privacy p WHERE p.message_id=messages.id);
 -- Upgrade existing transcripts too, including tombstones from before this bridge.
 INSERT OR IGNORE INTO memory_outbox(message_id, operation)
 SELECT m.id, CASE WHEN f.session_id IS NULL THEN 'ingest' ELSE 'delete' END
 FROM messages m LEFT JOIN forgotten_sessions f ON f.session_id=m.session_id
-WHERE m.role='user';
+WHERE m.role='user' AND (f.session_id IS NOT NULL OR EXISTS(
+ SELECT 1 FROM message_privacy p WHERE p.message_id=m.id AND p.allow_ingest=1));
 """
 
 
@@ -51,6 +68,10 @@ def migrate(db):
 def pin_destination(store, message_id, agent_id):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
+        eligibility = db.execute("SELECT allow_ingest FROM message_privacy WHERE message_id=?", (message_id,)).fetchone()
+        operation = db.execute("SELECT operation FROM memory_outbox WHERE message_id=?", (message_id,)).fetchone()
+        if operation and operation[0] == "ingest" and (not eligibility or not eligibility[0]):
+            raise ValueError("This message is excluded from memory ingestion.")
         row = db.execute("SELECT destination_agent_id,delivery_started FROM memory_outbox "
                          "WHERE message_id=?", (message_id,)).fetchone()
         if row[0] is None and row[1]:
@@ -108,10 +129,13 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
         for state in ("admitted", "filtered", "deleted")
     }
     notices = []
+    retrieval = context(store, turn_id) if turn_id else None
     if blocked:
         notices.append("Conversation saved. Long-term memory delivery is blocked; "
                        "see delivery_error and repair it before explicitly retrying.")
-    if not configured:
+    if retrieval and retrieval["status"] == "disabled":
+        notices.append("Memory is excluded for this turn by privacy or an unmapped specialist namespace. Prior allowed deliveries remain separate.")
+    elif not configured:
         notices.append(
             "Conversation saved. Long-term memory is not configured; delivery remains pending."
         )
@@ -124,7 +148,6 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
             "Forgetting is pending in MemoryGate. "
             "Memory retrieval is paused until deletion is acknowledged."
         )
-    retrieval = context(store, turn_id) if turn_id else None
     if retrieval and retrieval["status"] in {"unavailable", "degraded", "redacted", "not_recorded"}:
         notices.append(
             "Memory context is incomplete or unavailable for this turn; "

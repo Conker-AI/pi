@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, agents, collaboration_api, context_api, context_controls, owner_preferences, projects_api, submissions, tasks
+from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
 from .browser_contract import runtime_allowed
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
@@ -161,6 +161,9 @@ def require_admin(identity: str = Depends(require_key)) -> None:
 app.include_router(projects_api.router(lambda: app.state.store, require_admin))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
+app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
+app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
+app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
 
 
 @app.exception_handler(context_controls.ContextError)

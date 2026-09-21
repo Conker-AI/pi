@@ -8,7 +8,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
-from . import memory_store
+from . import memory_store, session_settings
 
 log = logging.getLogger("pi.memory")
 
@@ -51,14 +51,19 @@ class MemoryClient:
             for key in ("id", "message_id", "state", "memory_id", "value_score")
         }
 
-    def retrieve(self, query):
+    def retrieve(self, query, *, scope="all", session_id=None, memory_ids=None):
+        payload = {"query": query[:16000], "max_items": 8, "include_evidence": False}
+        if scope != "all":
+            payload.update(scope=scope, memory_ids=memory_ids or [], session_id=session_id)
         response = self.http.post(
             "/runtime/context",
             headers=self.read_headers,
-            json={"query": query[:16000], "max_items": 8, "include_evidence": False},
+            json=payload,
         )
         response.raise_for_status()
         package = response.json()
+        if scope != "all" and (not isinstance(package, dict) or package.get("scope") != scope):
+            raise ValueError("MemoryGate did not enforce the requested scope.")
         if (
             not isinstance(package, dict)
             or not isinstance(package.get("memories"), list)
@@ -93,15 +98,28 @@ class Memory:
         self.thread = None
 
     def prepare(self, turn_id, query):
+        turn = self.store.get_turn(turn_id)
+        selected = session_settings.execution(self.store, turn["session_id"], turn_id)
+        if not session_settings.memory_allowed(selected):
+            memory_store.save_context(self.store, turn_id, "disabled")
+            return
         state, package = "not_configured", None
         if memory_store.pending_deletions(self.store):
             state = "unavailable"
         elif self.client:
             try:
-                package = self.client.retrieve(query)
+                # Legacy Companion behavior remains unchanged unless settings were explicitly saved.
+                if selected.get("revision", 0) == 0:
+                    package = self.client.retrieve(query)
+                else:
+                    configuration = selected["configuration"]
+                    scope = configuration["memory"]["scope"]
+                    package = self.client.retrieve(query, scope=scope,
+                        session_id=turn["session_id"] if scope == "conversation" else None,
+                        memory_ids=configuration["memory"]["memoryIds"] if scope == "selected" else [])
                 state = (
                     "ok"
-                    if package["retrieval"].get("semantic", {}).get("status") == "ok"
+                    if selected.get("revision", 0) != 0 or package["retrieval"].get("semantic", {}).get("status") == "ok"
                     and not package["retrieval"].get("pending_conversation_index")
                     else "degraded"
                 )

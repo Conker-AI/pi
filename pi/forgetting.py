@@ -17,7 +17,7 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from . import memory_store, submissions, tasks
+from . import artifacts, memory_store, session_settings, submissions, tasks
 from .access import MaintenanceRequired, acquire
 from .store import FORGETTING_SCHEMA, Store
 
@@ -127,6 +127,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # The runtime lease prevents a provider response from arriving after deletion.
         from . import context_controls
         context_controls.redact(db, plan["session_ids"])
+        artifacts.redact(db, plan["session_ids"])
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])
         submissions.redact(db, plan["session_ids"])
@@ -166,6 +167,7 @@ def forget(path: Path | str, session_id: str, confirmation: str) -> dict:
     with closing(acquire(path, exclusive=True)), closing(_connect(path)) as db:
         Store._migrate(db)
         db.executescript(FORGETTING_SCHEMA)
+        db.executescript(session_settings.SCHEMA)
         db.executescript(memory_store.SCHEMA)
         db.execute("PRAGMA secure_delete=ON")
         db.execute("BEGIN IMMEDIATE")

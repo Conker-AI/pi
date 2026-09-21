@@ -11,7 +11,7 @@ import re
 import time
 import uuid
 
-from . import tasks
+from . import session_settings, tasks
 
 UNRESOLVED = ("('running','awaiting_approval','awaiting_budget','acted_no_reply',"
               "'action_in_progress','outcome_unknown')")
@@ -237,6 +237,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "task_expected_revision,state,payload_hash,pending_text,history_seq,"
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
+        session_settings.reserve(db, request_id, session_id)
         result = _view(db, _row(db, request_id))
         db.commit()
         return result, True
@@ -281,6 +282,7 @@ def bind(store, request_id, *, fork_summary=None):
         turn_id = "trn_" + uuid.uuid4().hex[:16]
         db.execute("INSERT INTO turns(id,session_id,status,started_at) VALUES(?,?,'running',?)",
                    (turn_id, session_id, now))
+        session_settings.bind(db, turn_id, session_id, request_id)
         message = append(db, session_id, "user", row["pending_text"],
                          turn_id=turn_id, purpose="input")
         if row["task_id"]:
