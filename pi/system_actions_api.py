@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from . import system_actions as actions
-from . import system_port_reviews, system_targets
+from . import system_port_recovery, system_port_reviews, system_targets
 
 
 def router(store, gate, authorize):
@@ -39,6 +39,12 @@ def router(store, gate, authorize):
     @routes.post("/{identity}/resume")
     def resume(identity: str):
         return invoke(actions.resume, identity)
+
+    @routes.get("/{identity}/recovery")
+    def recovery(identity: str):
+        return JSONResponse(
+            invoke(system_port_recovery.inspect, identity), headers={"Cache-Control": "no-store"}
+        )
 
     return routes
 

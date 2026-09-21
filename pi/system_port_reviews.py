@@ -159,38 +159,43 @@ def fetch(gate, *, request=None, review_id=None, transport=None):
         raise ActionError("invalid_review", "Invalid port review identity.", 422)
     path = "/v2/agent/system/port-reviews" + ("/" + review_id if review_id else "")
     try:
-        deadline = time.monotonic() + 15
-        options = {"json": request.model_dump(exclude_none=True)} if request else {}
-        with (
-            httpx.Client(
-                transport=transport, trust_env=False, follow_redirects=False, timeout=10
-            ) as client,
-            client.stream(
-                "POST" if request else "GET",
-                gate.base_url + path,
-                headers={**gate._headers(), "Accept-Encoding": "identity"},
-                **options,
-            ) as response,
-        ):
-            if (
-                response.status_code != 200
-                or response.headers.get("content-encoding", "identity") != "identity"
-            ):
-                raise ValueError("unavailable")
-            raw = bytearray()
-            for chunk in response.iter_raw():
-                if len(raw) + len(chunk) > 256 * 1024 or time.monotonic() > deadline:
-                    raise ValueError("response limit")
-                raw.extend(chunk)
-            if time.monotonic() > deadline:
-                raise ValueError("deadline")
-        value = json.loads(
-            raw,
-            object_pairs_hook=_pairs,
-            parse_constant=lambda value: (_ for _ in ()).throw(ValueError()),
-        )
+        value = exchange(gate, path, request=request, transport=transport)
         return _project(value, request=request, review_id=review_id)
     except Exception:
         raise ActionError(
             "review_unavailable", "Port review is unavailable; no change was executed.", 503
         ) from None
+
+
+def exchange(gate, path, *, request=None, transport=None):
+    """Internal fixed-route callers share response bounds and parsing."""
+    deadline = time.monotonic() + 15
+    options = {"json": request.model_dump(exclude_none=True)} if request else {}
+    with (
+        httpx.Client(
+            transport=transport, trust_env=False, follow_redirects=False, timeout=10
+        ) as client,
+        client.stream(
+            "POST" if request else "GET",
+            gate.base_url + path,
+            headers={**gate._headers(), "Accept-Encoding": "identity"},
+            **options,
+        ) as response,
+    ):
+        if (
+            response.status_code != 200
+            or response.headers.get("content-encoding", "identity") != "identity"
+        ):
+            raise ValueError("unavailable")
+        raw = bytearray()
+        for chunk in response.iter_raw():
+            if len(raw) + len(chunk) > 256 * 1024 or time.monotonic() > deadline:
+                raise ValueError("response limit")
+            raw.extend(chunk)
+        if time.monotonic() > deadline:
+            raise ValueError("deadline")
+    return json.loads(
+        raw,
+        object_pairs_hook=_pairs,
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError()),
+    )

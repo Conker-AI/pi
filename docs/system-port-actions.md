@@ -31,3 +31,21 @@ Starlette test-client deprecation warning remains.
 No real Docker daemon or host resources were used. This is backend-only: the
 dashboard remains on fixtures. ToolGate retained-container recovery, replacement
 allowlist lineage, review retention and real Docker validation remain unfinished.
+
+## Read-only recovery inspection
+
+`GET /system/actions/{request_id}/recovery` now uses the saved port action identity
+to read ToolGate recovery evidence. The originating ToolGate actor remains the
+existing connection identity. Pi validates action/container IDs, ordered steps,
+references, states, observation time and bounded port mappings, strips unknown
+fields and returns no-store metadata. Claims of resumability/release are rejected:
+this endpoint does not authorize corrective actions or alter Pi's action ledger.
+
+Review and recovery calls share the bounded transport/parser; both use only their
+fixed ToolGate routes. Recovery uses GET, never tool invocation. Unconfirmed new
+container identities remain distinct from missing containers or failed reads.
+
+40 recovery/review/port-action/container-action checks passed using temporary stores
+and synthetic transport. Scoped lint/diff pass, with the existing test-client
+deprecation warning. ToolGate has since implemented managed replacement lineage;
+corrective recovery/finalization, retention and real Docker verification remain.
