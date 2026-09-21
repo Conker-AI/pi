@@ -34,11 +34,22 @@ source message references and original tool observations from the existing ledge
 These are fetched evidence, not a claim that every source was cited or verified.
 Forgotten turns cannot expose this receipt. Answer retries remain narration-only.
 
-Deep research still reports `research_unavailable` before retrieval/generation.
-Its bounded iterative plan, progress, collection and synthesis remain unfinished.
+Deep research now saves a validated public plan as a turn-associated intermediate
+message. It adaptively queries research.web from prior results, with at most four
+searches (or the configured lower tool-step limit), then synthesizes. Plans and
+source/action receipts survive reopening and approval continuation. Refusals remain
+visible, and reply-only recovery does not restart research. Forgetting scrubs the
+plan with the existing message lifecycle. This is bounded snippet research; full
+page reading and live-search verification are not implied.
+
+Remaining before research completion: aggregate provider usage across planning,
+query selection and synthesis; verify this accounting and integrated regression.
+The current loop's final-call usage must not be treated as whole-research cost.
 No paid fallback was enabled and final dashboard wiring remains deferred.
 
 Verification: 61 focused tests across web execution, selections, ordinary tool
 turns, reply recovery and steering. Includes scope/missing-query failures, bounds,
 approval, single-search ceiling, provider failure, Stop, lost-receipt recovery and
 refusal. Tests use scripted providers and ToolGate doubles, not a live search service.
+
+Deep research verification: 70 focused research/tool/recovery/steering tests pass, including stop during planning and forgetting. No live provider/search calls were made.

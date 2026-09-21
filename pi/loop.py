@@ -230,8 +230,10 @@ class Loop:
         if tools:
             messages.append(Message("system", tool_protocol.describe(tools)))
         from . import research
-        messages.extend(research.instructions(execution,
-            bool(turn_id and execution.get("researchMode") == "web" and research.action_count(self.store, turn_id))))
+        research_used = research.action_count(self.store, turn_id) if turn_id and execution.get("researchMode") in ("web", "deep") else 0
+        research_plan = research.plan(self.store, turn_id) if turn_id and execution.get("researchMode") == "deep" else None
+        remaining = max(0, min(self.max_tool_steps, (research_plan or {}).get("search_limit", 4)) - research_used)
+        messages.extend(research.instructions(execution, bool(research_used), remaining))
         # A forked child carries its parent's summary as context, not its
         # parent's messages. The messages are still there, in the parent, and
         # still readable - they are simply not resent.
@@ -426,6 +428,13 @@ class Loop:
             actions.record(self.store, action, outcome)
             acted = acted or outcome.ok
 
+        if execution.get("researchMode") == "deep" and turn["status"] in {
+            "awaiting_approval", "awaiting_budget", "action_in_progress", "outcome_unknown"
+        }:
+            with self.store._connect() as db:
+                source = db.execute("SELECT m.content FROM turn_messages tm JOIN messages m ON m.id=tm.message_id "
+                                    "WHERE tm.turn_id=? AND tm.purpose='input'", (turn_id,)).fetchone()
+            return self._run_bound(session_id, json.loads(source[0]), turn_id, {}, None, continued=True)
         return self._finish_reply(turn_id, session_id, execution, acted, started)
 
     def recover_reply(self, turn_id, request_id):
@@ -447,9 +456,9 @@ class Loop:
     def _finish_reply(self, turn_id, session_id, execution, acted, started,
                       reply_request_id=None):
         try:
-            available = [] if reply_request_id or execution.get("researchMode") == "web" else self._available_tools(execution)
+            available = [] if reply_request_id or execution.get("researchMode") in ("web", "deep") else self._available_tools(execution)
             history = self._history(session_id, tools=available, turn_id=turn_id)
-            if reply_request_id:
+            if reply_request_id or execution.get("researchMode") in ("web", "deep"):
                 history.append(Message("system", "Report only the recorded action results. "
                     "Do not request or repeat any tool action. State uncertainty honestly."))
             ctx = TurnContext(history_chars=self._history_size(history), needs_tools=bool(available))
@@ -559,7 +568,7 @@ class Loop:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
             from . import research
             research.require_runtime(execution,
-                self._available_tools(execution) if execution.get("researchMode") == "web" else (),
+                self._available_tools(execution) if execution.get("researchMode") in ("web", "deep") else (),
                 self.max_tool_steps)
             turn_control.guard(self.store, execution)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
@@ -610,9 +619,8 @@ class Loop:
             result["replayed"] = False
         return result
 
-    def _run_bound(self, session_id, user_text, turn_id, context, forked_from):
+    def _run_bound(self, session_id, user_text, turn_id, context, forked_from, continued=False):
         turn_steering.active(self.store, turn_id, True)
-        continued = False
         started = time.monotonic()
         try:
             while True:
@@ -645,9 +653,13 @@ class Loop:
         ctx = TurnContext(history_chars=self._history_size(history), **context)
 
         try:
+            if execution.get("researchMode") == "deep" and research.plan(self.store, turn_id) is None:
+                _, planned, _ = self._call([*history, research.PLAN_PROMPT], ctx, execution)
+                research.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
+                history = self._history(session_id, tools=available, turn_id=turn_id)
             route, completion, skipped = self._call(history, ctx, execution)
 
-            web_research = execution.get("researchMode") == "web"
+            web_research = execution.get("researchMode") in ("web", "deep")
             if web_research and not research.action_count(self.store, turn_id):
                 research.validate_call(tool_protocol.parse(completion.text, allowed))
 
@@ -655,7 +667,12 @@ class Loop:
             # ToolGate; Pi runs nothing itself.
             with self.store._connect() as db:
                 used = db.execute('SELECT COUNT(*) FROM tool_actions WHERE turn_id=?', (turn_id,)).fetchone()[0]
-            for _ in range(max(0, (1 if web_research else self.max_tool_steps) - used)):
+            limit = self.max_tool_steps
+            if execution.get("researchMode") == "web":
+                limit = 1
+            elif execution.get("researchMode") == "deep":
+                limit = min(limit, research.plan(self.store, turn_id)["search_limit"])
+            for _ in range(max(0, limit - used)):
                 call = tool_protocol.parse(completion.text, allowed)
                 if call is None:
                     break
@@ -724,7 +741,7 @@ class Loop:
                     # Written before the next model call, which can fail.
                     self.store.mark_acted(turn_id)
                     acted = True
-                history = self._history(session_id, tools=[] if web_research else available, turn_id=turn_id)
+                history = self._history(session_id, tools=[] if execution.get("researchMode") == "web" else available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)
             research.validate_narration(execution, completion.text)
             turn_control.guard(self.store, execution)
