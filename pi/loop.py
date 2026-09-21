@@ -512,6 +512,11 @@ class Loop:
         except Exception as exc:
             submissions.fail_preparation(self.store, identity,
                 exc.detail["code"] if isinstance(exc, tasks.TaskError) else "preparation_failed")
+            stopped = submissions.get(self.store, identity)
+            if stopped["status"] == "cancelled":
+                return {"session_id": session_id, "turn_id": None, "status": "cancelled",
+                        "acted": False, "message": None, "submission": stopped,
+                        "replayed": False}
             if not explicit and isinstance(exc, tasks.TaskError):
                 raise TurnFailed(str(exc)) from exc
             raise

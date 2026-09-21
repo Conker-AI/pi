@@ -115,3 +115,62 @@ def test_stop_does_not_prevent_unknown_effect_reconciliation(tmp_path):
         assert receipt["cancel_requested"] and receipt["acted"]
         assert receipt["status"] == "acted_no_reply"
         assert len(gate.invocations) == len(provider.sent) == 1
+
+
+def test_cancel_preparation_retains_input_prevents_fork_and_replays(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        session = store.create_session()
+        store.append_message(session, "user", "x" * 120)
+
+        class StopSummary(Recorder):
+            def complete(self, messages, *, model):
+                receipt = turn_control.cancel_submission(store, "cancel_preparing_001")
+                assert receipt["status"] == "cancelled" and receipt["turn_id"] is None
+                assert turn_control.cancel_submission(store, "cancel_preparing_001") == receipt
+                return super().complete(messages, model=model)
+
+        provider = StopSummary()
+        loop = loop_with(store, provider, fork_threshold_chars=100)
+        result = loop.run_turn(session, "keep this draft", request_id="cancel_preparing_001")
+        assert result["status"] == "cancelled"
+        assert result["submission"]["pending_text"] == "keep this draft"
+        assert store.get_session(session)["status"] == "open"
+        assert len(store.messages(session)) == 1
+        replay = loop.run_turn(session, "keep this draft", request_id="cancel_preparing_001")
+        assert replay["replayed"] and len(provider.calls) == 1
+        with store._connect() as db:
+            assert db.execute("SELECT COUNT(*) FROM turns").fetchone()[0] == 0
+            assert db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
+
+
+def test_submission_stop_orders_before_and_after_binding(tmp_path):
+    from pi import session_settings
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        session = store.create_session()
+        submissions.reserve(store, "before_bind_request", session, "first", {})
+        turn_control.cancel_submission(store, "before_bind_request")
+        execution = session_settings.execution(store, session, request_id="before_bind_request")
+        with pytest.raises(ProviderUnavailable, match="preparation"):
+            turn_control.guard(store, execution)
+        with pytest.raises(tasks.TaskError):
+            submissions.bind(store, "before_bind_request")
+        submissions.reserve(store, "after_bind_request", session, "second", {})
+        receipt = submissions.bind(store, "after_bind_request")
+        stopped = turn_control.cancel_submission(store, "after_bind_request")
+        assert stopped["turn_id"] == receipt["turn_id"] and stopped["cancel_requested"]
+        with pytest.raises(ProviderUnavailable):
+            store.complete_turn(receipt["turn_id"], "too late")
+
+
+def test_submission_cancel_route_requires_owner(tmp_path, monkeypatch):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        monkeypatch.setattr(api.app.state, "store", store, raising=False)
+        monkeypatch.setattr(api.app.state, "admin_key", "synthetic-owner", raising=False)
+        submissions.reserve(store, "cancel_route_request", store.create_session(), "hello", {})
+        client = TestClient(api.app)
+        url = "/turn-submissions/cancel_route_request/cancel"
+        assert client.post(url).status_code == 401
+        response = client.post(url, headers={"X-Pi-Key": "synthetic-owner"})
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelled"

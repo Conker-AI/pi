@@ -669,3 +669,8 @@ def list_events(limit: int = Query(default=50, ge=1, le=200),
 @app.post("/turns/{turn_id}/cancel", dependencies=[Depends(require_admin)])
 def cancel_turn(turn_id: str):
     return turn_control.cancel(app.state.store, turn_id)
+
+
+@app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_admin)])
+def cancel_submission(request_id: str):
+    return turn_control.cancel_submission(app.state.store, request_id)

@@ -17,7 +17,15 @@ but the stop guard prevents new dispatch and narration. It does not revoke a
 separate ToolGate approval or undo effects. Cancellation cannot change an already
 finished turn. Call-specific stop/privacy guards continue to apply.
 
-Remaining P9 work: cancellation during submission preparation, explicit consent
+`POST /turn-submissions/{request_id}/cancel` accepts the retained submission ID
+before or after turn binding. During preparation it preserves pending input and
+drafts, releases upload reservations, interrupts context selection and prevents
+a late summary from creating a fork. The terminal preparation receipt uses
+`failure_code=owner_cancelled` and presents `status=cancelled`. The same request
+ID only replays the receipt; an intentional resend requires a new ID. A helper
+already in flight may finish remotely, but cannot dispatch the answer.
+
+Remaining P9 work: explicit consent
 for reply-only recovery after a stop, queued future turns, steering, and reviewed
 per-message retry/fork. These routes are independent backend contracts; browser
 wiring remains deferred for owner review.

@@ -133,9 +133,10 @@ def _view(db, row):
         "task_id": row["task_id"], "input_message_id": row["input_message_id"],
         "final_message_id": next((ref["message_id"] for ref in refs
                                    if ref["purpose"] == "final"), None),
-        "state": row["state"], "status": turn["status"] if turn else row["state"],
+        "state": row["state"], "status": turn["status"] if turn else (
+            "cancelled" if row["failure_code"] == "owner_cancelled" else row["state"]),
         "acted": bool(turn["acted"]) if turn else False, "message_refs": refs,
-        "cancel_requested": bool(db.execute(
+        "cancel_requested": row["failure_code"] == "owner_cancelled" or bool(db.execute(
             "SELECT 1 FROM turn_cancellations WHERE turn_id=?", (row["turn_id"],)
         ).fetchone()),
         "pending_text": row["pending_text"] if available else None,

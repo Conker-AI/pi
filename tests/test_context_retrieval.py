@@ -317,3 +317,18 @@ def test_offline_forgetting_purges_frozen_context_instructions(tmp_path):
             "request_id='forget_context_helper_001'"
         ).fetchone()
         assert row[0] is None and row[1] == "forgotten"
+
+
+def test_owner_stop_discards_late_selection_and_never_dispatches_answer(store):
+    from pi import turn_control
+    sid = store.create_session()
+    candidate = store.append_message(sid, "user", "Candidate text")
+    policy(store, sid, {candidate["id"]: "retrieve"})
+    provider = Provider([candidate["id"]], callback=lambda: turn_control.cancel_submission(
+        store, "selection_cancel_001"))
+    result = loop(store, provider).run_turn(sid, "Choose context", request_id="selection_cancel_001")
+    assert result["status"] == "cancelled" and result["turn_id"] is None
+    assert [call[0] for call in provider.calls] == ["selector"]
+    receipt = r.read(store, sid, request_id="selection_cancel_001")
+    assert receipt["state"] == "interrupted" and not receipt["selectedIds"]
+    assert len(store.messages(sid)) == 1

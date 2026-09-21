@@ -162,6 +162,8 @@ def execution(store, identity, turn_id=None, request_id=None):
                 snapshot = json.loads(row[0])
                 if turn_id:
                     snapshot["turnExecutionId"] = turn_id
+                if request_id:
+                    snapshot["submissionExecutionId"] = request_id
                 return snapshot
             # Legacy turns had only the Companion, without runtime privacy settings.
             return {"agentId": "companion", "kind": "companion", "configuration": None,
