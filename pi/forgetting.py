@@ -65,9 +65,15 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
     prior = _receipt(db, session_id)
     if prior:
         return {"already_forgotten": prior, "confirmation": prior["confirmation"]}
+    dependencies = (
+        " UNION SELECT d.target_session FROM project_context_dependencies d "
+        "JOIN tree t ON d.source_session=t.id"
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='project_context_dependencies'").fetchone()
+        else ""
+    )
     sessions = [r[0] for r in db.execute(
         "WITH RECURSIVE tree(id) AS (SELECT id FROM sessions WHERE id=? UNION"
-        " SELECT s.id FROM sessions s JOIN tree t ON s.parent_id=t.id)"
+        " SELECT s.id FROM sessions s JOIN tree t ON s.parent_id=t.id" + dependencies + ")"
         " SELECT id FROM tree ORDER BY id", (session_id,),
     )]
     sessions = [sid for sid in sessions if _receipt(db, sid) is None]

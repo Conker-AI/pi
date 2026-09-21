@@ -32,6 +32,8 @@ from . import context_summaries
 from . import attachments
 from . import model_evaluations
 from . import context_retrieval
+from . import project_context
+from . import team_execution
 from .access import MaintenanceRequired, acquire
 
 SCHEMA = """
@@ -250,9 +252,11 @@ class Store:
                 owner_preferences.initialize(db)
                 agents.initialize(db)
                 db.executescript(projects.SCHEMA)
+                db.executescript(project_context.SCHEMA)
                 db.executescript(context_controls.SCHEMA)
                 db.executescript(context_retrieval.SCHEMA)
                 db.executescript(collaboration.SCHEMA)
+                db.executescript(team_execution.SCHEMA)
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
                 db.executescript(jobs.SCHEMA)

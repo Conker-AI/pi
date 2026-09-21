@@ -126,6 +126,8 @@ class Loop:
             adapters = {adapter.name: adapter for adapter in (
                 getattr(self.router, "local", None), getattr(self.router, "hosted", None)
             ) if adapter is not None}
+            from . import team_execution
+            adapters = team_execution.metered_providers(self.store, execution, adapters)
             result = model_roles.dispatch(configuration, role, messages, adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None)
@@ -186,6 +188,13 @@ class Loop:
             messages.append(Message("system", project["instructions"]))
         if policy and policy["sessionInstructions"].strip():
             messages.append(Message("system", policy["sessionInstructions"]))
+        from . import agents, attachments, project_context
+        try:
+            messages.extend(project_context.messages(self.store, execution))
+        except (agents.AgentError, attachments.AttachmentError) as exc:
+            raise context_controls.ContextError(
+                exc.detail["code"], exc.detail["message"], exc.status
+            ) from exc
         if turn_id:
             saved = memory_store.context(self.store, turn_id)
             if saved["package"] and session_settings.memory_allowed(execution):

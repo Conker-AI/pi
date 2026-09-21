@@ -1,9 +1,11 @@
 # Forgetting a Pi conversation
 
-Forgetting removes the content of one session and its fork descendants from
-Pi's active database. The preview lists the exact affected identifiers. This
-scope includes descendants because their summaries and replies can retain what
-was said in the parent. Pi does not yet track the provenance needed to safely
+Forgetting removes the content of one session, its fork descendants, and any
+conversations that consumed it through selected project context from Pi's active
+database. The preview lists the exact affected identifiers. Dependency expansion
+is transitive, including descendants of those consumers. This scope includes
+derived conversations because their summaries and replies can retain what
+was said in the source. Pi does not yet track the provenance needed to safely
 forget an individual message while keeping its derived replies.
 
 ## Owner operation

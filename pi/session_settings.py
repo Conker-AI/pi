@@ -1,7 +1,7 @@
 """Future-turn privacy and immutable execution selections; no permission grants."""
 import json
-from pydantic import Field
-from . import agents
+from pydantic import Field, model_validator
+from . import agents, projects
 
 
 class Privacy(agents.StrictModel):
@@ -13,6 +13,14 @@ class Settings(agents.StrictModel):
     agentId: str = Field(min_length=1, max_length=200)
     privacy: Privacy
     projectId: str | None = Field(default=None, min_length=1, max_length=200)
+    projectSources: list[projects.Reference] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def project_sources(self):
+        keys = [json.dumps(ref.model_dump(), sort_keys=True) for ref in self.projectSources]
+        if len(keys) != len(set(keys)) or (keys and self.projectId is None):
+            raise ValueError("Select distinct linked sources within a project.")
+        return self
 
 
 class Update(agents.StrictModel):
@@ -62,6 +70,11 @@ def load(store, identity):
 
 
 def _snapshot(db, identity):
+    from . import team_execution
+    frozen = team_execution.session_snapshot(db, identity)
+    if frozen is not None:
+        return frozen
+    from . import project_context
     value = _load(db, identity)
     agent = agents._get(db, value["settings"]["agentId"])
     if agent["archived_at"] is not None:
@@ -72,7 +85,8 @@ def _snapshot(db, identity):
             "modelConfigurationRevision": models["revision"] if models else 0,
             "modelConfiguration": json.loads(models["configuration"]) if models else None,
             "configuration": agent["configuration"], "kind": agent["kind"],
-            "privacy": value["settings"]["privacy"], "project": project, "authority": "none"}
+            "privacy": value["settings"]["privacy"], "project": project, "authority": "none",
+            "projectContext": project_context.capture(db, identity, value["settings"])}
 
 
 def _project(db, identity):
@@ -109,12 +123,18 @@ def save(store, identity, body):
 
 
 def reserve(db, request_id, identity):
-    db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(_snapshot(db, identity))))
+    from . import project_context
+    snapshot = _snapshot(db, identity)
+    db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
+    project_context.record_dependencies(db, identity, snapshot)
 
 
 def bind(db, turn_id, identity, request_id=None):
+    from . import project_context
     row = db.execute("SELECT snapshot FROM submission_settings WHERE request_id=?", (request_id,)).fetchone() if request_id else None
-    db.execute("INSERT INTO turn_settings VALUES (?,?)", (turn_id, row[0] if row else json.dumps(_snapshot(db, identity))))
+    snapshot = json.loads(row[0]) if row else _snapshot(db, identity)
+    db.execute("INSERT INTO turn_settings VALUES (?,?)", (turn_id, json.dumps(snapshot)))
+    project_context.record_dependencies(db, identity, snapshot)
 
 
 def execution(store, identity, turn_id=None, request_id=None):

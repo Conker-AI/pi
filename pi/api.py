@@ -30,6 +30,7 @@ from . import conversation_search
 from . import attachments_api
 from . import model_evaluations, model_evaluations_api
 from . import context_retrieval
+from . import team_execution, team_execution_api
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
     interrupted = store.mark_interrupted_turns()
     model_evaluations.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
+    team_execution.recover_interrupted(store)
 
     # Local inference is slow on modest hardware and costs nothing to wait for,
     # so the ceiling is generous. It exists to catch a hung server, not to give
@@ -184,6 +186,8 @@ app.include_router(projects_api.router(lambda: app.state.store, require_admin,
     lambda reference: project_sources.resolve(app.state.store, reference)))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
+app.include_router(team_execution_api.create_router(
+    lambda: app.state.store, lambda: app.state.loop, require_admin))
 app.include_router(session_settings_api.router(lambda: app.state.store, require_admin))
 app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
 app.include_router(model_roles_api.router(lambda: app.state.store, require_admin))
