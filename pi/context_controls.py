@@ -101,7 +101,12 @@ def _session(db, identity):
         raise ContextError("unavailable", "Conversation unavailable.", 404)
 
 
-def load(store, identity, turn_id=None):
+def load(store, identity, turn_id=None, request_id=None):
+    if turn_id or request_id:
+        from . import context_retrieval
+        frozen = context_retrieval.read(store, identity, turn_id=turn_id, request_id=request_id)
+        if frozen is not None:
+            return {"revision": frozen["revision"], "policy": frozen["policy"]}
     with store._connect() as db:
         _session(db, identity)
         if turn_id:
@@ -157,7 +162,7 @@ def estimate(text):
     return math.ceil(len(text.encode("utf-8")) / 4) + 4 if text else 0
 
 
-def select_history(policy, rows):
+def select_history(policy, rows, retrieved_ids=None):
     """No silent compaction. Retrieve needs a separate authorized selection result."""
     if not policy:
         return rows
@@ -166,16 +171,24 @@ def select_history(policy, rows):
     for identity, mode in value.messagePolicies.items():
         if identity not in by_id:
             raise ContextError("missing_message", "Context refers to an unavailable message.")
-        if mode == "retrieve":
+        if mode == "retrieve" and retrieved_ids is None:
             raise ContextError(
                 "retrieval_pending", "Resolve retrieval before dispatch or choose another policy."
             )
-        if mode == "keep-exact" and by_id[identity].get("redacted"):
+        if mode == "keep-exact" and (
+            by_id[identity].get("redacted")
+            or by_id[identity].get("content_status") == "forgotten"
+        ):
             raise ContextError("unavailable_pin", "An exact pin was redacted; review context.")
     return [
         row
         for row in rows
-        if not row.get("redacted") and value.messagePolicies.get(row["id"]) != "exclude"
+        if not row.get("redacted") and row.get("content_status") != "forgotten"
+        and value.messagePolicies.get(row["id"]) != "exclude"
+        and (
+            value.messagePolicies.get(row["id"]) != "retrieve"
+            or row["id"] in (retrieved_ids or [])
+        )
     ]
 
 
@@ -196,6 +209,8 @@ def check_budget(policy, messages):
 
 
 def redact(db, session_ids):
+    from . import context_retrieval
+    context_retrieval.redact(db, session_ids)
     # Called only by the exclusive offline forgetting transaction.
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='context_policies'").fetchone():
         return

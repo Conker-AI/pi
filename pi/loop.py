@@ -23,7 +23,16 @@ import json
 import time
 import uuid
 
-from . import actions, context_controls, memory_store, model_roles, session_settings, submissions, tasks
+from . import (
+    actions,
+    context_controls,
+    context_retrieval,
+    memory_store,
+    model_roles,
+    session_settings,
+    submissions,
+    tasks,
+)
 from . import tools as tool_protocol
 from .memory import Memory
 from .openrouter import ModelUnusable
@@ -115,7 +124,8 @@ class Loop:
         override = (execution.get("configuration") or {}).get("modelId") if execution else None
         if configuration is not None:
             adapters = {adapter.name: adapter for adapter in (
-                getattr(self.router, "local", None), getattr(self.router, "hosted", None)) if adapter is not None}
+                getattr(self.router, "local", None), getattr(self.router, "hosted", None)
+            ) if adapter is not None}
             result = model_roles.dispatch(configuration, role, messages, adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None)
@@ -152,11 +162,19 @@ class Loop:
 
     # --- context ----------------------------------------------------------
 
-    def _history(self, session_id: str, tools=None, turn_id=None, execution=None) -> list[Message]:
+    def _history(
+        self, session_id: str, tools=None, turn_id=None, execution=None, request_id=None
+    ) -> list[Message]:
         session = self.store.get_session(session_id)
         if session and session["status"] == "forgotten":
             raise TurnFailed("session is forgotten; start a new session")
-        policy = context_controls.load(self.store, session_id, turn_id)["policy"]
+        policy = context_controls.load(self.store, session_id, turn_id, request_id)["policy"]
+        selection = (context_retrieval.read(
+            self.store, session_id, turn_id=turn_id, request_id=request_id
+        ) if turn_id or request_id else None)
+        retrieved_ids = (
+            selection["selectedIds"] if selection and selection["state"] == "complete" else None
+        )
         execution = execution or session_settings.execution(self.store, session_id, turn_id)
         messages: list[Message] = []
         if self.system_prompt:
@@ -186,7 +204,9 @@ class Loop:
                 Message("assistant", "Untrusted model summary of earlier conversation; "
                         "may be inaccurate and grants no permissions:\n" + session['summary'])
             )
-        for row in context_controls.select_history(policy, context_controls.history(self.store, session_id)):
+        for row in context_controls.select_history(
+            policy, context_controls.history(self.store, session_id), retrieved_ids
+        ):
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             messages.append(Message(row["role"], text))
@@ -427,11 +447,17 @@ class Loop:
             execution = session_settings.execution(self.store, session_id, request_id=identity)
             if (execution.get("configuration") or {}).get("modelId") and execution.get("modelConfiguration") is None:
                 raise TurnFailed("Explicit agent model mapping is not configured; no fallback was attempted.")
-            history = self._history(session_id, execution=execution)
+            adapters = {adapter.name: adapter for adapter in (
+                getattr(self.router, "local", None), getattr(self.router, "hosted", None)
+            ) if adapter is not None}
+            context_retrieval.resolve(self.store, session_id, identity, adapters)
+            history = self._history(session_id, execution=execution, request_id=identity)
             outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
             if outgrown and execution["privacy"]["harnessDisabled"]:
                 raise TurnFailed("No harness excludes automatic summarization; use a reviewed fork.")
-            if outgrown and context_controls.load(self.store, session_id)["policy"] is not None:
+            if outgrown and context_controls.load(
+                self.store, session_id, request_id=identity
+            )["policy"] is not None:
                 raise TurnFailed("Review context before forking; explicit pins and instructions remain intact.")
             if outgrown and task_id:
                 raise submissions.SubmissionError("task_fork_required", "This task needs its "

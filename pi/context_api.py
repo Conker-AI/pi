@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from . import context_controls as controls
+from . import context_retrieval as retrieval
 from . import context_summaries as summaries
 
 
@@ -24,6 +25,17 @@ def router(store, authorize):
     @routes.get("/{session_id}/turns/{turn_id}")
     def snapshot(session_id: str, turn_id: str):
         return invoke(controls.load, session_id, turn_id)
+
+    @routes.get("/{session_id}/selections/{request_id}")
+    def selection(session_id: str, request_id: str):
+        # Read-only inspection never starts or resumes a helper.
+        try:
+            value = retrieval.read(store(), session_id, request_id=request_id)
+        except controls.ContextError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+        if value is None:
+            raise HTTPException(404, "Context selection not found.")
+        return value
 
     @routes.post("/{session_id}/fork")
     def fork(session_id: str, body: controls.ReviewedFork):

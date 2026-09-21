@@ -11,7 +11,7 @@ import re
 import time
 import uuid
 
-from . import session_settings, tasks
+from . import context_retrieval, session_settings, tasks
 
 UNRESOLVED = ("('running','awaiting_approval','awaiting_budget','acted_no_reply',"
               "'action_in_progress','outcome_unknown')")
@@ -243,6 +243,7 @@ def reserve(store, request_id, session_id, text, context, task_id=None, task_rev
                    "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
                    (request_id, session_id, task_id, task_revision, digest, text, head, now, now))
         session_settings.reserve(db, request_id, session_id)
+        context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:
             from . import attachment_turns, attachments
             try:
@@ -265,11 +266,19 @@ def fail_preparation(store, request_id, code="preparation_failed"):
     if code not in {"preparation_failed", "task_fork_required", "source_changed"}:
         code = "preparation_failed"
     with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
         db.execute("UPDATE turn_submissions SET state='preparation_failed',failure_code=?,"
                    "updated_at=? WHERE request_id=? AND state='preparing'",
                    (code, time.time(), request_id))
         from . import attachment_turns
-        attachment_turns.release(db, request_id)
+        terminal = db.execute(
+            "SELECT 1 FROM turn_submissions WHERE request_id=? "
+            "AND state IN ('preparation_failed','preparation_interrupted')",
+            (request_id,),
+        ).fetchone()
+        if terminal:
+            attachment_turns.release(db, request_id)
+        db.commit()
 
 
 def bind(store, request_id, *, fork_summary=None):
@@ -304,6 +313,7 @@ def bind(store, request_id, *, fork_summary=None):
         db.execute("INSERT INTO turns(id,session_id,status,started_at) VALUES(?,?,'running',?)",
                    (turn_id, session_id, now))
         session_settings.bind(db, turn_id, session_id, request_id)
+        context_retrieval.bind(db, request_id, turn_id)
         message = append(db, session_id, "user", row["pending_text"],
                          turn_id=turn_id, purpose="input")
         from . import attachment_turns
@@ -333,7 +343,8 @@ def recover_preparations(db):
                       (time.time(),)).rowcount
     if db.execute("SELECT 1 FROM sqlite_master WHERE name='attachment_reservations'").fetchone():
         db.execute("DELETE FROM attachment_reservations WHERE request_id IN "
-                   "(SELECT request_id FROM turn_submissions WHERE state='preparation_interrupted')")
+                   "(SELECT request_id FROM turn_submissions "
+                   "WHERE state IN ('preparation_interrupted','preparation_failed'))")
     return changed
 
 
