@@ -22,5 +22,5 @@ It is not an execution authorization: retry admission still needs an atomic clai
 current permission checks and a retained request identity.
 
 Verification: 31 combined prepared-context, context-control, reply-target,
-attachment and message-fork tests pass. Retry endpoint and response-family
-selection are still outstanding.
+attachment and message-fork tests pass. Retry execution and response-family selection are documented separately in
+response-retries.md and response-versions.md.

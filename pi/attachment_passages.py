@@ -28,6 +28,11 @@ def citations(db, turn_id, text, supplied):
     from . import attachments, session_settings
     from .citations import normalize
 
+    while retry := db.execute(
+        "SELECT source_turn_id FROM response_retries WHERE turn_id=?", (turn_id,)
+    ).fetchone():
+        turn_id = retry[0]
+
     result = [item for item in normalize(supplied) if not item["id"].startswith("attachment_")]
     requested = set(re.findall(r"\[\[(attachment_[a-f0-9]{32}:p[0-9]{1,3})\]\]", text))
     if not requested:

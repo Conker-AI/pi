@@ -102,6 +102,13 @@ def _session(db, identity):
 
 
 def load(store, identity, turn_id=None, request_id=None):
+    if turn_id:
+        with store._connect() as db:
+            while retry := db.execute(
+                "SELECT source_turn_id FROM response_retries WHERE turn_id=? AND session_id=?",
+                (turn_id, identity),
+            ).fetchone():
+                turn_id = retry[0]
     if turn_id or request_id:
         from . import context_retrieval
         frozen = context_retrieval.read(store, identity, turn_id=turn_id, request_id=request_id)

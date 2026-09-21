@@ -117,6 +117,26 @@ class Selection(BaseModel):
     expected_revision: int = Field(ge=1)
 
 
+def activate(db, sid, root, identity):
+    """Completion auto-selects unless it would silently drop an exact context rule."""
+    policy = db.execute("SELECT policy FROM context_policies WHERE session_id=?", (sid,)).fetchone()
+    rules = json.loads(policy[0])["messagePolicies"] if policy else {}
+    ids = [
+        row[0]
+        for row in db.execute(
+            "SELECT message_id FROM response_versions WHERE root_message_id=?", (root,)
+        )
+    ]
+    if identity not in ids or any(mid in rules and mid != identity for mid in ids):
+        return False
+    db.execute(
+        "UPDATE response_families SET selected_message_id=?,revision=revision+1 "
+        "WHERE root_message_id=? AND selected_message_id!=?",
+        (identity, root, identity),
+    )
+    return True
+
+
 def select(store, sid, root, body):
     body = Selection.model_validate(body.model_dump())
     with store._connect() as db:

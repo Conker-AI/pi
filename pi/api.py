@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
 from .browser_contract import runtime_allowed
-from . import jobs_api, turn_control, turn_queue, message_forks, response_versions
+from . import jobs_api, turn_control, turn_queue, message_forks, response_versions, response_retries
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
 from .queue_worker import QueueWorker
@@ -704,3 +704,4 @@ app.include_router(turn_queue.router(lambda: app.state.store, require_admin, lam
 
 app.include_router(message_forks.router(lambda: app.state.store, require_admin))
 app.include_router(response_versions.router(lambda: app.state.store, require_admin))
+app.include_router(response_retries.router(lambda: app.state.loop, require_admin))

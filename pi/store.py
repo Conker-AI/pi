@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import turn_control, turn_queue, message_forks, turn_context, response_versions
+from . import turn_control, turn_queue, message_forks, turn_context, response_versions, response_retries
 from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
 from . import citations as message_citations
 from . import jobs
@@ -273,6 +273,7 @@ class Store:
                 db.executescript(message_forks.SCHEMA)
                 db.executescript(turn_context.SCHEMA)
                 db.executescript(response_versions.SCHEMA)
+                db.executescript(response_retries.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)
@@ -461,6 +462,10 @@ class Store:
                 message["citations"] = evidence
             if not self._finish_turn(db, turn_id, "complete", **fields):
                 raise RuntimeError("Turn is no longer claimed by this caller")
+            retry = db.execute("SELECT source_message_id FROM response_retries WHERE turn_id=?", (turn_id,)).fetchone()
+            if retry:
+                root = response_versions.register(db, retry[0], message["id"])
+                response_versions.activate(db, row["session_id"], root, message["id"])
             db.commit()
             return message
 

@@ -12,7 +12,7 @@ Selection refuses foreign versions, unresolved work, stale revisions and context
 rules referring to another version. Review those rules explicitly before switching.
 Forgotten messages expose no family metadata and their families cannot be opened.
 
-This module provides internal atomic registration for retry completion. Retry
-execution is a separate implementation step, not claimed by these routes.
+Retry completion uses this module to register and select its new answer atomically.
+See response-retries.md for execution, cancellation and receipt behavior.
 
 Validation: 26 combined version/context/fork/input tests passed; focused lint passed.
