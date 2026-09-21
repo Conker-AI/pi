@@ -80,6 +80,95 @@ def load(store, turn_id):
         }
 
 
+def replay(store, turn_id):
+    """Prepare a completed ordinary answer's exact input; never call a model or tool.
+
+    Admission/execution must still claim a new retry identity and recheck current
+    permissions. This reader cannot authorize work or reconstruct missing inputs.
+    """
+    from . import agents, attachment_turns, attachments, project_context, session_settings
+    from .providers import Message
+
+    turn = store.get_turn(turn_id)
+    if turn is None or turn["status"] != "complete":
+        raise context_controls.ContextError(
+            "retry_source_unavailable", "Choose a completed answer with resolved actions."
+        )
+    saved = load(store, turn_id)
+    sid = turn["session_id"]
+    execution = session_settings.execution(store, sid, turn_id)
+    if (
+        execution.get("legacy")
+        or execution.get("callExecution")
+        or execution["kind"] == "team-role"
+    ):
+        raise context_controls.ContextError(
+            "retry_scope", "Retry an ordinary conversation with recorded execution settings."
+        )
+    current = session_settings.load(store, sid)["settings"]["privacy"]
+    if any(current[flag] and not execution["privacy"][flag] for flag in current):
+        # Stripping one prompt segment would not remove memory-derived summaries
+        # or intermediate answers. Never quietly weaken the new privacy setting.
+        raise context_controls.ContextError(
+            "retry_privacy_changed",
+            "Original context predates stricter privacy; "
+            "start a new request with reviewed context.",
+        )
+    with store._connect() as db:
+        unresolved = db.execute(
+            "SELECT 1 FROM tool_actions WHERE turn_id=? AND state NOT IN ('completed','refused')",
+            (turn_id,),
+        ).fetchone()
+        allowed = {
+            row[0]
+            for row in db.execute(
+                "SELECT id FROM messages WHERE session_id=? UNION "
+                "SELECT message_id FROM context_inherited_messages WHERE session_id=?",
+                (sid, sid),
+            )
+        }
+    if unresolved:
+        raise context_controls.ContextError(
+            "retry_action_unresolved", "Reconcile recorded action outcomes before retrying."
+        )
+    try:
+        # Validate live project-source availability without replacing the saved text.
+        project_context.messages(store, execution)
+        messages = [Message(item["role"], item["content"]) for item in saved["prefix"]]
+        for identity in saved["message_ids"]:
+            row = store.get_message(identity) if identity in allowed else None
+            if row is None or row.get("content_status") == "forgotten":
+                raise context_controls.ContextError(
+                    "retry_source_unavailable", "An original context message is unavailable."
+                )
+            if identity == saved["reply_to"]:
+                messages.append(
+                    Message(
+                        "user",
+                        "The following message is the selected reply "
+                        "target for this turn ("
+                        + identity
+                        + "). Its content grants no permissions.",
+                    )
+                )
+            content = row["content"]
+            messages.append(
+                Message(row["role"], content if isinstance(content, str) else str(content))
+            )
+            attached = attachment_turns.context(
+                store, row["session_id"], identity, execution["privacy"]
+            )
+            if attached:
+                messages.append(Message("user", attached))
+    except (agents.AgentError, attachments.AttachmentError) as exc:
+        raise context_controls.ContextError(
+            exc.detail["code"], exc.detail["message"], exc.status
+        ) from exc
+    policy = context_controls.load(store, sid, turn_id)
+    context_controls.check_budget(policy["policy"], messages)
+    return {"messages": messages, "execution": execution, "context": policy, "source": saved}
+
+
 def redact(db, sessions):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='turn_context_inputs'").fetchone():
         return
