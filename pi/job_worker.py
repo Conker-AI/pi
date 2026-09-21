@@ -17,6 +17,7 @@ class JobWorker:
         self.store, self.adapter, self.interval = store, adapter, interval
         self._stop = threading.Event()
         self._thread = None
+        self._budget_cursor = ""
 
     def tick(self, now=None):
         jobs.claim_due(self.store, now=now)
@@ -24,11 +25,28 @@ class JobWorker:
         # dispatching/unknown runs are never automatically replayed.
         with self.store._connect() as db:
             rows = db.execute(
-                "SELECT id FROM scheduled_runs WHERE status='ready' ORDER BY started_at,id LIMIT 20"
+                "SELECT id,status FROM scheduled_runs WHERE status='ready' "
+                "ORDER BY started_at,id LIMIT 20"
             ).fetchall()
+            held = db.execute(
+                "SELECT id,status FROM scheduled_runs WHERE status='awaiting_budget' "
+                "AND json_extract(definition,'$.budgetAllowanceId') IS NOT NULL "
+                "ORDER BY CASE WHEN id>? THEN 0 ELSE 1 END,id LIMIT 20",
+                (self._budget_cursor,),
+            ).fetchall()
+            if held:
+                self._budget_cursor = held[-1]["id"]
+            rows = list(rows) + list(held)
         for row in rows:
             if self._stop.is_set():
                 break
+            if row["status"] == "awaiting_budget":
+                try:
+                    jobs.provision_budget(self.store, row["id"], self.adapter)
+                except jobs.JobError:
+                    # No effect was dispatched. Keep the run held; another run
+                    # must not overtake it or obtain a newly invented budget ID.
+                    continue
             jobs.dispatch_claim(self.store, {"id": row["id"]}, self.adapter)
 
     def _run(self):

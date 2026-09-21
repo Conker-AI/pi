@@ -50,6 +50,10 @@ def router(store, authorize, executor=None):
     def budget(identity: str, body: jobs.BudgetBinding):
         return call(jobs.bind_budget, identity, body, execution_adapter())
 
+    @routes.post("/runs/{identity}/provision-budget")
+    def provision_budget(identity: str):
+        return call(jobs.provision_budget, identity, execution_adapter())
+
     @routes.post("/runs/{identity}/cancel")
     def cancel(identity: str):
         return call(jobs.cancel_run, identity)

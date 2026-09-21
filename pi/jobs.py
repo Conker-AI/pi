@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from .agents import StrictModel
 
@@ -46,6 +46,13 @@ class Definition(StrictModel):
     target: Target
     overlap: Literal["skip"] = "skip"
     requireBudget: bool = False
+    budgetAllowanceId: str | None = Field(default=None, pattern=r"^allowance_[a-f0-9]{32}$")
+
+    @model_validator(mode="after")
+    def allowance_requires_budget(self):
+        if self.budgetAllowanceId and not self.requireBudget:
+            raise ValueError("A recurring allowance requires budgeted execution.")
+        return self
 
     @field_validator("timeZone")
     @classmethod
@@ -340,6 +347,28 @@ def reconcile(store, identity, adapter):
 
 class BudgetBinding(StrictModel):
     budget_id: str = Field(pattern=r"^job_[a-f0-9]{32}$")
+
+
+def provision_budget(store, identity, adapter):
+    """Allocate from an existing owner grant; repeating admission cannot mint twice."""
+    with store._connect() as db:
+        row = db.execute("SELECT * FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        if row is None:
+            raise JobError("Run not found.")
+        if row["status"] != "awaiting_budget":
+            return {"run_id": identity, "state": row["status"]}
+        definition = json.loads(row["definition"])
+    allowance = definition.get("budgetAllowanceId")
+    allocate = getattr(adapter, "allocate_budget", None)
+    if not allowance or not callable(allocate):
+        raise JobError("No recurring budget allowance is configured for this run.")
+    try:
+        budget_id = allocate(allowance, target=definition["target"], action_id=identity,
+                             agent_id=definition["agentId"])
+        body = BudgetBinding(budget_id=budget_id)
+    except Exception:
+        raise JobError("Recurring allowance is unavailable, exhausted, expired or does not match this run.") from None
+    return bind_budget(store, identity, body, adapter)
 
 
 def bind_budget(store, identity, body, adapter):

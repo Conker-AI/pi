@@ -84,6 +84,21 @@ class PublishedJobs:
         except (httpx.HTTPError, ValueError):
             return False
 
+    def allocate_budget(self, allowance_id, *, target, action_id, agent_id):
+        target = Target.model_validate(target)
+        client = self.clients.get(agent_id)
+        if client is None or not client.execution_key:
+            raise ValueError("Budget authority unavailable")
+        response = self._request(client, "POST",
+            f"/v2/agent/spending/allowances/{allowance_id}/allocate",
+            json={"root_action_id": action_id, "target": target.model_dump()})
+        value = response.json()
+        if (response.status_code != 200 or not isinstance(value, dict)
+                or value.get("root_action_id") != action_id
+                or type(value.get("cap")) is not int or value["cap"] <= 0):
+            raise ValueError("Budget allocation unavailable")
+        return value.get("job_id")
+
     def _request(self, gate, method, path, **kwargs):
         # Receipts are metadata; never buffer arbitrary tool output or inherit
         # proxy credentials/configuration from the worker's environment.
