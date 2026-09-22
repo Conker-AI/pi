@@ -495,6 +495,19 @@ def create_app(
             app.state.config.pi_url.rstrip("/") + target, "X-Pi-Owner-Key",
             app.state.config.pi_owner_key, body, request.scope["query_string"])
 
+    @app.get("/api/owner/editor-capabilities")
+    def editor_capabilities(request: Request):
+        session(request)
+        params = request.query_params
+        if set(params) - {"kind", "q", "after", "limit"} or any(len(params.getlist(key)) != 1 for key in params):
+            raise AuthError("Use only capability search parameters.", 422)
+        if (params.get("kind", "tool") not in {"tool", "workflow"} or len(params.get("q", "")) > 100
+                or ("after" in params and not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,79}", params["after"]))
+                or ("limit" in params and (not re.fullmatch(r"[0-9]{1,3}", params["limit"]) or not 1 <= int(params["limit"]) <= 100))):
+            raise AuthError("Invalid capability search parameters.", 422)
+        return forward("GET", app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-capabilities",
+                       "X-ToolGate-Owner-Key", app.state.config.owner_key, None, request.scope["query_string"])
+
     @app.get("/api/owner/editor-drafts")
     def editor_drafts(request: Request):
         session(request)

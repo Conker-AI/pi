@@ -110,6 +110,20 @@ def test_editor_publication_requires_exact_one_use_proof_and_owner_channel(gatew
         assert client.get(f"/api/owner/editor-drafts/example/{operation}?secret=x").status_code == 422
 
 
+def test_editor_catalogue_is_a_narrow_read_only_owner_route(gateway):
+    client, _, seen = gateway
+    path = "/api/owner/editor-capabilities"
+    assert client.get(path).status_code == 401
+    sign_in(client)
+    for suffix in ("?kind=secret", "?limit=0", "?q=a&q=b", "?after=../secret", "?extra=x"):
+        assert client.get(path + suffix).status_code == 422
+    assert seen == []
+    assert client.get(path + "?kind=tool&q=echo&limit=10").status_code == 200
+    assert seen[-1].url.path == "/v2/owner/editor-capabilities"
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert client.post(path, json={}).status_code == 405
+
+
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):
     client, _, seen = gateway
     cookie = client.get("/auth/session").headers["set-cookie"]
