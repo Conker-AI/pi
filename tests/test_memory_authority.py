@@ -24,7 +24,12 @@ def test_invalid_binding_does_not_create_client(raw):
         memory_authority.clients(raw, {}, lambda *args: pytest.fail())
 
 
-def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(monkeypatch):
+@pytest.mark.parametrize("retrieval,expected_status", [
+    ({}, "degraded"),
+    ({"semantic": {"status": "ok"}}, "ok"),
+    ({"semantic": {"status": "unavailable"}}, "degraded"),
+])
+def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(monkeypatch, retrieval, expected_status):
     class Store:
         def get_turn(self, identity):
             return {"session_id": "session"}
@@ -35,7 +40,7 @@ def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(monkey
 
         def retrieve(self, query, **options):
             self.calls.append(options)
-            return {"memories": [], "retrieval": {}}
+            return {"memories": [], "retrieval": retrieval}
 
     selected = {
         "kind": "agent",
@@ -57,7 +62,7 @@ def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(monkey
     assert specialist.calls == [
         {"scope": "selected", "session_id": None, "memory_ids": ["memory_a"]}
     ]
-    assert saved[-1] == "ok" and not companion.calls
+    assert saved[-1] == expected_status and not companion.calls
     selected["privacy"]["memoryDisabled"] = True
     memory.prepare("turn", "query")
     assert saved[-1] == "disabled" and len(specialist.calls) == 1
