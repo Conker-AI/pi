@@ -1,5 +1,7 @@
 # Pi
 
+Part of **[Conker](https://github.com/alexeybe1kin/conker)**, independently usable and deployable. [Project map](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/docs/conker-project.md) · [Connected local setup](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/docs/local-windows-startup.md).
+
 Conker's runtime. Agent turns, sessions, jobs, model routing, execution history.
 
 The browser talks to a separate HTTPS gateway, shipped in this image but run in
@@ -211,3 +213,9 @@ cron come with C2.
 ## Licence
 
 MIT.
+
+## Independent model roles
+
+The catalogue assigns answer generation, model routing, context selection, summarization and memory ranking independently. Memory ranking replaces the legacy PI_MEMORY_RERANK_ENABLED switch and migrates disabled. Enable it explicitly in Conker Settings. The optional decision-service adapter accepts `model-routing` and `memory-ranking` routes; general completion adapters can also implement the ranking JSON contract. Provider transports and credentials remain server-owned.
+
+Memory ranking only reorders authorized candidates; it preserves originals and source links. Invalid or unavailable results keep retrieval order. No-memory skips retrieval; no-harness skips ranking. See [decision-service setup](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/services/decisions/README.md).
