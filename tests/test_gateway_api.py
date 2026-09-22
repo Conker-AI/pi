@@ -60,6 +60,38 @@ def verified_headers(client, headers, path, body):
     return {**headers, "X-Conker-Verification": result.json()["verification_token"]}
 
 
+def test_editor_draft_write_requires_exact_one_use_proof(gateway):
+    client, _, seen = gateway
+    path = "/api/owner/editor-drafts/example"
+    assert client.get(path).status_code == 401
+    headers = sign_in(client)
+    body = {"expected_revision": 0, "document": {"id": "example"}}
+    assert client.post(path, json=body, headers=headers).status_code == 428
+    verified = verified_headers(client, headers, path, body)
+    assert client.post(path, json={**body, "expected_revision": 1}, headers=verified).status_code == 428
+    assert client.post(path, json=body, headers=verified).status_code == 200
+    assert seen[-1].url.path == "/v2/owner/editor-drafts/example"
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert "X-ToolGate-Execution-Key" not in seen[-1].headers
+    assert "cookie" not in seen[-1].headers
+    assert client.post(path, json=body, headers=verified).status_code == 428
+    assert len(seen) == 1
+
+
+def test_editor_draft_routes_do_not_widen_to_publish_or_arbitrary_paths(gateway):
+    client, _, seen = gateway
+    headers = sign_in(client)
+    for suffix in ("?limit=0", "?limit=101", "?limit=2&limit=3", "?secret=x", "?after=../vault"):
+        assert client.get("/api/owner/editor-drafts" + suffix).status_code == 422
+    assert not seen
+    assert client.get("/api/owner/editor-drafts?limit=2&after=a").status_code == 200
+    assert str(seen[-1].url).endswith("/v2/owner/editor-drafts?limit=2&after=a")
+    for path in ("/api/owner/editor-drafts/example/publish", "/api/owner/editor-drafts/example/run"):
+        result = client.post("/auth/verify", headers=headers, json={"password": PASSWORD,
+            "operation": {"method": "POST", "path": path, "body": {}}})
+        assert result.status_code == 422
+
+
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):
     client, _, seen = gateway
     cookie = client.get("/auth/session").headers["set-cookie"]

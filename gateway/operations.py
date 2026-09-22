@@ -64,6 +64,7 @@ def fingerprint(method: str, path: str, body: dict) -> str:
             (path.startswith("/api/pi/") and runtime_allowed(method, path[len("/api/pi") :]))
             or (path.startswith("/api/control/pi/") and owner_allowed(method, path[len("/api/control/pi") :]))
             or re.fullmatch(r"/api/owner/requests/[A-Za-z0-9_-]+/decision", path)
+            or re.fullmatch(r"/api/owner/editor-drafts/[A-Za-z][A-Za-z0-9_-]{0,63}", path)
             or path == "/api/terminal"
         )
     )

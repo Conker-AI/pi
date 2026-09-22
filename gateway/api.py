@@ -495,6 +495,37 @@ def create_app(
             app.state.config.pi_url.rstrip("/") + target, "X-Pi-Owner-Key",
             app.state.config.pi_owner_key, body, request.scope["query_string"])
 
+    @app.get("/api/owner/editor-drafts")
+    def editor_drafts(request: Request):
+        session(request)
+        params = request.query_params
+        if set(params) - {"limit", "after"} or any(len(params.getlist(key)) != 1 for key in params):
+            raise AuthError("Use only editor draft pagination parameters.", 422)
+        limit, after = params.get("limit"), params.get("after")
+        if ((limit is not None and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 100))
+                or (after is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", after))):
+            raise AuthError("Invalid editor draft pagination.", 422)
+        return forward("GET", app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-drafts",
+                       "X-ToolGate-Owner-Key", app.state.config.owner_key, None, request.scope["query_string"])
+
+    @app.get("/api/owner/editor-drafts/{identity}")
+    @app.post("/api/owner/editor-drafts/{identity}")
+    async def editor_draft(identity: str, request: Request):
+        session(request)
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity) or request.scope["query_string"]:
+            raise AuthError("Invalid editor draft identity.", 422)
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            if (set(body) != {"expected_revision", "document"}
+                    or type(body.get("expected_revision")) is not int or body["expected_revision"] < 0
+                    or not isinstance(body.get("document"), dict) or body["document"].get("id") != identity):
+                raise AuthError("Send an editor document and its expected revision.", 422)
+            admit_write(request, body)
+        from starlette.concurrency import run_in_threadpool
+        return await run_in_threadpool(forward, request.method,
+            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}",
+            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
+
     @app.get("/api/owner/requests")
     def owner_requests(request: Request):
         session(request)
