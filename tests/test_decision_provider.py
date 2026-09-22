@@ -127,3 +127,18 @@ def test_memory_no_harness_never_calls_ranker(monkeypatch):
                            client, ranker=SimpleNamespace(rank_memories=prohibited))
     worker.prepare("turn", "private")
     assert saved[-1][-1] is package
+
+
+def test_typed_memory_ranking_route():
+    calls = []
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json={"choice": "m1", "confidence": 0.8,
+            "model": "replacement-model", "probabilities": {"m0": 0.1, "m1": 0.9}})
+    _, provider = setup(httpx.MockTransport(handler))
+    result = provider.complete_bounded([Message("user", json.dumps({
+        "query": "question", "memory_previews": {"m0": "first", "m1": "second"}}))],
+        model="memory-ranking", timeout=1)
+    assert json.loads(result.text) == {"order": ["m1", "m0"]}
+    assert result.model == "replacement-model"
+    assert len(calls) == 1

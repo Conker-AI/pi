@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .providers import Message, ProviderUnavailable, require_images
 
-ROLES = ("answer", "routing", "context-selection", "summarization")
+ROLES = ("answer", "routing", "context-selection", "summarization", "memory-ranking")
 
 
 class Strict(BaseModel):
@@ -52,6 +52,17 @@ class Configuration(Strict):
     defaultModelId: str | None
     roleSettings: Roles
 
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_roles(cls, value):
+        if isinstance(value, dict) and isinstance(value.get("roleSettings"), dict):
+            roles = value["roleSettings"].get("roles")
+            if isinstance(roles, dict) and "memory-ranking" not in roles:
+                value = {**value, "roleSettings": {**value["roleSettings"], "roles": {
+                    **roles, "memory-ranking": dict(enabled=False, eligibleModelIds=[],
+                        modelId=None, timeoutMs=2000, failure="stop", fallbackModelId=None)}}}
+        return value
+
     @model_validator(mode="after")
     def references(self):
         providers = {p.id: p for p in self.providers}
@@ -64,7 +75,7 @@ class Configuration(Strict):
         if self.defaultModelId not in enabled and (self.defaultModelId is not None or enabled):
             raise ValueError("Choose an enabled default model.")
         if set(self.roleSettings.roles) != set(ROLES):
-            raise ValueError("Configure all four known model roles.")
+            raise ValueError("Configure all known model roles.")
         for item in self.roleSettings.roles.values():
             eligible = set(item.eligibleModelIds)
             if len(eligible) != len(item.eligibleModelIds) or not eligible.issubset(known):
@@ -133,7 +144,7 @@ def load(store):
         ).fetchone()
         return {
             "revision": row[0] if row else 0,
-            "configuration": json.loads(row[1]) if row else None,
+            "configuration": Configuration.model_validate_json(row[1]).model_dump() if row else None,
         }
 
 

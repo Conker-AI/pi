@@ -188,10 +188,8 @@ async def lifespan(app: FastAPI):
             os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)),
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
-    if os.environ.get("PI_MEMORY_RERANK_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
-        memory.ranker = app.state.router.providers.get("decisions")
-        if memory.ranker is None:
-            raise RuntimeError("Memory reranking requires the configured decision service.")
+    from .memory_ranking import ConfiguredMemoryRanker
+    memory.ranker = ConfiguredMemoryRanker(store, app.state.router.providers)
     app.state.loop = Loop(
         store, app.state.router,
         system_prompt=os.environ.get("PI_SYSTEM_PROMPT", ""),
