@@ -27,7 +27,8 @@ def gateway(tmp_path):
             headers={"Set-Cookie": "service_secret=bad", "X-Pi-Key": "bad"},
         )
 
-    config = Config(ORIGIN, str(auth.path), "http://pi:8050", RUNTIME, owner_key=OWNER)
+    config = Config(ORIGIN, str(auth.path), "http://pi:8050", RUNTIME, owner_key=OWNER,
+                    toolgate_execution_key="tgx_" + "e" * 40)
     with TestClient(
         create_app(config, store=auth, transport=httpx.MockTransport(upstream)), base_url=ORIGIN
     ) as client:
@@ -122,6 +123,21 @@ def test_editor_catalogue_is_a_narrow_read_only_owner_route(gateway):
     assert seen[-1].url.path == "/v2/owner/editor-capabilities"
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
     assert client.post(path, json={}).status_code == 405
+
+
+@pytest.mark.parametrize('operation,fields', [('access', {'enabled': True}), ('runs', {'action_id': 'editor_' + 'a' * 32, 'args': {}})])
+def test_editor_execution_operations_require_proof_and_both_host_credentials(gateway, operation, fields):
+    client, _, seen = gateway
+    headers = sign_in(client)
+    path = f'/api/owner/editor-drafts/example/{operation}'
+    body = {'version': 1, 'digest': 'b' * 64, **fields}
+    assert client.post(path, headers=headers, json=body).status_code == 428
+    verified = verified_headers(client, headers, path, body)
+    assert client.post(path, headers=verified, json={**body, 'version': 2}).status_code == 428
+    assert client.post(path, headers=verified, json=body).status_code == 200
+    assert seen[-1].headers['X-ToolGate-Owner-Key'] == OWNER
+    assert seen[-1].headers['X-ToolGate-Execution-Key'] == 'tgx_' + 'e' * 40
+    assert client.post(path, headers=verified, json=body).status_code == 428
 
 
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):

@@ -39,8 +39,13 @@ class Config:
     terminal_shell: str = ""
     terminal_directory: str = ""
     pi_owner_key: str = ""
+    toolgate_execution_key: str = ""
 
     def validate(self) -> None:
+        if self.toolgate_execution_key and (not self.toolgate_execution_key.startswith("tgx_")
+                or len(self.toolgate_execution_key) < 32
+                or self.toolgate_execution_key in {self.pi_key, self.owner_key, self.pi_owner_key}):
+            raise ValueError("Provision a distinct scoped ToolGate execution credential on the host.")
         if self.pi_owner_key and (len(self.pi_owner_key) < 32 or self.pi_owner_key in {self.pi_key, self.owner_key}):
             raise ValueError("Provision a distinct Pi owner-control key of at least 32 characters.")
         if bool(self.terminal_shell) != bool(self.terminal_directory):
@@ -100,6 +105,7 @@ class Config:
             os.environ.get("GATEWAY_TERMINAL_SHELL", ""),
             os.environ.get("GATEWAY_TERMINAL_DIRECTORY", ""),
             os.environ.get("GATEWAY_PI_OWNER_KEY", ""),
+            os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
         )
 
 
@@ -348,11 +354,12 @@ def create_app(
         query: bytes,
         *,
         timeout: float = 660,
+        extra_headers: dict | None = None,
     ) -> httpx.Response:
         outgoing = app.state.client.build_request(
             method,
             url,
-            headers={key_header: key},
+            headers={key_header: key, **(extra_headers or {})},
             json=body,
             params=query.decode("ascii") if query else None,
             timeout=timeout,
@@ -361,7 +368,7 @@ def create_app(
         outgoing.headers.pop("cookie", None)
         return app.state.client.send(outgoing)
 
-    def forward(method: str, url: str, key_header: str, key: str, body: dict | None, query: bytes):
+    def forward(method: str, url: str, key_header: str, key: str, body: dict | None, query: bytes, extra_headers=None):
         if not key:
             raise AuthError(
                 "Owner approval channel is not configured. "
@@ -369,7 +376,7 @@ def create_app(
                 503,
             )
         try:
-            response = upstream(method, url, key_header, key, body, query)
+            response = upstream(method, url, key_header, key, body, query, extra_headers=extra_headers)
         except (httpx.HTTPError, UnicodeError):
             raise AuthError(
                 "Service unavailable; check conker status. The operation was not retried; "
@@ -538,6 +545,44 @@ def create_app(
         return await run_in_threadpool(forward, request.method,
             app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}",
             "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
+
+    @app.get("/api/owner/editor-drafts/{identity}/access")
+    @app.post("/api/owner/editor-drafts/{identity}/access")
+    @app.get("/api/owner/editor-drafts/{identity}/runs")
+    @app.post("/api/owner/editor-drafts/{identity}/runs")
+    async def editor_execution(identity: str, request: Request):
+        session(request)
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity):
+            raise AuthError("Invalid editor draft identity.", 422)
+        key = app.state.config.toolgate_execution_key
+        if not key:
+            raise AuthError("The scoped workflow execution credential is not configured on this host.", 503)
+        operation = request.url.path.rsplit("/", 1)[-1]
+        body = await json_body(request) if request.method == "POST" else None
+        params = request.query_params
+        if body is not None:
+            required = {"version", "digest", "enabled"} if operation == "access" else {"version", "digest", "action_id", "args"}
+            optional = set() if operation == "access" else {"approval_request_id"}
+            if (not required <= body.keys() or body.keys() - required - optional
+                    or type(body.get("version")) is not int or body["version"] < 1
+                    or not isinstance(body.get("digest"), str) or not re.fullmatch(r"[a-f0-9]{64}", body["digest"])
+                    or (operation == "access" and type(body.get("enabled")) is not bool)
+                    or (operation == "runs" and (not isinstance(body.get("action_id"), str)
+                        or not re.fullmatch(r"editor_[a-f0-9]{32}", body["action_id"]) or not isinstance(body.get("args"), dict)))):
+                raise AuthError("Supply the exact workflow version and bounded operation fields.", 422)
+            admit_write(request, body)
+        elif operation == "access":
+            if (set(params) != {"version", "digest"} or any(len(params.getlist(k)) != 1 for k in params)
+                    or not re.fullmatch(r"[1-9][0-9]{0,8}", params["version"])
+                    or not re.fullmatch(r"[a-f0-9]{64}", params["digest"])):
+                raise AuthError("Select the exact published workflow version.", 422)
+        elif params:
+            raise AuthError("Run history accepts no query parameters.", 422)
+        from starlette.concurrency import run_in_threadpool
+        return await run_in_threadpool(forward, request.method,
+            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}/{operation}",
+            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, request.scope["query_string"],
+            {"X-ToolGate-Execution-Key": key})
 
     @app.get("/api/owner/editor-drafts/{identity}/publications")
     @app.get("/api/owner/editor-drafts/{identity}/validation")
