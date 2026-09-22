@@ -526,6 +526,27 @@ def create_app(
             app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}",
             "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
 
+    @app.get("/api/owner/editor-drafts/{identity}/publications")
+    @app.get("/api/owner/editor-drafts/{identity}/validation")
+    @app.post("/api/owner/editor-drafts/{identity}/publish")
+    async def editor_publication(identity: str, request: Request):
+        session(request)
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity) or request.scope["query_string"]:
+            raise AuthError("Invalid editor draft identity.", 422)
+        operation = request.url.path.rsplit("/", 1)[-1]
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            if (set(body) != {"expected_revision", "expected_publication_version", "authorization"}
+                    or type(body.get("expected_revision")) is not int or body["expected_revision"] < 1
+                    or type(body.get("expected_publication_version")) is not int or body["expected_publication_version"] < 0
+                    or body.get("authorization") not in {"auto", "owner_confirmation"}):
+                raise AuthError("Select the saved draft, publication version and authorization.", 422)
+            admit_write(request, body)
+        from starlette.concurrency import run_in_threadpool
+        return await run_in_threadpool(forward, request.method,
+            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}/{operation}",
+            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
+
     @app.get("/api/owner/requests")
     def owner_requests(request: Request):
         session(request)

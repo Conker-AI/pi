@@ -78,7 +78,7 @@ def test_editor_draft_write_requires_exact_one_use_proof(gateway):
     assert len(seen) == 1
 
 
-def test_editor_draft_routes_do_not_widen_to_publish_or_arbitrary_paths(gateway):
+def test_editor_draft_routes_do_not_widen_to_execution_or_arbitrary_paths(gateway):
     client, _, seen = gateway
     headers = sign_in(client)
     for suffix in ("?limit=0", "?limit=101", "?limit=2&limit=3", "?secret=x", "?after=../vault"):
@@ -86,10 +86,28 @@ def test_editor_draft_routes_do_not_widen_to_publish_or_arbitrary_paths(gateway)
     assert not seen
     assert client.get("/api/owner/editor-drafts?limit=2&after=a").status_code == 200
     assert str(seen[-1].url).endswith("/v2/owner/editor-drafts?limit=2&after=a")
-    for path in ("/api/owner/editor-drafts/example/publish", "/api/owner/editor-drafts/example/run"):
+    for path in ("/api/owner/editor-drafts/example/delete", "/api/owner/editor-drafts/example/run"):
         result = client.post("/auth/verify", headers=headers, json={"password": PASSWORD,
             "operation": {"method": "POST", "path": path, "body": {}}})
         assert result.status_code == 422
+
+
+def test_editor_publication_requires_exact_one_use_proof_and_owner_channel(gateway):
+    client, _, seen = gateway
+    path = "/api/owner/editor-drafts/example/publish"
+    headers = sign_in(client)
+    body = {"expected_revision": 2, "expected_publication_version": 1, "authorization": "owner_confirmation"}
+    assert client.post(path, json=body, headers=headers).status_code == 428
+    verified = verified_headers(client, headers, path, body)
+    assert client.post(path, json={**body, "authorization": "auto"}, headers=verified).status_code == 428
+    assert client.post(path, json=body, headers=verified).status_code == 200
+    assert seen[-1].url.path == "/v2/owner/editor-drafts/example/publish"
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert "X-ToolGate-Execution-Key" not in seen[-1].headers
+    assert client.post(path, json=body, headers=verified).status_code == 428
+    for operation in ("publications", "validation"):
+        assert client.get(f"/api/owner/editor-drafts/example/{operation}").status_code == 200
+        assert client.get(f"/api/owner/editor-drafts/example/{operation}?secret=x").status_code == 422
 
 
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):
