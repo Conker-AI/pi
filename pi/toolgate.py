@@ -18,10 +18,13 @@ story that is not true.
 from __future__ import annotations
 
 import uuid
+import re
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+_WORKFLOW = re.compile(r'^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$')
 
 
 @dataclass(frozen=True)
@@ -113,6 +116,15 @@ class ToolGateClient:
                                  headers=self._headers(), timeout=self.timeout)
             response.raise_for_status()
             rows = response.json()
+            workflows = httpx.get(f"{self.base_url}/v2/agent/published-workflows",
+                                  headers=self._headers(), timeout=self.timeout)
+            # Older ToolGate deployments retain individual tools until upgraded.
+            if workflows.status_code != 404:
+                workflows.raise_for_status()
+                published = workflows.json()
+                if not isinstance(published, list) or any(not isinstance(row, dict) or not _WORKFLOW.fullmatch(str(row.get('id', ''))) for row in published):
+                    raise ValueError('Invalid published workflow catalogue')
+                rows = [*rows, *published]
         except Exception as exc:
             raise ToolGateUnavailable(type(exc).__name__) from exc
         return [
@@ -132,10 +144,18 @@ class ToolGateClient:
         confirm is not a failure - the turn parks and the owner decides.
         """
         payload: dict[str, Any] = {"args": args, "action_id": action_id, "job_id": job_id}
+        workflow = _WORKFLOW.fullmatch(tool_id)
+        if tool_id.startswith('workflow:') and not workflow:
+            raise ToolRefused('VALIDATION_ERROR', 'Invalid immutable workflow capability')
+        path = f"/v2/tools/{tool_id}/invoke"
+        if workflow:
+            identity, version, digest = workflow.groups()
+            path = f"/v2/automations/{identity}/run"
+            payload.update(published_version=int(version), expected_publication_digest=digest)
         if approval_request_id:
             payload["approval_request_id"] = approval_request_id
         try:
-            response = httpx.post(f"{self.base_url}/v2/tools/{tool_id}/invoke",
+            response = httpx.post(f"{self.base_url}{path}",
                                   json=payload, headers=self._headers(), timeout=self.timeout)
         except Exception as exc:
             return ToolPending("outcome_unknown",
@@ -186,6 +206,15 @@ class ToolGateClient:
             return ToolPending("outcome_unknown",
                                "Outcome unknown; check the action, never repeat it", action_id)
         result = body.get("result")
+        workflow = _WORKFLOW.fullmatch(tool_id)
+        if workflow and body.get('status') == 'completed':
+            identity, version, digest = workflow.groups()
+            publication = body.get('publication', {})
+            if (not isinstance(publication, dict) or publication.get('id') != identity
+                    or publication.get('version') != int(version) or publication.get('digest') != digest):
+                return ToolPending('outcome_unknown', 'Workflow publication receipt does not match', action_id)
+            if body.get('code') in ('OK', 'WORKFLOW_FAILED'):
+                return ToolResult(body['code'] == 'OK', result, tool_id)
         if body.get("status") == "completed" and isinstance(result, dict):
             if body.get("code") == "OK" and result.get("ok") is True:
                 return ToolResult(True, result.get("result"), tool_id)
