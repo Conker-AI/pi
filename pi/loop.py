@@ -30,6 +30,7 @@ from . import (
     character_context,
     context_controls,
     context_retrieval,
+    live_stream,
     memory_store,
     model_roles,
     session_settings,
@@ -129,7 +130,10 @@ class Loop:
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
         if role == "answer":
             turn_steering.guard(self.store, execution)
-        result = self._call_once(messages, ctx, execution, role)
+            with live_stream.answering():
+                result = self._call_once(messages, ctx, execution, role)
+        else:
+            result = self._call_once(messages, ctx, execution, role)
         if role == "answer":
             try:
                 turn_steering.guard(self.store, execution)
@@ -722,7 +726,12 @@ class Loop:
 
     # --- the turn ---------------------------------------------------------
 
-    def run_turn(
+    def run_turn(self, session_id: str, user_text: str, context: dict | None = None, **kwargs):
+        """One turn; its answer can be previewed live by `request_id` while it runs."""
+        with live_stream.open_reply(kwargs.get("request_id")):
+            return self._run_turn(session_id, user_text, context, **kwargs)
+
+    def _run_turn(
         self,
         session_id: str,
         user_text: str,

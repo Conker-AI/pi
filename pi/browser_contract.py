@@ -10,6 +10,7 @@ RUNTIME_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/submissions",
         r"/turns/unreplied",
         r"/turn-submissions/[A-Za-z0-9_-]+",
+        r"/turn-submissions/[A-Za-z0-9_-]+/stream",
         r"/approvals",
         r"/tools",
         r"/models",

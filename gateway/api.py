@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from pi.browser_contract import owner_allowed, runtime_allowed
 from pi.owner_terminal import Terminal, TerminalError
@@ -120,6 +120,7 @@ def create_app(
     *,
     store: AuthStore | None = None,
     transport: httpx.BaseTransport | None = None,
+    stream_transport: httpx.AsyncBaseTransport | None = None,
     terminal_factory=Terminal,
 ) -> FastAPI:
     @asynccontextmanager
@@ -478,6 +479,55 @@ def create_app(
             manager.use(owner["id"], identity, "close")
             return {"closed": True}
         raise AuthError("Invalid terminal operation.", 422)
+
+    @app.get("/api/pi/turn-submissions/{request_id}/stream", operation_id="runtime_stream")
+    async def runtime_stream(request_id: str, request: Request, after: int = Query(0, ge=0)):
+        """Relay a live answer preview. Bytes pass through; upstream headers never do."""
+        session(request)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", request_id):
+            raise AuthError("Invalid submission identity.", 422)
+        url = f"{app.state.config.pi_url.rstrip('/')}/turn-submissions/{request_id}/stream"
+        client = httpx.AsyncClient(
+            transport=stream_transport,
+            trust_env=False,
+            follow_redirects=False,
+            timeout=httpx.Timeout(10.0, read=60.0),
+        )
+        try:
+            upstream_request = client.build_request(
+                "GET",
+                url,
+                headers={"X-Pi-Gateway-Key": app.state.config.pi_key},
+                params={"after": after},
+            )
+            response = await client.send(upstream_request, stream=True)
+        except httpx.HTTPError:
+            await client.aclose()
+            raise AuthError(
+                "Live preview unavailable; the saved turn is unaffected.", 503
+            ) from None
+        if response.status_code != 200 or not response.headers.get("content-type", "").startswith(
+            "text/event-stream"
+        ):
+            await response.aclose()
+            await client.aclose()
+            raise AuthError("Live preview unavailable; the saved turn is unaffected.", 502)
+
+        async def relay():
+            try:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+            except httpx.HTTPError:
+                return
+            finally:
+                await response.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            relay(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/api/pi/{path:path}", operation_id="runtime_read")
     @app.post("/api/pi/{path:path}", operation_id="runtime_write")

@@ -24,7 +24,8 @@ from decimal import Decimal, InvalidOperation
 
 import httpx
 
-from . import citations
+from . import citations, live_stream
+from .direct_providers import collect_chat_stream, sse_events
 from .providers import Completion, Message, ProviderUnavailable, chat_content
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
@@ -177,22 +178,10 @@ class OpenRouterProvider:
             "model": model,
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
         }
-        try:
-            response = httpx.post(CHAT_URL, json=payload, headers=self._headers(), timeout=timeout)
-        except Exception as exc:
-            raise ProviderUnavailable(type(exc).__name__) from exc
-
-        if response.status_code in (403, 404, 400):
-            # About this model, not about us. 401 and 429 are deliberately not
-            # here: a bad key or an exhausted quota will fail identically on
-            # every candidate, and walking the whole catalogue to rediscover
-            # that would be slow and would look like the models were at fault.
-            raise ModelUnusable(f"{model}: HTTP {response.status_code}")
-        try:
-            response.raise_for_status()
-            body = response.json()
-        except Exception as exc:
-            raise ProviderUnavailable(type(exc).__name__) from exc
+        if live_stream.active():
+            body = self._streamed(payload, model, timeout)
+        else:
+            body = self._posted(payload, model, timeout)
 
         choices = body.get("choices") or []
         if not choices:
@@ -225,6 +214,45 @@ class OpenRouterProvider:
             raw={"finish_reason": choices[0].get("finish_reason")},
             citations=evidence,
         )
+
+    def _posted(self, payload: dict, model: str, timeout: float) -> dict:
+        try:
+            response = httpx.post(CHAT_URL, json=payload, headers=self._headers(), timeout=timeout)
+        except Exception as exc:
+            raise ProviderUnavailable(type(exc).__name__) from exc
+        self._check_model_status(response, model)
+        try:
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            raise ProviderUnavailable(type(exc).__name__) from exc
+
+    def _streamed(self, payload: dict, model: str, timeout: float) -> dict:
+        live_stream.begin_attempt()
+        try:
+            with httpx.stream(
+                "POST",
+                CHAT_URL,
+                json={**payload, "stream": True},
+                headers=self._headers(),
+                timeout=timeout,
+            ) as response:
+                self._check_model_status(response, model)
+                response.raise_for_status()
+                return collect_chat_stream(sse_events(response))
+        except (ModelUnusable, ProviderUnavailable):
+            raise
+        except Exception as exc:
+            raise ProviderUnavailable(type(exc).__name__) from exc
+
+    @staticmethod
+    def _check_model_status(response, model: str) -> None:
+        if response.status_code in (403, 404, 400):
+            # About this model, not about us. 401 and 429 are deliberately not
+            # here: a bad key or an exhausted quota will fail identically on
+            # every candidate, and walking the whole catalogue to rediscover
+            # that would be slow and would look like the models were at fault.
+            raise ModelUnusable(f"{model}: HTTP {response.status_code}")
 
     def health(self) -> dict:
         if not self.api_key:
