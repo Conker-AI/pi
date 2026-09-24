@@ -147,6 +147,5 @@ def test_pdf_turn_citations_restart_forgetting_and_session_isolation(tmp_path):
             assert attachments.download(reopened, sid, item["id"], resolve)[1] == raw
     path = tmp_path / "pi.db"
     forgetting.forget(path, sid, forgetting.preview(path, sid)["confirmation"])
-    with closing(Store(path)) as reopened:
-        with pytest.raises(attachments.AttachmentError):
-            attachments.passage(reopened, sid, item["id"], 0, resolve)
+    with closing(Store(path)) as reopened, pytest.raises(attachments.AttachmentError):
+        attachments.passage(reopened, sid, item["id"], 0, resolve)

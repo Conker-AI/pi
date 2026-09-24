@@ -13,8 +13,10 @@ from pi import (
     api,
     context_controls,
     memory_store,
-    session_settings as settings,
     submissions,
+)
+from pi import (
+    session_settings as settings,
 )
 from pi.loop import Loop, TurnFailed
 from pi.memory import Memory, MemoryClient
@@ -294,7 +296,7 @@ def test_reviewed_fork_inherits_private_settings(tmp_path):
 
 
 def test_privacy_does_not_force_local_answer_provider(tmp_path):
-    from pi.routing import Route, Tier, Reason
+    from pi.routing import Reason, Route, Tier
 
     with closing(Store(tmp_path / "test.db")) as store:
         sid = store.create_session()

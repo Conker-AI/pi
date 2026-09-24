@@ -15,7 +15,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 
-from pi.browser_contract import runtime_allowed, owner_allowed
+from pi.browser_contract import owner_allowed, runtime_allowed
 from pi.owner_terminal import Terminal, TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets

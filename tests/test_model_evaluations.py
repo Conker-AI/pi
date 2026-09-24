@@ -6,11 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 
 import pytest
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, model_evaluations as e, model_evaluations_api, model_roles
+from pi import agents, model_evaluations_api, model_roles
+from pi import model_evaluations as e
 from pi.providers import Completion, ProviderUnavailable
 from pi.store import Store
 

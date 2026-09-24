@@ -2,10 +2,10 @@
 
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import threading
+from pathlib import Path
 
 TIMEOUT = 10
 WORKERS = threading.BoundedSemaphore(2)

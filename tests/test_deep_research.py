@@ -3,9 +3,9 @@
 from contextlib import closing
 
 import pytest
-from test_tool_turns import build
-from test_web_research import SearchGate, SEARCH
 from test_forgetting import erase
+from test_tool_turns import build
+from test_web_research import SEARCH, SearchGate
 
 from pi import research, tasks, turn_control
 from pi.loop import ActedWithoutReply, TurnFailed

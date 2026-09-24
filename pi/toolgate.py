@@ -18,8 +18,8 @@ story that is not true.
 
 from __future__ import annotations
 
-import uuid
 import re
+import uuid
 from dataclasses import dataclass
 from typing import Any
 

@@ -1,8 +1,10 @@
 import json
+
+from test_model_roles import Adapter, config
+
 from pi import model_roles
 from pi.memory_ranking import ConfiguredMemoryRanker
 from pi.store import Store
-from test_model_roles import config, Adapter
 
 
 def setup(tmp_path, response, enabled=True):

@@ -9,15 +9,16 @@ from pi import research, turn_control
 from pi.loop import ActedWithoutReply, TurnFailed
 from pi.providers import ProviderUnavailable
 from pi.store import Store
-from pi.toolgate import Tool, ToolResult, ToolGateUnavailable
+from pi.toolgate import Tool, ToolGateUnavailable, ToolResult
 
 SEARCH = '{"tool":"research.web","args":{"query":"memory database design","max_results":5}}'
 
 
 class SearchGate(FakeGate):
     def tools(self):
-        return super().tools() + [
-            Tool("research.web", "Search", "Search the web", [{"name": "query", "type": "string"}])
+        return [
+            *super().tools(),
+            Tool("research.web", "Search", "Search the web", [{"name": "query", "type": "string"}]),
         ]
 
     def invoke(self, tool_id, args, approval_request_id=None, **kwargs):

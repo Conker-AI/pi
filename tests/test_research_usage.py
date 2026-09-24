@@ -2,9 +2,9 @@ from contextlib import closing
 from dataclasses import replace
 
 import pytest
+from test_deep_research import FOLLOWUP, PLAN
 from test_tool_turns import build
-from test_web_research import SearchGate, SEARCH
-from test_deep_research import PLAN, FOLLOWUP
+from test_web_research import SEARCH, SearchGate
 
 from pi import research, research_usage, session_settings
 from pi.loop import ActedWithoutReply
@@ -101,6 +101,7 @@ def test_process_interruption_leaves_pending_attempt_not_zero_cost(tmp_path):
 
 def test_configured_model_dispatch_preserves_timeout_and_usage(tmp_path):
     from test_model_roles import config
+
     from pi import model_roles
     from pi.providers import Completion, Message
 

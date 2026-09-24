@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from typing import ClassVar
 from urllib.parse import urlsplit
 
 import httpx
@@ -15,7 +16,7 @@ class DecisionProvider:
     name = "decisions"
     supports_images = False
     allow_paid = False
-    capabilities = ["typed-decision"]
+    capabilities: ClassVar[list[str]] = ["typed-decision"]
 
     def __init__(self, url, key, *, transport=None, minimum_confidence=0.2):
         parsed = urlsplit(url)

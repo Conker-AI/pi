@@ -10,7 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, api, collaboration as c
+from pi import agents, api
+from pi import collaboration as c
 from pi.store import Store
 
 

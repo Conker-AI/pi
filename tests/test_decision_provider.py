@@ -2,11 +2,11 @@ import json
 
 import httpx
 import pytest
+from test_model_roles import Adapter, config
 
 from pi import model_roles
 from pi.decision_provider import DecisionProvider, configured
 from pi.providers import Message, ProviderUnavailable
-from test_model_roles import Adapter, config
 
 
 def setup(transport):
@@ -106,11 +106,14 @@ def test_routing_projection_excludes_system_memory_and_old_history_without_trunc
             {"role": "user", "content": "Current task"},
         ],
     }
-    invoke = lambda: decision.complete_bounded(
-        [Message("system", "route"), Message("user", json.dumps(envelope))],
-        model="model-routing",
-        timeout=1,
-    )
+
+    def invoke():
+        return decision.complete_bounded(
+            [Message("system", "route"), Message("user", json.dumps(envelope))],
+            model="model-routing",
+            timeout=1,
+        )
+
     result = invoke()
     assert json.loads(calls[0]["state"]) == [{"role": "user", "content": "Current task"}]
     assert result.raw["decision"]["inputScope"] == "latest-user-request"
@@ -190,8 +193,9 @@ def test_memory_ranking_preserves_records_and_falls_back_without_dropping_eviden
 
 
 def test_memory_no_harness_never_calls_ranker(monkeypatch):
-    from pi import memory, memory_store, session_settings
     from types import SimpleNamespace
+
+    from pi import memory, memory_store, session_settings
 
     selected = {
         "kind": "companion",

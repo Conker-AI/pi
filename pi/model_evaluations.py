@@ -378,8 +378,12 @@ def _score(case, text):
             "metric": "case-insensitive-literal-fact-coverage",
             "score": sum(matches) / len(matches),
             "passed": all(matches),
-            "matchedFacts": [fact for fact, hit in zip(case["requiredFacts"], matches) if hit],
-            "missingFacts": [fact for fact, hit in zip(case["requiredFacts"], matches) if not hit],
+            "matchedFacts": [
+                fact for fact, hit in zip(case["requiredFacts"], matches, strict=True) if hit
+            ],
+            "missingFacts": [
+                fact for fact, hit in zip(case["requiredFacts"], matches, strict=True) if not hit
+            ],
         }
     key = "modelId" if case["role"] == "routing" else "messageIds"
     try:

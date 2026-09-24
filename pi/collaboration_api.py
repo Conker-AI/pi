@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, Depends
 
-from . import agents, collaboration as c
+from . import agents
+from . import collaboration as c
 
 
 def create_router(store_provider, authorize):

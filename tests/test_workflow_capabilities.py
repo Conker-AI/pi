@@ -1,6 +1,6 @@
 import httpx
 
-from pi.toolgate import ToolGateClient, ToolResult, ToolPending, ApprovalRequired
+from pi.toolgate import ApprovalRequired, ToolGateClient, ToolPending, ToolResult
 
 
 def test_workflow_capability_pins_dispatch_and_checks_receipt(monkeypatch):

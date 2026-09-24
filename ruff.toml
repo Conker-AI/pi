@@ -24,9 +24,13 @@ ignore = [
     # that raised instead would take down the very endpoint the owner uses to
     # find out what is wrong. See the truthful-status rule in CLAUDE.md.
     "BLE001",
+    # `ruff format` enforces line length for code (CI runs `ruff format --check`).
+    # What it cannot wrap are SQL statements and model-facing prompt literals,
+    # whose exact text matters more than a column limit.
+    "E501",
 ]
 
 [lint.per-file-ignores]
 # Test doubles subclass stdlib handlers whose method names are fixed by the
 # stdlib, and hold shared state as class attributes on purpose.
-"tests/*" = ["N802", "RUF012"]
+"tests/*" = ["N802", "RUF012", "F811"]  # F811: pytest fixtures are imported, then requested by name

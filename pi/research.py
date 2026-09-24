@@ -1,5 +1,6 @@
 """Research selections are immutable intent, never authority or evidence of execution."""
 
+import contextlib
 import json
 import re
 
@@ -263,10 +264,8 @@ def receipt(store, turn_id):
         ):
             observation = json.loads(row["content"]) if row["content"] else None
             if isinstance(observation, str):
-                try:
+                with contextlib.suppress(ValueError):  # Refusal observations can be plain text.
                     observation = json.loads(observation)
-                except ValueError:
-                    pass  # Refusal observations can be plain text.
             records.append(
                 {
                     "action_id": row["id"],

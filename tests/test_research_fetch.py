@@ -1,15 +1,15 @@
-from contextlib import closing
 import json
+from contextlib import closing
 
 import pytest
-from test_tool_turns import build
-from test_web_research import SearchGate, SEARCH
 from test_deep_research import PLAN
+from test_tool_turns import build
+from test_web_research import SEARCH, SearchGate
 
 from pi import research
 from pi.loop import ActedWithoutReply, TurnFailed
 from pi.store import Store
-from pi.toolgate import Tool, ToolResult, ToolGateUnavailable
+from pi.toolgate import Tool, ToolGateUnavailable, ToolResult
 
 HANDLE = "rr_current_turn_source_01"
 FETCH = json.dumps({"tool": "research.fetch", "args": {"result_id": HANDLE, "max_chars": 3000}})
@@ -17,13 +17,14 @@ FETCH = json.dumps({"tool": "research.fetch", "args": {"result_id": HANDLE, "max
 
 class FetchGate(SearchGate):
     def tools(self):
-        return super().tools() + [
+        return [
+            *super().tools(),
             Tool(
                 "research.fetch",
                 "Read source",
                 "Read a retrieved source",
                 [{"name": "result_id", "type": "string"}],
-            )
+            ),
         ]
 
     def invoke(self, tool_id, args, approval_request_id=None, **kwargs):

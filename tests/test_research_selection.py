@@ -1,14 +1,15 @@
 """Research intent survives transport/queue replay without claiming execution."""
 
-from contextlib import closing
 import hashlib
+from contextlib import closing
 
 import pytest
-from pydantic import ValidationError
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from test_loop import Recorder, loop_with
 
-from pi import api, drafts, research, session_settings, submissions, tasks, turn_queue as q
+from pi import api, drafts, research, session_settings, submissions, tasks
+from pi import turn_queue as q
 from pi.store import Store
 
 

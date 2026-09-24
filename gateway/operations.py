@@ -5,7 +5,7 @@ import json
 import math
 import re
 
-from pi.browser_contract import runtime_allowed, owner_allowed
+from pi.browser_contract import owner_allowed, runtime_allowed
 
 from .store import AuthError
 

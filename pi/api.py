@@ -25,49 +25,56 @@ from . import (
     activity,
     agents,
     artifacts_api,
+    attachments_api,
+    calls,
+    calls_api,
+    characters_api,
     collaboration_api,
     context_api,
     context_controls,
+    context_retrieval,
+    continuity_api,
+    conversation_search,
+    drafts_api,
+    filesystem_api,
+    filesystem_reads,
+    jobs_api,
+    memory_corrections,
+    memory_proposals,
+    memory_proposals_api,
+    message_forks,
+    model_evaluations,
+    model_evaluations_api,
     model_roles_api,
     owner_preferences,
+    project_sources,
     projects_api,
+    response_retries,
+    response_versions,
     session_settings,
     session_settings_api,
+    speech,
     submissions,
+    system_actions,
+    system_actions_api,
+    system_inventory,
+    system_inventory_api,
     tasks,
-)
-from .browser_contract import runtime_allowed
-from . import (
-    jobs_api,
+    team_execution,
+    team_execution_api,
     turn_control,
     turn_queue,
-    message_forks,
-    response_versions,
-    response_retries,
     turn_steering,
 )
+from .browser_contract import runtime_allowed
+from .direct_providers import configured as configured_direct_providers
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
-from .queue_worker import QueueWorker
-from . import project_sources
-from . import drafts_api
-from . import conversation_search
-from . import attachments_api
-from . import model_evaluations, model_evaluations_api
-from . import context_retrieval
-from . import team_execution, team_execution_api
-from . import memory_corrections, memory_proposals, memory_proposals_api
-from . import continuity_api
-from . import calls, calls_api, speech
-from . import characters_api
-from . import system_inventory, system_inventory_api
-from . import filesystem_api, filesystem_reads
-from . import system_actions, system_actions_api
-from .direct_providers import configured as configured_direct_providers
 from .loop import ActedWithoutReply, Loop, TurnFailed
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
 from .providers import OllamaProvider
+from .queue_worker import QueueWorker
 from .routing import Router
 from .store import Store
 from .toolgate import ToolGateClient
@@ -391,7 +398,7 @@ app.include_router(
     artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
-from . import memory_explorer_api
+from . import memory_explorer_api  # noqa: E402 - registered after the routers it follows
 
 app.include_router(memory_explorer_api.router(lambda: app.state.memory, require_owner))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
