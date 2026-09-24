@@ -1,4 +1,5 @@
 """Content-free provider attempt receipts for research turns."""
+
 import math
 import time
 import uuid
@@ -18,8 +19,12 @@ CREATE INDEX IF NOT EXISTS research_calls_turn ON research_model_calls(turn_id);
 
 def totals(db, turn_id):
     rows = db.execute("SELECT * FROM research_model_calls WHERE turn_id=?", (turn_id,)).fetchall()
-    return {key: sum(row[key] for row in rows) if rows and all(
-        row['status'] == 'reported' and row[key] is not None for row in rows) else None for key in FIELDS}
+    return {
+        key: sum(row[key] for row in rows)
+        if rows and all(row["status"] == "reported" and row[key] is not None for row in rows)
+        else None
+        for key in FIELDS
+    }
 
 
 def account(db, turn_id, fields):
@@ -30,8 +35,10 @@ def account(db, turn_id, fields):
 
 def _refresh(db, turn_id):
     values = totals(db, turn_id)
-    db.execute("UPDATE turns SET " + ",".join(key + "=?" for key in FIELDS) + " WHERE id=?",
-               (*values.values(), turn_id))
+    db.execute(
+        "UPDATE turns SET " + ",".join(key + "=?" for key in FIELDS) + " WHERE id=?",
+        (*values.values(), turn_id),
+    )
 
 
 def _value(completion, key):
@@ -42,7 +49,11 @@ def _value(completion, key):
 
 
 def wrap(store, execution, provider, role="answer"):
-    if not execution or execution.get("researchMode") not in ("web", "deep") or not execution.get("turnExecutionId"):
+    if (
+        not execution
+        or execution.get("researchMode") not in ("web", "deep")
+        or not execution.get("turnExecutionId")
+    ):
         return provider
     return Metered(store, execution["turnExecutionId"], provider, role)
 
@@ -71,8 +82,11 @@ class Metered:
         identity = uuid.uuid4().hex
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("INSERT INTO research_model_calls(id,turn_id,provider,model,role,status,started_at) "
-                       "VALUES(?,?,?,?,?,'pending',?)", (identity, self.turn_id, self.name, model, self.role, time.time()))
+            db.execute(
+                "INSERT INTO research_model_calls(id,turn_id,provider,model,role,status,started_at) "
+                "VALUES(?,?,?,?,?,'pending',?)",
+                (identity, self.turn_id, self.name, model, self.role, time.time()),
+            )
             _refresh(db, self.turn_id)
             db.commit()
         try:
@@ -80,15 +94,21 @@ class Metered:
         except Exception:
             with self.store._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
-                db.execute("UPDATE research_model_calls SET status='failed',ended_at=? WHERE id=?", (time.time(), identity))
+                db.execute(
+                    "UPDATE research_model_calls SET status='failed',ended_at=? WHERE id=?",
+                    (time.time(), identity),
+                )
                 _refresh(db, self.turn_id)
                 db.commit()
             raise
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("UPDATE research_model_calls SET status='reported',ended_at=?," +
-                       ",".join(key + "=?" for key in FIELDS) + " WHERE id=?",
-                       (time.time(), *(_value(completion, key) for key in FIELDS), identity))
+            db.execute(
+                "UPDATE research_model_calls SET status='reported',ended_at=?,"
+                + ",".join(key + "=?" for key in FIELDS)
+                + " WHERE id=?",
+                (time.time(), *(_value(completion, key) for key in FIELDS), identity),
+            )
             _refresh(db, self.turn_id)
             db.commit()
         return completion

@@ -1,4 +1,5 @@
 """Synthetic HTTP only: no service, key lookup, or live paid request."""
+
 import asyncio
 import json
 import os
@@ -17,12 +18,26 @@ from pi.store import Store
 
 def response_for(name):
     if name == "openai":
-        return {"model": "actual", "choices": [{"message": {"content": "Answer"},
-                "finish_reason": "stop"}], "usage": {"prompt_tokens": 12,
-                "completion_tokens": 3, "prompt_tokens_details": {"cached_tokens": 5}}}
-    return {"model": "actual", "content": [{"type": "text", "text": "Answer"}],
-            "stop_reason": "end_turn", "usage": {"input_tokens": 4, "output_tokens": 3,
-            "cache_creation_input_tokens": 3, "cache_read_input_tokens": 5}}
+        return {
+            "model": "actual",
+            "choices": [{"message": {"content": "Answer"}, "finish_reason": "stop"}],
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 3,
+                "prompt_tokens_details": {"cached_tokens": 5},
+            },
+        }
+    return {
+        "model": "actual",
+        "content": [{"type": "text", "text": "Answer"}],
+        "stop_reason": "end_turn",
+        "usage": {
+            "input_tokens": 4,
+            "output_tokens": 3,
+            "cache_creation_input_tokens": 3,
+            "cache_read_input_tokens": 5,
+        },
+    }
 
 
 @pytest.fixture
@@ -41,8 +56,9 @@ def capture(monkeypatch):
 @pytest.mark.parametrize("cls", [OpenAIProvider, AnthropicProvider])
 def test_text_translation_usage_and_timeout(cls, capture):
     provider = cls("synthetic", allow_paid=True)
-    result = provider.complete_bounded([Message("system", "Rules"), Message("user", "Q")],
-                                       model="requested", timeout=1.25)
+    result = provider.complete_bounded(
+        [Message("system", "Rules"), Message("user", "Q")], model="requested", timeout=1.25
+    )
     url, request = capture[0]
     assert url == provider.url and request["timeout"] == 1.25
     assert request["follow_redirects"] is False
@@ -71,12 +87,23 @@ def test_missing_authority_never_sends(cls, key, paid, capture):
 
 
 @pytest.mark.parametrize("cls", [OpenAIProvider, AnthropicProvider])
-@pytest.mark.parametrize("status,body", [(401, {"secret": "sensitive"}), (429, {}),
-                                       (302, {}), (200, []), (200, {}),
-                                       (200, {"content": [{"type": "tool_use"}]})])
+@pytest.mark.parametrize(
+    "status,body",
+    [
+        (401, {"secret": "sensitive"}),
+        (429, {}),
+        (302, {}),
+        (200, []),
+        (200, {}),
+        (200, {"content": [{"type": "tool_use"}]}),
+    ],
+)
 def test_bad_http_and_shapes_fail_without_leaking(cls, status, body, monkeypatch):
-    monkeypatch.setattr(httpx, "post", lambda url, **kw: httpx.Response(
-        status, json=body, request=httpx.Request("POST", url)))
+    monkeypatch.setattr(
+        httpx,
+        "post",
+        lambda url, **kw: httpx.Response(status, json=body, request=httpx.Request("POST", url)),
+    )
     with pytest.raises(ProviderUnavailable) as error:
         cls("sensitive", allow_paid=True).complete([Message("user", "sensitive")], model="m")
     assert "sensitive" not in str(error.value)
@@ -86,14 +113,16 @@ def test_bad_http_and_shapes_fail_without_leaking(cls, status, body, monkeypatch
 def test_anthropic_rejects_moved_system_instruction(capture):
     with pytest.raises(ProviderUnavailable):
         AnthropicProvider("synthetic", allow_paid=True).complete(
-            [Message("user", "Q"), Message("system", "late")], model="m")
+            [Message("user", "Q"), Message("system", "late")], model="m"
+        )
     assert not capture
 
 
 def test_factory_is_explicit_and_health_does_not_call(capture):
     assert configured({}) == {}
-    adapters = configured({"PI_OPENAI_KEY": "synthetic", "PI_ANTHROPIC_KEY": "synthetic",
-                           "PI_ALLOW_PAID_MODELS": "1"})
+    adapters = configured(
+        {"PI_OPENAI_KEY": "synthetic", "PI_ANTHROPIC_KEY": "synthetic", "PI_ALLOW_PAID_MODELS": "1"}
+    )
     assert set(adapters) == {"openai", "anthropic"}
     assert all(p.health()["status"] == "unverified" for p in adapters.values())
     assert not capture
@@ -147,19 +176,40 @@ def test_timeout_is_sanitized_and_not_retried(cls, monkeypatch):
 def test_registered_direct_adapter_runs_frozen_manual_role(tmp_path, capture, provider_id):
     with closing(Store(tmp_path / "test.db")) as store:
         sid = store.create_session()
-        disabled = {"enabled": False, "eligibleModelIds": [], "modelId": None,
-                    "timeoutMs": 1250, "failure": "stop", "fallbackModelId": None}
+        disabled = {
+            "enabled": False,
+            "eligibleModelIds": [],
+            "modelId": None,
+            "timeoutMs": 1250,
+            "failure": "stop",
+            "fallbackModelId": None,
+        }
         roles = {r: dict(disabled) for r in model_roles.ROLES}
-        roles["answer"] = {**disabled, "enabled": True,
-                           "eligibleModelIds": ["m"], "modelId": "m"}
-        config = model_roles.Configuration.model_validate({
-            "providers": [{"id": provider_id, "name": provider_id, "enabled": True}],
-            "models": [{"id": "m", "providerId": provider_id, "name": "M",
-                        "route": "requested", "enabled": True}], "defaultModelId": "m",
-            "roleSettings": {"answerMode": "manual", "roles": roles}})
+        roles["answer"] = {**disabled, "enabled": True, "eligibleModelIds": ["m"], "modelId": "m"}
+        config = model_roles.Configuration.model_validate(
+            {
+                "providers": [{"id": provider_id, "name": provider_id, "enabled": True}],
+                "models": [
+                    {
+                        "id": "m",
+                        "providerId": provider_id,
+                        "name": "M",
+                        "route": "requested",
+                        "enabled": True,
+                    }
+                ],
+                "defaultModelId": "m",
+                "roleSettings": {"answerMode": "manual", "roles": roles},
+            }
+        )
         model_roles.save(store, model_roles.Update(expected_revision=0, configuration=config))
-        adapters = configured({"PI_OPENAI_KEY": "synthetic", "PI_ANTHROPIC_KEY": "synthetic",
-                               "PI_ALLOW_PAID_MODELS": "1"})
+        adapters = configured(
+            {
+                "PI_OPENAI_KEY": "synthetic",
+                "PI_ANTHROPIC_KEY": "synthetic",
+                "PI_ALLOW_PAID_MODELS": "1",
+            }
+        )
         loop = Loop(store, Router(providers=adapters))
         result = loop.run_turn(sid, "Question")
         assert result["message"]["content"] == "Answer"

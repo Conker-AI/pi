@@ -16,8 +16,13 @@ def test_owner_projection_uses_bound_namespace_and_read_credential():
         seen.append(request)
         return httpx.Response(200, json={"scope": "all", "objects": [], "total": 0})
 
-    memory = MemoryClient("http://memorygate", "ingest-private", "read-private",
-                          "companion-bound", transport=httpx.MockTransport(upstream))
+    memory = MemoryClient(
+        "http://memorygate",
+        "ingest-private",
+        "read-private",
+        "companion-bound",
+        transport=httpx.MockTransport(upstream),
+    )
     app = FastAPI()
     app.include_router(router(lambda: SimpleNamespace(client=memory), lambda: None))
     client = TestClient(app)
@@ -28,7 +33,10 @@ def test_owner_projection_uses_bound_namespace_and_read_credential():
     assert seen[0].headers["x-memorygate-key"] == "read-private"
     assert "x-memorygate-conversation-key" not in seen[0].headers
     assert b'"scope":"all"' in seen[0].content
-    assert client.get("/memory/objects/memory/m_1?operation=content&field=text&offset=20").status_code == 200
+    assert (
+        client.get("/memory/objects/memory/m_1?operation=content&field=text&offset=20").status_code
+        == 200
+    )
     assert seen[-1].url.path == "/runtime/explore"
     assert client.get("/memory/objects?limit=1000").status_code == 422
     assert client.get("/memory/objects/secret/m_1").status_code == 422
@@ -36,15 +44,22 @@ def test_owner_projection_uses_bound_namespace_and_read_credential():
     memory.close()
 
 
-@pytest.mark.parametrize("status,body,expected", [
-    (200, {"scope": "selected"}, 503),
-    (200, [], 503),
-    (404, {"detail": "private upstream body"}, 404),
-    (500, {"detail": "private upstream body"}, 503),
-])
+@pytest.mark.parametrize(
+    "status,body,expected",
+    [
+        (200, {"scope": "selected"}, 503),
+        (200, [], 503),
+        (404, {"detail": "private upstream body"}, 404),
+        (500, {"detail": "private upstream body"}, 503),
+    ],
+)
 def test_owner_projection_rejects_bad_scope_and_sanitizes_errors(status, body, expected):
-    memory = MemoryClient("http://memorygate", "ingest", "read", transport=httpx.MockTransport(
-        lambda request: httpx.Response(status, json=body)))
+    memory = MemoryClient(
+        "http://memorygate",
+        "ingest",
+        "read",
+        transport=httpx.MockTransport(lambda request: httpx.Response(status, json=body)),
+    )
     app = FastAPI()
     app.include_router(router(lambda: SimpleNamespace(client=memory), lambda: None))
     response = TestClient(app).get("/memory/objects")

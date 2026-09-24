@@ -11,6 +11,7 @@ is the *seam* - routing decided in one place, recorded per turn, changeable
 without touching the loop. Tuning it against real outcomes comes later, and
 needs the record this produces.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,9 +22,9 @@ from .providers import ProviderUnavailable
 
 class Tier(StrEnum):
     CONFIGURED = "configured"  # explicit owner role selection, no inferred price tier
-    LOCAL = "local"      # free, on the box, no network
-    CHEAP = "cheap"      # free tier, hosted
-    STRONG = "strong"    # the best available under the current spend policy
+    LOCAL = "local"  # free, on the box, no network
+    CHEAP = "cheap"  # free tier, hosted
+    STRONG = "strong"  # the best available under the current spend policy
 
 
 class Reason(StrEnum):
@@ -56,6 +57,7 @@ class TurnContext:
     A router that inspects message text would become a classifier nobody
     evaluates. These are facts the loop already has.
     """
+
     history_chars: int = 0
     needs_tools: bool = False
     is_analysis: bool = False
@@ -64,9 +66,15 @@ class TurnContext:
 
 
 class Router:
-    def __init__(self, *, local_provider=None, hosted_provider=None,
-                 local_model: str = "", escalate_above_chars: int = 12_000,
-                 providers: dict | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        local_provider=None,
+        hosted_provider=None,
+        local_model: str = "",
+        escalate_above_chars: int = 12_000,
+        providers: dict | None = None,
+    ) -> None:
         self.local = local_provider
         self.hosted = hosted_provider
         self.local_model = local_model
@@ -75,8 +83,7 @@ class Router:
 
     def adapters(self) -> dict:
         """Registered explicit roles plus the existing legacy route adapters."""
-        return {**self.providers, **{p.name: p for p in (self.local, self.hosted)
-                                    if p is not None}}
+        return {**self.providers, **{p.name: p for p in (self.local, self.hosted) if p is not None}}
 
     # --- the policy -------------------------------------------------------
 
@@ -108,8 +115,15 @@ class Router:
         except ProviderUnavailable as exc:
             if self.local is None or not self.local_model:
                 raise
-            return [Route(Tier.LOCAL, self._reason(ctx or TurnContext()), self.local.name,
-                          self.local_model, "Hosted catalogue unavailable: " + exc.reason)]
+            return [
+                Route(
+                    Tier.LOCAL,
+                    self._reason(ctx or TurnContext()),
+                    self.local.name,
+                    self.local_model,
+                    "Hosted catalogue unavailable: " + exc.reason,
+                )
+            ]
 
     def _candidates(self, ctx, limit):
         primary = self.route(ctx)

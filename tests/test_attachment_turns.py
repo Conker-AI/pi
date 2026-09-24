@@ -41,7 +41,9 @@ def test_attachment_reaches_model_bound_to_exact_input(tmp_path):
         )
         assert any("Attachment content 42" in message.content for message in provider.calls[0])
         assert store.get_turn(result["turn_id"])["status"] == "complete"
-        input_message = next(message for message in store.messages(sid) if message["role"] == "user")
+        input_message = next(
+            message for message in store.messages(sid) if message["role"] == "user"
+        )
         assert input_message["attachments"][0]["id"] == identity
         assert store.get_message(input_message["id"])["attachments"] == input_message["attachments"]
         loop.run_turn(
@@ -104,14 +106,17 @@ def test_private_upload_cannot_be_sent_after_lowering_privacy(tmp_path):
 
 def test_owner_stop_releases_reserved_upload_for_new_submission(tmp_path):
     from pi import turn_control
+
     with closing(Store(tmp_path / "a.db")) as store:
         sid = store.create_session()
         identity = upload(store, sid)
-        submissions.reserve(store, "cancel_attachment_001", sid, "Read this", {},
-                            attachment_ids=[identity])
+        submissions.reserve(
+            store, "cancel_attachment_001", sid, "Read this", {}, attachment_ids=[identity]
+        )
         turn_control.cancel_submission(store, "cancel_attachment_001")
-        submissions.reserve(store, "cancel_attachment_002", sid, "Read this", {},
-                            attachment_ids=[identity])
+        submissions.reserve(
+            store, "cancel_attachment_002", sid, "Read this", {}, attachment_ids=[identity]
+        )
         with store._connect() as db:
             rows = db.execute("SELECT request_id FROM attachment_reservations").fetchall()
             assert [row[0] for row in rows] == ["cancel_attachment_002"]

@@ -1,4 +1,5 @@
 """Durable owner task metadata. Creating or updating a task never dispatches work."""
+
 from __future__ import annotations
 
 import hashlib
@@ -190,9 +191,13 @@ END;
 
 def _source(db, session_id, *, open_required=False):
     row = db.execute("SELECT status FROM sessions WHERE id=?", (session_id,)).fetchone()
-    if not row or row["status"] == "forgotten" or db.execute(
-        "SELECT 1 FROM forgotten_sessions WHERE session_id=?", (session_id,)
-    ).fetchone():
+    if (
+        not row
+        or row["status"] == "forgotten"
+        or db.execute(
+            "SELECT 1 FROM forgotten_sessions WHERE session_id=?", (session_id,)
+        ).fetchone()
+    ):
         raise TaskError("source_unavailable", "The source conversation is unavailable.")
     if open_required and row["status"] != "open":
         raise TaskError("source_closed", "Choose an open conversation for new work.")
@@ -203,8 +208,9 @@ def _row(db, task_id, revision=None):
     if not row:
         raise TaskError("not_found", "Task not found.", 404)
     if revision is not None and row["revision"] != revision:
-        raise TaskError("revision_conflict", "Reload the task before saving.",
-                        current_revision=row["revision"])
+        raise TaskError(
+            "revision_conflict", "Reload the task before saving.", current_revision=row["revision"]
+        )
     return row
 
 
@@ -230,46 +236,70 @@ def _links(db, session_id, parent_id, run_ids, task_id=None):
 
 
 def _set_runs(db, task_id, session_id, run_ids):
-    previous = {r[0] for r in db.execute(
-        "SELECT run_id FROM task_runs WHERE task_id=?", (task_id,)
-    )}
+    previous = {
+        r[0] for r in db.execute("SELECT run_id FROM task_runs WHERE task_id=?", (task_id,))
+    }
     for run_id in sorted(previous - set(run_ids)):
         db.execute("DELETE FROM task_runs WHERE task_id=? AND run_id=?", (task_id, run_id))
-        db.execute("INSERT INTO activity_events(kind,session_id,task_id,run_id,occurred_at) "
-                   "VALUES('run_unlinked',?,?,?,?)", (session_id, task_id, run_id, time.time()))
+        db.execute(
+            "INSERT INTO activity_events(kind,session_id,task_id,run_id,occurred_at) "
+            "VALUES('run_unlinked',?,?,?,?)",
+            (session_id, task_id, run_id, time.time()),
+        )
     for run_id in sorted(set(run_ids) - previous):
         db.execute("INSERT INTO task_runs VALUES(?,?)", (task_id, run_id))
-        db.execute("INSERT INTO activity_events(kind,session_id,task_id,run_id,occurred_at) "
-                   "VALUES('run_linked',?,?,?,?)", (session_id, task_id, run_id, time.time()))
+        db.execute(
+            "INSERT INTO activity_events(kind,session_id,task_id,run_id,occurred_at) "
+            "VALUES('run_linked',?,?,?,?)",
+            (session_id, task_id, run_id, time.time()),
+        )
 
 
 def _no_active_children(db, task_id):
-    if db.execute("SELECT 1 FROM tasks WHERE parent_task_id=? "
-                  "AND status NOT IN ('completed','cancelled')", (task_id,)).fetchone():
+    if db.execute(
+        "SELECT 1 FROM tasks WHERE parent_task_id=? AND status NOT IN ('completed','cancelled')",
+        (task_id,),
+    ).fetchone():
         raise TaskError("active_children", "Resolve active child tasks first.")
 
 
 def _view(db, row):
     value = dict(row)
-    available = db.execute("SELECT 1 FROM sessions WHERE id=? AND status!='forgotten' "
-                           "AND id NOT IN (SELECT session_id FROM forgotten_sessions)",
-                           (row["session_id"],)).fetchone() is not None
-    value.update(agent_id="companion", status_source="owner", provenance="recorded",
-                 content_status="available" if available else "forgotten")
+    available = (
+        db.execute(
+            "SELECT 1 FROM sessions WHERE id=? AND status!='forgotten' "
+            "AND id NOT IN (SELECT session_id FROM forgotten_sessions)",
+            (row["session_id"],),
+        ).fetchone()
+        is not None
+    )
+    value.update(
+        agent_id="companion",
+        status_source="owner",
+        provenance="recorded",
+        content_status="available" if available else "forgotten",
+    )
     value["criteria"] = json.loads(value["criteria"]) if available else []
     value["completed_criterion_ids"] = (
         json.loads(value["completed_criterion_ids"]) if available else []
     )
     if not available:
         value["outcome"] = value["status_note"] = ""
-    value["run_ids"] = [r[0] for r in db.execute(
-        "SELECT run_id FROM task_runs WHERE task_id=? ORDER BY run_id", (row["id"],)
-    )]
-    events = db.execute("SELECT * FROM activity_events WHERE task_id=? "
-                        "ORDER BY sequence DESC LIMIT 101", (row["id"],)).fetchall()
+    value["run_ids"] = [
+        r[0]
+        for r in db.execute(
+            "SELECT run_id FROM task_runs WHERE task_id=? ORDER BY run_id", (row["id"],)
+        )
+    ]
+    events = db.execute(
+        "SELECT * FROM activity_events WHERE task_id=? ORDER BY sequence DESC LIMIT 101",
+        (row["id"],),
+    ).fetchall()
     value["changes_truncated"] = len(events) > 100
-    value["changes"] = [{**dict(event), "content_status": value["content_status"]}
-                        for event in reversed(events[:100])]
+    value["changes"] = [
+        {**dict(event), "content_status": value["content_status"]}
+        for event in reversed(events[:100])
+    ]
     return value
 
 
@@ -282,8 +312,9 @@ def get(store, task_id):
 def by_request(store, request_id):
     with store._connect() as db:
         db.execute("BEGIN")
-        row = db.execute("SELECT task_id FROM task_requests WHERE request_id=?",
-                         (request_id,)).fetchone()
+        row = db.execute(
+            "SELECT task_id FROM task_requests WHERE request_id=?", (request_id,)
+        ).fetchone()
         if not row:
             raise TaskError("not_found", "This task request has not been recorded.", 404)
         return _view(db, _row(db, row[0]))
@@ -302,22 +333,27 @@ def list_tasks(store, limit=50, cursor=None, session_id=None):
             where.append("session_id=?")
             values.append(session_id)
         clause = " WHERE " + " AND ".join(where) if where else ""
-        rows = db.execute("SELECT * FROM tasks" + clause +
-                          " ORDER BY created_at DESC,id DESC LIMIT ?",
-                          (*values, min(max(limit, 1), 200) + 1)).fetchall()
+        rows = db.execute(
+            "SELECT * FROM tasks" + clause + " ORDER BY created_at DESC,id DESC LIMIT ?",
+            (*values, min(max(limit, 1), 200) + 1),
+        ).fetchall()
         page = rows[:limit]
-        return {"results": [_view(db, row) for row in page],
-                "next_cursor": page[-1]["id"] if len(rows) > limit else None}
+        return {
+            "results": [_view(db, row) for row in page],
+            "next_cursor": page[-1]["id"] if len(rows) > limit else None,
+        }
 
 
 def create(store, body: CreateTask):
     payload = body.model_dump(exclude={"request_id"})
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True,
-                                      ensure_ascii=False).encode()).hexdigest()
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        prior = db.execute("SELECT * FROM task_requests WHERE request_id=?",
-                           (body.request_id,)).fetchone()
+        prior = db.execute(
+            "SELECT * FROM task_requests WHERE request_id=?", (body.request_id,)
+        ).fetchone()
         if prior:
             if prior["payload_hash"] != digest:
                 raise TaskError("request_conflict", "This request identity was already used.")
@@ -325,14 +361,21 @@ def create(store, body: CreateTask):
         _source(db, body.session_id, open_required=True)
         _links(db, body.session_id, body.parent_task_id, body.run_ids)
         identity, now = "tsk_" + uuid.uuid4().hex, time.time()
-        criteria = [{"id": "crit_" + uuid.uuid4().hex, "text": text}
-                    for text in body.criteria]
-        db.execute("INSERT INTO tasks(id,session_id,parent_task_id,outcome,criteria,status,"
-                   "revision,created_at,updated_at) VALUES(?,?,?,?,?,'planned',1,?,?)",
-                   (identity, body.session_id, body.parent_task_id, body.outcome,
-                    json.dumps(criteria, ensure_ascii=False), now, now))
-        db.execute("INSERT INTO task_requests VALUES(?,?,?)",
-                   (body.request_id, identity, digest))
+        criteria = [{"id": "crit_" + uuid.uuid4().hex, "text": text} for text in body.criteria]
+        db.execute(
+            "INSERT INTO tasks(id,session_id,parent_task_id,outcome,criteria,status,"
+            "revision,created_at,updated_at) VALUES(?,?,?,?,?,'planned',1,?,?)",
+            (
+                identity,
+                body.session_id,
+                body.parent_task_id,
+                body.outcome,
+                json.dumps(criteria, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        db.execute("INSERT INTO task_requests VALUES(?,?,?)", (body.request_id, identity, digest))
         _set_runs(db, identity, body.session_id, body.run_ids)
         result = _view(db, _row(db, identity))
         db.commit()
@@ -348,12 +391,21 @@ def update(store, task_id, body: UpdateTask):
             raise TaskError("task_inactive", "Restore and reopen the task before editing it.")
         _links(db, row["session_id"], body.parent_task_id, body.run_ids, task_id)
         old = {item["text"]: item for item in json.loads(row["criteria"])}
-        criteria = [old.get(text) or {"id": "crit_" + uuid.uuid4().hex, "text": text}
-                    for text in body.criteria]
-        db.execute("UPDATE tasks SET outcome=?,criteria=?,parent_task_id=?,revision=revision+1,"
-                   "updated_at=?,completed_criterion_ids='[]' WHERE id=?",
-                   (body.outcome, json.dumps(criteria, ensure_ascii=False), body.parent_task_id,
-                    time.time(), task_id))
+        criteria = [
+            old.get(text) or {"id": "crit_" + uuid.uuid4().hex, "text": text}
+            for text in body.criteria
+        ]
+        db.execute(
+            "UPDATE tasks SET outcome=?,criteria=?,parent_task_id=?,revision=revision+1,"
+            "updated_at=?,completed_criterion_ids='[]' WHERE id=?",
+            (
+                body.outcome,
+                json.dumps(criteria, ensure_ascii=False),
+                body.parent_task_id,
+                time.time(),
+                task_id,
+            ),
+        )
         _set_runs(db, task_id, row["session_id"], body.run_ids)
         result = _view(db, _row(db, task_id))
         db.commit()
@@ -379,9 +431,11 @@ def transition(store, task_id, body: TransitionTask):
         else:
             _source(db, row["session_id"], open_required=True)
             _links(db, row["session_id"], row["parent_task_id"], [], task_id)
-        db.execute("UPDATE tasks SET status=?,status_note=?,completed_criterion_ids=?,"
-                   "revision=revision+1,updated_at=? WHERE id=?",
-                   (body.status, body.note, json.dumps(reviewed), time.time(), task_id))
+        db.execute(
+            "UPDATE tasks SET status=?,status_note=?,completed_criterion_ids=?,"
+            "revision=revision+1,updated_at=? WHERE id=?",
+            (body.status, body.note, json.dumps(reviewed), time.time(), task_id),
+        )
         result = _view(db, _row(db, task_id))
         db.commit()
         return result
@@ -399,8 +453,10 @@ def archive(store, task_id, body: ArchiveTask):
                 raise TaskError("task_active", "Complete or cancel the task before archiving it.")
             _no_active_children(db, task_id)
         now = time.time()
-        db.execute("UPDATE tasks SET archived_at=?,revision=revision+1,updated_at=? WHERE id=?",
-                   (now if body.archived else None, now, task_id))
+        db.execute(
+            "UPDATE tasks SET archived_at=?,revision=revision+1,updated_at=? WHERE id=?",
+            (now if body.archived else None, now, task_id),
+        )
         result = _view(db, _row(db, task_id))
         db.commit()
         return result
@@ -411,7 +467,13 @@ def redact(db, session_ids):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='tasks'").fetchone():
         return
     for session_id in session_ids:
-        db.execute("UPDATE tasks SET outcome='',criteria='[]',status_note='',"
-                   "completed_criterion_ids='[]' WHERE session_id=?", (session_id,))
-        db.execute("UPDATE task_requests SET payload_hash=NULL WHERE task_id IN "
-                   "(SELECT id FROM tasks WHERE session_id=?)", (session_id,))
+        db.execute(
+            "UPDATE tasks SET outcome='',criteria='[]',status_note='',"
+            "completed_criterion_ids='[]' WHERE session_id=?",
+            (session_id,),
+        )
+        db.execute(
+            "UPDATE task_requests SET payload_hash=NULL WHERE task_id IN "
+            "(SELECT id FROM tasks WHERE session_id=?)",
+            (session_id,),
+        )

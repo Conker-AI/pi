@@ -2,6 +2,7 @@
 level it is enforced: not that the module declines to rewrite history, but that
 the database refuses even when someone reaches past the module.
 """
+
 from __future__ import annotations
 
 import sqlite3

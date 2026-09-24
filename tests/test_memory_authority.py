@@ -24,12 +24,17 @@ def test_invalid_binding_does_not_create_client(raw):
         memory_authority.clients(raw, {}, lambda *args: pytest.fail())
 
 
-@pytest.mark.parametrize("retrieval,expected_status", [
-    ({}, "degraded"),
-    ({"semantic": {"status": "ok"}}, "ok"),
-    ({"semantic": {"status": "unavailable"}}, "degraded"),
-])
-def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(monkeypatch, retrieval, expected_status):
+@pytest.mark.parametrize(
+    "retrieval,expected_status",
+    [
+        ({}, "degraded"),
+        ({"semantic": {"status": "ok"}}, "ok"),
+        ({"semantic": {"status": "unavailable"}}, "degraded"),
+    ],
+)
+def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(
+    monkeypatch, retrieval, expected_status
+):
     class Store:
         def get_turn(self, identity):
             return {"session_id": "session"}

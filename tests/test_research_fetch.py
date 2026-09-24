@@ -17,13 +17,28 @@ FETCH = json.dumps({"tool": "research.fetch", "args": {"result_id": HANDLE, "max
 
 class FetchGate(SearchGate):
     def tools(self):
-        return super().tools() + [Tool("research.fetch", "Read source", "Read a retrieved source", [{"name": "result_id", "type": "string"}])]
+        return super().tools() + [
+            Tool(
+                "research.fetch",
+                "Read source",
+                "Read a retrieved source",
+                [{"name": "result_id", "type": "string"}],
+            )
+        ]
 
     def invoke(self, tool_id, args, approval_request_id=None, **kwargs):
         if tool_id == "research.fetch":
             self.invocations.append((tool_id, args, approval_request_id))
-            return ToolResult(True, {"result_id": args["result_id"], "url": "https://example.org/source",
-                                    "text": "Bounded source excerpt", "truncated": True}, tool_id)
+            return ToolResult(
+                True,
+                {
+                    "result_id": args["result_id"],
+                    "url": "https://example.org/source",
+                    "text": "Bounded source excerpt",
+                    "truncated": True,
+                },
+                tool_id,
+            )
         result = super().invoke(tool_id, args, approval_request_id, **kwargs)
         if isinstance(result, ToolResult):
             result.result["results"][0]["result_id"] = HANDLE
@@ -47,15 +62,20 @@ def test_deep_fetches_current_source_and_synthesis_sees_read_receipt(store):
     assert receipt["actions"][1]["observation"]["result"]["truncated"]
 
 
-@pytest.mark.parametrize("args", [
-    {"result_id": "rr_foreign_turn_source_01"},
-    {"result_id": HANDLE, "url": "http://localhost/admin"},
-    {"result_id": HANDLE, "max_chars": 20000},
-    {"result_id": HANDLE, "max_chars": True},
-])
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"result_id": "rr_foreign_turn_source_01"},
+        {"result_id": HANDLE, "url": "http://localhost/admin"},
+        {"result_id": HANDLE, "max_chars": 20000},
+        {"result_id": HANDLE, "max_chars": True},
+    ],
+)
 def test_fetch_rejects_foreign_handles_urls_and_unbounded_inputs(store, args):
     gate = FetchGate()
-    loop, _ = build(store, [PLAN, SEARCH, json.dumps({"tool": "research.fetch", "args": args})], gate)
+    loop, _ = build(
+        store, [PLAN, SEARCH, json.dumps({"tool": "research.fetch", "args": args})], gate
+    )
     with pytest.raises(ActedWithoutReply):
         loop.run_turn(store.create_session(), "Investigate", research_mode="deep")
     assert [call[0] for call in gate.invocations] == ["research.web"]
@@ -85,11 +105,13 @@ def test_another_conversations_real_source_handle_is_not_authority(store):
     first.run_turn(store.create_session(), "First search", research_mode="web")
     gate = FetchGate()
     invoke = gate.invoke
+
     def no_handles(*args, **kwargs):
         result = invoke(*args, **kwargs)
         if args[0] == "research.web":
             result.result["results"][0].pop("result_id")
         return result
+
     gate.invoke = no_handles
     second, _ = build(store, [PLAN, SEARCH, FETCH], gate)
     with pytest.raises(ActedWithoutReply):
@@ -100,12 +122,14 @@ def test_another_conversations_real_source_handle_is_not_authority(store):
 def test_lost_fetch_receipt_is_reconciled_without_reading_again(store):
     gate = FetchGate()
     invoke, saved = gate.invoke, {}
+
     def lost(tool_id, *args, **kwargs):
         result = invoke(tool_id, *args, **kwargs)
         if tool_id == "research.fetch":
             saved[kwargs["action_id"]] = result
             raise ToolGateUnavailable("lost read receipt")
         return result
+
     gate.invoke = lost
     gate.check_action = lambda action_id, tool_id: saved[action_id]
     loop, _ = build(store, [PLAN, SEARCH, FETCH, "Sourced answer"], gate)

@@ -39,8 +39,11 @@ def test_lost_reply_retries_same_root_before_dispatch(store):
 
 def test_held_jobs_do_not_starve_ready_or_other_allowances(store):
     for index in range(22):
-        jobs.create(store, definition(name=f"Held {index}", requireBudget=True,
-                    budgetAllowanceId=ALLOWANCE), now=0)
+        jobs.create(
+            store,
+            definition(name=f"Held {index}", requireBudget=True, budgetAllowanceId=ALLOWANCE),
+            now=0,
+        )
     ready = jobs.create(store, definition(name="Ready"), now=0)
     adapter = Allocator()
     adapter.fail = True
@@ -68,14 +71,24 @@ def test_executor_allocation_wire_contract(monkeypatch):
     import httpx
     from pi.job_execution import PublishedJobs
     from pi.toolgate import ToolGateClient
+
     seen = []
+
     def request(self, client, method, path, **kwargs):
         seen.append((method, path, kwargs["json"]))
         return httpx.Response(200, json={"job_id": BUDGET, "root_action_id": "run", "cap": 100})
+
     monkeypatch.setattr(PublishedJobs, "_request", request)
     adapter = PublishedJobs({"companion": ToolGateClient("http://gate", "scoped")})
     target = definition().target.model_dump()
-    assert adapter.allocate_budget(ALLOWANCE, target=target, action_id="run",
-                                   agent_id="companion") == BUDGET
-    assert seen == [("POST", f"/v2/agent/spending/allowances/{ALLOWANCE}/allocate",
-                     {"root_action_id": "run", "target": target})]
+    assert (
+        adapter.allocate_budget(ALLOWANCE, target=target, action_id="run", agent_id="companion")
+        == BUDGET
+    )
+    assert seen == [
+        (
+            "POST",
+            f"/v2/agent/spending/allowances/{ALLOWANCE}/allocate",
+            {"root_action_id": "run", "target": target},
+        )
+    ]

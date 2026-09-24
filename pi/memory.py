@@ -43,8 +43,11 @@ class MemoryClient:
         receipt = response.json()
         allowed = {"deleted"} if operation == "delete" else {"admitted", "filtered", "deleted"}
         expected_id = str(uuid5(NAMESPACE_URL, f"pi:{agent_id}:{message['id']}"))
-        if (receipt.get("id") != expected_id or receipt.get("message_id") != message["id"]
-                or receipt.get("state") not in allowed):
+        if (
+            receipt.get("id") != expected_id
+            or receipt.get("message_id") != message["id"]
+            or receipt.get("state") not in allowed
+        ):
             raise ValueError("MemoryGate did not acknowledge the expected message")
         return {
             key: receipt.get(key)
@@ -126,7 +129,11 @@ class Memory:
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
-        client = self.client if selected["agentId"] == "companion" else self.read_clients.get(selected["agentId"])
+        client = (
+            self.client
+            if selected["agentId"] == "companion"
+            else self.read_clients.get(selected["agentId"])
+        )
         if memory_store.pending_deletions(self.store):
             state = "unavailable"
         elif client:
@@ -137,16 +144,29 @@ class Memory:
                 else:
                     configuration = selected["configuration"]
                     scope = configuration["memory"]["scope"]
-                    package = client.retrieve(query, scope=scope,
-                        session_id=(team_source or turn["session_id"]) if scope == "conversation" else None,
-                        memory_ids=configuration["memory"]["memoryIds"] if scope == "selected" else [])
-                if self.ranker is not None and not selected.get("privacy", {}).get("harnessDisabled", False):
+                    package = client.retrieve(
+                        query,
+                        scope=scope,
+                        session_id=(team_source or turn["session_id"])
+                        if scope == "conversation"
+                        else None,
+                        memory_ids=configuration["memory"]["memoryIds"]
+                        if scope == "selected"
+                        else [],
+                    )
+                if self.ranker is not None and not selected.get("privacy", {}).get(
+                    "harnessDisabled", False
+                ):
                     package = self.ranker.rank_memories(query, package)
                 state = (
                     "ok"
-                    if (package["retrieval"].get("semantic", {}).get("status") == "ok"
-                        or (package["retrieval"].get("mode") == "explicit-scope"
-                            and package["retrieval"].get("semantic", {}).get("status") == "not-used"))
+                    if (
+                        package["retrieval"].get("semantic", {}).get("status") == "ok"
+                        or (
+                            package["retrieval"].get("mode") == "explicit-scope"
+                            and package["retrieval"].get("semantic", {}).get("status") == "not-used"
+                        )
+                    )
                     and not package["retrieval"].get("pending_conversation_index")
                     else "degraded"
                 )
@@ -165,7 +185,8 @@ class Memory:
         state = self.client.health()
         delivery = self.status()
         if state["status"] == "ok" and (
-            delivery["pending_ingestion"] or delivery["pending_deletion"]
+            delivery["pending_ingestion"]
+            or delivery["pending_deletion"]
             or delivery["blocked_delivery"]
         ):
             return {"status": "degraded", "reason": "Memory delivery or deletion is pending"}
@@ -190,23 +211,30 @@ class Memory:
                 operation = "delete"
             try:
                 destination = memory_store.pin_destination(
-                    self.store, message["id"], self.client.agent_id)
-                if (operation == "ingest"
-                        and len(message["content"]) > memory_store.MAX_CONTENT_CHARACTERS):
-                    raise ValueError("Saved text exceeds 16000 characters; keep the transcript and "
-                                     "send a shorter new message. This payload cannot be retried.")
+                    self.store, message["id"], self.client.agent_id
+                )
+                if (
+                    operation == "ingest"
+                    and len(message["content"]) > memory_store.MAX_CONTENT_CHARACTERS
+                ):
+                    raise ValueError(
+                        "Saved text exceeds 16000 characters; keep the transcript and "
+                        "send a shorter new message. This payload cannot be retried."
+                    )
                 receipt = self.client.deliver(operation, message, agent_id=destination)
             except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
-                code = (exc.response.status_code
-                        if isinstance(exc, httpx.HTTPStatusError) else None)
-                permanent = ((code is not None and 400 <= code < 500
-                              and code not in {408, 425, 429})
-                             or isinstance(exc, (ValueError, TypeError, KeyError)))
-                error = (f"HTTP {code}: repair MemoryGate authorization or the rejected payload; "
-                         "then stop Pi and use python -m pi.memory_recovery retry."
-                         if code is not None and permanent else
-                         str(exc) if permanent else
-                         type(exc).__name__ + ": MemoryGate unavailable; retry scheduled")
+                code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                permanent = (
+                    code is not None and 400 <= code < 500 and code not in {408, 425, 429}
+                ) or isinstance(exc, (ValueError, TypeError, KeyError))
+                error = (
+                    f"HTTP {code}: repair MemoryGate authorization or the rejected payload; "
+                    "then stop Pi and use python -m pi.memory_recovery retry."
+                    if code is not None and permanent
+                    else str(exc)
+                    if permanent
+                    else type(exc).__name__ + ": MemoryGate unavailable; retry scheduled"
+                )
                 with self.store._connect() as db:
                     db.execute(
                         "UPDATE memory_outbox SET attempts=attempts+1,next_at=?,error=?,state=?"

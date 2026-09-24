@@ -1,4 +1,5 @@
 """Admin-only preparation routes. Gateway wiring is deliberately separate."""
+
 from fastapi import APIRouter, Depends
 
 from . import agents, collaboration as c
@@ -21,7 +22,9 @@ def create_router(store_provider, authorize):
 
     @router.post("/templates/{identity}/update")
     def update_template(identity: str, body: c.UpdateTemplate):
-        return c.save(store_provider(), "template", body.definition, identity, body.expected_revision)
+        return c.save(
+            store_provider(), "template", body.definition, identity, body.expected_revision
+        )
 
     @router.post("/templates/{identity}/publish")
     def publish_template(identity: str, body: c.Revision):

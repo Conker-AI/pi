@@ -14,10 +14,17 @@ from pi.store import Store
 
 def priced(provider, unknown=False):
     complete = provider.complete
+
     def call(messages, *, model):
         result = complete(messages, model=model)
-        return replace(result, input_tokens=10, output_tokens=5, cached_tokens=2,
-                       cost_usd=None if unknown else 0.01)
+        return replace(
+            result,
+            input_tokens=10,
+            output_tokens=5,
+            cached_tokens=2,
+            cost_usd=None if unknown else 0.01,
+        )
+
     provider.complete = call
 
 
@@ -30,15 +37,17 @@ def test_deep_usage_sums_plan_query_followup_and_synthesis_after_reopen(tmp_path
     with closing(Store(path)) as store:
         turn = store.get_turn(tid)
         assert turn["input_tokens"] == 40 and turn["output_tokens"] == 20
-        assert turn["cached_tokens"] == 8 and turn["cost_usd"] == pytest.approx(.04)
+        assert turn["cached_tokens"] == 8 and turn["cost_usd"] == pytest.approx(0.04)
         usage = research.receipt(store, tid)["usage"]
-        assert len(usage["attempts"]) == 4 and usage["cost_usd"] == pytest.approx(.04)
+        assert len(usage["attempts"]) == 4 and usage["cost_usd"] == pytest.approx(0.04)
         assert all("content" not in attempt for attempt in usage["attempts"])
 
 
 def test_failed_call_remains_unknown_after_successful_recovery(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
-        loop, provider = build(store, [SEARCH, ProviderUnavailable("offline"), "Answer"], SearchGate())
+        loop, provider = build(
+            store, [SEARCH, ProviderUnavailable("offline"), "Answer"], SearchGate()
+        )
         priced(provider)
         with pytest.raises(ActedWithoutReply) as failed:
             loop.run_turn(store.create_session(), "Search", research_mode="web")
@@ -63,18 +72,21 @@ def test_approval_pause_and_resume_total_without_overwrite(tmp_path):
         loop, provider = build(store, [SEARCH, "Answer"], SearchGate(needs_approval=True))
         priced(provider)
         tid = loop.run_turn(store.create_session(), "Search", research_mode="web")["turn_id"]
-        assert store.get_turn(tid)["cost_usd"] == pytest.approx(.01)
+        assert store.get_turn(tid)["cost_usd"] == pytest.approx(0.01)
         loop.resume_turn(tid)
-        assert store.get_turn(tid)["cost_usd"] == pytest.approx(.02)
+        assert store.get_turn(tid)["cost_usd"] == pytest.approx(0.02)
 
 
 def test_process_interruption_leaves_pending_attempt_not_zero_cost(tmp_path):
     class Crash(BaseException):
         pass
+
     class CrashingProvider:
         name = "crashing"
+
         def complete(self, messages, *, model):
             raise Crash()
+
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()
         tid = store.start_turn(sid)
@@ -98,8 +110,14 @@ def test_configured_model_dispatch_preserves_timeout_and_usage(tmp_path):
 
         def complete_bounded(self, messages, *, model, timeout):
             self.calls.append((model, timeout))
-            return Completion(text="Answer", provider=self.name, model=model,
-                              input_tokens=11, output_tokens=4, cost_usd=.02)
+            return Completion(
+                text="Answer",
+                provider=self.name,
+                model=model,
+                input_tokens=11,
+                output_tokens=4,
+                cost_usd=0.02,
+            )
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()
@@ -108,12 +126,14 @@ def test_configured_model_dispatch_preserves_timeout_and_usage(tmp_path):
         execution["researchMode"] = "web"
         provider = Bounded()
         wrapped = research_usage.wrap(store, execution, provider)
-        result = model_roles.dispatch(config(), "answer", [Message("user", "Research")], {"one": wrapped})
+        result = model_roles.dispatch(
+            config(), "answer", [Message("user", "Research")], {"one": wrapped}
+        )
         assert result["completion"].text == "Answer"
         assert provider.calls == [("actual-a", 1.0)]
         with store._connect() as db:
             totals = research_usage.totals(db, tid)
-            assert totals["input_tokens"] == 11 and totals["cost_usd"] == .02
+            assert totals["input_tokens"] == 11 and totals["cost_usd"] == 0.02
 
 
 def test_configured_timeout_cannot_fall_back_to_unbounded_call(tmp_path):
@@ -129,6 +149,8 @@ def test_configured_timeout_cannot_fall_back_to_unbounded_call(tmp_path):
         execution = session_settings.execution(store, sid, turn_id=tid)
         execution["researchMode"] = "web"
         with pytest.raises(ProviderUnavailable, match="configured timeout"):
-            research_usage.wrap(store, execution, Unbounded()).complete_bounded([], model="test", timeout=1)
+            research_usage.wrap(store, execution, Unbounded()).complete_bounded(
+                [], model="test", timeout=1
+            )
         with store._connect() as db:
             assert db.execute("SELECT COUNT(*) FROM research_model_calls").fetchone()[0] == 0

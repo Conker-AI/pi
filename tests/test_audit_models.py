@@ -134,15 +134,22 @@ def test_hosted_completion_outage_keeps_local_without_walking_whole_catalogue(tm
     class Offline:
         name = "hosted"
         calls = 0
+
         def free_models(self, **kwargs):
             return [free("first"), free("second")]
+
         def complete(self, *args, **kwargs):
             self.calls += 1
             raise ProviderUnavailable("hosted HTTP 503")
+
     hosted = Offline()
     store = Store(tmp_path / "pi.db")
-    loop = Loop(store, Router(local_provider=Scripted(["local answer"]),
-        local_model="local", hosted_provider=hosted))
+    loop = Loop(
+        store,
+        Router(
+            local_provider=Scripted(["local answer"]), local_model="local", hosted_provider=hosted
+        ),
+    )
     result = loop.run_turn(store.create_session(), "analyse", {"is_analysis": True})
     assert result["message"]["content"] == "local answer"
     assert hosted.calls == 1

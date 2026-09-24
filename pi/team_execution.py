@@ -182,6 +182,7 @@ def start(store, team_id, body):
             definition = collaboration.Team.model_validate(current["definition"])
             profiles = collaboration._team_agents(db, definition)
             from . import characters
+
             for profile in profiles:
                 profile["character"] = characters.runtime_snapshot(db, profile["agentId"])
             tasks._source(db, body.source_session_id, open_required=True)

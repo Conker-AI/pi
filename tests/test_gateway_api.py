@@ -27,8 +27,14 @@ def gateway(tmp_path):
             headers={"Set-Cookie": "service_secret=bad", "X-Pi-Key": "bad"},
         )
 
-    config = Config(ORIGIN, str(auth.path), "http://pi:8050", RUNTIME, owner_key=OWNER,
-                    toolgate_execution_key="tgx_" + "e" * 40)
+    config = Config(
+        ORIGIN,
+        str(auth.path),
+        "http://pi:8050",
+        RUNTIME,
+        owner_key=OWNER,
+        toolgate_execution_key="tgx_" + "e" * 40,
+    )
     with TestClient(
         create_app(config, store=auth, transport=httpx.MockTransport(upstream)), base_url=ORIGIN
     ) as client:
@@ -69,7 +75,10 @@ def test_editor_draft_write_requires_exact_one_use_proof(gateway):
     body = {"expected_revision": 0, "document": {"id": "example"}}
     assert client.post(path, json=body, headers=headers).status_code == 428
     verified = verified_headers(client, headers, path, body)
-    assert client.post(path, json={**body, "expected_revision": 1}, headers=verified).status_code == 428
+    assert (
+        client.post(path, json={**body, "expected_revision": 1}, headers=verified).status_code
+        == 428
+    )
     assert client.post(path, json=body, headers=verified).status_code == 200
     assert seen[-1].url.path == "/v2/owner/editor-drafts/example"
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
@@ -88,8 +97,11 @@ def test_editor_draft_routes_do_not_widen_to_execution_or_arbitrary_paths(gatewa
     assert client.get("/api/owner/editor-drafts?limit=2&after=a").status_code == 200
     assert str(seen[-1].url).endswith("/v2/owner/editor-drafts?limit=2&after=a")
     for path in ("/api/owner/editor-drafts/example/delete", "/api/owner/editor-drafts/example/run"):
-        result = client.post("/auth/verify", headers=headers, json={"password": PASSWORD,
-            "operation": {"method": "POST", "path": path, "body": {}}})
+        result = client.post(
+            "/auth/verify",
+            headers=headers,
+            json={"password": PASSWORD, "operation": {"method": "POST", "path": path, "body": {}}},
+        )
         assert result.status_code == 422
 
 
@@ -97,10 +109,17 @@ def test_editor_publication_requires_exact_one_use_proof_and_owner_channel(gatew
     client, _, seen = gateway
     path = "/api/owner/editor-drafts/example/publish"
     headers = sign_in(client)
-    body = {"expected_revision": 2, "expected_publication_version": 1, "authorization": "owner_confirmation"}
+    body = {
+        "expected_revision": 2,
+        "expected_publication_version": 1,
+        "authorization": "owner_confirmation",
+    }
     assert client.post(path, json=body, headers=headers).status_code == 428
     verified = verified_headers(client, headers, path, body)
-    assert client.post(path, json={**body, "authorization": "auto"}, headers=verified).status_code == 428
+    assert (
+        client.post(path, json={**body, "authorization": "auto"}, headers=verified).status_code
+        == 428
+    )
     assert client.post(path, json=body, headers=verified).status_code == 200
     assert seen[-1].url.path == "/v2/owner/editor-drafts/example/publish"
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
@@ -108,7 +127,9 @@ def test_editor_publication_requires_exact_one_use_proof_and_owner_channel(gatew
     assert client.post(path, json=body, headers=verified).status_code == 428
     for operation in ("publications", "validation"):
         assert client.get(f"/api/owner/editor-drafts/example/{operation}").status_code == 200
-        assert client.get(f"/api/owner/editor-drafts/example/{operation}?secret=x").status_code == 422
+        assert (
+            client.get(f"/api/owner/editor-drafts/example/{operation}?secret=x").status_code == 422
+        )
 
 
 def test_editor_catalogue_is_a_narrow_read_only_owner_route(gateway):
@@ -125,18 +146,23 @@ def test_editor_catalogue_is_a_narrow_read_only_owner_route(gateway):
     assert client.post(path, json={}).status_code == 405
 
 
-@pytest.mark.parametrize('operation,fields', [('access', {'enabled': True}), ('runs', {'action_id': 'editor_' + 'a' * 32, 'args': {}})])
-def test_editor_execution_operations_require_proof_and_both_host_credentials(gateway, operation, fields):
+@pytest.mark.parametrize(
+    "operation,fields",
+    [("access", {"enabled": True}), ("runs", {"action_id": "editor_" + "a" * 32, "args": {}})],
+)
+def test_editor_execution_operations_require_proof_and_both_host_credentials(
+    gateway, operation, fields
+):
     client, _, seen = gateway
     headers = sign_in(client)
-    path = f'/api/owner/editor-drafts/example/{operation}'
-    body = {'version': 1, 'digest': 'b' * 64, **fields}
+    path = f"/api/owner/editor-drafts/example/{operation}"
+    body = {"version": 1, "digest": "b" * 64, **fields}
     assert client.post(path, headers=headers, json=body).status_code == 428
     verified = verified_headers(client, headers, path, body)
-    assert client.post(path, headers=verified, json={**body, 'version': 2}).status_code == 428
+    assert client.post(path, headers=verified, json={**body, "version": 2}).status_code == 428
     assert client.post(path, headers=verified, json=body).status_code == 200
-    assert seen[-1].headers['X-ToolGate-Owner-Key'] == OWNER
-    assert seen[-1].headers['X-ToolGate-Execution-Key'] == 'tgx_' + 'e' * 40
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert seen[-1].headers["X-ToolGate-Execution-Key"] == "tgx_" + "e" * 40
     assert client.post(path, headers=verified, json=body).status_code == 428
 
 

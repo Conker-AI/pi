@@ -26,10 +26,13 @@ def dist(tmp_path):
 
 
 def app_for(tmp_path, directory=""):
-    settings = Config(ORIGIN, str(tmp_path / "auth.db"), "http://pi:8050", RUNTIME,
-                      dashboard_dir=str(directory))
-    return create_app(settings, transport=httpx.MockTransport(
-        lambda request: httpx.Response(200, json={"status": "ok"})))
+    settings = Config(
+        ORIGIN, str(tmp_path / "auth.db"), "http://pi:8050", RUNTIME, dashboard_dir=str(directory)
+    )
+    return create_app(
+        settings,
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"status": "ok"})),
+    )
 
 
 def test_optional_dashboard_does_not_change_api_only_installation(tmp_path):
@@ -51,10 +54,13 @@ def test_public_shell_and_packaged_assets_have_local_ui_policy(tmp_path, dist):
             assert result.headers["cache-control"] == "no-store"
             assert result.headers["x-content-type-options"] == "nosniff"
             assert "set-cookie" not in result.headers and RUNTIME not in result.text
-        for path, media in (("/assets/app.js", "text/javascript"),
-                            ("/assets/app.css", "text/css"),
-                            ("/assets/font.woff2", "font/woff2"),
-                            ("/portrait.png", "image/png"), ("/fixture.txt", "text/plain")):
+        for path, media in (
+            ("/assets/app.js", "text/javascript"),
+            ("/assets/app.css", "text/css"),
+            ("/assets/font.woff2", "font/woff2"),
+            ("/portrait.png", "image/png"),
+            ("/fixture.txt", "text/plain"),
+        ):
             result = client.get(path)
             assert result.status_code == 200
             assert result.headers["content-type"].startswith(media)
@@ -91,14 +97,33 @@ def test_ui_policy_accepts_bundled_inline_fonts_without_widening_api_or_scripts(
         assert "data:" not in API_CSP
 
 
-@pytest.mark.parametrize("path", [
-    "/auth", "/auth/unknown", "/api", "/api/unknown", "/health/unknown",
-    "/assets/missing.js", "/assets/missing", "/missing.css", "/missing.png",
-    "/.env", "/auth.db", "/assets/app.js.map", "/config.json", "/other.html",
-    "/assets/%2e%2e/fixture.txt", "/%2e%2e/secret.txt", "/%252e%252e/secret.txt",
-    "/assets%5c..%5csecret.txt", "/C:%5csecret.txt", "/portrait.png:stream",
-    "/auth//unknown", "/%00secret.txt",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/auth",
+        "/auth/unknown",
+        "/api",
+        "/api/unknown",
+        "/health/unknown",
+        "/assets/missing.js",
+        "/assets/missing",
+        "/missing.css",
+        "/missing.png",
+        "/.env",
+        "/auth.db",
+        "/assets/app.js.map",
+        "/config.json",
+        "/other.html",
+        "/assets/%2e%2e/fixture.txt",
+        "/%2e%2e/secret.txt",
+        "/%252e%252e/secret.txt",
+        "/assets%5c..%5csecret.txt",
+        "/C:%5csecret.txt",
+        "/portrait.png:stream",
+        "/auth//unknown",
+        "/%00secret.txt",
+    ],
+)
 def test_reserved_missing_and_unsafe_paths_never_become_html(tmp_path, dist, path):
     (dist / ".env").write_text("fake secret", encoding="utf-8")
     (dist / "auth.db").write_text("fake database", encoding="utf-8")
@@ -125,8 +150,9 @@ def test_static_shell_does_not_bypass_https_session_or_csrf(tmp_path, dist):
         assert client.get("/api/pi/sessions", headers={"Accept": "text/html"}).status_code == 401
         start = client.get("/auth/session")
         assert start.headers["content-security-policy"] == API_CSP
-        result = client.post("/auth/login", json={"password": "not configured"},
-                             headers={"Accept": "text/html"})
+        result = client.post(
+            "/auth/login", json={"password": "not configured"}, headers={"Accept": "text/html"}
+        )
         assert result.status_code == 403
         assert result.headers["content-security-policy"] == API_CSP
         forged = client.get("/", headers={"Host": "evil.invalid", "Accept": "text/html"})

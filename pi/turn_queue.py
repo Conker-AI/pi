@@ -77,6 +77,7 @@ def _source(db, sid, *, open_required=True):
 
 def _files(db, sid, payload, snapshot):
     from . import research
+
     research.validate(payload.get("research_mode", "off"), json.loads(snapshot)["execution"])
     session_settings.validate_answer_model(
         json.loads(snapshot)["execution"], payload.get("model_id")
@@ -277,7 +278,16 @@ def submission_identity(identity, revision):
 
 
 def admit(
-    db, sid, identity, revision, request_id, text, attachment_ids, model_id=None, reply_to=None, research_mode="off"
+    db,
+    sid,
+    identity,
+    revision,
+    request_id,
+    text,
+    attachment_ids,
+    model_id=None,
+    reply_to=None,
+    research_mode="off",
 ):
     """Called inside the submission writer transaction, never a separate claim."""
     _source(db, sid)
@@ -362,7 +372,11 @@ def run_next(store, loop, sid):
             attachment_ids=entry["payload"]["attachment_ids"],
             model_id=entry["payload"].get("model_id"),
             reply_to=entry["payload"].get("reply_to"),
-            **({"research_mode": entry["payload"]["research_mode"]} if entry["payload"].get("research_mode", "off") != "off" else {}),
+            **(
+                {"research_mode": entry["payload"]["research_mode"]}
+                if entry["payload"].get("research_mode", "off") != "off"
+                else {}
+            ),
             queued_entry=(entry["id"], entry["revision"]),
         )
     except (tasks.TaskError, agents.AgentError, attachments.AttachmentError) as exc:

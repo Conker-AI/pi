@@ -10,6 +10,7 @@ turn. The full set - OpenRouter, direct API keys, auto-discovered free models
 and the escalation policy - is #28. Keeping them apart is deliberate: a loop
 that only ever saw one provider would grow assumptions about it.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -36,10 +37,17 @@ class Message:
 
 def require_images(provider, messages):
     images = [image for message in messages for image in message.images]
-    if (len(images) > 20 or sum(len(image.data) for image in images) > 34_952_536
-            or any(message.images and message.role != "user" for message in messages)):
-        raise ProviderUnavailable("Image context exceeds supported limits; review included messages.")
-    if any(message.images for message in messages) and not getattr(provider, "supports_images", False):
+    if (
+        len(images) > 20
+        or sum(len(image.data) for image in images) > 34_952_536
+        or any(message.images and message.role != "user" for message in messages)
+    ):
+        raise ProviderUnavailable(
+            "Image context exceeds supported limits; review included messages."
+        )
+    if any(message.images for message in messages) and not getattr(
+        provider, "supports_images", False
+    ):
         raise ProviderUnavailable("Selected provider adapter cannot receive images.")
 
 
@@ -50,7 +58,8 @@ def chat_content(message):
         raise ProviderUnavailable("Images require a user attachment message.")
     return [{"type": "text", "text": message.content}] + [
         {"type": "image_url", "image_url": {"url": f"data:{image.media_type};base64,{image.data}"}}
-        for image in message.images]
+        for image in message.images
+    ]
 
 
 @dataclass(frozen=True)
@@ -128,12 +137,19 @@ class OllamaProvider:
     def complete(self, messages: list[Message], *, model: str) -> Completion:
         return self.complete_bounded(messages, model=model, timeout=self.timeout)
 
-    def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
+    def complete_bounded(
+        self, messages: list[Message], *, model: str, timeout: float
+    ) -> Completion:
         payload = {
             "model": model,
-            "messages": [{"role": m.role, "content": m.content,
-                          **({"images": [image.data for image in m.images]} if m.images else {})}
-                         for m in messages],
+            "messages": [
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    **({"images": [image.data for image in m.images]} if m.images else {}),
+                }
+                for m in messages
+            ],
             "stream": False,
         }
         try:
@@ -174,6 +190,5 @@ class OllamaProvider:
         # while being unable to answer a single turn - readiness claimed from a
         # proxy rather than from the thing that actually has to work.
         if self.model and not _installed(self.model, models):
-            return {"status": "not_configured",
-                    "reason": f"{self.model} is not pulled"}
+            return {"status": "not_configured", "reason": f"{self.model} is not pulled"}
         return {"status": "ok"}

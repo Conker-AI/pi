@@ -1,4 +1,5 @@
 """Durable authored agent profiles, not execution identities or permission grants."""
+
 from __future__ import annotations
 
 import json
@@ -124,34 +125,52 @@ def initialize(db):
     db.executescript(SCHEMA)
     db.execute("BEGIN IMMEDIATE")
     if not db.execute("SELECT 1 FROM agents WHERE kind='companion'").fetchone():
-        configuration = AgentInput(name="Conker", role="The daily companion",
-            instructions="Act as the owner's daily companion.", modelId=None,
-            toolIds=[], memory=MemorySelection(scope="conversation", memoryIds=[]))
+        configuration = AgentInput(
+            name="Conker",
+            role="The daily companion",
+            instructions="Act as the owner's daily companion.",
+            modelId=None,
+            toolIds=[],
+            memory=MemorySelection(scope="conversation", memoryIds=[]),
+        )
         _insert(db, "companion", "companion", configuration, time.time())
     db.commit()
 
 
 def _insert(db, identity, kind, configuration, now):
-    db.execute("INSERT INTO agents VALUES (?,?,?,1,?)",
-               (identity, kind, configuration.name.casefold(), now))
-    db.execute("INSERT INTO agent_versions VALUES (?,1,?,NULL,?,'created')",
-               (identity, configuration.model_dump_json(), now))
+    db.execute(
+        "INSERT INTO agents VALUES (?,?,?,1,?)",
+        (identity, kind, configuration.name.casefold(), now),
+    )
+    db.execute(
+        "INSERT INTO agent_versions VALUES (?,1,?,NULL,?,'created')",
+        (identity, configuration.model_dump_json(), now),
+    )
 
 
 def _get(db, identity, revision=None):
     agent = db.execute("SELECT * FROM agents WHERE id=?", (identity,)).fetchone()
     if agent is None:
         raise AgentError("not_found", "Agent does not exist.", 404)
-    version = db.execute("SELECT * FROM agent_versions WHERE agent_id=? AND revision=?",
-                         (identity, agent["revision"] if revision is None else revision)).fetchone()
+    version = db.execute(
+        "SELECT * FROM agent_versions WHERE agent_id=? AND revision=?",
+        (identity, agent["revision"] if revision is None else revision),
+    ).fetchone()
     if version is None:
         raise AgentError("version_not_found", "Agent version does not exist.", 404)
-    return {"id": identity, "kind": agent["kind"], "revision": version["revision"],
-            "configuration": json.loads(version["configuration"]),
-            "created_at": agent["created_at"], "updated_at": version["recorded_at"],
-            "archived_at": version["archived_at"], "change_kind": version["change_kind"],
-            "authority": "none", "execution": "not-integrated",
-            "reference_validation": "not-performed"}
+    return {
+        "id": identity,
+        "kind": agent["kind"],
+        "revision": version["revision"],
+        "configuration": json.loads(version["configuration"]),
+        "created_at": agent["created_at"],
+        "updated_at": version["recorded_at"],
+        "archived_at": version["archived_at"],
+        "change_kind": version["change_kind"],
+        "authority": "none",
+        "execution": "not-integrated",
+        "reference_validation": "not-performed",
+    }
 
 
 def get(store, identity, revision=None):
@@ -164,22 +183,37 @@ def get(store, identity, revision=None):
 def list_agents(store):
     with store._connect() as db:
         db.execute("BEGIN")
-        return {"results": [_get(db, row["id"]) for row in
-                db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()]}
+        return {
+            "results": [
+                _get(db, row["id"])
+                for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
+            ]
+        }
 
 
 def history(store, identity):
     with store._connect() as db:
         db.execute("BEGIN")
         _get(db, identity)
-        return {"results": [_get(db, identity, row["revision"]) for row in db.execute(
-            "SELECT revision FROM agent_versions WHERE agent_id=? ORDER BY revision", (identity,)).fetchall()]}
+        return {
+            "results": [
+                _get(db, identity, row["revision"])
+                for row in db.execute(
+                    "SELECT revision FROM agent_versions WHERE agent_id=? ORDER BY revision",
+                    (identity,),
+                ).fetchall()
+            ]
+        }
 
 
 def _unique_name(db, configuration, identity=None):
-    other = db.execute("SELECT id FROM agents WHERE name_key=?", (configuration.name.casefold(),)).fetchone()
+    other = db.execute(
+        "SELECT id FROM agents WHERE name_key=?", (configuration.name.casefold(),)
+    ).fetchone()
     if other is not None and other["id"] != identity:
-        raise AgentError("name_conflict", "Choose a unique name, including archived agents and the Companion.")
+        raise AgentError(
+            "name_conflict", "Choose a unique name, including archived agents and the Companion."
+        )
 
 
 def create(store, configuration: AgentInput):
@@ -199,17 +233,31 @@ def _editable(db, identity, expected_revision):
     if current["kind"] == "companion":
         raise AgentError("companion_protected", "The singular Companion is managed separately.")
     if current["revision"] != expected_revision:
-        raise AgentError("revision_conflict", "Agent changed. Reload before saving.",
-                         current_revision=current["revision"])
+        raise AgentError(
+            "revision_conflict",
+            "Agent changed. Reload before saving.",
+            current_revision=current["revision"],
+        )
     return current
 
 
 def _append(db, current, configuration, archived_at, change):
     revision = current["revision"] + 1
-    db.execute("INSERT INTO agent_versions VALUES (?,?,?,?,?,?)",
-        (current["id"], revision, configuration.model_dump_json(), archived_at, time.time(), change))
-    db.execute("UPDATE agents SET revision=?,name_key=? WHERE id=?",
-               (revision, configuration.name.casefold(), current["id"]))
+    db.execute(
+        "INSERT INTO agent_versions VALUES (?,?,?,?,?,?)",
+        (
+            current["id"],
+            revision,
+            configuration.model_dump_json(),
+            archived_at,
+            time.time(),
+            change,
+        ),
+    )
+    db.execute(
+        "UPDATE agents SET revision=?,name_key=? WHERE id=?",
+        (revision, configuration.name.casefold(), current["id"]),
+    )
     return _get(db, current["id"])
 
 
@@ -233,8 +281,12 @@ def archive(store, identity, request: ArchiveAgent):
         current = _editable(db, identity, request.expected_revision)
         if (current["archived_at"] is not None) == request.archived:
             return current
-        result = _append(db, current, AgentInput.model_validate(current["configuration"]),
-                         time.time() if request.archived else None,
-                         "archived" if request.archived else "restored")
+        result = _append(
+            db,
+            current,
+            AgentInput.model_validate(current["configuration"]),
+            time.time() if request.archived else None,
+            "archived" if request.archived else "restored",
+        )
         db.commit()
     return result

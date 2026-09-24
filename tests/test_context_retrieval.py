@@ -321,12 +321,17 @@ def test_offline_forgetting_purges_frozen_context_instructions(tmp_path):
 
 def test_owner_stop_discards_late_selection_and_never_dispatches_answer(store):
     from pi import turn_control
+
     sid = store.create_session()
     candidate = store.append_message(sid, "user", "Candidate text")
     policy(store, sid, {candidate["id"]: "retrieve"})
-    provider = Provider([candidate["id"]], callback=lambda: turn_control.cancel_submission(
-        store, "selection_cancel_001"))
-    result = loop(store, provider).run_turn(sid, "Choose context", request_id="selection_cancel_001")
+    provider = Provider(
+        [candidate["id"]],
+        callback=lambda: turn_control.cancel_submission(store, "selection_cancel_001"),
+    )
+    result = loop(store, provider).run_turn(
+        sid, "Choose context", request_id="selection_cancel_001"
+    )
     assert result["status"] == "cancelled" and result["turn_id"] is None
     assert [call[0] for call in provider.calls] == ["selector"]
     receipt = r.read(store, sid, request_id="selection_cancel_001")
@@ -340,7 +345,8 @@ def test_reply_to_unselected_retrieval_candidate_requires_context_review(store):
     policy(store, sid, {target["id"]: "retrieve"})
     provider = Provider([])
     with pytest.raises(c.ContextError, match="reply target"):
-        loop(store, provider).run_turn(sid, "Explain this", request_id="reply_retrieval_001",
-                                      reply_to=target["id"])
+        loop(store, provider).run_turn(
+            sid, "Explain this", request_id="reply_retrieval_001", reply_to=target["id"]
+        )
     assert [call[0] for call in provider.calls] == ["selector"]
     assert len(store.messages(sid)) == 1

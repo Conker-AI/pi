@@ -4,6 +4,7 @@ The fake here implements the same interface as OllamaProvider and is swapped in
 the way a real adapter would be, so the loop is exercised through its actual
 seam. What it does not do is pretend to succeed when asked to fail.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -36,8 +37,9 @@ class Recorder:
         self.calls.append(list(messages))
         if self.fail:
             raise ProviderUnavailable("ConnectError")
-        return Completion(text=self.reply, model=model, provider=self.name,
-                          input_tokens=11, output_tokens=7)
+        return Completion(
+            text=self.reply, model=model, provider=self.name, input_tokens=11, output_tokens=7
+        )
 
     def health(self):
         return {"status": "ok"}
@@ -58,7 +60,8 @@ def test_a_turn_appends_the_question_and_the_answer(store):
     assert result["session_id"] == s
     assert result["forked_from"] is None
     assert [(m["role"], m["content"]) for m in store.messages(s)] == [
-        ("user", "hello"), ("assistant", "hello back"),
+        ("user", "hello"),
+        ("assistant", "hello back"),
     ]
 
 
@@ -88,7 +91,8 @@ def test_history_is_resent_in_order(store):
     sent = provider.calls[-1]
     assert [(m.role, m.content) for m in sent] == [
         ("system", "be brief"),
-        ("user", "first"), ("assistant", "answered"),
+        ("user", "first"),
+        ("assistant", "answered"),
         ("user", "second"),
     ]
 
@@ -224,8 +228,9 @@ def test_a_turn_falls_through_models_that_refuse_and_records_which(store):
 def test_when_every_hosted_model_refuses_the_local_one_answers(store):
     """A weaker answer beats none, and the record still shows what was tried."""
     hosted = GatedHosted(["gated-a", "gated-b"], gated={"gated-a", "gated-b"})
-    router = Router(local_provider=Recorder("local answer"), hosted_provider=hosted,
-                    local_model="local-m")
+    router = Router(
+        local_provider=Recorder("local answer"), hosted_provider=hosted, local_model="local-m"
+    )
     loop = Loop(store, router)
     s = store.create_session()
 

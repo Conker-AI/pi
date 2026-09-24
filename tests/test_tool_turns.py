@@ -3,6 +3,7 @@
 The parking behaviour is the point: being asked to confirm is not a failure, and
 a turn that failed would tell the owner the wrong thing about what happened.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -37,8 +38,7 @@ class Scripted:
 
 
 class FakeGate:
-    def __init__(self, *, needs_approval=False, refuse=None, unavailable=False,
-                 always_asks=False):
+    def __init__(self, *, needs_approval=False, refuse=None, unavailable=False, always_asks=False):
         self.needs_approval = needs_approval
         self.refuse = refuse
         self.unavailable = unavailable
@@ -52,6 +52,7 @@ class FakeGate:
     def tools(self):
         if self.unavailable:
             from pi.toolgate import ToolGateUnavailable
+
             raise ToolGateUnavailable("ConnectError")
         return [Tool("t_echo", "echo", "echoes things", [{"name": "text", "type": "string"}])]
 
@@ -61,8 +62,13 @@ class FakeGate:
             raise ToolRefused(*self.refuse)
         if self.needs_approval and (approval_request_id is None or self.always_asks):
             self.requests += 1
-            return ApprovalRequired(f"req_{self.requests}", "2026-01-01T00:00:00Z",
-                                    "Owner confirmation required.", tool_id, args)
+            return ApprovalRequired(
+                f"req_{self.requests}",
+                "2026-01-01T00:00:00Z",
+                "Owner confirmation required.",
+                tool_id,
+                args,
+            )
         if approval_request_id and approval_request_id in self.approved:
             raise ToolRefused("APPROVAL_INVALID", "confirmation already consumed")
         if approval_request_id:
@@ -424,6 +430,7 @@ def test_the_queue_shows_intent_for_every_parked_turn(store):
 
 def test_resumed_answer_receives_result_without_advertising_more_actions(store):
     from pi import turn_context
+
     gate = FakeGate(needs_approval=True)
     loop, provider = build(store, [CALL, "the tool echoed hi"], gate)
     sid = store.create_session()

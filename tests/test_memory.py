@@ -82,9 +82,14 @@ def test_lost_ack_retries_same_identity_after_restart(tmp_path):
         attempts.append((request.url.path, json.loads(request.content)))
         if len(attempts) == 1:
             raise httpx.ReadTimeout("receiver committed, acknowledgment lost")
-        return httpx.Response(200, json={"id": str(uuid5(
-            NAMESPACE_URL, f"pi:default:{message['id']}")),
-                                        "message_id": message["id"], "state": "admitted"})
+        return httpx.Response(
+            200,
+            json={
+                "id": str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")),
+                "message_id": message["id"],
+                "state": "admitted",
+            },
+        )
 
     memory = Memory(store, client(receive))
     assert memory.drain_once() == 0
@@ -170,9 +175,14 @@ def test_forgetting_cancels_upload_scrubs_context_and_blocks_recall(tmp_path):
     def receive(request):
         calls.append(request.method)
         assert request.content == b""
-        return httpx.Response(200, json={"id": str(uuid5(
-            NAMESPACE_URL, f"pi:default:{message['id']}")),
-                                        "message_id": message["id"], "state": "deleted"})
+        return httpx.Response(
+            200,
+            json={
+                "id": str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")),
+                "message_id": message["id"],
+                "state": "deleted",
+            },
+        )
 
     memory = Memory(store, client(receive))
     next_turn = store.start_turn(other)
@@ -222,9 +232,14 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
     def receive(request):
         entered.set()
         assert release.wait(5)
-        return httpx.Response(200, json={"id": str(uuid5(
-            NAMESPACE_URL, f"pi:default:{message['id']}")),
-                                        "message_id": message["id"], "state": "admitted"})
+        return httpx.Response(
+            200,
+            json={
+                "id": str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")),
+                "message_id": message["id"],
+                "state": "admitted",
+            },
+        )
 
     memory = Memory(store, client(receive))
     memory.start()
@@ -244,21 +259,44 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
         stopped.result(timeout=3)
 
 
-@pytest.mark.parametrize("retrieval,expected", [
-    ({"mode": "lexical", "semantic": {"status": "degraded"}}, "degraded"),
-    ({"mode": "explicit-scope", "semantic": {"status": "not-used"}}, "ok"),
-])
+@pytest.mark.parametrize(
+    "retrieval,expected",
+    [
+        ({"mode": "lexical", "semantic": {"status": "degraded"}}, "degraded"),
+        ({"mode": "explicit-scope", "semantic": {"status": "not-used"}}, "ok"),
+    ],
+)
 def test_saved_settings_do_not_hide_retrieval_degradation(tmp_path, retrieval, expected):
     from pi import session_settings
+
     store = Store(tmp_path / "retrieval.db")
     sid = store.create_session()
-    session_settings.save(store, sid, session_settings.Update(expected_revision=0,
-        settings=session_settings.Settings(agentId="companion", privacy=session_settings.Privacy(
-            memoryDisabled=False, harnessDisabled=False))))
-    remote = client(lambda request: httpx.Response(200, json={"scope": json.loads(request.content).get("scope", "all"), "memories": [], "retrieval": retrieval}))
+    session_settings.save(
+        store,
+        sid,
+        session_settings.Update(
+            expected_revision=0,
+            settings=session_settings.Settings(
+                agentId="companion",
+                privacy=session_settings.Privacy(memoryDisabled=False, harnessDisabled=False),
+            ),
+        ),
+    )
+    remote = client(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "scope": json.loads(request.content).get("scope", "all"),
+                "memories": [],
+                "retrieval": retrieval,
+            },
+        )
+    )
     memory = Memory(store, remote)
     try:
-        result = Loop(store, Router(local_provider=Provider(), local_model="fixed"), memory=memory).run_turn(sid, "A question")
+        result = Loop(
+            store, Router(local_provider=Provider(), local_model="fixed"), memory=memory
+        ).run_turn(sid, "A question")
         assert result["memory"]["retrieval"]["status"] == expected
     finally:
         memory.close()

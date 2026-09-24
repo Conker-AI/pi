@@ -54,8 +54,9 @@ def _read(db, session_id, scope):
         (session_id, scope),
     ).fetchone()
     result = dict(row) if row else {"revision": 0, "text": "", "updated_at": None}
-    mode = db.execute("SELECT mode FROM draft_research WHERE session_id=? AND scope=?",
-                      (session_id, scope)).fetchone()
+    mode = db.execute(
+        "SELECT mode FROM draft_research WHERE session_id=? AND scope=?", (session_id, scope)
+    ).fetchone()
     if mode:
         result["research_mode"] = mode[0]
     return result
@@ -83,7 +84,9 @@ def save(store, session_id, body, task_id=None):
         )
         db.execute("DELETE FROM draft_research WHERE session_id=? AND scope=?", (session_id, scope))
         if body.research_mode != "off":
-            db.execute("INSERT INTO draft_research VALUES(?,?,?)", (session_id, scope, body.research_mode))
+            db.execute(
+                "INSERT INTO draft_research VALUES(?,?,?)", (session_id, scope, body.research_mode)
+            )
         result = _read(db, session_id, scope)
         db.commit()
         return result
@@ -110,7 +113,9 @@ def reserve(db, request_id, session_id, task_id, revision, text, research_mode="
         or draft["text"] != text
         or draft.get("research_mode", "off") != research_mode
     ):
-        raise DraftError("Submitted text or research mode no longer matches the saved draft revision.")
+        raise DraftError(
+            "Submitted text or research mode no longer matches the saved draft revision."
+        )
     db.execute(
         "INSERT INTO submitted_drafts VALUES(?,?,?,?)", (request_id, session_id, scope, revision)
     )
@@ -121,8 +126,10 @@ def consume(db, request_id):
     if row:
         current = _read(db, row["session_id"], row["scope"])
         if current["revision"] == row["revision"]:
-            db.execute("DELETE FROM draft_research WHERE session_id=? AND scope=?",
-                       (row["session_id"], row["scope"]))
+            db.execute(
+                "DELETE FROM draft_research WHERE session_id=? AND scope=?",
+                (row["session_id"], row["scope"]),
+            )
         db.execute(
             "UPDATE conversation_drafts SET text='',revision=revision+1,updated_at=? "
             "WHERE session_id=? AND scope=? AND revision=?",

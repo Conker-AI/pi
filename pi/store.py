@@ -12,6 +12,7 @@ evidence, never these rows - see ADR-0002. Message ids are therefore stable and
 never reused: evidence cites them, and a citation that can be re-pointed is not
 a citation.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,29 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import turn_control, turn_queue, message_forks, turn_context, response_versions, response_retries, turn_steering
-from . import actions, agents, artifacts, collaboration, context_controls, memory_store, model_roles, owner_preferences, projects, session_settings, submissions, tasks
+from . import (
+    turn_control,
+    turn_queue,
+    message_forks,
+    turn_context,
+    response_versions,
+    response_retries,
+    turn_steering,
+)
+from . import (
+    actions,
+    agents,
+    artifacts,
+    collaboration,
+    context_controls,
+    memory_store,
+    model_roles,
+    owner_preferences,
+    projects,
+    session_settings,
+    submissions,
+    tasks,
+)
 from . import citations as message_citations
 from . import jobs
 from . import drafts
@@ -226,14 +248,19 @@ def _message(row: sqlite3.Row) -> dict:
 def _message_with_attachments(db, row):
     item = _message(row)
     if item.get("content_status") != "forgotten":
-        version = db.execute("SELECT v.root_message_id,v.retry_of,f.selected_message_id,f.revision "
+        version = db.execute(
+            "SELECT v.root_message_id,v.retry_of,f.selected_message_id,f.revision "
             "FROM response_versions v JOIN response_families f "
-            "ON f.root_message_id=v.root_message_id WHERE v.message_id=?", (item["id"],)).fetchone()
+            "ON f.root_message_id=v.root_message_id WHERE v.message_id=?",
+            (item["id"],),
+        ).fetchone()
         if version:
             item["response_family"] = dict(version)
-        binding = db.execute("SELECT s.snapshot FROM turn_messages tm JOIN turn_settings s "
-                             "ON s.turn_id=tm.turn_id WHERE tm.message_id=? AND tm.purpose='input'",
-                             (item["id"],)).fetchone()
+        binding = db.execute(
+            "SELECT s.snapshot FROM turn_messages tm JOIN turn_settings s "
+            "ON s.turn_id=tm.turn_id WHERE tm.message_id=? AND tm.purpose='input'",
+            (item["id"],),
+        ).fetchone()
         if binding and (target := json.loads(binding[0]).get("replyToMessageId")):
             item["reply_to"] = target
     files = attachments.message_views(db, item["id"], session_settings.source_privacy)
@@ -256,9 +283,12 @@ class Store:
                     raise MaintenanceRequired(
                         "Recovered data is held pending coordinated deletion, effect and authority reconciliation."
                     )
-                if db.execute(
-                    "SELECT 1 FROM sqlite_master WHERE name='forgetting_maintenance'"
-                ).fetchone() and db.execute("SELECT 1 FROM forgetting_maintenance").fetchone():
+                if (
+                    db.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name='forgetting_maintenance'"
+                    ).fetchone()
+                    and db.execute("SELECT 1 FROM forgetting_maintenance").fetchone()
+                ):
                     raise MaintenanceRequired(
                         "Forgetting cleanup is unfinished. Stop Pi and rerun the same "
                         "forgetting command before starting it."
@@ -323,9 +353,15 @@ class Store:
         after the upgrade.
         """
         have = {row["name"] for row in db.execute("PRAGMA table_info(turns)")}
-        for column in ("route_tier", "route_reason", "approval_request_id",
-                       "approval_tool_id", "approval_args", "approval_expires_at",
-                       "approval_intent"):
+        for column in (
+            "route_tier",
+            "route_reason",
+            "approval_request_id",
+            "approval_tool_id",
+            "approval_args",
+            "approval_expires_at",
+            "approval_intent",
+        ):
             if column not in have:
                 db.execute(f"ALTER TABLE turns ADD COLUMN {column} TEXT")
         if "acted" not in have:
@@ -345,8 +381,9 @@ class Store:
 
     # --- sessions ---------------------------------------------------------
 
-    def create_session(self, title: str = "", parent_id: str | None = None,
-                       summary: str | None = None) -> str:
+    def create_session(
+        self, title: str = "", parent_id: str | None = None, summary: str | None = None
+    ) -> str:
         session_id = f"ses_{uuid.uuid4().hex[:16]}"
         with self._connect() as db:
             db.execute(
@@ -381,8 +418,16 @@ class Store:
 
     # --- messages ---------------------------------------------------------
 
-    def append_message(self, session_id: str, role: str, content: Any, *,
-                       turn_id=None, purpose=None, action_id=None) -> dict:
+    def append_message(
+        self,
+        session_id: str,
+        role: str,
+        content: Any,
+        *,
+        turn_id=None,
+        purpose=None,
+        action_id=None,
+    ) -> dict:
         """Add one message to the end of a session. There is no other way in.
 
         No update, no delete, no reorder - not because callers are trusted but
@@ -391,8 +436,9 @@ class Store:
         with self._connect() as db:
             # Sequence allocation and the outbox trigger share the message commit.
             db.execute("BEGIN IMMEDIATE")
-            message = submissions.append(db, session_id, role, content, turn_id=turn_id,
-                                         purpose=purpose, action_id=action_id)
+            message = submissions.append(
+                db, session_id, role, content, turn_id=turn_id, purpose=purpose, action_id=action_id
+            )
             db.commit()
         return message
 
@@ -425,48 +471,73 @@ class Store:
             db.commit()
         return turn_id
 
-    def finish_turn(self, turn_id: str, status: str, *, expected_status: str = "running",
-                    **fields: Any) -> bool:
+    def finish_turn(
+        self, turn_id: str, status: str, *, expected_status: str = "running", **fields: Any
+    ) -> bool:
         with self._connect() as db:
             return self._finish_turn(db, turn_id, status, expected_status=expected_status, **fields)
 
     @staticmethod
     def _finish_turn(db, turn_id, status, *, expected_status="running", **fields):
         fields = research_usage.account(db, turn_id, fields)
-        allowed = {"provider", "model", "input_tokens", "output_tokens", "cached_tokens",
-                   "cost_usd", "latency_ms", "detail", "route_tier", "route_reason",
-                   "approval_request_id", "approval_tool_id", "approval_args",
-                   "approval_expires_at", "approval_intent", "acted"}
+        allowed = {
+            "provider",
+            "model",
+            "input_tokens",
+            "output_tokens",
+            "cached_tokens",
+            "cost_usd",
+            "latency_ms",
+            "detail",
+            "route_tier",
+            "route_reason",
+            "approval_request_id",
+            "approval_tool_id",
+            "approval_args",
+            "approval_expires_at",
+            "approval_intent",
+            "acted",
+        }
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"unknown turn fields: {sorted(unknown)}")
-        if status == "failed" and db.execute(
-            "SELECT 1 FROM turn_cancellations WHERE turn_id=?", (turn_id,)
-        ).fetchone():
+        if (
+            status == "failed"
+            and db.execute(
+                "SELECT 1 FROM turn_cancellations WHERE turn_id=?", (turn_id,)
+            ).fetchone()
+        ):
             status = "cancelled"
         sets = ", ".join(f"{k}=?" for k in fields)
         clause = f", {sets}" if sets else ""
-        return db.execute(
-            f"UPDATE turns SET status=?, ended_at=?{clause} WHERE id=? AND status=?",
-            (status, time.time(), *fields.values(), turn_id, expected_status),
-        ).rowcount == 1
+        return (
+            db.execute(
+                f"UPDATE turns SET status=?, ended_at=?{clause} WHERE id=? AND status=?",
+                (status, time.time(), *fields.values(), turn_id, expected_status),
+            ).rowcount
+            == 1
+        )
 
     def complete_turn(self, turn_id, text, *, citations=None, reply_request_id=None, **fields):
         """A final reply and terminal state are one commit, including exact message provenance."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT session_id,status FROM turns WHERE id=?",
-                             (turn_id,)).fetchone()
+            row = db.execute(
+                "SELECT session_id,status FROM turns WHERE id=?", (turn_id,)
+            ).fetchone()
             if row is None or row["status"] != "running":
                 raise RuntimeError("Turn is no longer claimed by this caller")
-            snapshot = db.execute("SELECT snapshot FROM turn_settings WHERE turn_id=?",
-                                  (turn_id,)).fetchone()
+            snapshot = db.execute(
+                "SELECT snapshot FROM turn_settings WHERE turn_id=?", (turn_id,)
+            ).fetchone()
             calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
             turn_control.guard_db(db, turn_id, reply_request_id)
             turn_steering.guard_db(db, turn_id)
-            message = submissions.append(db, row["session_id"], "assistant", text,
-                                         turn_id=turn_id, purpose="final")
+            message = submissions.append(
+                db, row["session_id"], "assistant", text, turn_id=turn_id, purpose="final"
+            )
             from . import attachment_passages
+
             citations = attachment_passages.citations(db, turn_id, text, citations)
             evidence = message_citations.save(db, message["id"], citations)
             if evidence:
@@ -474,7 +545,9 @@ class Store:
             fields = turn_steering.account(db, turn_id, fields)
             if not self._finish_turn(db, turn_id, "complete", **fields):
                 raise RuntimeError("Turn is no longer claimed by this caller")
-            retry = db.execute("SELECT source_message_id FROM response_retries WHERE turn_id=?", (turn_id,)).fetchone()
+            retry = db.execute(
+                "SELECT source_message_id FROM response_retries WHERE turn_id=?", (turn_id,)
+            ).fetchone()
             if retry:
                 root = response_versions.register(db, retry[0], message["id"])
                 response_versions.activate(db, row["session_id"], root, message["id"])
@@ -483,13 +556,18 @@ class Store:
 
     def claim_turn(self, turn_id: str, expected_status: str) -> bool:
         with self._connect() as db:
-            return db.execute("UPDATE turns SET status='running',ended_at=NULL "
-                              "WHERE id=? AND status=? AND NOT EXISTS "
-                              "(SELECT 1 FROM turns other WHERE other.session_id=turns.session_id "
-                              "AND other.id!=turns.id AND other.status='running') AND NOT EXISTS "
-                              "(SELECT 1 FROM turn_submissions s WHERE s.requested_session_id="
-                              "turns.session_id AND s.state='preparing')",
-                              (turn_id, expected_status)).rowcount == 1
+            return (
+                db.execute(
+                    "UPDATE turns SET status='running',ended_at=NULL "
+                    "WHERE id=? AND status=? AND NOT EXISTS "
+                    "(SELECT 1 FROM turns other WHERE other.session_id=turns.session_id "
+                    "AND other.id!=turns.id AND other.status='running') AND NOT EXISTS "
+                    "(SELECT 1 FROM turn_submissions s WHERE s.requested_session_id="
+                    "turns.session_id AND s.state='preparing')",
+                    (turn_id, expected_status),
+                ).rowcount
+                == 1
+            )
 
     def acted_without_reply(self) -> list[dict]:
         """Every turn that changed the world but never said what happened.
@@ -506,8 +584,9 @@ class Store:
                 " AND session_id NOT IN (SELECT session_id FROM forgotten_sessions)"
                 " ORDER BY started_at"
             ).fetchall()
-        return [{**dict(r), "approval_args": json.loads(r["approval_args"] or "null")}
-                for r in rows]
+        return [
+            {**dict(r), "approval_args": json.loads(r["approval_args"] or "null")} for r in rows
+        ]
 
     def mark_acted(self, turn_id: str) -> None:
         """Record that this turn has now changed the world, before anything else.
@@ -549,8 +628,7 @@ class Store:
         item = dict(row)
         item["approval_args"] = json.loads(item["approval_args"] or "null")
         latest = actions.latest(self, turn_id)
-        item["action"] = ({key: latest[key] for key in ("id", "state", "job_id")}
-                          if latest else None)
+        item["action"] = {key: latest[key] for key in ("id", "state", "job_id")} if latest else None
         return item
 
     def turns(self, session_id: str) -> list[dict]:
@@ -564,10 +642,18 @@ class Store:
                 "AND a.rowid=(SELECT MAX(rowid) FROM tool_actions WHERE turn_id=a.turn_id)",
                 (session_id,),
             ).fetchall()
-        latest = {row["turn_id"]: {key: row[key] for key in ("id", "state", "job_id")}
-                  for row in action_rows}
-        return [{**dict(row), "approval_args": json.loads(row["approval_args"] or "null"),
-                 "action": latest.get(row["id"])} for row in rows]
+        latest = {
+            row["turn_id"]: {key: row[key] for key in ("id", "state", "job_id")}
+            for row in action_rows
+        }
+        return [
+            {
+                **dict(row),
+                "approval_args": json.loads(row["approval_args"] or "null"),
+                "action": latest.get(row["id"]),
+            }
+            for row in rows
+        ]
 
     def mark_interrupted_turns(self) -> int:
         """Called at startup. A turn that was running when the process died did

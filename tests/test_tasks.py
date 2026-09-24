@@ -1,4 +1,5 @@
 """Task metadata never dispatches; its state and evidence survive real SQLite reopen."""
+
 import hashlib
 import json
 import sqlite3
@@ -20,23 +21,35 @@ def store(tmp_path):
 
 
 def body(session, **fields):
-    return tasks.CreateTask(request_id="request_identity_0001", session_id=session,
-                            outcome="Deliver the requested document",
-                            criteria=["Document reviewed"],
-                            **fields)
+    return tasks.CreateTask(
+        request_id="request_identity_0001",
+        session_id=session,
+        outcome="Deliver the requested document",
+        criteria=["Document reviewed"],
+        **fields,
+    )
 
 
 def change(task, status, **fields):
-    return tasks.TransitionTask(expected_revision=task["revision"], status=status,
-                                note="Owner reviewed the current state", **fields)
+    return tasks.TransitionTask(
+        expected_revision=task["revision"],
+        status=status,
+        note="Owner reviewed the current state",
+        **fields,
+    )
 
 
 def edit(task, **fields):
-    return tasks.UpdateTask(**{
-        "expected_revision": task["revision"], "outcome": task["outcome"],
-        "criteria": [item["text"] for item in task["criteria"]],
-        "parent_task_id": task["parent_task_id"], "run_ids": task["run_ids"], **fields,
-    })
+    return tasks.UpdateTask(
+        **{
+            "expected_revision": task["revision"],
+            "outcome": task["outcome"],
+            "criteria": [item["text"] for item in task["criteria"]],
+            "parent_task_id": task["parent_task_id"],
+            "run_ids": task["run_ids"],
+            **fields,
+        }
+    )
 
 
 def test_create_is_durable_metadata_without_starting_a_turn(tmp_path):
@@ -94,16 +107,19 @@ def test_review_reopen_and_archive_preserve_criteria_identity(store):
     with pytest.raises(tasks.TaskError, match="every current"):
         tasks.transition(store, task["id"], change(task, "completed"))
     ids = [criterion["id"] for criterion in task["criteria"]]
-    task = tasks.transition(store, task["id"], change(
-        task, "completed", completed_criterion_ids=ids))
+    task = tasks.transition(
+        store, task["id"], change(task, "completed", completed_criterion_ids=ids)
+    )
     with pytest.raises(tasks.TaskError, match="reopen"):
         tasks.update(store, task["id"], edit(task))
-    task = tasks.archive(store, task["id"], tasks.ArchiveTask(
-        expected_revision=task["revision"], archived=True))
+    task = tasks.archive(
+        store, task["id"], tasks.ArchiveTask(expected_revision=task["revision"], archived=True)
+    )
     with pytest.raises(tasks.TaskError):
         tasks.transition(store, task["id"], change(task, "planned"))
-    task = tasks.archive(store, task["id"], tasks.ArchiveTask(
-        expected_revision=task["revision"], archived=False))
+    task = tasks.archive(
+        store, task["id"], tasks.ArchiveTask(expected_revision=task["revision"], archived=False)
+    )
     task = tasks.transition(store, task["id"], change(task, "planned"))
     assert task["completed_criterion_ids"] == []
     task = tasks.update(store, task["id"], edit(task))
@@ -113,9 +129,15 @@ def test_review_reopen_and_archive_preserve_criteria_identity(store):
 def test_parent_cycles_foreign_runs_and_active_children_are_rejected(store):
     session = store.create_session()
     parent = tasks.create(store, body(session))
-    child = tasks.create(store, body(session).model_copy(update={
-        "request_id": "request_identity_0002", "parent_task_id": parent["id"],
-    }))
+    child = tasks.create(
+        store,
+        body(session).model_copy(
+            update={
+                "request_id": "request_identity_0002",
+                "parent_task_id": parent["id"],
+            }
+        ),
+    )
     with pytest.raises(tasks.TaskError, match="ancestor"):
         tasks.update(store, parent["id"], edit(parent, parent_task_id=child["id"]))
     with pytest.raises(tasks.TaskError, match="child"):
@@ -124,9 +146,15 @@ def test_parent_cycles_foreign_runs_and_active_children_are_rejected(store):
     with pytest.raises(tasks.TaskError, match="this conversation"):
         tasks.update(store, child["id"], edit(child, run_ids=[foreign]))
     with pytest.raises(tasks.TaskError, match="same conversation"):
-        tasks.create(store, body(store.create_session()).model_copy(update={
-            "request_id": "request_identity_0003", "parent_task_id": parent["id"],
-        }))
+        tasks.create(
+            store,
+            body(store.create_session()).model_copy(
+                update={
+                    "request_id": "request_identity_0003",
+                    "parent_task_id": parent["id"],
+                }
+            ),
+        )
     child = tasks.transition(store, child["id"], change(child, "cancelled"))
     parent = tasks.transition(store, parent["id"], change(parent, "cancelled"))
     with pytest.raises(tasks.TaskError, match="active parent"):
@@ -139,8 +167,9 @@ def test_link_and_unlink_keep_evidence_and_cancel_does_not_stop_the_turn(store):
     run = store.start_turn(session)
     task = tasks.create(store, body(session, run_ids=[run]))
     assert activity.get_run(store, run)["task_ids"] == [task["id"]]
-    assert "run_started" in {event["kind"] for event in
-                             activity.list_events(store, task_id=task["id"])["results"]}
+    assert "run_started" in {
+        event["kind"] for event in activity.list_events(store, task_id=task["id"])["results"]
+    }
     task = tasks.update(store, task["id"], edit(task, run_ids=[]))
     assert activity.get_run(store, run)["task_ids"] == []
     events = activity.list_events(store, task_id=task["id"])["results"]
@@ -155,9 +184,14 @@ def test_task_event_scope_excludes_other_tasks_link_history_on_a_shared_run(stor
     session = store.create_session()
     run = store.start_turn(session)
     first = tasks.create(store, body(session, run_ids=[run]))
-    second = tasks.create(store, body(session, run_ids=[run]).model_copy(update={
-        "request_id": "request_identity_0002",
-    }))
+    second = tasks.create(
+        store,
+        body(session, run_ids=[run]).model_copy(
+            update={
+                "request_id": "request_identity_0002",
+            }
+        ),
+    )
     tasks.update(store, second["id"], edit(second, run_ids=[]))
     events, cursor = [], None
     while True:
@@ -167,13 +201,15 @@ def test_task_event_scope_excludes_other_tasks_link_history_on_a_shared_run(stor
         if cursor is None:
             break
     assert {event["kind"] for event in events} == {
-        "task_created", "run_linked", "run_started",
+        "task_created",
+        "run_linked",
+        "run_started",
     }
     assert all(event["task_id"] in (None, first["id"]) for event in events)
     assert len(events) == len({event["sequence"] for event in events}) == 3
-    assert {event["kind"] for event in activity.list_events(
-        store, task_id=second["id"]
-    )["results"]} == {"task_created", "run_linked", "task_updated", "run_unlinked"}
+    assert {
+        event["kind"] for event in activity.list_events(store, task_id=second["id"])["results"]
+    } == {"task_created", "run_linked", "task_updated", "run_unlinked"}
 
 
 def test_task_write_and_event_rollback_together(store):
@@ -181,8 +217,10 @@ def test_task_write_and_event_rollback_together(store):
     task = tasks.create(store, body(session))
     run = store.start_turn(session)
     with store._connect() as db:
-        db.executescript("CREATE TRIGGER reject_test_link BEFORE INSERT ON task_runs "
-                         "BEGIN SELECT RAISE(ABORT,'test link failed'); END;")
+        db.executescript(
+            "CREATE TRIGGER reject_test_link BEFORE INSERT ON task_runs "
+            "BEGIN SELECT RAISE(ABORT,'test link failed'); END;"
+        )
     with pytest.raises(sqlite3.IntegrityError, match="test link failed"):
         tasks.update(store, task["id"], edit(task, outcome="must roll back", run_ids=[run]))
     assert tasks.get(store, task["id"]) == task
@@ -197,14 +235,20 @@ def test_events_are_database_append_only_and_do_not_copy_private_content(store):
         for statement, values in [
             ("UPDATE activity_events SET kind='forged' WHERE id=?", (event["id"],)),
             ("DELETE FROM activity_events WHERE id=?", (event["id"],)),
-            (("INSERT OR REPLACE INTO activity_events(id,kind,session_id,occurred_at) "
-              "VALUES(?,'forged',?,0)"), (event["id"], session)),
+            (
+                (
+                    "INSERT OR REPLACE INTO activity_events(id,kind,session_id,occurred_at) "
+                    "VALUES(?,'forged',?,0)"
+                ),
+                (event["id"], session),
+            ),
         ]:
             with pytest.raises(sqlite3.IntegrityError, match="append-only"):
                 db.execute(statement, values)
         with pytest.raises(sqlite3.IntegrityError, match="fixed"):
-            db.execute("UPDATE tasks SET session_id=? WHERE id=?",
-                       (store.create_session(), task["id"]))
+            db.execute(
+                "UPDATE tasks SET session_id=? WHERE id=?", (store.create_session(), task["id"])
+            )
 
 
 def test_run_events_preserve_approval_recovery_and_uncertain_outcomes(store):
@@ -222,8 +266,15 @@ def test_run_events_preserve_approval_recovery_and_uncertain_outcomes(store):
     assert observed["action"] == {"id": "action_one", "state": "outcome_unknown", "job_id": None}
     events = activity.list_events(store, run_id=run)["results"]
     states = [event["to_status"] for event in reversed(events)]
-    assert states == ["running", "dispatching", "awaiting_approval", "awaiting_approval",
-                      "running", "outcome_unknown", "outcome_unknown"]
+    assert states == [
+        "running",
+        "dispatching",
+        "awaiting_approval",
+        "awaiting_approval",
+        "running",
+        "outcome_unknown",
+        "outcome_unknown",
+    ]
     assert "DO NOT COPY" not in json.dumps(events)
     assert "DO NOT COPY" not in json.dumps(observed)
 
@@ -233,8 +284,10 @@ def test_old_database_upgrades_without_fabricating_historical_events(tmp_path):
     with sqlite3.connect(path) as db:
         db.executescript(SCHEMA)
         db.execute("INSERT INTO sessions(id,created_at) VALUES('old_session',1)")
-        db.execute("INSERT INTO turns(id,session_id,status,started_at,ended_at) "
-                   "VALUES('old_turn','old_session','complete',1,2)")
+        db.execute(
+            "INSERT INTO turns(id,session_id,status,started_at,ended_at) "
+            "VALUES('old_turn','old_session','complete',1,2)"
+        )
     with closing(Store(path)) as store:
         assert activity.get_run(store, "old_turn")["status"] == "complete"
         assert activity.list_events(store)["results"] == []
@@ -273,17 +326,28 @@ def test_forgetting_scrubs_tasks_idempotency_hashes_and_views_across_descendants
         for index, session in enumerate((root, child, other)):
             text = secret if index < 2 else "unrelated safe text"
             run = store.start_turn(session)
-            request = body(session).model_copy(update={
-                "request_id": f"request_identity_00{index}", "outcome": text,
-                "criteria": [text], "run_ids": [run],
-            })
+            request = body(session).model_copy(
+                update={
+                    "request_id": f"request_identity_00{index}",
+                    "outcome": text,
+                    "criteria": [text],
+                    "run_ids": [run],
+                }
+            )
             task = tasks.create(store, request)
-            task = tasks.transition(store, task["id"], tasks.TransitionTask(
-                expected_revision=1, status="blocked", note=text))
+            task = tasks.transition(
+                store,
+                task["id"],
+                tasks.TransitionTask(expected_revision=1, status="blocked", note=text),
+            )
             saved.append((request, task, run))
         with store._connect() as db:
-            hashes = [row[0] for row in db.execute("SELECT payload_hash FROM task_requests "
-                                                  "WHERE task_id!=?", (saved[2][1]["id"],))]
+            hashes = [
+                row[0]
+                for row in db.execute(
+                    "SELECT payload_hash FROM task_requests WHERE task_id!=?", (saved[2][1]["id"],)
+                )
+            ]
     receipt = forgetting.forget(path, root, forgetting.preview(path, root)["confirmation"])
     assert secret not in json.dumps(receipt)
     with closing(Store(path)) as store:
@@ -303,8 +367,12 @@ def test_forgetting_scrubs_tasks_idempotency_hashes_and_views_across_descendants
         events = activity.list_events(store)["results"]
         assert secret not in json.dumps(events)
         with store._connect() as db:
-            assert db.execute("SELECT COUNT(*) FROM task_requests WHERE payload_hash IS NULL"
-                              ).fetchone()[0] == 2
+            assert (
+                db.execute(
+                    "SELECT COUNT(*) FROM task_requests WHERE payload_hash IS NULL"
+                ).fetchone()[0]
+                == 2
+            )
     for entry in path.parent.glob("pi.db*"):
         assert secret.encode() not in entry.read_bytes()
         assert all(value.encode() not in entry.read_bytes() for value in hashes)
@@ -315,8 +383,12 @@ def test_strict_metadata_models_reject_fake_agents_and_execution_flags(store):
     for extra in ({"agent_id": "fixture-specialist"}, {"execute": True}, {"status": "completed"}):
         with pytest.raises(ValidationError):
             tasks.CreateTask(**{**request, **extra})
-    for change_data in ({"criteria": ["Same", "same"]}, {"outcome": " "},
-                        {"criteria": ["x" * 501]}, {"criteria": []}):
+    for change_data in (
+        {"criteria": ["Same", "same"]},
+        {"outcome": " "},
+        {"criteria": ["x" * 501]},
+        {"criteria": []},
+    ):
         with pytest.raises(ValidationError):
             tasks.CreateTask(**{**request, **change_data})
     with pytest.raises(ValidationError):
@@ -327,8 +399,9 @@ def test_authenticated_api_contract_and_recovery_read(monkeypatch, store):
     key = "runtime_key_for_ledger_test"
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "separate_recovery_key", raising=False)
-    monkeypatch.setattr(api.app.state, "gateway_key_hash",
-                        hashlib.sha256(key.encode()).hexdigest(), raising=False)
+    monkeypatch.setattr(
+        api.app.state, "gateway_key_hash", hashlib.sha256(key.encode()).hexdigest(), raising=False
+    )
     client = TestClient(api.app)
     try:
         session = store.create_session()
@@ -338,13 +411,19 @@ def test_authenticated_api_contract_and_recovery_read(monkeypatch, store):
         response = client.post("/tasks", json=payload, headers=headers)
         assert response.status_code == 200
         task = response.json()
-        assert client.get("/tasks/requests/" + payload["request_id"],
-                          headers=headers).json() == task
+        assert (
+            client.get("/tasks/requests/" + payload["request_id"], headers=headers).json() == task
+        )
         listed = client.get("/tasks?session_id=" + session, headers=headers).json()
         assert listed["results"] == [task]
-        bad = client.post(f"/tasks/{task['id']}/update", headers=headers, json={
-            **edit(task).model_dump(), "expected_revision": 7,
-        })
+        bad = client.post(
+            f"/tasks/{task['id']}/update",
+            headers=headers,
+            json={
+                **edit(task).model_dump(),
+                "expected_revision": 7,
+            },
+        )
         assert bad.status_code == 409
         assert bad.json()["detail"]["current_revision"] == 1
         assert client.post(f"/tasks/{task['id']}/run", json={}, headers=headers).status_code == 404

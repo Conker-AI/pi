@@ -1,4 +1,5 @@
 """Explicit admin evaluation requests; GET never runs a provider."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from . import agents, model_evaluations as evaluations
 
@@ -37,7 +38,9 @@ def router(store, authorize, providers):
         return call(evaluations.evaluate, identity, body, providers())
 
     @routes.get("/runs")
-    def runs(case_id: str | None = Query(None, max_length=200), limit: int = Query(50, ge=1, le=200)):
+    def runs(
+        case_id: str | None = Query(None, max_length=200), limit: int = Query(50, ge=1, le=200)
+    ):
         return call(evaluations.list_runs, case_id, limit)
 
     @routes.get("/runs/{request_id}")

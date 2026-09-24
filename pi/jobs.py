@@ -363,11 +363,17 @@ def provision_budget(store, identity, adapter):
     if not allowance or not callable(allocate):
         raise JobError("No recurring budget allowance is configured for this run.")
     try:
-        budget_id = allocate(allowance, target=definition["target"], action_id=identity,
-                             agent_id=definition["agentId"])
+        budget_id = allocate(
+            allowance,
+            target=definition["target"],
+            action_id=identity,
+            agent_id=definition["agentId"],
+        )
         body = BudgetBinding(budget_id=budget_id)
     except Exception:
-        raise JobError("Recurring allowance is unavailable, exhausted, expired or does not match this run.") from None
+        raise JobError(
+            "Recurring allowance is unavailable, exhausted, expired or does not match this run."
+        ) from None
     return bind_budget(store, identity, body, adapter)
 
 

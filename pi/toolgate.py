@@ -15,6 +15,7 @@ anywhere in this file - that semantics cannot be reconciled with a nonce
 consumed server-side, and pretending otherwise would show the owner an approval
 story that is not true.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -24,7 +25,7 @@ from typing import Any
 
 import httpx
 
-_WORKFLOW = re.compile(r'^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$')
+_WORKFLOW = re.compile(r"^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$")
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class ApprovalRequired:
     Not an error: the turn parks rather than failing. The owner has not said no,
     they have not been asked yet.
     """
+
     request_id: str
     expires_at: str | None
     message: str
@@ -112,32 +114,49 @@ class ToolGateClient:
     def tools(self) -> list[Tool]:
         """Only what this key is scoped to. ToolGate decides, not Pi."""
         try:
-            response = httpx.get(f"{self.base_url}/v2/agent/tools",
-                                 headers=self._headers(), timeout=self.timeout)
+            response = httpx.get(
+                f"{self.base_url}/v2/agent/tools", headers=self._headers(), timeout=self.timeout
+            )
             response.raise_for_status()
             rows = response.json()
-            workflows = httpx.get(f"{self.base_url}/v2/agent/published-workflows",
-                                  headers=self._headers(), timeout=self.timeout)
+            workflows = httpx.get(
+                f"{self.base_url}/v2/agent/published-workflows",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
             # Older ToolGate deployments retain individual tools until upgraded.
             if workflows.status_code != 404:
                 workflows.raise_for_status()
                 published = workflows.json()
-                if not isinstance(published, list) or any(not isinstance(row, dict) or not _WORKFLOW.fullmatch(str(row.get('id', ''))) for row in published):
-                    raise ValueError('Invalid published workflow catalogue')
+                if not isinstance(published, list) or any(
+                    not isinstance(row, dict) or not _WORKFLOW.fullmatch(str(row.get("id", "")))
+                    for row in published
+                ):
+                    raise ValueError("Invalid published workflow catalogue")
                 rows = [*rows, *published]
         except Exception as exc:
             raise ToolGateUnavailable(type(exc).__name__) from exc
         return [
-            Tool(id=row["id"], name=row.get("name", row["id"]),
-                 description=row.get("description", ""), inputs=row.get("inputs", []))
+            Tool(
+                id=row["id"],
+                name=row.get("name", row["id"]),
+                description=row.get("description", ""),
+                inputs=row.get("inputs", []),
+            )
             for row in rows
         ]
 
     # --- acting ----------------------------------------------------------
 
-    def invoke(self, tool_id: str, args: dict,
-               approval_request_id: str | None = None, *, action_id: str,
-               job_id: str | None = None) -> ToolResult | ApprovalRequired | ToolPending:
+    def invoke(
+        self,
+        tool_id: str,
+        args: dict,
+        approval_request_id: str | None = None,
+        *,
+        action_id: str,
+        job_id: str | None = None,
+    ) -> ToolResult | ApprovalRequired | ToolPending:
         """Run a tool, or come back asking for the owner.
 
         Returns ApprovalRequired rather than raising, because being asked to
@@ -145,8 +164,8 @@ class ToolGateClient:
         """
         payload: dict[str, Any] = {"args": args, "action_id": action_id, "job_id": job_id}
         workflow = _WORKFLOW.fullmatch(tool_id)
-        if tool_id.startswith('workflow:') and not workflow:
-            raise ToolRefused('VALIDATION_ERROR', 'Invalid immutable workflow capability')
+        if tool_id.startswith("workflow:") and not workflow:
+            raise ToolRefused("VALIDATION_ERROR", "Invalid immutable workflow capability")
         path = f"/v2/tools/{tool_id}/invoke"
         if workflow:
             identity, version, digest = workflow.groups()
@@ -155,29 +174,40 @@ class ToolGateClient:
         if approval_request_id:
             payload["approval_request_id"] = approval_request_id
         try:
-            response = httpx.post(f"{self.base_url}{path}",
-                                  json=payload, headers=self._headers(), timeout=self.timeout)
+            response = httpx.post(
+                f"{self.base_url}{path}",
+                json=payload,
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
         except Exception as exc:
-            return ToolPending("outcome_unknown",
-                               type(exc).__name__ + ": check action; do not repeat", action_id)
+            return ToolPending(
+                "outcome_unknown", type(exc).__name__ + ": check action; do not repeat", action_id
+            )
 
         if 400 <= response.status_code < 500:
             detail = self._detail(response)
             # 409 APPROVAL_INVALID is what a replayed or expired approval looks
             # like. It is a refusal, never a reason to retry without one.
-            raise ToolRefused(detail.get("code", f"HTTP_{response.status_code}"),
-                              detail.get("message", "tool refused"),
-                              detail.get("next_action", ""))
+            raise ToolRefused(
+                detail.get("code", f"HTTP_{response.status_code}"),
+                detail.get("message", "tool refused"),
+                detail.get("next_action", ""),
+            )
 
         return self._outcome(response, tool_id, args, action_id)
 
     def check_action(self, action_id: str, tool_id: str) -> ToolResult | ToolPending:
         try:
-            response = httpx.get(f"{self.base_url}/v2/agent/actions/{action_id}",
-                                 headers=self._headers(), timeout=self.timeout)
+            response = httpx.get(
+                f"{self.base_url}/v2/agent/actions/{action_id}",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
         except httpx.HTTPError:
-            return ToolPending("outcome_unknown",
-                               "Action status unavailable; do not repeat it", action_id)
+            return ToolPending(
+                "outcome_unknown", "Action status unavailable; do not repeat it", action_id
+            )
         return self._outcome(response, tool_id, {}, action_id)
 
     @staticmethod
@@ -189,8 +219,9 @@ class ToolGateClient:
         if not isinstance(body, dict) or response.status_code != 200:
             return ToolPending("outcome_unknown", "Action outcome could not be verified", action_id)
         if body.get("action_id", action_id) != action_id:
-            return ToolPending("outcome_unknown",
-                               "Action receipt identity does not match", action_id)
+            return ToolPending(
+                "outcome_unknown", "Action receipt identity does not match", action_id
+            )
         if body.get("code") == "CONFIRMATION_REQUIRED" and isinstance(body.get("request_id"), str):
             return ApprovalRequired(
                 request_id=body["request_id"],
@@ -200,39 +231,52 @@ class ToolGateClient:
                 args=args,
             )
         if body.get("code") == "IN_PROGRESS":
-            return ToolPending("action_in_progress",
-                               "Dispatch recorded; outcome pending", action_id)
+            return ToolPending(
+                "action_in_progress", "Dispatch recorded; outcome pending", action_id
+            )
         if body.get("code") == "OUTCOME_UNKNOWN":
-            return ToolPending("outcome_unknown",
-                               "Outcome unknown; check the action, never repeat it", action_id)
+            return ToolPending(
+                "outcome_unknown", "Outcome unknown; check the action, never repeat it", action_id
+            )
         result = body.get("result")
         workflow = _WORKFLOW.fullmatch(tool_id)
-        if workflow and body.get('status') == 'completed':
+        if workflow and body.get("status") == "completed":
             identity, version, digest = workflow.groups()
-            publication = body.get('publication', {})
-            if (not isinstance(publication, dict) or publication.get('id') != identity
-                    or publication.get('version') != int(version) or publication.get('digest') != digest):
-                return ToolPending('outcome_unknown', 'Workflow publication receipt does not match', action_id)
-            if body.get('code') in ('OK', 'WORKFLOW_FAILED'):
-                return ToolResult(body['code'] == 'OK', result, tool_id)
+            publication = body.get("publication", {})
+            if (
+                not isinstance(publication, dict)
+                or publication.get("id") != identity
+                or publication.get("version") != int(version)
+                or publication.get("digest") != digest
+            ):
+                return ToolPending(
+                    "outcome_unknown", "Workflow publication receipt does not match", action_id
+                )
+            if body.get("code") in ("OK", "WORKFLOW_FAILED"):
+                return ToolResult(body["code"] == "OK", result, tool_id)
         if body.get("status") == "completed" and isinstance(result, dict):
             if body.get("code") == "OK" and result.get("ok") is True:
                 return ToolResult(True, result.get("result"), tool_id)
             if body.get("code") == "TOOL_UNAVAILABLE" and result.get("ok") is False:
                 return ToolResult(False, result, tool_id)
         # Compatibility with explicit old receipts; absence or truthy strings are not success.
-        if ("code" not in body and "status" not in body
-                and (body.get("ok") is True or body.get("ok") is False)):
+        if (
+            "code" not in body
+            and "status" not in body
+            and (body.get("ok") is True or body.get("ok") is False)
+        ):
             return ToolResult(body["ok"], result, tool_id)
-        return ToolPending("outcome_unknown",
-                           "No affirmative or negative execution receipt", action_id)
+        return ToolPending(
+            "outcome_unknown", "No affirmative or negative execution receipt", action_id
+        )
 
     def health(self) -> dict:
         if not self.execution_key:
             return {"status": "not_configured", "reason": "no execution key"}
         try:
-            response = httpx.get(f"{self.base_url}/v2/agent/status",
-                                 headers=self._headers(), timeout=5.0)
+            response = httpx.get(
+                f"{self.base_url}/v2/agent/status", headers=self._headers(), timeout=5.0
+            )
         except Exception as exc:
             return {"status": "unavailable", "reason": type(exc).__name__}
         if response.status_code == 401:

@@ -4,6 +4,7 @@ The cost guard is the part worth being strict about: it decides whether a typo
 in a model name becomes a bill. It is tested here as behaviour, not as a
 configuration flag that happens to be set.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -47,8 +48,9 @@ class FakeHosted:
 
 
 def free(model_id, ctx=100_000, tools=False):
-    return ModelInfo(model_id, ctx, 0.0, 0.0, tools,
-                     {"prompt": "0", "completion": "0", "request": "0"})
+    return ModelInfo(
+        model_id, ctx, 0.0, 0.0, tools, {"prompt": "0", "completion": "0", "request": "0"}
+    )
 
 
 def paid(model_id, ctx=100_000, tools=True):
@@ -60,27 +62,34 @@ def paid(model_id, ctx=100_000, tools=True):
 
 def test_ordinary_conversation_stays_local(store=None):
     """The cheapest thing that can answer, answers. Escalation is the exception."""
-    router = Router(local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]),
-                    local_model="qwen3:4b")
+    router = Router(
+        local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]), local_model="qwen3:4b"
+    )
     route = router.route(TurnContext())
     assert route.tier is Tier.LOCAL
     assert route.reason is Reason.DEFAULT
     assert route.escalated is False
 
 
-@pytest.mark.parametrize("ctx,expected", [
-    (TurnContext(owner_requested_strong=True), Reason.OWNER_ASKED),
-    (TurnContext(needs_tools=True), Reason.TOOLS_REQUIRED),
-    (TurnContext(previous_attempt_failed=True), Reason.RETRY_AFTER_FAILURE),
-    (TurnContext(is_analysis=True), Reason.ANALYSIS),
-    (TurnContext(history_chars=50_000), Reason.LONG_CONTEXT),
-])
+@pytest.mark.parametrize(
+    "ctx,expected",
+    [
+        (TurnContext(owner_requested_strong=True), Reason.OWNER_ASKED),
+        (TurnContext(needs_tools=True), Reason.TOOLS_REQUIRED),
+        (TurnContext(previous_attempt_failed=True), Reason.RETRY_AFTER_FAILURE),
+        (TurnContext(is_analysis=True), Reason.ANALYSIS),
+        (TurnContext(history_chars=50_000), Reason.LONG_CONTEXT),
+    ],
+)
 def test_each_signal_escalates_and_says_why(ctx, expected):
     """Every escalation carries its reason. A policy nobody can measure drifts
     into always escalating, and features.md A6 names the trap: a cheap model
     that fails and then escalates has cost both."""
-    router = Router(local_provider=FakeLocal(), hosted_provider=FakeHosted([free("big", 200_000)]),
-                    local_model="qwen3:4b")
+    router = Router(
+        local_provider=FakeLocal(),
+        hosted_provider=FakeHosted([free("big", 200_000)]),
+        local_model="qwen3:4b",
+    )
     route = router.route(ctx)
     assert route.reason is expected
     assert route.escalated is True
@@ -88,10 +97,14 @@ def test_each_signal_escalates_and_says_why(ctx, expected):
 
 
 def test_the_owners_request_outranks_every_other_signal():
-    router = Router(local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]),
-                    local_model="qwen3:4b")
-    route = router.route(TurnContext(owner_requested_strong=True, is_analysis=True,
-                                     needs_tools=True, history_chars=99_999))
+    router = Router(
+        local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]), local_model="qwen3:4b"
+    )
+    route = router.route(
+        TurnContext(
+            owner_requested_strong=True, is_analysis=True, needs_tools=True, history_chars=99_999
+        )
+    )
     assert route.reason is Reason.OWNER_ASKED
 
 
@@ -203,6 +216,7 @@ def test_candidates_are_ordered_and_end_with_the_local_fallback():
 
 def test_an_ordinary_turn_does_not_enumerate_hosted_models():
     """Nothing to fall through to when the cheapest option is already chosen."""
-    router = Router(local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]),
-                    local_model="qwen3:4b")
+    router = Router(
+        local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]), local_model="qwen3:4b"
+    )
     assert len(router.candidates(TurnContext())) == 1

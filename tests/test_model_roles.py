@@ -34,8 +34,22 @@ def config():
             dict(id="two", name="Other", enabled=True),
         ],
         models=[
-            dict(id="a", providerId="one", name="A", route="actual-a", enabled=True, routingDescription=""),
-            dict(id="b", providerId="two", name="B", route="actual-b", enabled=True, routingDescription=""),
+            dict(
+                id="a",
+                providerId="one",
+                name="A",
+                route="actual-a",
+                enabled=True,
+                routingDescription="",
+            ),
+            dict(
+                id="b",
+                providerId="two",
+                name="B",
+                route="actual-b",
+                enabled=True,
+                routingDescription="",
+            ),
         ],
         defaultModelId="a",
         roleSettings=dict(

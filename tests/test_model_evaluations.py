@@ -1,4 +1,5 @@
 """Real dispatcher execution with injected adapters; no external requests."""
+
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -17,32 +18,79 @@ from pi.store import Store
 class Adapter:
     def __init__(self, response='{"modelId":"a"}', fail=False):
         self.response, self.fail, self.calls = response, fail, []
+
     def complete_bounded(self, messages, *, model, timeout):
         self.calls.append((messages, model, timeout))
-        if self.fail: raise ProviderUnavailable("Do not persist provider secrets")
-        return Completion(text=self.response, model="actual-returned", provider="test",
-            input_tokens=12, output_tokens=4, cached_tokens=None, cost_usd=0.004)
+        if self.fail:
+            raise ProviderUnavailable("Do not persist provider secrets")
+        return Completion(
+            text=self.response,
+            model="actual-returned",
+            provider="test",
+            input_tokens=12,
+            output_tokens=4,
+            cached_tokens=None,
+            cost_usd=0.004,
+        )
 
 
 def configuration():
-    role = dict(enabled=True, eligibleModelIds=["a", "b"], modelId="a", timeoutMs=1200,
-                failure="stop", fallbackModelId=None)
-    return model_roles.Configuration.model_validate({
-        "providers": [{"id": "test", "name": "Test", "enabled": True}, {"id": "other", "name": "Other", "enabled": True}],
-        "models": [{"id": "a", "providerId": "test", "name": "A", "route": "requested-a", "enabled": True},
-                   {"id": "b", "providerId": "other", "name": "B", "route": "requested-b", "enabled": True}],
-        "defaultModelId": "a", "roleSettings": {"answerMode": "manual", "roles": {name: dict(role) for name in model_roles.ROLES}}})
+    role = dict(
+        enabled=True,
+        eligibleModelIds=["a", "b"],
+        modelId="a",
+        timeoutMs=1200,
+        failure="stop",
+        fallbackModelId=None,
+    )
+    return model_roles.Configuration.model_validate(
+        {
+            "providers": [
+                {"id": "test", "name": "Test", "enabled": True},
+                {"id": "other", "name": "Other", "enabled": True},
+            ],
+            "models": [
+                {
+                    "id": "a",
+                    "providerId": "test",
+                    "name": "A",
+                    "route": "requested-a",
+                    "enabled": True,
+                },
+                {
+                    "id": "b",
+                    "providerId": "other",
+                    "name": "B",
+                    "route": "requested-b",
+                    "enabled": True,
+                },
+            ],
+            "defaultModelId": "a",
+            "roleSettings": {
+                "answerMode": "manual",
+                "roles": {name: dict(role) for name in model_roles.ROLES},
+            },
+        }
+    )
 
 
 def case(role="routing"):
-    return e.Case(name=role, role=role, prompt="The meeting is on Monday. Budget is $10.",
+    return e.Case(
+        name=role,
+        role=role,
+        prompt="The meeting is on Monday. Budget is $10.",
         candidateIds=[] if role == "summarization" else ["a", "b"],
         expectedIds=[] if role == "summarization" else ["a"],
-        requiredFacts=["Monday", "$10"] if role == "summarization" else [])
+        requiredFacts=["Monday", "$10"] if role == "summarization" else [],
+    )
 
 
 def request(identity="evaluation_request_001", case_revision=1, config_revision=1):
-    return e.Run(request_id=identity, expected_case_revision=case_revision, expected_configuration_revision=config_revision)
+    return e.Run(
+        request_id=identity,
+        expected_case_revision=case_revision,
+        expected_configuration_revision=config_revision,
+    )
 
 
 def setup(store):
@@ -56,16 +104,21 @@ def store(tmp_path):
         yield value
 
 
-@pytest.mark.parametrize("role,response,score", [
-    ("routing", '{"modelId":"a"}', 1), ("routing", '{"modelId":"b"}', 0),
-    ("routing", '{"modelId":"outside"}', 0), ("routing", '{"modelId":"a","modelId":"b"}', 0),
-    ("routing", '```json\n{"modelId":"a"}\n```', 0),
-    ("context-selection", '{"messageIds":["a"]}', 1),
-    ("context-selection", '{"messageIds":["a","a"]}', 0),
-    ("context-selection", '{"messageIds":["a","b"]}', 0),
-    ("summarization", 'MONDAY, with a $10 budget.', 1),
-    ("summarization", 'The meeting is Monday.', 0.5),
-])
+@pytest.mark.parametrize(
+    "role,response,score",
+    [
+        ("routing", '{"modelId":"a"}', 1),
+        ("routing", '{"modelId":"b"}', 0),
+        ("routing", '{"modelId":"outside"}', 0),
+        ("routing", '{"modelId":"a","modelId":"b"}', 0),
+        ("routing", '```json\n{"modelId":"a"}\n```', 0),
+        ("context-selection", '{"messageIds":["a"]}', 1),
+        ("context-selection", '{"messageIds":["a","a"]}', 0),
+        ("context-selection", '{"messageIds":["a","b"]}', 0),
+        ("summarization", "MONDAY, with a $10 budget.", 1),
+        ("summarization", "The meeting is Monday.", 0.5),
+    ],
+)
 def test_actual_dispatch_and_bounded_metrics(store, role, response, score):
     saved = e.save_case(store, case(role))
     adapter = Adapter(response)
@@ -79,7 +132,12 @@ def test_actual_dispatch_and_bounded_metrics(store, role, response, score):
     assert evidence["attempts"][0]["actualModel"] == "actual-returned"
     assert evidence["providerCalls"][0]["requestedModel"] == "requested-a"
     assert evidence["latencyMs"] >= 0 and evidence["providerCalls"][0]["latencyMs"] >= 0
-    assert evidence["usage"] == {"input_tokens": 12, "output_tokens": 4, "cached_tokens": None, "cost_usd": 0.004}
+    assert evidence["usage"] == {
+        "input_tokens": 12,
+        "output_tokens": 4,
+        "cached_tokens": None,
+        "cost_usd": 0.004,
+    }
     assert evidence["semanticCorrectnessVerified"] is False
     assert model_roles.load(store)["configuration"]["defaultModelId"] == "a"
 
@@ -97,26 +155,38 @@ def test_durable_snapshots_replay_and_immutable_terminal_result(tmp_path):
         config.roleSettings.roles["routing"].modelId = "b"
         model_roles.save(store, model_roles.Update(expected_revision=1, configuration=config))
         replay = e.evaluate(store, saved["id"], request(), {"test": adapter})
-        assert replay["replayed"] and replay["snapshot"] == first["snapshot"] and len(adapter.calls) == 1
+        assert (
+            replay["replayed"]
+            and replay["snapshot"] == first["snapshot"]
+            and len(adapter.calls) == 1
+        )
         with pytest.raises(e.EvaluationError, match="already used"):
             e.evaluate(store, saved["id"], request(case_revision=2), {"test": adapter})
         with store._connect() as db:
-            for sql in ("UPDATE model_evaluation_runs SET result='{}'", "DELETE FROM model_evaluation_runs",
-                        "UPDATE model_evaluation_case_versions SET definition='{}'",
-                        "INSERT OR REPLACE INTO model_evaluation_runs SELECT * FROM model_evaluation_runs"):
-                with pytest.raises(sqlite3.IntegrityError): db.execute(sql)
+            for sql in (
+                "UPDATE model_evaluation_runs SET result='{}'",
+                "DELETE FROM model_evaluation_runs",
+                "UPDATE model_evaluation_case_versions SET definition='{}'",
+                "INSERT OR REPLACE INTO model_evaluation_runs SELECT * FROM model_evaluation_runs",
+            ):
+                with pytest.raises(sqlite3.IntegrityError):
+                    db.execute(sql)
     with closing(Store(path)) as store:
-        assert e.get_run(store, request().request_id) == {k: v for k, v in first.items() if k != "replayed"}
+        assert e.get_run(store, request().request_id) == {
+            k: v for k, v in first.items() if k != "replayed"
+        }
 
 
 def test_concurrent_duplicate_does_not_repeat_provider_call(store):
     saved = e.save_case(store, case())
     entered, release = threading.Event(), threading.Event()
+
     class Waiting(Adapter):
         def complete_bounded(self, *args, **kwargs):
             entered.set()
             assert release.wait(3)
             return super().complete_bounded(*args, **kwargs)
+
     adapter = Waiting()
     with ThreadPoolExecutor(max_workers=2) as pool:
         future = pool.submit(e.evaluate, store, saved["id"], request(), {"test": adapter})
@@ -131,11 +201,13 @@ def test_concurrent_duplicate_does_not_repeat_provider_call(store):
 def test_late_provider_completion_cannot_overwrite_interrupted_receipt(store):
     saved = e.save_case(store, case())
     entered, release = threading.Event(), threading.Event()
+
     class Waiting(Adapter):
         def complete_bounded(self, *args, **kwargs):
             entered.set()
             assert release.wait(3)
             return super().complete_bounded(*args, **kwargs)
+
     adapter = Waiting()
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(e.evaluate, store, saved["id"], request(), {"test": adapter})
@@ -152,13 +224,19 @@ def test_late_provider_completion_cannot_overwrite_interrupted_receipt(store):
 
 def test_interrupted_call_reopen_never_repeats(tmp_path):
     path = tmp_path / "test.db"
-    class Crash(BaseException): pass
+
+    class Crash(BaseException):
+        pass
+
     class Crashing(Adapter):
-        def complete_bounded(self, *args, **kwargs): raise Crash()
+        def complete_bounded(self, *args, **kwargs):
+            raise Crash()
+
     with closing(Store(path)) as store:
         setup(store)
         saved = e.save_case(store, case())
-        with pytest.raises(Crash): e.evaluate(store, saved["id"], request(), {"test": Crashing()})
+        with pytest.raises(Crash):
+            e.evaluate(store, saved["id"], request(), {"test": Crashing()})
     with closing(Store(path)) as store:
         assert e.recover_interrupted(store) == 1
         adapter = Adapter()
@@ -174,29 +252,48 @@ def test_failure_and_fallback_have_actual_call_records_and_unknown_usage(store):
     role.failure, role.fallbackModelId = "fallback", "b"
     model_roles.save(store, model_roles.Update(expected_revision=1, configuration=value))
     first, second = Adapter(fail=True), Adapter()
-    run = e.evaluate(store, saved["id"], request(config_revision=2), {"test": first, "other": second})
+    run = e.evaluate(
+        store, saved["id"], request(config_revision=2), {"test": first, "other": second}
+    )
     assert [c["status"] for c in run["result"]["providerCalls"]] == ["failed", "completed"]
     assert run["result"]["usage"]["cost_usd"] is None
     assert run["result"]["providerCalls"][1]["usage"]["cost_usd"] == 0.004
-    failed = e.evaluate(store, saved["id"], request("evaluation_failure_002", config_revision=2), {"test": first})
+    failed = e.evaluate(
+        store, saved["id"], request("evaluation_failure_002", config_revision=2), {"test": first}
+    )
     assert failed["state"] == "failed" and "secrets" not in str(failed)
     count = len(first.calls)
-    assert e.evaluate(store, saved["id"], request("evaluation_failure_002", config_revision=2), {"test": first})["replayed"]
+    assert e.evaluate(
+        store, saved["id"], request("evaluation_failure_002", config_revision=2), {"test": first}
+    )["replayed"]
     assert len(first.calls) == count
 
 
 def test_case_validation_and_revision_archive_rules(store):
-    for changes in ({"prompt": " "}, {"role": "answer"}, {"expectedIds": ["outside"]},
-                    {"candidateIds": ["a", "a"]}, {"requiredFacts": ["fact"]}):
-        with pytest.raises(ValidationError): e.Case.model_validate({**case().model_dump(), **changes})
+    for changes in (
+        {"prompt": " "},
+        {"role": "answer"},
+        {"expectedIds": ["outside"]},
+        {"candidateIds": ["a", "a"]},
+        {"requiredFacts": ["fact"]},
+    ):
+        with pytest.raises(ValidationError):
+            e.Case.model_validate({**case().model_dump(), **changes})
     saved = e.save_case(store, case())
-    with pytest.raises(e.EvaluationError, match="unique"): e.save_case(store, case())
+    with pytest.raises(e.EvaluationError, match="unique"):
+        e.save_case(store, case())
     with pytest.raises(e.EvaluationError, match="changed"):
         e.save_case(store, case(), saved["id"], 2)
-    archived = e.archive_case(store, saved["id"], agents.ArchiveAgent(expected_revision=1, archived=True))
+    archived = e.archive_case(
+        store, saved["id"], agents.ArchiveAgent(expected_revision=1, archived=True)
+    )
     with pytest.raises(e.EvaluationError, match="Restore"):
         e.evaluate(store, saved["id"], request(case_revision=2), {})
-    restored = e.archive_case(store, saved["id"], agents.ArchiveAgent(expected_revision=archived["revision"], archived=False))
+    restored = e.archive_case(
+        store,
+        saved["id"],
+        agents.ArchiveAgent(expected_revision=archived["revision"], archived=False),
+    )
     assert restored["revision"] == 3 and restored["archived_at"] is None
 
 
@@ -209,9 +306,14 @@ def test_oversize_output_is_recorded_without_unbounded_body(store):
 
 def test_owner_only_router_and_read_paths_never_dispatch(store):
     app, adapter = FastAPI(), Adapter()
+
     def authorize(x_owner_key: str | None = Header(None)):
-        if x_owner_key != "owner": raise HTTPException(401)
-    app.include_router(model_evaluations_api.router(lambda: store, authorize, lambda: {"test": adapter}))
+        if x_owner_key != "owner":
+            raise HTTPException(401)
+
+    app.include_router(
+        model_evaluations_api.router(lambda: store, authorize, lambda: {"test": adapter})
+    )
     client, headers = TestClient(app), {"X-Owner-Key": "owner"}
     base = "/model-evaluations"
     assert client.get(base + "/cases").status_code == 401

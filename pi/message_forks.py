@@ -82,11 +82,20 @@ def create(store, sid, message_id, body):
             )
         ]
         from . import response_versions
-        own = [row["id"] for row in response_versions.project(db, sid, [
-            dict(row) for row in db.execute(
-                "SELECT id FROM messages WHERE session_id=? ORDER BY seq", (sid,)
+
+        own = [
+            row["id"]
+            for row in response_versions.project(
+                db,
+                sid,
+                [
+                    dict(row)
+                    for row in db.execute(
+                        "SELECT id FROM messages WHERE session_id=? ORDER BY seq", (sid,)
+                    )
+                ],
             )
-        ])]
+        ]
         ids = inherited + own
         if message_id not in ids:
             raise tasks.TaskError("foreign_message", "Choose a message in this conversation.", 404)

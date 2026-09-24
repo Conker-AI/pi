@@ -58,9 +58,23 @@ class Configuration(Strict):
         if isinstance(value, dict) and isinstance(value.get("roleSettings"), dict):
             roles = value["roleSettings"].get("roles")
             if isinstance(roles, dict) and "memory-ranking" not in roles:
-                value = {**value, "roleSettings": {**value["roleSettings"], "roles": {
-                    **roles, "memory-ranking": dict(enabled=False, eligibleModelIds=[],
-                        modelId=None, timeoutMs=2000, failure="stop", fallbackModelId=None)}}}
+                value = {
+                    **value,
+                    "roleSettings": {
+                        **value["roleSettings"],
+                        "roles": {
+                            **roles,
+                            "memory-ranking": dict(
+                                enabled=False,
+                                eligibleModelIds=[],
+                                modelId=None,
+                                timeoutMs=2000,
+                                failure="stop",
+                                fallbackModelId=None,
+                            ),
+                        },
+                    },
+                }
         return value
 
     @model_validator(mode="after")
@@ -144,7 +158,9 @@ def load(store):
         ).fetchone()
         return {
             "revision": row[0] if row else 0,
-            "configuration": Configuration.model_validate_json(row[1]).model_dump() if row else None,
+            "configuration": Configuration.model_validate_json(row[1]).model_dump()
+            if row
+            else None,
         }
 
 
@@ -217,8 +233,10 @@ def dispatch(
                 json.dumps(
                     {
                         "allowedModelIds": list(eligible),
-                        "modelDescriptions": {key: model.routingDescription or model.name
-                                              for key, model in eligible.items()},
+                        "modelDescriptions": {
+                            key: model.routingDescription or model.name
+                            for key, model in eligible.items()
+                        },
                         "task": [{"role": m.role, "content": m.content} for m in messages],
                     },
                     ensure_ascii=False,

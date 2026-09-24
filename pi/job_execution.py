@@ -89,13 +89,20 @@ class PublishedJobs:
         client = self.clients.get(agent_id)
         if client is None or not client.execution_key:
             raise ValueError("Budget authority unavailable")
-        response = self._request(client, "POST",
+        response = self._request(
+            client,
+            "POST",
             f"/v2/agent/spending/allowances/{allowance_id}/allocate",
-            json={"root_action_id": action_id, "target": target.model_dump()})
+            json={"root_action_id": action_id, "target": target.model_dump()},
+        )
         value = response.json()
-        if (response.status_code != 200 or not isinstance(value, dict)
-                or value.get("root_action_id") != action_id
-                or type(value.get("cap")) is not int or value["cap"] <= 0):
+        if (
+            response.status_code != 200
+            or not isinstance(value, dict)
+            or value.get("root_action_id") != action_id
+            or type(value.get("cap")) is not int
+            or value["cap"] <= 0
+        ):
             raise ValueError("Budget allocation unavailable")
         return value.get("job_id")
 

@@ -42,11 +42,17 @@ class Config:
     toolgate_execution_key: str = ""
 
     def validate(self) -> None:
-        if self.toolgate_execution_key and (not self.toolgate_execution_key.startswith("tgx_")
-                or len(self.toolgate_execution_key) < 32
-                or self.toolgate_execution_key in {self.pi_key, self.owner_key, self.pi_owner_key}):
-            raise ValueError("Provision a distinct scoped ToolGate execution credential on the host.")
-        if self.pi_owner_key and (len(self.pi_owner_key) < 32 or self.pi_owner_key in {self.pi_key, self.owner_key}):
+        if self.toolgate_execution_key and (
+            not self.toolgate_execution_key.startswith("tgx_")
+            or len(self.toolgate_execution_key) < 32
+            or self.toolgate_execution_key in {self.pi_key, self.owner_key, self.pi_owner_key}
+        ):
+            raise ValueError(
+                "Provision a distinct scoped ToolGate execution credential on the host."
+            )
+        if self.pi_owner_key and (
+            len(self.pi_owner_key) < 32 or self.pi_owner_key in {self.pi_key, self.owner_key}
+        ):
             raise ValueError("Provision a distinct Pi owner-control key of at least 32 characters.")
         if bool(self.terminal_shell) != bool(self.terminal_directory):
             raise ValueError("Configure terminal shell and directory together.")
@@ -368,7 +374,15 @@ def create_app(
         outgoing.headers.pop("cookie", None)
         return app.state.client.send(outgoing)
 
-    def forward(method: str, url: str, key_header: str, key: str, body: dict | None, query: bytes, extra_headers=None):
+    def forward(
+        method: str,
+        url: str,
+        key_header: str,
+        key: str,
+        body: dict | None,
+        query: bytes,
+        extra_headers=None,
+    ):
         if not key:
             raise AuthError(
                 "Owner approval channel is not configured. "
@@ -376,7 +390,9 @@ def create_app(
                 503,
             )
         try:
-            response = upstream(method, url, key_header, key, body, query, extra_headers=extra_headers)
+            response = upstream(
+                method, url, key_header, key, body, query, extra_headers=extra_headers
+            )
         except (httpx.HTTPError, UnicodeError):
             raise AuthError(
                 "Service unavailable; check conker status. The operation was not retried; "
@@ -498,22 +514,48 @@ def create_app(
         if body is not None:
             admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
-        return await run_in_threadpool(forward, request.method,
-            app.state.config.pi_url.rstrip("/") + target, "X-Pi-Owner-Key",
-            app.state.config.pi_owner_key, body, request.scope["query_string"])
+
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.pi_url.rstrip("/") + target,
+            "X-Pi-Owner-Key",
+            app.state.config.pi_owner_key,
+            body,
+            request.scope["query_string"],
+        )
 
     @app.get("/api/owner/editor-capabilities")
     def editor_capabilities(request: Request):
         session(request)
         params = request.query_params
-        if set(params) - {"kind", "q", "after", "limit"} or any(len(params.getlist(key)) != 1 for key in params):
+        if set(params) - {"kind", "q", "after", "limit"} or any(
+            len(params.getlist(key)) != 1 for key in params
+        ):
             raise AuthError("Use only capability search parameters.", 422)
-        if (params.get("kind", "tool") not in {"tool", "workflow"} or len(params.get("q", "")) > 100
-                or ("after" in params and not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,79}", params["after"]))
-                or ("limit" in params and (not re.fullmatch(r"[0-9]{1,3}", params["limit"]) or not 1 <= int(params["limit"]) <= 100))):
+        if (
+            params.get("kind", "tool") not in {"tool", "workflow"}
+            or len(params.get("q", "")) > 100
+            or (
+                "after" in params and not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,79}", params["after"])
+            )
+            or (
+                "limit" in params
+                and (
+                    not re.fullmatch(r"[0-9]{1,3}", params["limit"])
+                    or not 1 <= int(params["limit"]) <= 100
+                )
+            )
+        ):
             raise AuthError("Invalid capability search parameters.", 422)
-        return forward("GET", app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-capabilities",
-                       "X-ToolGate-Owner-Key", app.state.config.owner_key, None, request.scope["query_string"])
+        return forward(
+            "GET",
+            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-capabilities",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            None,
+            request.scope["query_string"],
+        )
 
     @app.get("/api/owner/editor-drafts")
     def editor_drafts(request: Request):
@@ -522,29 +564,51 @@ def create_app(
         if set(params) - {"limit", "after"} or any(len(params.getlist(key)) != 1 for key in params):
             raise AuthError("Use only editor draft pagination parameters.", 422)
         limit, after = params.get("limit"), params.get("after")
-        if ((limit is not None and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 100))
-                or (after is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", after))):
+        if (
+            limit is not None
+            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 100)
+        ) or (after is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", after)):
             raise AuthError("Invalid editor draft pagination.", 422)
-        return forward("GET", app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-drafts",
-                       "X-ToolGate-Owner-Key", app.state.config.owner_key, None, request.scope["query_string"])
+        return forward(
+            "GET",
+            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-drafts",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            None,
+            request.scope["query_string"],
+        )
 
     @app.get("/api/owner/editor-drafts/{identity}")
     @app.post("/api/owner/editor-drafts/{identity}")
     async def editor_draft(identity: str, request: Request):
         session(request)
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity) or request.scope["query_string"]:
+        if (
+            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity)
+            or request.scope["query_string"]
+        ):
             raise AuthError("Invalid editor draft identity.", 422)
         body = await json_body(request) if request.method == "POST" else None
         if body is not None:
-            if (set(body) != {"expected_revision", "document"}
-                    or type(body.get("expected_revision")) is not int or body["expected_revision"] < 0
-                    or not isinstance(body.get("document"), dict) or body["document"].get("id") != identity):
+            if (
+                set(body) != {"expected_revision", "document"}
+                or type(body.get("expected_revision")) is not int
+                or body["expected_revision"] < 0
+                or not isinstance(body.get("document"), dict)
+                or body["document"].get("id") != identity
+            ):
                 raise AuthError("Send an editor document and its expected revision.", 422)
             admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
-        return await run_in_threadpool(forward, request.method,
+
+        return await run_in_threadpool(
+            forward,
+            request.method,
             app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}",
-            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            b"",
+        )
 
     @app.get("/api/owner/editor-drafts/{identity}/access")
     @app.post("/api/owner/editor-drafts/{identity}/access")
@@ -556,54 +620,101 @@ def create_app(
             raise AuthError("Invalid editor draft identity.", 422)
         key = app.state.config.toolgate_execution_key
         if not key:
-            raise AuthError("The scoped workflow execution credential is not configured on this host.", 503)
+            raise AuthError(
+                "The scoped workflow execution credential is not configured on this host.", 503
+            )
         operation = request.url.path.rsplit("/", 1)[-1]
         body = await json_body(request) if request.method == "POST" else None
         params = request.query_params
         if body is not None:
-            required = {"version", "digest", "enabled"} if operation == "access" else {"version", "digest", "action_id", "args"}
+            required = (
+                {"version", "digest", "enabled"}
+                if operation == "access"
+                else {"version", "digest", "action_id", "args"}
+            )
             optional = set() if operation == "access" else {"approval_request_id"}
-            if (not required <= body.keys() or body.keys() - required - optional
-                    or type(body.get("version")) is not int or body["version"] < 1
-                    or not isinstance(body.get("digest"), str) or not re.fullmatch(r"[a-f0-9]{64}", body["digest"])
-                    or (operation == "access" and type(body.get("enabled")) is not bool)
-                    or (operation == "runs" and (not isinstance(body.get("action_id"), str)
-                        or not re.fullmatch(r"editor_[a-f0-9]{32}", body["action_id"]) or not isinstance(body.get("args"), dict)))):
-                raise AuthError("Supply the exact workflow version and bounded operation fields.", 422)
+            if (
+                not required <= body.keys()
+                or body.keys() - required - optional
+                or type(body.get("version")) is not int
+                or body["version"] < 1
+                or not isinstance(body.get("digest"), str)
+                or not re.fullmatch(r"[a-f0-9]{64}", body["digest"])
+                or (operation == "access" and type(body.get("enabled")) is not bool)
+                or (
+                    operation == "runs"
+                    and (
+                        not isinstance(body.get("action_id"), str)
+                        or not re.fullmatch(r"editor_[a-f0-9]{32}", body["action_id"])
+                        or not isinstance(body.get("args"), dict)
+                    )
+                )
+            ):
+                raise AuthError(
+                    "Supply the exact workflow version and bounded operation fields.", 422
+                )
             admit_write(request, body)
         elif operation == "access":
-            if (set(params) != {"version", "digest"} or any(len(params.getlist(k)) != 1 for k in params)
-                    or not re.fullmatch(r"[1-9][0-9]{0,8}", params["version"])
-                    or not re.fullmatch(r"[a-f0-9]{64}", params["digest"])):
+            if (
+                set(params) != {"version", "digest"}
+                or any(len(params.getlist(k)) != 1 for k in params)
+                or not re.fullmatch(r"[1-9][0-9]{0,8}", params["version"])
+                or not re.fullmatch(r"[a-f0-9]{64}", params["digest"])
+            ):
                 raise AuthError("Select the exact published workflow version.", 422)
         elif params:
             raise AuthError("Run history accepts no query parameters.", 422)
         from starlette.concurrency import run_in_threadpool
-        return await run_in_threadpool(forward, request.method,
-            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}/{operation}",
-            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, request.scope["query_string"],
-            {"X-ToolGate-Execution-Key": key})
+
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/")
+            + f"/v2/owner/editor-drafts/{identity}/{operation}",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            request.scope["query_string"],
+            {"X-ToolGate-Execution-Key": key},
+        )
 
     @app.get("/api/owner/editor-drafts/{identity}/publications")
     @app.get("/api/owner/editor-drafts/{identity}/validation")
     @app.post("/api/owner/editor-drafts/{identity}/publish")
     async def editor_publication(identity: str, request: Request):
         session(request)
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity) or request.scope["query_string"]:
+        if (
+            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity)
+            or request.scope["query_string"]
+        ):
             raise AuthError("Invalid editor draft identity.", 422)
         operation = request.url.path.rsplit("/", 1)[-1]
         body = await json_body(request) if request.method == "POST" else None
         if body is not None:
-            if (set(body) != {"expected_revision", "expected_publication_version", "authorization"}
-                    or type(body.get("expected_revision")) is not int or body["expected_revision"] < 1
-                    or type(body.get("expected_publication_version")) is not int or body["expected_publication_version"] < 0
-                    or body.get("authorization") not in {"auto", "owner_confirmation"}):
-                raise AuthError("Select the saved draft, publication version and authorization.", 422)
+            if (
+                set(body) != {"expected_revision", "expected_publication_version", "authorization"}
+                or type(body.get("expected_revision")) is not int
+                or body["expected_revision"] < 1
+                or type(body.get("expected_publication_version")) is not int
+                or body["expected_publication_version"] < 0
+                or body.get("authorization") not in {"auto", "owner_confirmation"}
+            ):
+                raise AuthError(
+                    "Select the saved draft, publication version and authorization.", 422
+                )
             admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
-        return await run_in_threadpool(forward, request.method,
-            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}/{operation}",
-            "X-ToolGate-Owner-Key", app.state.config.owner_key, body, b"")
+
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/")
+            + f"/v2/owner/editor-drafts/{identity}/{operation}",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            b"",
+        )
 
     @app.get("/api/owner/requests")
     def owner_requests(request: Request):

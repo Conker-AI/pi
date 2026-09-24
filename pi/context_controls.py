@@ -111,6 +111,7 @@ def load(store, identity, turn_id=None, request_id=None):
                 turn_id = retry[0]
     if turn_id or request_id:
         from . import context_retrieval
+
         frozen = context_retrieval.read(store, identity, turn_id=turn_id, request_id=request_id)
         if frozen is not None:
             return {"revision": frozen["revision"], "policy": frozen["policy"]}
@@ -152,7 +153,10 @@ def save(store, identity, body: Update):
                 (message_id, identity),
             ).fetchone()
             if inactive:
-                raise ContextError("inactive_version", "Select this response version before setting its context rule.")
+                raise ContextError(
+                    "inactive_version",
+                    "Select this response version before setting its context rule.",
+                )
             message = db.execute(
                 "SELECT session_id FROM messages WHERE id=?", (message_id,)
             ).fetchone()
@@ -191,18 +195,17 @@ def select_history(policy, rows, retrieved_ids=None):
                 "retrieval_pending", "Resolve retrieval before dispatch or choose another policy."
             )
         if mode == "keep-exact" and (
-            by_id[identity].get("redacted")
-            or by_id[identity].get("content_status") == "forgotten"
+            by_id[identity].get("redacted") or by_id[identity].get("content_status") == "forgotten"
         ):
             raise ContextError("unavailable_pin", "An exact pin was redacted; review context.")
     return [
         row
         for row in rows
-        if not row.get("redacted") and row.get("content_status") != "forgotten"
+        if not row.get("redacted")
+        and row.get("content_status") != "forgotten"
         and value.messagePolicies.get(row["id"]) != "exclude"
         and (
-            value.messagePolicies.get(row["id"]) != "retrieve"
-            or row["id"] in (retrieved_ids or [])
+            value.messagePolicies.get(row["id"]) != "retrieve" or row["id"] in (retrieved_ids or [])
         )
     ]
 
@@ -225,6 +228,7 @@ def check_budget(policy, messages):
 
 def redact(db, session_ids):
     from . import context_retrieval
+
     context_retrieval.redact(db, session_ids)
     # Called only by the exclusive offline forgetting transaction.
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='context_policies'").fetchone():
@@ -258,6 +262,7 @@ def history(store, identity):
             raise ContextError("unavailable_pin", "An inherited source was forgotten.")
         rows.append(row)
     from . import response_versions
+
     own = store.messages(identity)
     with store._connect() as db:
         return rows + response_versions.project(db, identity, own)
@@ -290,10 +295,13 @@ def reviewed_fork(store, identity, body: ReviewedFork):
             "OR (status='interrupted' AND acted=1)) LIMIT 1",
             (identity,),
         ).fetchone()
-        if pending or db.execute(
-            "SELECT 1 FROM turn_submissions WHERE requested_session_id=? AND state='preparing'",
-            (identity,),
-        ).fetchone():
+        if (
+            pending
+            or db.execute(
+                "SELECT 1 FROM turn_submissions WHERE requested_session_id=? AND state='preparing'",
+                (identity,),
+            ).fetchone()
+        ):
             raise ContextError("turn_pending", "Finish the current turn before reviewing a fork.")
         last = db.execute(
             "SELECT id FROM messages WHERE session_id=? ORDER BY seq DESC LIMIT 1", (identity,)

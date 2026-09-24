@@ -6,6 +6,7 @@ did not would report `ok` while being unable to answer a single turn - the
 health contract claiming readiness from a proxy instead of from the thing that
 has to work.
 """
+
 from __future__ import annotations
 
 import httpx
@@ -31,6 +32,7 @@ class Tags:
 def tags(monkeypatch):
     def install(names):
         monkeypatch.setattr(httpx, "get", Tags(names))
+
     return install
 
 
@@ -57,8 +59,10 @@ def test_no_models_at_all_still_reports_not_configured(tags):
 def test_an_unreachable_ollama_is_unavailable_not_misconfigured(monkeypatch):
     """Unreachable and not-installed are different facts, and the owner needs
     different actions for each."""
+
     def boom(url, timeout=None):
         raise httpx.ConnectError("refused")
+
     monkeypatch.setattr(httpx, "get", boom)
 
     """Unreachable and not-installed are different facts, and the owner

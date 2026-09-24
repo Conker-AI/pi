@@ -1,4 +1,5 @@
 """Deep research plans once and adapts bounded searches from retained evidence."""
+
 from contextlib import closing
 
 import pytest
@@ -33,12 +34,15 @@ def test_plan_and_adaptive_searches_are_inspectable_after_reopen(tmp_path):
     with closing(Store(path)) as store:
         receipt = research.receipt(store, tid)
         assert receipt["status"] == "complete" and receipt["search_limit"] == 4
-        assert receipt["plan"]["questions"] == ["Find primary sources", "Resolve contradictory evidence"]
+        assert receipt["plan"]["questions"] == [
+            "Find primary sources",
+            "Resolve contradictory evidence",
+        ]
         assert len(receipt["actions"]) == 2
         assert all(action["source_message_id"] for action in receipt["actions"])
 
 
-@pytest.mark.parametrize("bad", ['not json', '{"research_plan":[]}', '{"research_plan":[42]}'])
+@pytest.mark.parametrize("bad", ["not json", '{"research_plan":[]}', '{"research_plan":[42]}'])
 def test_invalid_plan_stops_before_search(store, bad):
     gate = SearchGate()
     loop, _ = build(store, [bad], gate)
@@ -102,11 +106,13 @@ def test_stop_during_plan_does_not_save_plan_or_run_search(store):
     gate = SearchGate()
     loop, provider = build(store, [PLAN], gate)
     complete = provider.complete
+
     def stop(messages, *, model):
         with store._connect() as db:
             tid = db.execute("SELECT id FROM turns WHERE status='running'").fetchone()[0]
         turn_control.cancel(store, tid)
         return complete(messages, model=model)
+
     provider.complete = stop
     with pytest.raises(TurnFailed) as stopped:
         loop.run_turn(store.create_session(), "Investigate", research_mode="deep")

@@ -4,6 +4,7 @@ A transaction on the transcript alone cannot do this: the runtime closes its
 database connections while waiting for a provider. A separate rollback-journal
 database provides shared/exclusive process locks on both Linux and Windows.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -16,8 +17,9 @@ class MaintenanceRequired(RuntimeError):
 
 def acquire(path: Path, *, exclusive: bool = False) -> sqlite3.Connection:
     path = path.resolve()
-    db = sqlite3.connect(str(path) + ".access.sqlite", isolation_level=None,
-                         timeout=0.2, check_same_thread=False)
+    db = sqlite3.connect(
+        str(path) + ".access.sqlite", isolation_level=None, timeout=0.2, check_same_thread=False
+    )
     try:
         db.execute("CREATE TABLE IF NOT EXISTS lease (id INTEGER PRIMARY KEY)")
         db.execute("BEGIN EXCLUSIVE" if exclusive else "BEGIN")

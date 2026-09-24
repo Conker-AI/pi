@@ -5,6 +5,7 @@ sessions, messages, turns - because Pi coordinates and never owns anything else:
 memory belongs to MemoryGate, actions to ToolGate, machine truth to SystemGate.
 Tool calls arrive in #29 and go out through ToolGate, never from here.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -20,9 +21,31 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import activity, agents, artifacts_api, collaboration_api, context_api, context_controls, model_roles_api, owner_preferences, projects_api, session_settings, session_settings_api, submissions, tasks
+from . import (
+    activity,
+    agents,
+    artifacts_api,
+    collaboration_api,
+    context_api,
+    context_controls,
+    model_roles_api,
+    owner_preferences,
+    projects_api,
+    session_settings,
+    session_settings_api,
+    submissions,
+    tasks,
+)
 from .browser_contract import runtime_allowed
-from . import jobs_api, turn_control, turn_queue, message_forks, response_versions, response_retries, turn_steering
+from . import (
+    jobs_api,
+    turn_control,
+    turn_queue,
+    message_forks,
+    response_versions,
+    response_retries,
+    turn_steering,
+)
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
 from .queue_worker import QueueWorker
@@ -63,8 +86,11 @@ async def lifespan(app: FastAPI):
     admin_key = os.environ.get("PI_ADMIN_KEY", "").strip()
     runtime_hash = os.environ.get("PI_GATEWAY_KEY_SHA256", "").strip()
     owner_hash = os.environ.get("PI_OWNER_KEY_SHA256", "").strip()
-    if owner_hash and (len(owner_hash) != 64 or any(c not in "0123456789abcdef" for c in owner_hash)
-                       or owner_hash in {runtime_hash, hashlib.sha256(admin_key.encode()).hexdigest()}):
+    if owner_hash and (
+        len(owner_hash) != 64
+        or any(c not in "0123456789abcdef" for c in owner_hash)
+        or owner_hash in {runtime_hash, hashlib.sha256(admin_key.encode()).hexdigest()}
+    ):
         raise RuntimeError("PI_OWNER_KEY_SHA256 must identify a distinct owner-control credential.")
     if runtime_hash and (
         len(runtime_hash) != 64 or any(c not in "0123456789abcdef" for c in runtime_hash)
@@ -132,44 +158,75 @@ async def lifespan(app: FastAPI):
     # which is a working install rather than a broken one - Conker still talks
     # and still remembers.
     toolgate_key = os.environ.get("PI_TOOLGATE_KEY", "").strip()
-    toolgate = ToolGateClient(
-        os.environ.get("PI_TOOLGATE_URL", "http://toolgate-api:8010"), toolgate_key,
-        timeout=_seconds("PI_TOOLGATE_TIMEOUT_S", 120.0),
-    ) if toolgate_key else None
+    toolgate = (
+        ToolGateClient(
+            os.environ.get("PI_TOOLGATE_URL", "http://toolgate-api:8010"),
+            toolgate_key,
+            timeout=_seconds("PI_TOOLGATE_TIMEOUT_S", 120.0),
+        )
+        if toolgate_key
+        else None
+    )
 
     memory_url = os.environ.get("PI_MEMORYGATE_URL", "").strip()
     ingest_key = os.environ.get("PI_MEMORYGATE_INGEST_KEY", "").strip()
     read_key = os.environ.get("PI_MEMORYGATE_READ_KEY", "").strip()
     if any((memory_url, ingest_key, read_key)) and not all((memory_url, ingest_key, read_key)):
         store.close()
-        raise RuntimeError("Set PI_MEMORYGATE_URL, PI_MEMORYGATE_INGEST_KEY and "
-                           "PI_MEMORYGATE_READ_KEY together, then restart Pi.")
-    memory = Memory(store, MemoryClient(memory_url, ingest_key, read_key,
-        os.environ.get("PI_MEMORYGATE_AGENT_ID", "default"),
-        timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)) if memory_url else None)
+        raise RuntimeError(
+            "Set PI_MEMORYGATE_URL, PI_MEMORYGATE_INGEST_KEY and "
+            "PI_MEMORYGATE_READ_KEY together, then restart Pi."
+        )
+    memory = Memory(
+        store,
+        MemoryClient(
+            memory_url,
+            ingest_key,
+            read_key,
+            os.environ.get("PI_MEMORYGATE_AGENT_ID", "default"),
+            timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0),
+        )
+        if memory_url
+        else None,
+    )
     from . import memory_authority
+
     try:
         bindings = os.environ.get("PI_MEMORY_AGENT_READ_BINDINGS", "").strip()
         if bindings and not memory_url:
             raise ValueError("Configure MemoryGate before specialist memory bindings.")
-        memory.read_clients = memory_authority.clients(bindings, os.environ,
-            lambda namespace, key: MemoryClient(memory_url, "", key, namespace,
-                timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)))
+        memory.read_clients = memory_authority.clients(
+            bindings,
+            os.environ,
+            lambda namespace, key: MemoryClient(
+                memory_url, "", key, namespace, timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)
+            ),
+        )
     except ValueError:
         memory.close()
         store.close()
         raise
     app.state.memory = memory
-    correction_values = [os.environ.get(name, '').strip() for name in (
-        'PI_MEMORY_CORRECTION_URL', 'PI_MEMORY_CORRECTION_KEY', 'PI_MEMORY_CORRECTION_AGENT_ID')]
+    correction_values = [
+        os.environ.get(name, "").strip()
+        for name in (
+            "PI_MEMORY_CORRECTION_URL",
+            "PI_MEMORY_CORRECTION_KEY",
+            "PI_MEMORY_CORRECTION_AGENT_ID",
+        )
+    ]
     try:
         if any(correction_values) and not all(correction_values):
-            raise ValueError('Configure correction URL, key and namespace together.')
-        correction = memory_corrections.Client(*correction_values) if all(correction_values) else None
+            raise ValueError("Configure correction URL, key and namespace together.")
+        correction = (
+            memory_corrections.Client(*correction_values) if all(correction_values) else None
+        )
     except ValueError:
         memory.close()
         store.close()
-        raise RuntimeError('Set valid PI_MEMORY_CORRECTION_URL, KEY and AGENT_ID together.') from None
+        raise RuntimeError(
+            "Set valid PI_MEMORY_CORRECTION_URL, KEY and AGENT_ID together."
+        ) from None
     app.state.memory_corrections = correction
     app.state.speech = speech_client
     memory.start()
@@ -183,17 +240,22 @@ async def lifespan(app: FastAPI):
     app.state.job_executor = PublishedJobs({"companion": toolgate}) if toolgate else None
     app.state.interrupted_at_startup = interrupted
     app.state.router = Router(
-        local_provider=local, hosted_provider=hosted,
+        local_provider=local,
+        hosted_provider=hosted,
         providers=configured_direct_providers(
-            os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)),
+            os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
+        ),
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
     from .memory_ranking import ConfiguredMemoryRanker
+
     memory.ranker = ConfiguredMemoryRanker(store, app.state.router.providers)
     app.state.loop = Loop(
-        store, app.state.router,
+        store,
+        app.state.router,
         system_prompt=os.environ.get("PI_SYSTEM_PROMPT", ""),
-        toolgate=toolgate, memory=memory,
+        toolgate=toolgate,
+        memory=memory,
     )
     scheduler = None
     if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
@@ -230,13 +292,19 @@ async def task_error(request: Request, exc: tasks.TaskError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-def require_key(request: Request, x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
-                gateway_key: str | None = Header(None, alias="X-Pi-Gateway-Key")) -> str:
+def require_key(
+    request: Request,
+    x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
+    gateway_key: str | None = Header(None, alias="X-Pi-Gateway-Key"),
+) -> str:
     if x_pi_key and secrets.compare_digest(x_pi_key.encode(), app.state.admin_key.encode()):
         return "recovery"
     expected = getattr(app.state, "gateway_key_hash", "")
-    if (gateway_key and expected and secrets.compare_digest(
-            hashlib.sha256(gateway_key.encode()).hexdigest(), expected)):
+    if (
+        gateway_key
+        and expected
+        and secrets.compare_digest(hashlib.sha256(gateway_key.encode()).hexdigest(), expected)
+    ):
         if not runtime_allowed(request.method, request.url.path):
             raise HTTPException(403, "Gateway credential cannot perform this operation.")
         return "gateway-runtime"
@@ -250,12 +318,19 @@ def require_admin(identity: str = Depends(require_key)) -> None:
         raise HTTPException(403, "Owner administration credential required.")
 
 
-def require_owner(request: Request, owner_key: str | None = Header(None, alias="X-Pi-Owner-Key"),
-                  x_pi_key: str | None = Header(None, alias="X-Pi-Key")) -> None:
+def require_owner(
+    request: Request,
+    owner_key: str | None = Header(None, alias="X-Pi-Owner-Key"),
+    x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
+) -> None:
     from .browser_contract import owner_allowed
+
     expected = getattr(app.state, "owner_key_hash", "")
-    if (owner_key and len(expected) == 64 and secrets.compare_digest(
-            hashlib.sha256(owner_key.encode()).hexdigest(), expected)):
+    if (
+        owner_key
+        and len(expected) == 64
+        and secrets.compare_digest(hashlib.sha256(owner_key.encode()).hexdigest(), expected)
+    ):
         if owner_allowed(request.method, request.url.path):
             return
         raise HTTPException(403, "Owner-control credential cannot perform this operation.")
@@ -264,39 +339,76 @@ def require_owner(request: Request, owner_key: str | None = Header(None, alias="
     raise HTTPException(401, "Missing or invalid owner-control credential.")
 
 
-app.include_router(projects_api.router(lambda: app.state.store, require_admin,
-    lambda reference: project_sources.resolve(app.state.store, reference)))
+app.include_router(
+    projects_api.router(
+        lambda: app.state.store,
+        require_admin,
+        lambda reference: project_sources.resolve(app.state.store, reference),
+    )
+)
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_admin))
-app.include_router(system_inventory_api.router(lambda: app.state.store,
-    lambda: getattr(app.state, "toolgate", None), require_admin))
-app.include_router(filesystem_api.router(lambda: app.state.store,
-    lambda: getattr(app.state, "toolgate", None), require_admin))
-app.include_router(system_actions_api.router(lambda: app.state.store,
-    lambda: getattr(app.state, "toolgate", None), require_admin))
-app.include_router(system_actions_api.targets_router(
-    lambda: getattr(app.state, "toolgate", None), require_admin))
-app.include_router(calls_api.router(lambda: app.state.store, lambda: app.state.loop,
-    require_admin, lambda: getattr(app.state, "speech", None)))
+app.include_router(
+    system_inventory_api.router(
+        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_admin
+    )
+)
+app.include_router(
+    filesystem_api.router(
+        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_admin
+    )
+)
+app.include_router(
+    system_actions_api.router(
+        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_admin
+    )
+)
+app.include_router(
+    system_actions_api.targets_router(lambda: getattr(app.state, "toolgate", None), require_admin)
+)
+app.include_router(
+    calls_api.router(
+        lambda: app.state.store,
+        lambda: app.state.loop,
+        require_admin,
+        lambda: getattr(app.state, "speech", None),
+    )
+)
 app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
-app.include_router(memory_proposals_api.router(lambda: app.state.store,
-    lambda: getattr(app.state, 'memory_corrections', None), require_admin))
-app.include_router(team_execution_api.create_router(
-    lambda: app.state.store, lambda: app.state.loop, require_admin))
+app.include_router(
+    memory_proposals_api.router(
+        lambda: app.state.store,
+        lambda: getattr(app.state, "memory_corrections", None),
+        require_admin,
+    )
+)
+app.include_router(
+    team_execution_api.create_router(lambda: app.state.store, lambda: app.state.loop, require_admin)
+)
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
-app.include_router(artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy))
+app.include_router(
+    artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy)
+)
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
 from . import memory_explorer_api
+
 app.include_router(memory_explorer_api.router(lambda: app.state.memory, require_owner))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
 app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
-app.include_router(attachments_api.router(lambda: app.state.store, require_admin,
-                                         session_settings.source_privacy))
-app.include_router(model_evaluations_api.router(lambda: app.state.store, require_admin,
-    lambda: app.state.router.adapters()))
-app.include_router(jobs_api.router(lambda: app.state.store, require_admin,
-                                  lambda: getattr(app.state, "job_executor", None)))
+app.include_router(
+    attachments_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy)
+)
+app.include_router(
+    model_evaluations_api.router(
+        lambda: app.state.store, require_admin, lambda: app.state.router.adapters()
+    )
+)
+app.include_router(
+    jobs_api.router(
+        lambda: app.state.store, require_admin, lambda: getattr(app.state, "job_executor", None)
+    )
+)
 
 
 @app.exception_handler(context_controls.ContextError)
@@ -314,8 +426,14 @@ def save_owner_preferences(body: owner_preferences.UpdatePreferences):
     try:
         return owner_preferences.save(app.state.store, body)
     except owner_preferences.RevisionConflict as exc:
-        raise HTTPException(409, {"code": "revision_conflict", "message": str(exc),
-                                  "current_revision": exc.current_revision}) from exc
+        raise HTTPException(
+            409,
+            {
+                "code": "revision_conflict",
+                "message": str(exc),
+                "current_revision": exc.current_revision,
+            },
+        ) from exc
 
 
 @app.exception_handler(agents.AgentError)
@@ -363,16 +481,20 @@ class NewSession(BaseModel):
 
 
 class TurnRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=16000,
-                      description="Send at most 16000 characters per message; split longer text.")
+    text: str = Field(
+        min_length=1,
+        max_length=16000,
+        description="Send at most 16000 characters per message; split longer text.",
+    )
     # Routing hints the caller genuinely knows. The router is deliberately not
     # a classifier that reads the message - that would be a model nobody
     # evaluates deciding how much every turn costs.
     needs_tools: bool = False
     is_analysis: bool = False
     owner_requested_strong: bool = False
-    request_id: str | None = Field(default=None, min_length=16, max_length=128,
-                                  pattern=r"^[A-Za-z0-9_-]+$")
+    request_id: str | None = Field(
+        default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
     task_id: str | None = Field(default=None, min_length=1, max_length=128)
     task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
     draft_revision: int | None = Field(default=None, ge=1, strict=True)
@@ -422,12 +544,18 @@ def _acted_without_reply(exc: ActedWithoutReply) -> dict:
     recorded, and the caller is told plainly that the reply is what is missing
     and where to ask for it again.
     """
-    return {"turn_id": exc.turn_id, "status": "acted_no_reply", "acted": True,
-            "memory": app.state.loop.memory.status(
-                app.state.store.get_turn(exc.turn_id)["session_id"], exc.turn_id),
-            "message": None, "detail": exc.cause,
-            "hint": f"the action ran and was recorded; POST /turns/{exc.turn_id}/resume "
-                    "to ask for the reply again - it will not run the action a second time"}
+    return {
+        "turn_id": exc.turn_id,
+        "status": "acted_no_reply",
+        "acted": True,
+        "memory": app.state.loop.memory.status(
+            app.state.store.get_turn(exc.turn_id)["session_id"], exc.turn_id
+        ),
+        "message": None,
+        "detail": exc.cause,
+        "hint": f"the action ran and was recorded; POST /turns/{exc.turn_id}/resume "
+        "to ask for the reply again - it will not run the action a second time",
+    }
 
 
 @app.get("/health")
@@ -445,10 +573,16 @@ def health():
         # not_configured, not unavailable: no hosted provider is a valid install,
         # not a broken one, and collapsing the two is how a dashboard starts
         # lying about what is wrong.
-        "hosted_provider": (app.state.hosted.health() if app.state.hosted
-                            else {"status": "not_configured", "reason": "no API key"}),
-        "action_boundary": (app.state.toolgate.health() if app.state.toolgate
-                            else {"status": "not_configured", "reason": "no execution key"}),
+        "hosted_provider": (
+            app.state.hosted.health()
+            if app.state.hosted
+            else {"status": "not_configured", "reason": "no API key"}
+        ),
+        "action_boundary": (
+            app.state.toolgate.health()
+            if app.state.toolgate
+            else {"status": "not_configured", "reason": "no execution key"}
+        ),
     }
     degraded = sorted(name for name, c in checks.items() if c["status"] not in HEALTHY)
     result = {
@@ -480,29 +614,39 @@ def get_session(session_id: str):
     if session is None:
         raise HTTPException(404, "no such session")
     pending = submissions.list_pending(app.state.store, session_id, limit=100)
-    return {**session,
-            "pending_submissions": pending["results"],
-            "pending_submissions_truncated": pending["next_cursor"] is not None,
-            "messages": app.state.store.messages(session_id),
-            "turns": [{**turn, "memory": app.state.loop.memory.status(session_id, turn["id"])}
-                      for turn in app.state.store.turns(session_id)],
-            "memory": app.state.loop.memory.status(session_id)}
+    return {
+        **session,
+        "pending_submissions": pending["results"],
+        "pending_submissions_truncated": pending["next_cursor"] is not None,
+        "messages": app.state.store.messages(session_id),
+        "turns": [
+            {**turn, "memory": app.state.loop.memory.status(session_id, turn["id"])}
+            for turn in app.state.store.turns(session_id)
+        ],
+        "memory": app.state.loop.memory.status(session_id),
+    }
 
 
 @app.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
 def run_turn(session_id: str, body: TurnRequest):
     try:
-        return app.state.loop.run_turn(session_id, body.text, context={
-            "needs_tools": body.needs_tools,
-            "is_analysis": body.is_analysis,
-            "owner_requested_strong": body.owner_requested_strong,
-        }, request_id=body.request_id, task_id=body.task_id,
+        return app.state.loop.run_turn(
+            session_id,
+            body.text,
+            context={
+                "needs_tools": body.needs_tools,
+                "is_analysis": body.is_analysis,
+                "owner_requested_strong": body.owner_requested_strong,
+            },
+            request_id=body.request_id,
+            task_id=body.task_id,
             task_expected_revision=body.task_expected_revision,
             **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}),
             **({"attachment_ids": body.attachment_ids} if body.attachment_ids else {}),
             **({"model_id": body.model_id} if body.model_id is not None else {}),
             **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
-            **({"research_mode": body.research_mode} if body.research_mode != "off" else {}))
+            **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
+        )
     except ActedWithoutReply as exc:
         # Deliberately not an error status. A tool ran, so this request did the
         # thing that actually matters, and the one detail missing is what the
@@ -515,18 +659,27 @@ def run_turn(session_id: str, body: TurnRequest):
     except TurnFailed as exc:
         turn = app.state.store.get_turn(exc.turn_id) if exc.turn_id else None
         if turn and turn["status"] == "cancelled":
-            result = {"turn_id": exc.turn_id, "session_id": turn["session_id"],
-                      "status": "cancelled", "acted": bool(turn["acted"]), "message": None}
+            result = {
+                "turn_id": exc.turn_id,
+                "session_id": turn["session_id"],
+                "status": "cancelled",
+                "acted": bool(turn["acted"]),
+                "message": None,
+            }
             if body.request_id:
                 result["submission"] = submissions.get(app.state.store, body.request_id)
             return result
         # 503, not 500: the provider did not answer, which is a state the caller
         # can act on. The user's message is already stored either way.
-        raise HTTPException(503, {"message": f"turn failed: {exc.reason}",
-                                  "turn_id": exc.turn_id,
-                                  "memory": app.state.loop.memory.status(
-                                      session_id, exc.turn_id),
-                                  "request_id": body.request_id}) from exc
+        raise HTTPException(
+            503,
+            {
+                "message": f"turn failed: {exc.reason}",
+                "turn_id": exc.turn_id,
+                "memory": app.state.loop.memory.status(session_id, exc.turn_id),
+                "request_id": body.request_id,
+            },
+        ) from exc
 
 
 @app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
@@ -537,12 +690,16 @@ def get_submission(request_id: str):
 @app.get("/turns/{turn_id}/research", dependencies=[Depends(require_key)])
 def get_research_receipt(turn_id: str):
     from . import research
+
     return research.receipt(app.state.store, turn_id)
 
 
 @app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_key)])
-def list_pending_submissions(session_id: str, limit: int = Query(default=50, ge=1, le=200),
-                             cursor: str | None = Query(default=None, max_length=128)):
+def list_pending_submissions(
+    session_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=128),
+):
     return submissions.list_pending(app.state.store, session_id, limit, cursor)
 
 
@@ -579,8 +736,13 @@ def resume(turn_id: str, body: ResumeRequest | None = None):
     except ActedWithoutReply as exc:
         return _acted_without_reply(exc)
     except TurnFailed as exc:
-        raise HTTPException(409, {"message": f"cannot resume: {exc.reason}",
-                                  "memory": app.state.loop.memory.status(turn_id=turn_id)}) from exc
+        raise HTTPException(
+            409,
+            {
+                "message": f"cannot resume: {exc.reason}",
+                "memory": app.state.loop.memory.status(turn_id=turn_id),
+            },
+        ) from exc
 
 
 @app.get("/tools", dependencies=[Depends(require_key)])
@@ -592,10 +754,13 @@ def tools():
         found = app.state.toolgate.tools()
     except Exception as exc:
         return {"status": "unavailable", "reason": type(exc).__name__, "results": []}
-    return {"status": "ok", "results": [
-        {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
-        for t in found
-    ]}
+    return {
+        "status": "ok",
+        "results": [
+            {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
+            for t in found
+        ],
+    }
 
 
 @app.get("/models", dependencies=[Depends(require_key)])
@@ -606,25 +771,45 @@ def models():
     models are listed so the owner can see what opting in would buy, and marked
     so nothing is called by accident.
     """
-    local = {"provider": app.state.local.name, "model": app.state.router.local_model,
-             "free": True, "health": app.state.local.health()}
-    direct = {name: {"provider": name, "health": adapter.health(),
-                     "allow_paid": adapter.allow_paid, "discovery": "manual",
-                     "capabilities": getattr(adapter, "capabilities", ["text"])}
-              for name, adapter in app.state.router.providers.items()}
+    local = {
+        "provider": app.state.local.name,
+        "model": app.state.router.local_model,
+        "free": True,
+        "health": app.state.local.health(),
+    }
+    direct = {
+        name: {
+            "provider": name,
+            "health": adapter.health(),
+            "allow_paid": adapter.allow_paid,
+            "discovery": "manual",
+            "capabilities": getattr(adapter, "capabilities", ["text"]),
+        }
+        for name, adapter in app.state.router.providers.items()
+    }
     if app.state.hosted is None:
         return {"local": local, "hosted": {"status": "not_configured"}, "direct": direct}
     try:
         catalogue = app.state.hosted.catalogue()
     except Exception as exc:
-        return {"local": local, "direct": direct,
-                "hosted": {"status": "unavailable", "reason": type(exc).__name__}}
+        return {
+            "local": local,
+            "direct": direct,
+            "hosted": {"status": "unavailable", "reason": type(exc).__name__},
+        }
     free = [m.id for m in app.state.hosted.free_models()]
-    return {"local": local, "direct": direct, "hosted": {
-        "status": "ok", "provider": app.state.hosted.name,
-        "allow_paid": app.state.hosted.allow_paid,
-        "free_models": free, "free_count": len(free), "total_text_models": len(catalogue),
-    }}
+    return {
+        "local": local,
+        "direct": direct,
+        "hosted": {
+            "status": "ok",
+            "provider": app.state.hosted.name,
+            "allow_paid": app.state.hosted.allow_paid,
+            "free_models": free,
+            "free_count": len(free),
+            "total_text_models": len(catalogue),
+        },
+    }
 
 
 @app.post("/sessions/{session_id}/fork", dependencies=[Depends(require_key)])
@@ -652,9 +837,11 @@ def memory_status():
 
 
 @app.get("/tasks", dependencies=[Depends(require_key)])
-def list_tasks(limit: int = Query(default=50, ge=1, le=200),
-               cursor: str | None = Query(default=None, max_length=128),
-               session_id: str | None = Query(default=None, max_length=128)):
+def list_tasks(
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=128),
+    session_id: str | None = Query(default=None, max_length=128),
+):
     return tasks.list_tasks(app.state.store, limit, cursor, session_id)
 
 
@@ -689,10 +876,12 @@ def archive_task(task_id: str, body: tasks.ArchiveTask):
 
 
 @app.get("/runs", dependencies=[Depends(require_key)])
-def list_runs(limit: int = Query(default=50, ge=1, le=200),
-              cursor: str | None = Query(default=None, max_length=128),
-              session_id: str | None = Query(default=None, max_length=128),
-              task_id: str | None = Query(default=None, max_length=128)):
+def list_runs(
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=128),
+    session_id: str | None = Query(default=None, max_length=128),
+    task_id: str | None = Query(default=None, max_length=128),
+):
     return activity.list_runs(app.state.store, limit, cursor, session_id, task_id)
 
 
@@ -702,11 +891,13 @@ def get_run(run_id: str):
 
 
 @app.get("/events", dependencies=[Depends(require_key)])
-def list_events(limit: int = Query(default=50, ge=1, le=200),
-                cursor: str | None = Query(default=None, max_length=128),
-                session_id: str | None = Query(default=None, max_length=128),
-                task_id: str | None = Query(default=None, max_length=128),
-                run_id: str | None = Query(default=None, max_length=128)):
+def list_events(
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None, max_length=128),
+    session_id: str | None = Query(default=None, max_length=128),
+    task_id: str | None = Query(default=None, max_length=128),
+    run_id: str | None = Query(default=None, max_length=128),
+):
     return activity.list_events(app.state.store, limit, cursor, session_id, task_id, run_id)
 
 
@@ -732,7 +923,9 @@ def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
         return {**_acted_without_reply(exc), "request_id": body.request_id}
 
 
-app.include_router(turn_queue.router(lambda: app.state.store, require_admin, lambda: app.state.loop))
+app.include_router(
+    turn_queue.router(lambda: app.state.store, require_admin, lambda: app.state.loop)
+)
 
 
 app.include_router(message_forks.router(lambda: app.state.store, require_admin))

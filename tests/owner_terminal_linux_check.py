@@ -43,9 +43,7 @@ def check():
         expiring = Terminal("/bin/bash", directory, lifetime=1)
         time.sleep(1.2)
         assert expiring.closed and expiring.process.poll() is not None
-    print(
-        "Linux PTY: input/output, clean environment, job control, close and expiry passed"
-    )
+    print("Linux PTY: input/output, clean environment, job control, close and expiry passed")
 
 
 if __name__ == "__main__":

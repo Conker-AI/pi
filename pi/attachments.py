@@ -235,7 +235,11 @@ def _extract(raw, media_type):
             text = pdf_text.extract(raw, MAX_TEXT_CHARACTERS)
         except pdf_text.PDFError as error:
             return None, "unsupported", str(error)
-        return text, "extracted", "PDF text layer with page labels; images, layout and OCR are not extracted."
+        return (
+            text,
+            "extracted",
+            "PDF text layer with page labels; images, layout and OCR are not extracted.",
+        )
     if media_type == document_text.DOCX:
         try:
             text = document_text.docx(raw, MAX_TEXT_CHARACTERS)

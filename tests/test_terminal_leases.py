@@ -27,10 +27,12 @@ def test_replay_is_one_spawn_and_authorization_is_required():
 
     manager = Terminals("/bin/bash", "/synthetic", factory=factory)
     try:
+
         def create():
             return manager.create(
                 "owner", "terminal_request_01", lambda: None, lambda: approved.append(True)
             )
+
         assert not create()["replayed"]
         assert create()["replayed"]
         assert len(spawned) == len(approved) == 1

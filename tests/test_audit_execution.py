@@ -166,11 +166,14 @@ def test_budget_denial_without_approval_holds_stable_identity(tmp_path, monkeypa
     def post(url, *, json, **kwargs):
         sent.append(json)
         if not json.get("job_id"):
-            return httpx.Response(403, json={"detail": {"code": "BUDGET_DENIED",
-                "message": "Use the owner's job"}})
+            return httpx.Response(
+                403, json={"detail": {"code": "BUDGET_DENIED", "message": "Use the owner's job"}}
+            )
         assert json["job_id"] == "owner-job"
-        return httpx.Response(200, json={"code": "OK", "status": "completed",
-            "result": {"ok": True, "result": "sent"}})
+        return httpx.Response(
+            200,
+            json={"code": "OK", "status": "completed", "result": {"ok": True, "result": "sent"}},
+        )
 
     monkeypatch.setattr(httpx, "post", post)
     loop, provider = build(store, [CALL, "sent"], gate)

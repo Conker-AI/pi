@@ -14,6 +14,7 @@ Models are discovered, not hardcoded. A hardcoded list is stale within weeks -
 OpenRouter carried 431 models and 22 free ones the day this was written, and
 both numbers move.
 """
+
 from __future__ import annotations
 
 import math
@@ -49,8 +50,10 @@ class ModelInfo:
             return False
         try:
             # Decimal prevents a tiny positive fee underflowing to float zero.
-            return all(Decimal(str(value)).is_finite() and Decimal(str(value)) == 0
-                       for value in pricing.values())
+            return all(
+                Decimal(str(value)).is_finite() and Decimal(str(value)) == 0
+                for value in pricing.values()
+            )
         except (InvalidOperation, ValueError):
             return False
 
@@ -164,7 +167,9 @@ class OpenRouterProvider:
     def complete(self, messages: list[Message], *, model: str) -> Completion:
         return self.complete_bounded(messages, model=model, timeout=self.timeout)
 
-    def complete_bounded(self, messages: list[Message], *, model: str, timeout: float) -> Completion:
+    def complete_bounded(
+        self, messages: list[Message], *, model: str, timeout: float
+    ) -> Completion:
         info = self._guard_cost(model)
         if any(message.images for message in messages) and not info.supports_images:
             raise ModelUnusable("Selected model does not advertise image input.")
@@ -173,8 +178,7 @@ class OpenRouterProvider:
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
         }
         try:
-            response = httpx.post(CHAT_URL, json=payload, headers=self._headers(),
-                                  timeout=timeout)
+            response = httpx.post(CHAT_URL, json=payload, headers=self._headers(), timeout=timeout)
         except Exception as exc:
             raise ProviderUnavailable(type(exc).__name__) from exc
 

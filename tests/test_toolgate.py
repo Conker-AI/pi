@@ -4,6 +4,7 @@ The approval round-trip is the most load-bearing security property in the whole
 product, so nothing here is mocked at the client level: a real server on a real
 socket answers exactly what ToolGate answers, including the replay.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,19 +62,32 @@ class FakeToolGate(BaseHTTPRequestHandler):
         tool_id = self.path.split("/v2/tools/")[1].split("/invoke")[0]
 
         if cls.lockdown:
-            return self._send(423, {"detail": {"code": "LOCKED_DOWN",
-                                               "message": "ToolGate is in lockdown mode"}})
+            return self._send(
+                423, {"detail": {"code": "LOCKED_DOWN", "message": "ToolGate is in lockdown mode"}}
+            )
         if tool_id in cls.needs_approval:
             approval = body.get("approval_request_id")
             if not approval:
-                return self._send(200, {"code": "CONFIRMATION_REQUIRED",
-                                        "message": "This exact action is queued for owner review.",
-                                        "request_id": "req_1",
-                                        "expires_at": "2026-01-01T00:00:00Z"})
+                return self._send(
+                    200,
+                    {
+                        "code": "CONFIRMATION_REQUIRED",
+                        "message": "This exact action is queued for owner review.",
+                        "request_id": "req_1",
+                        "expires_at": "2026-01-01T00:00:00Z",
+                    },
+                )
             if approval in cls.consumed:
                 # What a replay looks like from the real service.
-                return self._send(409, {"detail": {"code": "APPROVAL_INVALID",
-                                                   "message": "confirmation already consumed"}})
+                return self._send(
+                    409,
+                    {
+                        "detail": {
+                            "code": "APPROVAL_INVALID",
+                            "message": "confirmation already consumed",
+                        }
+                    },
+                )
             cls.consumed.add(approval)
         self._send(200, {"ok": True, "result": {"echoed": body.get("args")}})
 
@@ -130,8 +144,9 @@ def test_a_gated_tool_asks_rather_than_fails(client):
 def test_an_approval_lets_the_exact_action_run(client):
     FakeToolGate.needs_approval = {"t_echo"}
     asked = client.invoke("t_echo", {"a": 1}, action_id="test-action")
-    result = client.invoke("t_echo", {"a": 1}, action_id="test-action",
-                      approval_request_id=asked.request_id)
+    result = client.invoke(
+        "t_echo", {"a": 1}, action_id="test-action", approval_request_id=asked.request_id
+    )
     assert isinstance(result, ToolResult) and result.ok
 
 
@@ -143,12 +158,12 @@ def test_replaying_an_approval_fails_closed(client):
     """
     FakeToolGate.needs_approval = {"t_echo"}
     asked = client.invoke("t_echo", {"a": 1}, action_id="test-action")
-    client.invoke("t_echo", {"a": 1}, action_id="test-action",
-                      approval_request_id=asked.request_id)
+    client.invoke("t_echo", {"a": 1}, action_id="test-action", approval_request_id=asked.request_id)
 
     with pytest.raises(ToolRefused) as exc:
-        client.invoke("t_echo", {"a": 1}, action_id="test-action",
-                      approval_request_id=asked.request_id)
+        client.invoke(
+            "t_echo", {"a": 1}, action_id="test-action", approval_request_id=asked.request_id
+        )
     assert exc.value.code == "APPROVAL_INVALID"
 
 
@@ -157,8 +172,7 @@ def test_pi_holds_no_memory_of_a_past_approval(client):
     the approval bound to the first one and was spent on it."""
     FakeToolGate.needs_approval = {"t_echo"}
     asked = client.invoke("t_echo", {"a": 1}, action_id="test-action")
-    client.invoke("t_echo", {"a": 1}, action_id="test-action",
-                      approval_request_id=asked.request_id)
+    client.invoke("t_echo", {"a": 1}, action_id="test-action", approval_request_id=asked.request_id)
 
     again = client.invoke("t_echo", {"a": 1}, action_id="test-action")
     assert isinstance(again, ApprovalRequired), "a spent approval must not carry forward"

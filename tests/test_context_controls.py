@@ -152,10 +152,10 @@ def test_reviewed_fork_stale_boundary_and_active_turn_are_atomic(store):
 
 def test_reviewed_fork_after_stop_but_not_during_preparation(store):
     from pi import submissions, turn_control
+
     sid = store.create_session()
     c.save(store, sid, c.Update(expected_revision=0, policy=policy()))
-    body = c.ReviewedFork(expected_revision=1, summary="Reviewed",
-                         request_id="fork-after-stop-001")
+    body = c.ReviewedFork(expected_revision=1, summary="Reviewed", request_id="fork-after-stop-001")
     submissions.reserve(store, "fork-preparing-001", sid, "pending", {})
     with pytest.raises(c.ContextError, match="Finish"):
         c.reviewed_fork(store, sid, body)

@@ -19,14 +19,29 @@ UI_CSP = (
 # Only public build formats. In particular: no source maps, HTML applications,
 # databases, configuration/credential files, Python, or arbitrary unknown files.
 MEDIA_TYPES = {
-    ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
-    ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf",
-    ".otf": "font/otf", ".png": "image/png", ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
-    ".avif": "image/avif", ".ico": "image/vnd.microsoft.icon", ".svg": "image/svg+xml",
-    ".txt": "text/plain", ".diff": "text/plain", ".webmanifest": "application/manifest+json",
-    ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
-    ".mp4": "video/mp4", ".webm": "video/webm",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".css": "text/css",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".ico": "image/vnd.microsoft.icon",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain",
+    ".diff": "text/plain",
+    ".webmanifest": "application/manifest+json",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
 }
 RESERVED = {"api", "auth", "health", "docs", "redoc", "openapi.json"}
 STATIC_NAMESPACES = {"assets", "fonts", "images", "fixtures"}
@@ -120,8 +135,11 @@ class DashboardAssets:
         if asset is None:
             # Only extensionless document navigation reaches the SPA. Missing
             # assets never become successful HTML responses, even with Accept: */*.
-            if (first in self.namespaces or "." in path
-                    or not _accepts_html(request.headers.get("accept", ""))):
+            if (
+                first in self.namespaces
+                or "." in path
+                or not _accepts_html(request.headers.get("accept", ""))
+            ):
                 return JSONResponse({"detail": "Not found."}, status_code=404)
             asset = self.files["index.html"]
         content, media_type = asset

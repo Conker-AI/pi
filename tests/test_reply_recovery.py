@@ -35,9 +35,12 @@ def test_reply_after_stop_is_once_durable_and_has_no_tools(tmp_path):
         assert result["status"] == "complete" and result["acted"]
         assert result["message"]["content"] == "The action completed."
         assert len(gate.invocations) == 1 and len(provider.sent) == 2
-        assert any(message.role == "system" and "recorded tool result" in message.content
-                   and "Do not repeat a tool call" in message.content
-                   for message in provider.sent[-1])
+        assert any(
+            message.role == "system"
+            and "recorded tool result" in message.content
+            and "Do not repeat a tool call" in message.content
+            for message in provider.sent[-1]
+        )
         assert loop.recover_reply(turn, "reply_recovery_001")["replayed"]
         assert len(provider.sent) == 2
     with closing(Store(path)) as store:

@@ -11,6 +11,7 @@ owns behaves identically everywhere, which is the whole reason the loop is thin.
 Models that support native tool calls can be adapted onto this in #31 and later
 without changing what ToolGate sees.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,20 +41,26 @@ def describe(tools: list[Tool]) -> str:
     if not tools:
         return ""
     lines = [
-        ("You can ask to run a tool. To do so, reply with a single line that is "
-         "exactly one JSON object and nothing else:"),
+        (
+            "You can ask to run a tool. To do so, reply with a single line that is "
+            "exactly one JSON object and nothing else:"
+        ),
         '{"tool": "<id>", "args": {...}}',
         "",
         "Ask for one tool at a time, and wait for the result before asking again.",
-        ("Some tools need the owner to confirm before they run. That is normal, not "
-         "a failure: say what you are waiting for and stop."),
+        (
+            "Some tools need the owner to confirm before they run. That is normal, not "
+            "a failure: say what you are waiting for and stop."
+        ),
         "",
         "Available tools:",
     ]
     for tool in tools:
         fields = ", ".join(f"{f.get('name')}: {f.get('type', 'string')}" for f in tool.inputs)
-        lines.append(f"- {tool.id} ({tool.name}): {tool.description or 'no description'}"
-                     + (f" | args: {fields}" if fields else " | args: none"))
+        lines.append(
+            f"- {tool.id} ({tool.name}): {tool.description or 'no description'}"
+            + (f" | args: {fields}" if fields else " | args: none")
+        )
     return "\n".join(lines)
 
 

@@ -1,4 +1,5 @@
 """Requests reconcile by identity; crashes never authorize duplicate model/tool execution."""
+
 import hashlib
 import json
 import sqlite3
@@ -43,9 +44,12 @@ def test_replay_uses_current_receipt_without_repeating_model_and_survives_reopen
         assert replay["message"] == result["message"]
         assert replay["submission"]["input_message_id"] == store.messages(session)[0]["id"]
         assert [ref["purpose"] for ref in replay["submission"]["message_refs"]] == (
-            ["input", "final"])
-        assert activity.get_run(store, result["turn_id"])["message_refs"] == (
-            replay["submission"]["message_refs"])
+            ["input", "final"]
+        )
+        assert (
+            activity.get_run(store, result["turn_id"])["message_refs"]
+            == (replay["submission"]["message_refs"])
+        )
         with pytest.raises(submissions.SubmissionError, match="already used"):
             loop.run_turn(session, "different words", request_id=REQUEST)
     with closing(Store(path)) as store:
@@ -117,8 +121,10 @@ def test_fork_binding_failure_rolls_back_parent_child_turn_input_and_outbox(stor
     store.append_message(session, "user", "x" * 200)
     loop = loop_with(store, Recorder(), fork_threshold_chars=100)
     with store._connect() as db:
-        db.executescript("CREATE TRIGGER fail_bind BEFORE UPDATE OF turn_id ON turn_submissions "
-                         "BEGIN SELECT RAISE(ABORT,'bind failed'); END;")
+        db.executescript(
+            "CREATE TRIGGER fail_bind BEFORE UPDATE OF turn_id ON turn_submissions "
+            "BEGIN SELECT RAISE(ABORT,'bind failed'); END;"
+        )
     with pytest.raises(sqlite3.IntegrityError, match="bind failed"):
         loop.run_turn(session, "hello", request_id=REQUEST)
     assert len(store.list_sessions()) == 1 and store.get_session(session)["status"] == "open"
@@ -131,36 +137,56 @@ def test_fork_binding_failure_rolls_back_parent_child_turn_input_and_outbox(stor
 
 def test_task_link_is_atomic_revision_checked_and_does_not_claim_completion(store):
     session = store.create_session()
-    task = tasks.create(store, tasks.CreateTask(
-        request_id="task_request_identity", session_id=session,
-        outcome="Write an answer", criteria=["Owner reviewed it"]))
+    task = tasks.create(
+        store,
+        tasks.CreateTask(
+            request_id="task_request_identity",
+            session_id=session,
+            outcome="Write an answer",
+            criteria=["Owner reviewed it"],
+        ),
+    )
     provider = Recorder()
     loop = loop_with(store, provider)
-    result = loop.run_turn(session, "answer", request_id=REQUEST, task_id=task["id"],
-                           task_expected_revision=1)
+    result = loop.run_turn(
+        session, "answer", request_id=REQUEST, task_id=task["id"], task_expected_revision=1
+    )
     saved = tasks.get(store, task["id"])
     assert saved["run_ids"] == [result["turn_id"]]
     assert saved["revision"] == 2 and saved["status"] == "planned"
-    replay = loop.run_turn(session, "answer", request_id=REQUEST, task_id=task["id"],
-                           task_expected_revision=1)
+    replay = loop.run_turn(
+        session, "answer", request_id=REQUEST, task_id=task["id"], task_expected_revision=1
+    )
     assert replay["turn_id"] == result["turn_id"] and len(provider.calls) == 1
     with pytest.raises(tasks.TaskError) as error:
-        loop.run_turn(session, "again", request_id="submission_request_002", task_id=task["id"],
-                      task_expected_revision=1)
+        loop.run_turn(
+            session,
+            "again",
+            request_id="submission_request_002",
+            task_id=task["id"],
+            task_expected_revision=1,
+        )
     assert error.value.detail["code"] == "revision_conflict"
 
 
 def test_task_bound_autofork_rejects_before_model_or_tool_call(store):
     session = store.create_session()
-    task = tasks.create(store, tasks.CreateTask(
-        request_id="task_request_identity", session_id=session,
-        outcome="Write an answer", criteria=["Owner reviewed it"]))
+    task = tasks.create(
+        store,
+        tasks.CreateTask(
+            request_id="task_request_identity",
+            session_id=session,
+            outcome="Write an answer",
+            criteria=["Owner reviewed it"],
+        ),
+    )
     store.append_message(session, "user", "x" * 200)
     provider = Recorder()
     loop = loop_with(store, provider, fork_threshold_chars=100)
     with pytest.raises(submissions.SubmissionError) as error:
-        loop.run_turn(session, "answer", request_id=REQUEST, task_id=task["id"],
-                      task_expected_revision=1)
+        loop.run_turn(
+            session, "answer", request_id=REQUEST, task_id=task["id"], task_expected_revision=1
+        )
     assert error.value.detail["code"] == "task_fork_required" and provider.calls == []
     assert len(store.list_sessions()) == 1 and store.turns(session) == []
     assert tasks.get(store, task["id"])["revision"] == 1
@@ -213,7 +239,8 @@ def test_crash_after_effect_record_keeps_associated_result_and_resume_only_adds_
     replay = loop.run_turn(session, "send", request_id=REQUEST)
     assert replay["status"] == "acted_no_reply"
     assert [ref["purpose"] for ref in replay["submission"]["message_refs"]] == (
-        ["input", "intermediate", "tool_result"])
+        ["input", "intermediate", "tool_result"]
+    )
     loop.resume_turn(replay["turn_id"])
     assert len(gate.invocations) == 1
     final = submissions.get(store, REQUEST)
@@ -240,9 +267,11 @@ def test_approval_and_reply_failure_keep_same_associations_through_resume(store)
 def test_final_message_and_turn_completion_are_one_commit(store):
     session = store.create_session()
     with store._connect() as db:
-        db.executescript("CREATE TRIGGER fail_final BEFORE UPDATE OF status ON turns "
-                         "WHEN NEW.status='complete' "
-                         "BEGIN SELECT RAISE(ABORT,'completion failed'); END;")
+        db.executescript(
+            "CREATE TRIGGER fail_final BEFORE UPDATE OF status ON turns "
+            "WHEN NEW.status='complete' "
+            "BEGIN SELECT RAISE(ABORT,'completion failed'); END;"
+        )
     with pytest.raises(sqlite3.IntegrityError, match="completion failed"):
         loop_with(store, Recorder()).run_turn(session, "hello", request_id=REQUEST)
     receipt = submissions.get(store, REQUEST)
@@ -308,8 +337,16 @@ def test_new_pending_submission_invalidates_forgetting_preview(tmp_path):
         forgetting.forget(path, session, first["confirmation"])
 
 
-@pytest.mark.parametrize("status", ["awaiting_approval", "awaiting_budget", "acted_no_reply",
-                                   "action_in_progress", "outcome_unknown"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        "awaiting_approval",
+        "awaiting_budget",
+        "acted_no_reply",
+        "action_in_progress",
+        "outcome_unknown",
+    ],
+)
 def test_new_submission_cannot_bypass_a_parked_unresolved_turn(store, status):
     session = store.create_session()
     turn = store.start_turn(session)
@@ -345,13 +382,16 @@ def test_replace_cannot_repoint_associations_or_reuse_submission_identity(store)
     message = store.append_message(session, "user", "other input")
     with store._connect() as db:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
-            db.execute("INSERT OR REPLACE INTO turn_messages VALUES(?,?,'input',NULL)",
-                       (message["id"], receipt["turn_id"]))
+            db.execute(
+                "INSERT OR REPLACE INTO turn_messages VALUES(?,?,'input',NULL)",
+                (message["id"], receipt["turn_id"]),
+            )
         with pytest.raises(sqlite3.IntegrityError, match="permanent"):
             db.execute("DELETE FROM turn_submissions WHERE request_id=?", (REQUEST,))
         with pytest.raises(sqlite3.IntegrityError, match="fixed"):
-            db.execute("UPDATE turn_submissions SET pending_text='new text' WHERE request_id=?",
-                       (REQUEST,))
+            db.execute(
+                "UPDATE turn_submissions SET pending_text='new text' WHERE request_id=?", (REQUEST,)
+            )
     assert submissions.get(store, REQUEST)["input_message_id"] == receipt["input_message_id"]
 
 
@@ -361,8 +401,9 @@ def test_http_receipts_are_authenticated_and_legacy_submission_still_works(monke
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "loop", loop_with(store, provider), raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "recovery_only", raising=False)
-    monkeypatch.setattr(api.app.state, "gateway_key_hash",
-                        hashlib.sha256(key.encode()).hexdigest(), raising=False)
+    monkeypatch.setattr(
+        api.app.state, "gateway_key_hash", hashlib.sha256(key.encode()).hexdigest(), raising=False
+    )
     session = store.create_session()
     client = TestClient(api.app)
     try:
@@ -373,7 +414,8 @@ def test_http_receipts_are_authenticated_and_legacy_submission_still_works(monke
         second = client.post(f"/sessions/{session}/turns", json=payload, headers=headers)
         assert first.status_code == second.status_code == 200 and second.json()["replayed"]
         assert client.get(f"/turn-submissions/{REQUEST}", headers=headers).json()["status"] == (
-            "complete")
+            "complete"
+        )
         assert len(provider.calls) == 1
         submissions.reserve(store, "pending_submission_002", session, "held private words", {})
         detail = client.get(f"/sessions/{session}", headers=headers).json()
@@ -384,8 +426,11 @@ def test_http_receipts_are_authenticated_and_legacy_submission_still_works(monke
         submissions.fail_preparation(store, "pending_submission_002")
         legacy = client.post(f"/sessions/{session}/turns", json={"text": "legacy"}, headers=headers)
         assert legacy.status_code == 200 and legacy.json()["message"]
-        invalid = client.post(f"/sessions/{session}/turns", headers=headers,
-                              json={"text": "task", "task_id": "t", "task_expected_revision": 1})
+        invalid = client.post(
+            f"/sessions/{session}/turns",
+            headers=headers,
+            json={"text": "task", "task_id": "t", "task_expected_revision": 1},
+        )
         assert invalid.status_code == 422
     finally:
         client.close()

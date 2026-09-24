@@ -4,6 +4,7 @@ Budget checks consume caller-supplied, same-local-day usage. They are not an ato
 reservation ledger. A scheduler must supply authoritative usage and reserve work
 before dispatch. Idle timeout is stored here; gateway enforcement is separate.
 """
+
 from __future__ import annotations
 
 import json
@@ -68,8 +69,13 @@ class UpdatePreferences(StrictModel):
 
 
 DEFAULT = {
-    "quietHours": {"enabled": True, "start": "22:00", "end": "07:00",
-                   "timeZone": "Asia/Jerusalem", "urgentExceptions": False},
+    "quietHours": {
+        "enabled": True,
+        "start": "22:00",
+        "end": "07:00",
+        "timeZone": "Asia/Jerusalem",
+        "urgentExceptions": False,
+    },
     "urgency": "meaningful",
     "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
     "idleTimeoutMinutes": 15,
@@ -91,15 +97,17 @@ class RevisionConflict(Exception):
 
 def initialize(db):
     from . import proactive_budget
+
     db.executescript(SCHEMA)
     db.executescript(proactive_budget.SCHEMA)
-    db.execute("INSERT OR IGNORE INTO owner_preferences VALUES (1,1,?)",
-               (json.dumps(DEFAULT),))
+    db.execute("INSERT OR IGNORE INTO owner_preferences VALUES (1,1,?)", (json.dumps(DEFAULT),))
 
 
 def load(store):
     with store._connect() as db:
-        row = db.execute("SELECT revision,preferences FROM owner_preferences WHERE singleton=1").fetchone()
+        row = db.execute(
+            "SELECT revision,preferences FROM owner_preferences WHERE singleton=1"
+        ).fetchone()
     return {"revision": row["revision"], "preferences": json.loads(row["preferences"])}
 
 
@@ -108,12 +116,16 @@ def save(store, request: UpdatePreferences):
     request = UpdatePreferences.model_validate(request.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        revision = db.execute("SELECT revision FROM owner_preferences WHERE singleton=1").fetchone()[0]
+        revision = db.execute(
+            "SELECT revision FROM owner_preferences WHERE singleton=1"
+        ).fetchone()[0]
         if revision != request.expected_revision:
             raise RevisionConflict(revision)
         payload = request.preferences.model_dump()
-        db.execute("UPDATE owner_preferences SET revision=?,preferences=? WHERE singleton=1",
-                   (revision + 1, json.dumps(payload)))
+        db.execute(
+            "UPDATE owner_preferences SET revision=?,preferences=? WHERE singleton=1",
+            (revision + 1, json.dumps(payload)),
+        )
         db.commit()
     return {"revision": revision + 1, "preferences": payload}
 
@@ -141,8 +153,15 @@ class Usage(StrictModel):
     costCents: int = Field(ge=0)
 
 
-def admission_reasons(preferences: OwnerPreferences, instant: datetime, *, urgent: bool,
-                      usage_day: str, used: Usage, proposed: Usage) -> list[str]:
+def admission_reasons(
+    preferences: OwnerPreferences,
+    instant: datetime,
+    *,
+    urgent: bool,
+    usage_day: str,
+    used: Usage,
+    proposed: Usage,
+) -> list[str]:
     """Pure policy result, never authorization. Empty means these limits allow it.
 
     Urgent exceptions bypass quiet hours only, never off or daily ceilings.

@@ -56,30 +56,43 @@ def migrate(db):
     if "destination_agent_id" not in columns:
         db.execute("BEGIN IMMEDIATE")
         db.execute("ALTER TABLE memory_outbox ADD COLUMN destination_agent_id TEXT")
-        db.execute("ALTER TABLE memory_outbox "
-                   "ADD COLUMN delivery_started INTEGER NOT NULL DEFAULT 0")
+        db.execute(
+            "ALTER TABLE memory_outbox ADD COLUMN delivery_started INTEGER NOT NULL DEFAULT 0"
+        )
         # Older failed requests may have committed remotely before losing the ACK.
         # Neither the current config nor an empty receipt proves their destination.
-        db.execute("UPDATE memory_outbox SET delivery_started=1 "
-                   "WHERE attempts>0 OR state='sent' OR operation='delete'")
+        db.execute(
+            "UPDATE memory_outbox SET delivery_started=1 "
+            "WHERE attempts>0 OR state='sent' OR operation='delete'"
+        )
         db.commit()
 
 
 def pin_destination(store, message_id, agent_id):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        eligibility = db.execute("SELECT allow_ingest FROM message_privacy WHERE message_id=?", (message_id,)).fetchone()
-        operation = db.execute("SELECT operation FROM memory_outbox WHERE message_id=?", (message_id,)).fetchone()
+        eligibility = db.execute(
+            "SELECT allow_ingest FROM message_privacy WHERE message_id=?", (message_id,)
+        ).fetchone()
+        operation = db.execute(
+            "SELECT operation FROM memory_outbox WHERE message_id=?", (message_id,)
+        ).fetchone()
         if operation and operation[0] == "ingest" and (not eligibility or not eligibility[0]):
             raise ValueError("This message is excluded from memory ingestion.")
-        row = db.execute("SELECT destination_agent_id,delivery_started FROM memory_outbox "
-                         "WHERE message_id=?", (message_id,)).fetchone()
+        row = db.execute(
+            "SELECT destination_agent_id,delivery_started FROM memory_outbox WHERE message_id=?",
+            (message_id,),
+        ).fetchone()
         if row[0] is None and row[1]:
-            raise ValueError("Original MemoryGate namespace unknown. Stop Pi and use "
-                             "python -m pi.memory_recovery bind-origin with the original agent ID.")
+            raise ValueError(
+                "Original MemoryGate namespace unknown. Stop Pi and use "
+                "python -m pi.memory_recovery bind-origin with the original agent ID."
+            )
         destination = row[0] if row[0] is not None else agent_id
-        db.execute("UPDATE memory_outbox SET destination_agent_id=?,delivery_started=1 "
-                   "WHERE message_id=?", (destination, message_id))
+        db.execute(
+            "UPDATE memory_outbox SET destination_agent_id=?,delivery_started=1 WHERE message_id=?",
+            (destination, message_id),
+        )
         db.commit()
     return destination
 
@@ -131,10 +144,14 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
     notices = []
     retrieval = context(store, turn_id) if turn_id else None
     if blocked:
-        notices.append("Conversation saved. Long-term memory delivery is blocked; "
-                       "see delivery_error and repair it before explicitly retrying.")
+        notices.append(
+            "Conversation saved. Long-term memory delivery is blocked; "
+            "see delivery_error and repair it before explicitly retrying."
+        )
     if retrieval and retrieval["status"] == "disabled":
-        notices.append("Memory is excluded for this turn by privacy or an unmapped specialist namespace. Prior allowed deliveries remain separate.")
+        notices.append(
+            "Memory is excluded for this turn by privacy or an unmapped specialist namespace. Prior allowed deliveries remain separate."
+        )
     elif not configured:
         notices.append(
             "Conversation saved. Long-term memory is not configured; delivery remains pending."

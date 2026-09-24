@@ -35,7 +35,7 @@ no default cloud endpoint or implicit provider credential.
 ```python
 client = SpeechClient(
     url="http://127.0.0.1:8000/v1",  # example only; server must be separately configured
-    key="",                       # optional bearer key for an authenticated server
+    key="",  # optional bearer key for an authenticated server
     stt_model="installed-english-stt-model",
     tts_model="installed-tts-model",
     voice="installed-english-voice",
