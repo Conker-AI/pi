@@ -416,3 +416,66 @@ def test_task_ledger_routes_use_runtime_authority_and_keep_csrf_boundary(gateway
     for path in ("/tasks/task_one/run", "/events", "/runs/turn_one/cancel"):
         assert client.post("/api/pi" + path, json={}, headers=headers).status_code == 403
     assert len(seen) == before
+
+
+def stream_gateway(tmp_path, upstream):
+    auth = AuthStore(tmp_path / "stream-auth.db")
+    auth.set_password(PASSWORD)
+    config = Config(ORIGIN, str(auth.path), "http://pi:8050", RUNTIME, owner_key=OWNER)
+    return TestClient(
+        create_app(config, store=auth, stream_transport=httpx.MockTransport(upstream)),
+        base_url=ORIGIN,
+    )
+
+
+def test_live_preview_is_relayed_without_upstream_headers(tmp_path):
+    seen = []
+
+    def upstream(request):
+        seen.append(request)
+        return httpx.Response(
+            200,
+            content=b'id: 1\nevent: delta\ndata: {"text": "Hi", "seq": 1}\n\n',
+            headers={"content-type": "text/event-stream", "Set-Cookie": "service_secret=bad"},
+        )
+
+    with stream_gateway(tmp_path, upstream) as client:
+        path = "/api/pi/turn-submissions/req_1/stream"
+        assert client.get(path).status_code == 401
+        assert not seen
+        sign_in(client)
+        response = client.get(path + "?after=3")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert '"text": "Hi"' in response.text
+        assert "service_secret" not in response.headers.get("set-cookie", "")
+        assert seen[0].url == "http://pi:8050/turn-submissions/req_1/stream?after=3"
+        assert seen[0].headers["X-Pi-Gateway-Key"] == RUNTIME
+        assert "cookie" not in seen[0].headers
+        assert client.get("/api/pi/turn-submissions/bad.id/stream").status_code in (404, 422)
+        assert client.get(path + "?after=-1").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        lambda: httpx.Response(401, json={"detail": "secret"}),
+        lambda: httpx.Response(200, json={"not": "a stream"}),
+    ],
+)
+def test_live_preview_rejects_non_stream_upstream(tmp_path, reply):
+    with stream_gateway(tmp_path, lambda request: reply()) as client:
+        sign_in(client)
+        response = client.get("/api/pi/turn-submissions/req_1/stream")
+        assert response.status_code == 502
+        assert "secret" not in response.text
+
+
+def test_live_preview_upstream_outage_is_503(tmp_path):
+    def upstream(request):
+        raise httpx.ConnectError("sensitive")
+
+    with stream_gateway(tmp_path, upstream) as client:
+        sign_in(client)
+        response = client.get("/api/pi/turn-submissions/req_1/stream")
+        assert response.status_code == 503 and "sensitive" not in response.text

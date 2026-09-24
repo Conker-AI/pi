@@ -13,12 +13,14 @@ that only ever saw one provider would grow assumptions about it.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
 
 from . import citations as message_citations
+from . import live_stream
 
 
 @dataclass(frozen=True)
@@ -150,12 +152,15 @@ class OllamaProvider:
                 }
                 for m in messages
             ],
-            "stream": False,
+            "stream": live_stream.active(),
         }
         try:
-            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=timeout)
-            response.raise_for_status()
-            body = response.json()
+            if payload["stream"]:
+                body = self._streamed(payload, timeout)
+            else:
+                response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=timeout)
+                response.raise_for_status()
+                body = response.json()
         except Exception as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}") from exc
 
@@ -175,6 +180,32 @@ class OllamaProvider:
             cost_usd=None,
             raw={k: body[k] for k in ("total_duration", "done_reason") if k in body},
         )
+
+    def _streamed(self, payload: dict, timeout: float) -> dict:
+        """Ollama streams one JSON object per line; rebuild the non-streamed body."""
+        live_stream.begin_attempt()
+        text = []
+        final: dict = {}
+        with httpx.stream(
+            "POST", f"{self.base_url}/api/chat", json=payload, timeout=timeout
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                if chunk.get("error"):
+                    raise ValueError("stream error")
+                piece = (chunk.get("message") or {}).get("content") or ""
+                if piece:
+                    text.append(piece)
+                    live_stream.delta(piece)
+                if chunk.get("done"):
+                    final = chunk
+                    break
+        if not final:
+            raise ValueError("stream ended before completion")
+        return {**final, "message": {"role": "assistant", "content": "".join(text)}}
 
     def health(self) -> dict:
         try:

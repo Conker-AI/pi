@@ -6,15 +6,32 @@ No discovery, automatic paid fallback, SDK retries, or inferred dollar charges.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
+from collections.abc import Iterator, Mapping
 
 import httpx
 
+from . import live_stream
 from .providers import Completion, Message, ProviderUnavailable, chat_content
 
 
 def _count(value):
     return value if type(value) is int and value >= 0 else None
+
+
+def sse_events(response: httpx.Response) -> Iterator[dict]:
+    """JSON payloads of a server-sent event stream; `[DONE]` ends it."""
+    for line in response.iter_lines():
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            return
+        if data:
+            event = json.loads(data)
+            if not isinstance(event, dict):
+                raise ValueError()
+            yield event
 
 
 class _DirectProvider:
@@ -51,15 +68,28 @@ class _DirectProvider:
             raise ProviderUnavailable("unsupported direct text request")
         payload = self._payload(messages, model)
         try:
-            response = httpx.post(
-                self.url,
-                headers=self._headers(),
-                json=payload,
-                timeout=timeout,
-                follow_redirects=False,
-            )
-            response.raise_for_status()
-            body = response.json()
+            if live_stream.active():
+                live_stream.begin_attempt()
+                with httpx.stream(
+                    "POST",
+                    self.url,
+                    headers=self._headers(),
+                    json={**payload, **self._stream_options()},
+                    timeout=timeout,
+                    follow_redirects=False,
+                ) as response:
+                    response.raise_for_status()
+                    body = self._collect(sse_events(response))
+            else:
+                response = httpx.post(
+                    self.url,
+                    headers=self._headers(),
+                    json=payload,
+                    timeout=timeout,
+                    follow_redirects=False,
+                )
+                response.raise_for_status()
+                body = response.json()
             if not isinstance(body, dict):
                 raise ValueError()
             return self._completion(body, model)
@@ -82,6 +112,12 @@ class OpenAIProvider(_DirectProvider):
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
             "store": False,
         }
+
+    def _stream_options(self):
+        return {"stream": True, "stream_options": {"include_usage": True}}
+
+    def _collect(self, events):
+        return collect_chat_stream(events)
 
     def _completion(self, body, model):
         choice = body["choices"][0]
@@ -162,6 +198,35 @@ class AnthropicProvider(_DirectProvider):
             payload["system"] = system
         return payload
 
+    def _stream_options(self):
+        return {"stream": True}
+
+    def _collect(self, events):
+        """Rebuild a Messages API body from its event stream."""
+        body: dict = {"content": [], "usage": {}}
+        for event in events:
+            kind = event.get("type")
+            if kind == "message_start":
+                message = event["message"]
+                body["model"] = message.get("model")
+                body["usage"].update(message.get("usage") or {})
+            elif kind == "content_block_start":
+                body["content"].append(dict(event["content_block"]))
+            elif kind == "content_block_delta":
+                piece = event["delta"]
+                if piece.get("type") != "text_delta":
+                    raise ValueError()
+                body["content"][event["index"]]["text"] += piece["text"]
+                live_stream.delta(piece["text"])
+            elif kind == "message_delta":
+                body["stop_reason"] = (event.get("delta") or {}).get("stop_reason")
+                body["usage"].update(event.get("usage") or {})
+            elif kind == "error":
+                raise ValueError()
+            elif kind == "message_stop":
+                return body
+        raise ValueError("stream ended before message_stop")
+
     def _completion(self, body, model):
         blocks = body["content"]
         if (
@@ -195,6 +260,34 @@ class AnthropicProvider(_DirectProvider):
             cached_tokens=_count(usage.get("cache_read_input_tokens")),
             raw={"finish_reason": body.get("stop_reason")},
         )
+
+
+def collect_chat_stream(events) -> dict:
+    """Rebuild a Chat Completions body from its stream (OpenAI and compatible APIs)."""
+    text, annotations = [], []
+    body: dict = {}
+    finish = None
+    for event in events:
+        if event.get("error"):
+            raise ValueError()
+        for key in ("model", "usage"):
+            if event.get(key):
+                body[key] = event[key]
+        for choice in event.get("choices") or []:
+            if choice.get("index", 0) != 0:
+                continue
+            piece = choice.get("delta") or {}
+            if piece.get("tool_calls"):
+                raise ValueError()
+            if piece.get("content"):
+                text.append(piece["content"])
+                live_stream.delta(piece["content"])
+            annotations.extend(piece.get("annotations") or [])
+            finish = choice.get("finish_reason") or finish
+    message = {"role": "assistant", "content": "".join(text)}
+    if annotations:
+        message["annotations"] = annotations
+    return {**body, "choices": [{"message": message, "finish_reason": finish}]}
 
 
 def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dict:

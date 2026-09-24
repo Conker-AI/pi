@@ -9,6 +9,7 @@ Tool calls arrive in #29 and go out through ToolGate, never from here.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import secrets
@@ -18,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from . import (
@@ -692,6 +693,52 @@ def run_turn(session_id: str, body: TurnRequest):
 @app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
 def get_submission(request_id: str):
     return submissions.get(app.state.store, request_id)
+
+
+@app.get("/turn-submissions/{request_id}/stream", dependencies=[Depends(require_key)])
+async def stream_submission(request_id: str, request: Request, after: int = Query(0, ge=0)):
+    """Server-sent preview of an answer being written; the saved message stays authoritative.
+
+    Events: `delta` (text to append), `reset` (discard the preview: a new model
+    attempt started), `done` (fetch the saved turn). Unknown or expired previews
+    end with `unavailable`, which is not an error: the saved turn is still there.
+    """
+    from . import live_stream
+
+    async def events():
+        import asyncio
+
+        seen, waited, idle = after, 0.0, 0.0
+        while True:
+            if await request.is_disconnected():
+                return
+            state = live_stream.read(request_id, seen)
+            if state is None:
+                if waited >= 15.0:
+                    yield "event: unavailable\ndata: {}\n\n"
+                    return
+                waited += 0.05
+            else:
+                batch, finished = state
+                for event in batch:
+                    seen = event["seq"]
+                    kind = event.pop("type")
+                    yield f"id: {seen}\nevent: {kind}\ndata: {json.dumps(event)}\n\n"
+                if batch:
+                    idle = 0.0
+                if finished and not batch:
+                    return
+            idle += 0.05
+            if idle >= 15.0:
+                idle = 0.0
+                yield ": keep-alive\n\n"
+            await asyncio.sleep(0.05)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/turns/{turn_id}/research", dependencies=[Depends(require_key)])
