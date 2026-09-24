@@ -960,9 +960,14 @@ def cancel_turn(turn_id: str):
     return turn_control.cancel(app.state.store, turn_id)
 
 
-@app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_admin)])
+@app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_key)])
 def cancel_submission(request_id: str):
-    return turn_control.cancel_submission(app.state.store, request_id)
+    """Stop is an owner safety action: record it durably, then end any live answer stream."""
+    from . import live_stream
+
+    result = turn_control.cancel_submission(app.state.store, request_id)
+    live_stream.stop(request_id)
+    return result
 
 
 class ReplyRecoveryRequest(BaseModel):

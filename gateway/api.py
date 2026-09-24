@@ -15,7 +15,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.owner_terminal import Terminal, TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
@@ -538,7 +538,12 @@ def create_app(
             raise AuthError("This operation is not available through the browser gateway.", 403)
         body = await json_body(request) if request.method == "POST" else None
         if body is not None:
-            admit_write(request, body)
+            if session_only_write(request.method, target):
+                # Signed-in session, CSRF and origin were checked above; see ADR-0010.
+                if request.scope["query_string"]:
+                    raise AuthError("Write operations must not include query parameters.", 422)
+            else:
+                admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
 
         return await run_in_threadpool(

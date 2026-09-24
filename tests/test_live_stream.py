@@ -333,3 +333,53 @@ def test_stream_endpoint_replays_events_and_ends():
         assert "event: delta" not in resumed.text and "event: done" in resumed.text
     finally:
         api.app.dependency_overrides.clear()
+
+
+def test_stop_ends_the_answer_mid_stream_and_cancels_the_turn(tmp_path):
+    import threading
+
+    from pi import turn_control
+    from pi.loop import TurnFailed
+
+    produced = []
+    first_piece = threading.Event()
+    stopped = threading.Event()
+
+    class SlowProvider:
+        name = "local"
+
+        def complete(self, messages, *, model):
+            live_stream.begin_attempt()
+            for index in range(200):
+                produced.append(index)
+                live_stream.delta(f"piece {index} ")
+                if index == 0:
+                    first_piece.set()
+                    assert stopped.wait(5)
+                live_stream.raise_if_stopped()
+            return Completion(text="never finished", model=model, provider=self.name)
+
+    with closing(Store(tmp_path / "t.db")) as store:
+        sid = store.create_session()
+        loop = Loop(store, Router(local_provider=SlowProvider(), local_model="test"))
+        outcome = {}
+
+        def run():
+            try:
+                outcome["result"] = loop.run_turn(sid, "Hi", request_id="stop_request_identity_01")
+            except TurnFailed as exc:
+                outcome["failed"] = exc
+
+        worker = threading.Thread(target=run)
+        worker.start()
+        assert first_piece.wait(5)
+        turn_control.cancel_submission(store, "stop_request_identity_01")
+        live_stream.stop("stop_request_identity_01")
+        stopped.set()
+        worker.join(5)
+        assert not worker.is_alive()
+        assert "failed" in outcome
+        turn = store.get_turn(outcome["failed"].turn_id)
+        assert turn["status"] == "cancelled"
+        assert produced == [0]
+    assert events("stop_request_identity_01")[0][-1] == ("done", None)

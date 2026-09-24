@@ -33,7 +33,7 @@ def boundary(tmp_path, monkeypatch):
 
     def upstream(request):
         seen.append(request)
-        if request.url.path == "/sessions/failure/turns":
+        if request.url.path == "/tasks/failure/update":
             raise httpx.ReadTimeout("private upstream detail")
         return httpx.Response(200, json={"ok": True})
 
@@ -67,9 +67,6 @@ def proof(client, headers, path, body):
 @pytest.mark.parametrize(
     "path",
     [
-        "/api/pi/sessions",
-        "/api/pi/sessions/s/turns",
-        "/api/pi/sessions/s/fork",
         "/api/pi/turns/t/resume",
         "/api/pi/tasks",
         "/api/pi/tasks/t/update",
@@ -94,9 +91,42 @@ def test_every_runtime_write_and_owner_decision_requires_exact_single_use_proof(
     assert PASSWORD not in seen[0].content.decode()
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/pi/sessions",
+        "/api/pi/sessions/s/turns",
+        "/api/pi/sessions/s/fork",
+        "/api/pi/turn-submissions/r/cancel",
+    ],
+)
+def test_conversation_writes_need_the_signed_in_session_not_a_password(boundary, path):
+    """ADR-0010: chatting and stopping are session-bound; risky writes keep proofs."""
+    client, _, headers, seen, _ = boundary
+    body = {"text": "private content"}
+    assert client.post(path, json=body).status_code == 403
+    assert (
+        client.post(path, json=body, headers={**headers, "X-CSRF-Token": "x" * 43}).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            path, json=body, headers={**headers, "Origin": "https://evil.example"}
+        ).status_code
+        == 403
+    )
+    assert client.post(path + "?extra=1", json=body, headers=headers).status_code == 422
+    assert not seen
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    assert len(seen) == 1 and "x-conker-verification" not in seen[0].headers
+    client.cookies.clear()
+    assert client.post(path, json=body, headers=headers).status_code == 401
+    assert len(seen) == 1
+
+
 def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary):
     client, _, headers, seen, _ = boundary
-    path = "/api/pi/sessions/s/turns"
+    path = "/api/pi/tasks/s/update"
     body = {
         "text": "private",
         "request_id": "request_identity_001",
@@ -116,9 +146,7 @@ def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary
         {**body, "prefer_local": True},
     ):
         assert client.post(path, json=altered, headers=checked).status_code == 428
-    assert (
-        client.post("/api/pi/sessions/other/turns", json=body, headers=checked).status_code == 428
-    )
+    assert client.post("/api/pi/tasks/other/update", json=body, headers=checked).status_code == 428
     assert client.post(path + "?ignored=1", json=body, headers=checked).status_code == 422
     assert not seen
     # Object key order is not authority; semantic types, arrays and all values are bound.
@@ -238,7 +266,7 @@ def test_concurrent_consumption_admits_exactly_once_and_stores_only_hashes(bound
 
 def test_upstream_unknown_result_spends_proof_without_retry(boundary):
     client, _, headers, seen, _ = boundary
-    path, body = "/api/pi/sessions/failure/turns", {"text": "private"}
+    path, body = "/api/pi/tasks/failure/update", {"text": "private"}
     checked = {
         **headers,
         "X-Conker-Verification": proof(client, headers, path, body)["verification_token"],

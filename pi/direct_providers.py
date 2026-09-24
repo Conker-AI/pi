@@ -218,6 +218,7 @@ class AnthropicProvider(_DirectProvider):
                     raise ValueError()
                 body["content"][event["index"]]["text"] += piece["text"]
                 live_stream.delta(piece["text"])
+                live_stream.raise_if_stopped()
             elif kind == "message_delta":
                 body["stop_reason"] = (event.get("delta") or {}).get("stop_reason")
                 body["usage"].update(event.get("usage") or {})
@@ -282,6 +283,7 @@ def collect_chat_stream(events) -> dict:
             if piece.get("content"):
                 text.append(piece["content"])
                 live_stream.delta(piece["content"])
+                live_stream.raise_if_stopped()
             annotations.extend(piece.get("annotations") or [])
             finish = choice.get("finish_reason") or finish
     message = {"role": "assistant", "content": "".join(text)}

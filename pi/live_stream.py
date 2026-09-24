@@ -32,6 +32,7 @@ class _Reply:
     finished_at: float | None = None
     shown: int = 0
     pending: str = ""
+    stopped: bool = False
 
 
 _replies: dict[str, _Reply] = {}
@@ -132,6 +133,28 @@ def delta(text: str) -> None:
             visible = visible[:room]
             reply.shown += len(visible)
             _append(reply, {"type": "delta", "text": visible})
+
+
+def stop(request_id: str) -> None:
+    """Ask the answer stream for this request to end at its next piece."""
+    with _lock:
+        reply = _replies.get(request_id)
+        if reply is not None:
+            reply.stopped = True
+
+
+def raise_if_stopped() -> None:
+    """Called by streaming adapters after each piece; the durable stop is recorded elsewhere."""
+    request_id = _active.get()
+    if request_id is None:
+        return
+    with _lock:
+        reply = _replies.get(request_id)
+        stopped = reply is not None and reply.stopped
+    if stopped:
+        from .providers import ProviderUnavailable
+
+        raise ProviderUnavailable("Owner stopped this turn.")
 
 
 def read(request_id: str, after: int = 0) -> tuple[list[dict], bool] | None:
