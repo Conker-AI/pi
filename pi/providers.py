@@ -200,6 +200,7 @@ class OllamaProvider:
                 if piece:
                     text.append(piece)
                     live_stream.delta(piece)
+                    live_stream.raise_if_stopped()
                 if chunk.get("done"):
                     final = chunk
                     break
