@@ -77,9 +77,16 @@ def test_real_https_login_conversation_logout_and_host_recovery(tmp_path, monkey
                 trust_env=False,
             ) as client:
                 deadline = time.monotonic() + 25
+                # Poll readiness with throwaway clients: a session cookie picked up
+                # while waiting for Pi would suppress the Set-Cookie asserted below.
                 while True:
                     try:
-                        start = client.get("/auth/session")
+                        with httpx.Client(
+                            base_url=origin,
+                            verify=ssl.create_default_context(cafile=str(cert)),
+                            trust_env=False,
+                        ) as ready:
+                            ready.get("/auth/session")
                         with httpx.Client(trust_env=False) as probe:
                             probe.get(f"http://127.0.0.1:{pi_port}/sessions")
                         break
@@ -88,6 +95,7 @@ def test_real_https_login_conversation_logout_and_host_recovery(tmp_path, monkey
                             "Gateway or Pi failed to start; inspect process.log"
                         )
                         time.sleep(0.1)
+                start = client.get("/auth/session")
                 assert "Secure" in start.headers["set-cookie"]
                 headers = {"Origin": origin, "X-CSRF-Token": start.json()["csrf_token"]}
                 result = client.post("/auth/login", json={"password": password}, headers=headers)
