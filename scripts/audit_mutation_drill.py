@@ -68,8 +68,7 @@ CASES = [
         "F2b-missing-ok-is-success",
         "pi/toolgate.py",
         (
-            'return ToolPending("outcome_unknown",\n'
-            '                           "No affirmative or negative execution receipt", action_id)'
+            'return ToolPending(\n            "outcome_unknown", "No affirmative or negative execution receipt", action_id\n        )'
         ),
         "return ToolResult(True, result, tool_id)",
         EXEC,
@@ -78,8 +77,7 @@ CASES = [
         "F2b-in-progress-is-success",
         "pi/toolgate.py",
         (
-            'return ToolPending("action_in_progress",\n'
-            '                               "Dispatch recorded; outcome pending", action_id)'
+            'return ToolPending(\n                "action_in_progress", "Dispatch recorded; outcome pending", action_id\n            )'
         ),
         "return ToolResult(True, None, tool_id)",
         EXEC,
@@ -126,7 +124,13 @@ CASES = [
         "OR (status='interrupted' AND acted=0)",
         EXEC,
     ),
-    ("F4-receipt-observation-lost", "pi/actions.py", "db.commit()", "pass", EXEC),
+    (
+        "F4-receipt-observation-lost",
+        "pi/actions.py",
+        'WHERE id=?", (action["id"],))\n        db.commit()',
+        'WHERE id=?", (action["id"],))\n        pass',
+        EXEC,
+    ),
     (
         "F5-current-namespace-for-deletion",
         "pi/memory.py",
@@ -137,8 +141,8 @@ CASES = [
     (
         "F5-destination-not-pinned",
         "pi/memory_store.py",
-        "(destination, message_id))",
-        "(None, message_id))",
+        "(destination, message_id),",
+        "(None, message_id),",
         MEMORY,
     ),
     (
@@ -155,7 +159,13 @@ CASES = [
         "if False:",
         MEMORY,
     ),
-    ("F8-api-unbounded", "pi/api.py", "min_length=1, max_length=16000,", "min_length=1,", MEMORY),
+    (
+        "F8-api-unbounded",
+        "pi/api.py",
+        "min_length=1,\n        max_length=16000,",
+        "min_length=1,",
+        MEMORY,
+    ),
     (
         "F8-permanent-errors-retry",
         "pi/memory.py",
@@ -180,15 +190,15 @@ CASES = [
     (
         "F11-summary-is-system",
         "pi/loop.py",
-        'Message("assistant", "Untrusted model summary',
-        'Message("system", "Untrusted model summary',
+        '"assistant",\n                    "Untrusted model summary',
+        '"system",\n                    "Untrusted model summary',
         MODELS,
     ),
     (
         "F9-completion-outage-removes-local",
         "pi/loop.py",
-        "except ProviderUnavailable as exc:",
-        "except KeyError as exc:",
+        "except ProviderUnavailable as exc:\n                turn_control.guard(self.store, execution)\n                # A provider outage",
+        "except KeyError as exc:\n                turn_control.guard(self.store, execution)\n                # A provider outage",
         MODELS,
     ),
     (

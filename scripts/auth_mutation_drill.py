@@ -131,8 +131,8 @@ CASES = [
     (
         "approval-uses-agent-channel",
         "gateway/api.py",
-        '"X-ToolGate-Owner-Key",\n            app.state.config.owner_key,\n            body',
-        '"X-ToolGate-Execution-Key",\n            app.state.config.owner_key,\n            body',
+        '/decision",\n            "X-ToolGate-Owner-Key",',
+        '/decision",\n            "X-ToolGate-Execution-Key",',
         API + "test_proxy_keeps_credentials_separate_and_preserves_memory_status",
     ),
     (
