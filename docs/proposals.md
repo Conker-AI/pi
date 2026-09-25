@@ -37,8 +37,10 @@ rereads the same messages.
 
 Proposals must cite the aliases of the supplied messages. Invented or missing evidence
 drops the proposal; a proposal that cannot say why it is shown is not shown. Titles are
-fingerprinted: an open, "never" or recently declined idea is not proposed again and
-does not take a slot from a new one.
+fingerprinted in any script (case, punctuation and spacing ignored): an open, "never" or
+recently declined idea with the same title is not proposed again and does not take a slot
+from a new one. Every "never" title and recent declines are also shown to the model as
+ideas to avoid. A reworded title can still get through; the UI says so.
 
 ## Decisions
 

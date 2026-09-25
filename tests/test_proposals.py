@@ -267,3 +267,22 @@ def test_small_model_quirks_are_tolerated_without_inventing_evidence(store):
     [item] = proposals.list_proposals(store)["proposals"]
     assert item["noticed"] == "You asked about this in 2 recent messages."
     assert len(item["evidence"]) == 2
+
+
+RUSSIAN = "Напоминание о домашке"  # noqa: RUF001 - Cyrillic on purpose
+
+
+def test_non_latin_titles_are_kept_and_suppressed_like_any_other(store):
+    say(store, "a", "b", "c")
+    model = Model(reply(proposal("תזכורת לשיעורי בית", "e1"), proposal(RUSSIAN, "e2")))
+    proposals.run_pass(store, model, now=DAY)
+    listed = {p["title"]: p for p in proposals.list_proposals(store)["proposals"]}
+    assert set(listed) == {"תזכורת לשיעורי בית", RUSSIAN}
+    proposals.decide(
+        store, listed["תזכורת לשיעורי בית"]["id"], proposals.Decision(decision="never")
+    )
+    say(store, "d", "e", "f", at=DAY.timestamp() - 60)
+    again = Model(reply(proposal("תזכורת  לשיעורי בית!", "e1")))
+    proposals.run_pass(store, again, now=DAY)
+    assert "- תזכורת לשיעורי בית" in again.prompts[0][1].content
+    assert {p["title"] for p in proposals.list_proposals(store)["proposals"]} == {RUSSIAN}
