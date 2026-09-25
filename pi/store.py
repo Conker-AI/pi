@@ -48,6 +48,7 @@ from . import (
     owner_preferences,
     project_context,
     projects,
+    proposals,
     research_usage,
     response_retries,
     response_versions,
@@ -299,6 +300,7 @@ class Store:
                 db.executescript(session_settings.SCHEMA)
                 db.executescript(memory_store.SCHEMA)
                 db.executescript(memory_proposals.SCHEMA)
+                db.executescript(proposals.SCHEMA)
                 memory_store.migrate(db)
                 db.executescript(actions.SCHEMA)
                 db.executescript(tasks.SCHEMA)

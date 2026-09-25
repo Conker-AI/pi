@@ -98,6 +98,7 @@ def test_every_runtime_write_and_owner_decision_requires_exact_single_use_proof(
         "/api/pi/sessions/s/turns",
         "/api/pi/sessions/s/fork",
         "/api/pi/turn-submissions/r/cancel",
+        "/api/pi/proposals/p/decision",
     ],
 )
 def test_conversation_writes_need_the_signed_in_session_not_a_password(boundary, path):

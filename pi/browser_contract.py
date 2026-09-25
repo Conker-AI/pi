@@ -22,6 +22,8 @@ RUNTIME_ROUTES = {
         r"/runs",
         r"/runs/[A-Za-z0-9_-]+",
         r"/events",
+        r"/proposals",
+        r"/proposals/passes",
     ),
     "POST": (
         r"/sessions",
@@ -31,6 +33,7 @@ RUNTIME_ROUTES = {
         r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
         r"/tasks",
         r"/tasks/[A-Za-z0-9_-]+/(update|transition|archive)",
+        r"/proposals/[A-Za-z0-9_-]+/decision",
     ),
 }
 
@@ -47,6 +50,8 @@ SESSION_ONLY_WRITES = (
     r"/sessions/[A-Za-z0-9_-]+/turns",
     r"/sessions/[A-Za-z0-9_-]+/fork",
     r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
+    # Deciding on a proposal records a preference; it grants and runs nothing.
+    r"/proposals/[A-Za-z0-9_-]+/decision",
 )
 
 
@@ -63,7 +68,11 @@ OWNER_ROUTES = {
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
     ),
-    "POST": (r"/models/configuration", r"/sessions/[A-Za-z0-9_-]+/settings"),
+    "POST": (
+        r"/models/configuration",
+        r"/sessions/[A-Za-z0-9_-]+/settings",
+        r"/proposals/passes",
+    ),
 }
 
 
