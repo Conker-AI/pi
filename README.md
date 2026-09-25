@@ -1,221 +1,132 @@
-# Pi
+<p align="center"><img src="https://raw.githubusercontent.com/Conker-AI/conker/main/dashboard/public/conker.png" width="64" alt="" /></p>
+<h1 align="center">Pi</h1>
+<p align="center"><b>Conker's runtime: conversations, model choice, tool calls and an append-only record of every turn.</b></p>
+<p align="center">
+  <a href="https://github.com/Conker-AI/pi/actions/workflows/ci.yml"><img src="https://github.com/Conker-AI/pi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" /></a>
+  <a href="https://github.com/Conker-AI/conker"><img src="https://img.shields.io/badge/part%20of-Conker-e36b2c" alt="Part of Conker" /></a>
+</p>
 
-Part of **[Conker](https://github.com/alexeybe1kin/conker)**, independently usable and deployable. [Project map](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/docs/conker-project.md) · [Connected local setup](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/docs/local-windows-startup.md).
+Pi runs each conversation turn: it gathers memory, picks a model, lets the model call tools through
+ToolGate, and records what happened. The same image ships the **Gateway**, the only thing a browser
+ever talks to. Part of [Conker](https://github.com/Conker-AI/conker), a personal AI companion you
+host yourself.
 
-Conker's runtime. Agent turns, sessions, jobs, model routing, execution history.
+## Where it fits
 
-The browser talks to a separate HTTPS gateway, shipped in this image but run in
-its own process and volume. Pi receives conversation operations through a scoped
-runtime credential; owner approval credentials and browser sessions stay outside
-the worker. [Browser API, password recovery and release gates](docs/browser-auth.md).
+```mermaid
+flowchart LR
+    You([Browser]) -->|HTTPS, owner session| GW[Gateway]
+    GW -->|scoped runtime key| Pi[Pi]
+    Pi -->|evidence and recall| MG[MemoryGate]
+    Pi -->|every action| TG[ToolGate]
+    Pi -->|read-only| SG[SystemGate]
+    Pi --> M[Models<br/>local or hosted]
+    classDef focus fill:#e36b2c,color:#fff,stroke:#b4521f
+    class Pi,GW focus
+```
 
-Conversation evidence now reaches MemoryGate through a durable outbox. Retrieval and
-delivery gaps are visible independently of model replies. [Setup, forgetting and tests](docs/memory.md).
+**Pi coordinates; it never owns.** It keeps conversations and execution history, nothing more.
 
-## Its boundary
+- Memory belongs to **MemoryGate**. What crosses over is derived evidence, never the transcript
+  ([ADR-0002](https://github.com/Conker-AI/conker/blob/main/docs/adr/0002-transcripts-and-evidence.md)).
+- Actions belong to **ToolGate**. Pi has no shell and no file access of its own
+  ([ADR-0005](https://github.com/Conker-AI/conker/blob/main/docs/adr/0005-toolgate-is-the-only-action-path.md)).
+- Machine state belongs to **SystemGate**, read-only.
+- The Gateway holds the owner's login and approval credentials; Pi never sees them
+  ([browser authentication](docs/browser-auth.md)).
 
-**Pi coordinates and never owns.** It holds **no store beyond session state and execution history**.
+Why build it rather than adopt a runtime: [ADR-0001](https://github.com/Conker-AI/conker/blob/main/docs/adr/0001-build-pi-in-house.md).
 
-- Memory belongs to **MemoryGate**. Pi owns transcripts; what crosses into MemoryGate is derived
-  evidence, never these rows ([ADR-0002](https://github.com/alexeybe1kin/conker/blob/main/docs/adr/0002-transcripts-and-evidence.md)).
-- Actions belong to **ToolGate**. If it touches anything outside Pi's own store, it goes through
-  ToolGate — no local shell, no file access
-  ([ADR-0005](https://github.com/alexeybe1kin/conker/blob/main/docs/adr/0005-toolgate-is-the-only-action-path.md)).
-- Machine truth belongs to **SystemGate**, read-only.
+## Three rules the code enforces
 
-Pi is built in-house rather than adopted because no existing runtime could leave the action
-boundary whole ([ADR-0001](https://github.com/alexeybe1kin/conker/blob/main/docs/adr/0001-build-pi-in-house.md)).
+**History is append-only.** No runtime function updates or deletes a message, and database triggers
+refuse both, so nothing reaching past the API can rewrite what was said. The owner can still
+[forget a conversation](docs/forgetting.md) through a separate command that removes content and
+leaves a content-free receipt.
 
-## Two rules that are structural, not stylistic
+**Long conversations fork; they are never truncated.** When history outgrows the model's window,
+the session closes with a summary and a linked child continues. Nothing is silently dropped.
 
-**Runtime history is append-only.** There is no runtime function that updates or deletes a message,
-and the schema
-refuses both with triggers — so a caller reaching past the API still cannot rewrite what was said.
-Current models bind reasoning blocks to the producing model and reject edited history; by the time
-that surfaces, the offending code is everywhere.
+**An action that happened is never recorded as one that didn't.** If a tool runs and the model then
+fails to reply, the turn is `acted_no_reply`, not `failed`, and resuming asks only for the reply. A
+turn needing approval *parks*, and resuming replays the exact stored action the owner saw.
+[More on turns](docs/turns.md).
 
-The owner can [forget a session and its fork descendants](docs/forgetting.md) through a separate
-offline command. It removes content and derived Pi copies, preserves content-free receipts and
-stable message IDs, and prevents those sessions from resuming. `GET /messages/{id}` resolves a
-deleted source as an explicit tombstone; an unknown ID still returns 404.
+## Quick start
 
-**Long conversations fork, they are never truncated.** When history outgrows the window, the session
-closes with a summary and a child opens seeded by it, pointing back at the parent. Dropping the
-middle would silently lose what was said; rewriting it would break the first rule. Forking keeps the
-lineage walkable, which is also how MemoryGate treats evidence.
-
-## Run
+Requires Docker with Compose.
 
 ```bash
 cp .env.example .env
 echo "PI_ADMIN_KEY=$(openssl rand -base64 24)" >> .env
-docker network create conker_net   # if it does not exist yet
+docker network create conker_net   # once; shared with the other Conker services
 docker compose up -d --build
 ```
 
-Development/recovery API: `http://127.0.0.1:8050`, using `X-Pi-Key: <PI_ADMIN_KEY>`.
-The companion deployment leaves this worker unpublished and uses the gateway's
-`X-Pi-Gateway-Key` credential for the explicit runtime operation allowlist.
+The development API is on `http://127.0.0.1:8050` with `X-Pi-Key: <PI_ADMIN_KEY>`. In a full
+Conker deployment the worker stays unpublished and only the Gateway reaches it, through an explicit
+allowlist of operations. Pi refuses to start without a key of at least 16 characters.
 
-Pi **refuses to start** without a key of at least 16 characters, and says how to fix it. It never
-falls back to open.
+## Configuration
 
-## Configure
-
-Precedence is **environment → file → default**.
+Precedence is environment, then file, then default. The essentials:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `PI_ADMIN_KEY` | *(required)* | At least 16 characters, or Pi will not start. |
-| `PI_DB_PATH` | `/data/pi.db` | Sessions and execution history. **Back this up** — it is the transcript, and MemoryGate's evidence cites message ids from it. |
-| `PI_OLLAMA_URL` | `http://ollama:11434` | Where the local model is. |
-| `PI_MODEL` | `qwen3:4b` | The local model, used for ordinary conversation. |
-| `PI_OPENROUTER_KEY` | *(empty)* | Optional. Without it Pi answers locally and says so. |
-| `PI_ALLOW_PAID_MODELS` | *(off)* | Opt in to models that cost money. Off means **free only**, enforced in code. |
-| `PI_SYSTEM_PROMPT` | *(empty)* | Prepended to every conversation. |
+| `PI_DB_PATH` | `/data/pi.db` | Conversations and history. **Back this up**: MemoryGate's evidence cites its message IDs. |
+| `PI_OLLAMA_URL` | `http://ollama:11434` | The local model server. |
+| `PI_MODEL` | `qwen3:4b` | The local model for ordinary conversation. |
+| `PI_OPENROUTER_KEY` | *(empty)* | Optional hosted models. Without it Pi answers locally and says so. |
+| `PI_ALLOW_PAID_MODELS` | *(off)* | Off means free models only, enforced in code. |
 | `PI_TOOLGATE_URL` | `http://toolgate-api:8010` | The action boundary. |
-| `PI_TOOLGATE_KEY` | *(empty)* | A **scoped** ToolGate execution key. Without it Pi acts on nothing and reports `not_configured`. |
-| `PI_LOCAL_TIMEOUT_S` | `600` | Generous on purpose — see below. |
-| `PI_HOSTED_TIMEOUT_S` | `180` | |
-| `PI_TOOLGATE_TIMEOUT_S` | `120` | |
+| `PI_TOOLGATE_KEY` | *(empty)* | A scoped ToolGate key. Without it Pi acts on nothing and reports `not_configured`. |
+| `PI_LOCAL_TIMEOUT_S` | `600` | Catches a hung server, not a slow model. Local inference can take minutes. |
 
-A timeout here exists to catch a **hung** server, not to give up on a model that is still thinking.
-Local inference on modest hardware genuinely takes minutes, and a ceiling that fires on a working
-model turns *slow* into *failed* — which is a lie about what happened.
+Every variable is in [`.env.example`](.env.example).
 
-## API
+## API at a glance
 
-| Route | Auth | |
-|---|---|---|
-| `GET /health` | none | Module contract shape. Probes the store and the provider. |
-| `POST /sessions` | key | Open a session. |
-| `GET /sessions` | key | List sessions, newest first. |
-| `GET /sessions/{id}` | key | The session with its messages and turns. |
-| `POST /sessions/{id}/turns` | key | Run one turn. |
-| `POST /sessions/{id}/fork` | key | Close with a summary and open a child. |
-| `GET /tools` | key | What Pi may currently do, **as ToolGate sees it** — not as Pi remembers. |
-| `GET /approvals` | key | Every turn parked on the owner, across all sessions. |
-| `GET /turns/unreplied` | key | Turns that acted but never reported back. |
-| `POST /turns/{id}/resume` | key | Continue a parked turn after the owner approved it. |
-
-A turn returns the session that **answered**, which may not be the one you asked: if history had
-outgrown the window it forked first, and `forked_from` says so rather than leaving you to assume.
-
-`POST /turns` answers **503** when the provider does not answer. The message you sent is stored
-either way — it was said, and a transcript that drops what was said because the answer failed is not
-a transcript.
-
-## Acting, and asking first
-
-Pi **executes nothing itself**. Every action goes through ToolGate, which is the only thing that
-can run one and the only thing that can approve one. Pi is given a *scoped* execution key and asks
-ToolGate what that key may reach on every turn, rather than caching it — the owner can widen or
-narrow scope at any moment.
-
-When a tool needs confirmation the turn **parks**: status `awaiting_approval`, with the exact tool
-and arguments stored whole. That is not a failure and is deliberately not recorded as one — the
-owner has not said no, they have not been asked yet. A restart does not withdraw the question.
-
-Resuming replays **the stored action**, not one rebuilt from the conversation, so an approval can
-never be spent on a different action than the one the owner was shown. ToolGate consumes the nonce
-once; a replay fails closed.
-
-### An action that happened is never recorded as one that did not
-
-A tool can succeed and the model can *then* fail to say so. The action is real, the approval is
-spent, and the world has changed — so that turn is recorded as **`acted_no_reply`**, never `failed`,
-and `POST /turns/{id}/resume` asks only for the missing reply without running the action again.
-
-For the same reason neither `/turns` nor `/resume` answers with an error status in that case: an
-error code invites a retry, and retrying the whole turn would do the thing twice. They answer `200`
-with `status: acted_no_reply` and say plainly what is missing. `GET /turns/unreplied` lists them,
-because an action whose result the owner never sees is, to them, the same as one that silently went
-wrong.
-
-## Turns are recorded, not just run
-
-Every turn stores provider, model, input and output tokens, cached tokens, cost and latency. A
-provider that does not report a price yields `null`, which renders as **unknown** — never `0`, which
-would read as free.
-
-**A turn that was running when the process stopped is marked `interrupted` at the next startup**,
-with the reason. Saying nothing would leave the owner looking at a request that simply vanished.
-A turn that had already **acted** before the process died says so — it is not the same event as one
-that died before touching anything, and one message for both would describe the wrong one.
-
-## Status vocabulary
-
-`/health` reports `ok`, `degraded`, `unavailable`, `not_configured` or `unknown` per check.
-`not_configured` is **not** a failure. Nothing is ever `ok` because it was configured — every check
-is probed.
-
-## Routing
-
-Routing is not a feature - it is the cost structure of a system that runs all day. A **local model
-carries ordinary conversation**, and Pi escalates only on explicit signals:
-
-| Signal | Reason recorded |
+| Route | |
 |---|---|
-| The owner asked for a stronger model | `owner_asked` |
-| The turn needs tools | `tools_required` |
-| A previous attempt failed | `retry_after_failure` |
-| The work is analysis, not conversation | `analysis` |
-| History has grown large | `long_context` |
+| `GET /health` | Probes the store and the model provider. No key. |
+| `POST /sessions` · `GET /sessions` · `GET /sessions/{id}` | Open, list and read conversations. |
+| `POST /sessions/{id}/turns` | Run one turn. Your message is stored even if the model fails (503). |
+| `POST /sessions/{id}/fork` | Close with a summary and continue in a child. |
+| `GET /tools` | What Pi may do right now, as ToolGate sees it. |
+| `GET /approvals` · `POST /turns/{id}/resume` | Turns waiting on the owner, and continuing them. |
+| `GET /turns/unreplied` | Turns that acted but never reported back. |
+| `GET /models` | Models Pi can route to now, free and paid. |
 
-Every route is recorded on the turn with its **reason**, because a policy nobody measures drifts
-into always escalating - and `features.md` A6 names the trap directly: a cheap model that fails and
-then escalates has cost both.
+Full reference: [Pi OpenAPI](docs/pi-openapi.json) · [Gateway OpenAPI](docs/gateway-openapi.json).
+Every turn records provider, model, tokens, cost and latency; an unknown price shows as unknown,
+never as zero. How the model is chosen: [routing](docs/routing.md).
 
-The router is deliberately **not** a classifier reading the message. That would be a model nobody
-evaluates deciding what every turn costs. It sees only facts the loop already has, and the caller
-passes what it genuinely knows.
+## Development
 
-**Free by default.** Models are **discovered, not hardcoded** - a static list is stale within weeks.
-Paid models are refused unless `PI_ALLOW_PAID_MODELS` is set, and a model outside the catalogue is
-refused rather than called blind, so a typo cannot become a bill. An unreadable price counts as
-**not free**, because treating it as zero is exactly the assumption that produces one.
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+ruff check . && ruff format --check .
+```
 
-Only text-in, text-out models are routed to. Some zero-priced entries are audio or image generators
-- Google's Lyria outputs `["text", "audio"]` - and routing a conversation into one is a strange
-failure to diagnose from the answer alone.
+The owner-terminal tests need Linux; everything else runs anywhere.
 
-**Listed and free does not mean callable.** Some free models are gated to particular clients and
-answer `403`. Pi walks its candidate list rather than failing the turn, and **records what it
-skipped** - so a model that always refuses is visible in the record rather than only as latency. A
-bad key or an exhausted quota is *not* treated this way: those fail identically on every candidate,
-and walking the catalogue would be slow and would blame the models.
+```text
+pi/        Runtime: turn loop, store, routing, memory outbox, jobs, proposals
+gateway/   Browser-facing HTTPS gateway: login, sessions, allowlisted routes
+tests/     Unit, contract and live-gateway tests
+docs/      One document per feature
+```
 
-`GET /models` shows what Pi can route to right now, free and paid, with the count discovered.
+## Documentation
 
-## Not here yet
+Start with [turns](docs/turns.md) and [routing](docs/routing.md), then the
+[feature index](docs/README.md), with one page per capability: memory, forgetting, jobs, proposals,
+attachments, projects, recovery and more.
 
-[Session privacy and agent selections](docs/session-settings.md) now govern future
-turns with immutable snapshots and memory queue exclusions. Specialist instructions
-and tool selections are enforced. Model-role catalogue snapshots now dispatch
-through configured server adapters; specialist memory namespace authorization
-remains a separate prerequisite.
+## License
 
-[Templates and team preparations](docs/collaboration.md) are durable, versioned
-configuration with bounded role selections and budgets. Publishing and preparing
-do not dispatch work or grant authority; live team execution remains separate.
-
-[Agent profiles](docs/agents.md) now have durable, revisioned configuration and immutable
-history through an admin-only API. Profiles are not yet bound to sessions or dispatched;
-tool and memory selections do not confer authority.
-
-Owner preference configuration and its current enforcement limits are documented in
-[owner-preferences.md](docs/owner-preferences.md). The admin-only API persists validated
-preferences; it does not start a scheduler, grant permissions, or change gateway idle locking.
-
-Tool calls through ToolGate are [#29](https://github.com/alexeybe1kin/conker/issues/29). Jobs and
-cron come with C2.
-
-## Licence
-
-MIT.
-
-## Independent model roles
-
-The catalogue assigns answer generation, model routing, context selection, summarization and memory ranking independently. Memory ranking replaces the legacy PI_MEMORY_RERANK_ENABLED switch and migrates disabled. Enable it explicitly in Conker Settings. The optional decision-service adapter accepts `model-routing` and `memory-ranking` routes; general completion adapters can also implement the ranking JSON contract. Provider transports and credentials remain server-owned.
-
-Memory ranking only reorders authorized candidates; it preserves originals and source links. Invalid or unavailable results keep retrieval order. No-memory skips retrieval; no-harness skips ranking. See [decision-service setup](https://github.com/alexeybe1kin/conker/blob/feat/dashboard/services/decisions/README.md).
+[MIT](LICENSE)
