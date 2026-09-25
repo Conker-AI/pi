@@ -93,7 +93,8 @@ class ProposalError(Exception):
 
 
 def fingerprint(title: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", title.casefold()))[:120]
+    """Same idea, same key: case, punctuation and spacing ignored, in any script."""
+    return " ".join(re.findall(r"\w+", title.casefold()))[:120]
 
 
 def _watermark(db) -> float:
@@ -132,7 +133,10 @@ def _suppressed(db, now: float) -> tuple[set[str], list[str]]:
         "WHERE state IN ('open','never') OR (state='declined' AND decided_at>?)",
         (now - DECLINE_MEMORY_SECONDS,),
     ).fetchall()
-    titles = [row["title"] for row in rows if row["state"] != "open"][-20:]
+    # Every never-again idea is shown to the model; recent declines fill the rest.
+    never = [row["title"] for row in rows if row["state"] == "never"]
+    declined = [row["title"] for row in rows if row["state"] == "declined"]
+    titles = never[-60:] + declined[-20:]
     return {row["fingerprint"] for row in rows}, titles
 
 
