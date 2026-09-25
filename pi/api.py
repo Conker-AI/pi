@@ -50,6 +50,7 @@ from . import (
     owner_preferences,
     project_sources,
     projects_api,
+    proposals,
     response_retries,
     response_versions,
     session_settings,
@@ -134,6 +135,7 @@ async def lifespan(app: FastAPI):
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
+    proposals.recover_interrupted(store)
     calls.recover(store)
     system_inventory.recover(store)
     filesystem_reads.recover(store)
@@ -279,9 +281,21 @@ async def lifespan(app: FastAPI):
     if os.environ.get("PI_QUEUE_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
         queue_worker = QueueWorker(store, app.state.loop)
         queue_worker.start()
+    proposal_worker = None
+    if os.environ.get("PI_PROPOSALS_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        from .proposal_worker import ProposalWorker
+
+        proposal_worker = ProposalWorker(
+            store,
+            app.state.router,
+            interval_hours=float(os.environ.get("PI_PROPOSALS_INTERVAL_HOURS", "24")),
+        )
+        proposal_worker.start()
     try:
         yield
     finally:
+        if proposal_worker:
+            proposal_worker.close()
         if queue_worker:
             queue_worker.close()
         if scheduler:
@@ -688,6 +702,36 @@ def run_turn(session_id: str, body: TurnRequest):
                 "request_id": body.request_id,
             },
         ) from exc
+
+
+@app.get("/proposals", dependencies=[Depends(require_key)])
+def list_proposals(state: str = Query("open"), limit: int = Query(50, ge=1, le=100)):
+    """Things Conker noticed and offers to take on. Listing grants no authority."""
+    try:
+        return proposals.list_proposals(app.state.store, state, limit)
+    except proposals.ProposalError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+
+
+@app.post("/proposals/{proposal_id}/decision", dependencies=[Depends(require_key)])
+def decide_proposal(proposal_id: str, body: proposals.Decision):
+    """Accept, decline, or never show again. Accepting records a decision; nothing runs."""
+    try:
+        return proposals.decide(app.state.store, proposal_id, body)
+    except proposals.ProposalError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+
+
+@app.get("/proposals/passes", dependencies=[Depends(require_key)])
+def list_proposal_passes(limit: int = Query(20, ge=1, le=100)):
+    return proposals.passes(app.state.store, limit)
+
+
+@app.post("/proposals/passes", dependencies=[Depends(require_owner)])
+def run_proposal_pass():
+    """Owner-requested pass. Budget, quiet hours and the role setting still apply."""
+    enabled, complete = proposals.model_call(app.state.store, app.state.router)
+    return proposals.run_pass(app.state.store, complete, role_enabled=enabled)
 
 
 @app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])

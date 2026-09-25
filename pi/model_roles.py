@@ -10,7 +10,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .providers import Message, ProviderUnavailable, require_images
 
-ROLES = ("answer", "routing", "context-selection", "summarization", "memory-ranking")
+ROLES = (
+    "answer",
+    "routing",
+    "context-selection",
+    "summarization",
+    "memory-ranking",
+    "proposals",
+)
+# Roles added after configurations were first saved. Older saved settings gain them
+# disabled: a new background use of the owner's conversations is never switched on
+# by an upgrade.
+LATER_ROLES = ("memory-ranking", "proposals")
 
 
 class Strict(BaseModel):
@@ -57,21 +68,27 @@ class Configuration(Strict):
     def migrate_roles(cls, value):
         if isinstance(value, dict) and isinstance(value.get("roleSettings"), dict):
             roles = value["roleSettings"].get("roles")
-            if isinstance(roles, dict) and "memory-ranking" not in roles:
+            missing = [
+                role for role in LATER_ROLES if isinstance(roles, dict) and role not in roles
+            ]
+            if missing:
                 value = {
                     **value,
                     "roleSettings": {
                         **value["roleSettings"],
                         "roles": {
                             **roles,
-                            "memory-ranking": dict(
-                                enabled=False,
-                                eligibleModelIds=[],
-                                modelId=None,
-                                timeoutMs=2000,
-                                failure="stop",
-                                fallbackModelId=None,
-                            ),
+                            **{
+                                role: dict(
+                                    enabled=False,
+                                    eligibleModelIds=[],
+                                    modelId=None,
+                                    timeoutMs=2000 if role == "memory-ranking" else 120000,
+                                    failure="stop",
+                                    fallbackModelId=None,
+                                )
+                                for role in missing
+                            },
                         },
                     },
                 }
