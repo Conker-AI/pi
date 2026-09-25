@@ -11,6 +11,48 @@ import httpx
 
 from .providers import Completion, ProviderUnavailable
 
+FOLLOW_UP_CHARACTERS = 400
+CONTEXT_CHARACTERS = 200
+
+
+def _excerpt(text: str) -> dict:
+    if len(text) <= CONTEXT_CHARACTERS:
+        return {"content": text}
+    return {"content": text[:140] + " … " + text[-57:], "excerpt": True}
+
+
+def routing_projection(task: list) -> tuple[list[dict], str]:
+    """What the router sees: the latest request, plus the previous exchange for short follow-ups.
+
+    Only conversation turns are eligible; system prompts, instructions and recalled
+    memory never reach the classifier. The latest request is never cut: over 1600
+    characters it is refused, and the caller's configured fallback answers instead.
+    """
+    turns = [
+        item
+        for item in task
+        if isinstance(item, dict)
+        and item.get("role") in ("user", "assistant")
+        and isinstance(item.get("content"), str)
+    ]
+    last = max((i for i, item in enumerate(turns) if item["role"] == "user"), default=None)
+    if last is None:
+        raise ValueError()
+    latest = turns[last]["content"]
+    if not latest.strip() or len(latest) > 1600:
+        raise ValueError()
+    current = {"role": "user", "content": latest}
+    if len(latest) >= FOLLOW_UP_CHARACTERS:
+        return [current], "latest-user-request"
+    earlier = [
+        {"role": item["role"], **_excerpt(item["content"])}
+        for item in turns[max(0, last - 2) : last]
+        if item["content"].strip()
+    ]
+    if not earlier:
+        return [current], "latest-user-request"
+    return [*earlier, current], "recent-exchange"
+
 
 class DecisionProvider:
     name = "decisions"
@@ -134,22 +176,13 @@ class DecisionProvider:
             # A small classifier routes the current request, not the answer's
             # entire system prompt, retrieved memory and conversation history.
             # Keep this projection explicit; never silently cut an oversized
-            # request. Context-dependent follow-ups may need the configured
-            # general-model fallback or a manual answer selection.
+            # request. A short follow-up ("and in Python?") is ambiguous alone,
+            # so it carries the previous exchange as marked, bounded excerpts.
             task = envelope["task"]
             if not isinstance(task, list):
                 raise ValueError()
-            latest = next(
-                (
-                    item.get("content")
-                    for item in reversed(task)
-                    if isinstance(item, dict) and item.get("role") == "user"
-                ),
-                None,
-            )
-            if not isinstance(latest, str) or not latest.strip() or len(latest) > 1600:
-                raise ValueError()
-            state = json.dumps([{"role": "user", "content": latest}], ensure_ascii=False)
+            projection, scope = routing_projection(task)
+            state = json.dumps(projection, ensure_ascii=False)
             data = self.choose(
                 state,
                 "Choose the model best suited to this task using the capability descriptions.",
@@ -166,8 +199,8 @@ class DecisionProvider:
                             key: data.get(key)
                             for key in ("choice", "confidence", "elapsed_ms", "provider", "model")
                         },
-                        "inputScope": "latest-user-request",
-                        "inputCharacters": len(latest),
+                        "inputScope": scope,
+                        "inputCharacters": sum(len(item["content"]) for item in projection),
                     }
                 },
             )

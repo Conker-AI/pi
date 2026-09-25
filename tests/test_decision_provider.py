@@ -115,12 +115,58 @@ def test_routing_projection_excludes_system_memory_and_old_history_without_trunc
         )
 
     result = invoke()
-    assert json.loads(calls[0]["state"]) == [{"role": "user", "content": "Current task"}]
-    assert result.raw["decision"]["inputScope"] == "latest-user-request"
+    # A short follow-up carries the previous exchange; system text and memory never do.
+    assert json.loads(calls[0]["state"]) == [
+        {"role": "user", "content": "old private question"},
+        {"role": "assistant", "content": "old answer"},
+        {"role": "user", "content": "Current task"},
+    ]
+    assert result.raw["decision"]["inputScope"] == "recent-exchange"
+    assert "private system" not in calls[0]["state"]
+    envelope["task"][-1]["content"] = "long self-contained request " * 20
+    assert invoke().raw["decision"]["inputScope"] == "latest-user-request"
+    assert json.loads(calls[1]["state"]) == [
+        {"role": "user", "content": envelope["task"][-1]["content"]}
+    ]
     envelope["task"][-1]["content"] = "x" * 1601
     with pytest.raises(ProviderUnavailable):
         invoke()
-    assert len(calls) == 1
+    assert len(calls) == 2
+
+
+def test_follow_up_context_is_bounded_and_marked():
+    from pi.decision_provider import CONTEXT_CHARACTERS, routing_projection
+
+    long_answer = "A" * 150 + "middle" * 100 + "Z" * 60
+    projection, scope = routing_projection(
+        [
+            {"role": "user", "content": "first question, too old to include"},
+            {"role": "user", "content": "Write a sorting function"},
+            {"role": "assistant", "content": long_answer},
+            {"role": "tool", "content": "tool output is not conversation"},
+            {"role": "user", "content": "and in Python?"},
+        ]
+    )
+    assert scope == "recent-exchange"
+    assert [item["role"] for item in projection] == ["user", "assistant", "user"]
+    assert projection[0] == {"role": "user", "content": "Write a sorting function"}
+    assert projection[1]["excerpt"] is True
+    assert len(projection[1]["content"]) <= CONTEXT_CHARACTERS
+    assert projection[1]["content"].startswith("A" * 140) and projection[1]["content"].endswith(
+        "Z" * 57
+    )
+    assert projection[2] == {"role": "user", "content": "and in Python?"}
+    assert routing_projection([{"role": "user", "content": "hello"}]) == (
+        [{"role": "user", "content": "hello"}],
+        "latest-user-request",
+    )
+    for bad in (
+        [],
+        [{"role": "assistant", "content": "no request"}],
+        [{"role": "user", "content": "  "}],
+    ):
+        with pytest.raises(ValueError):
+            routing_projection(bad)
 
 
 def test_adapter_refuses_text_answering_and_unapproved_choices():
