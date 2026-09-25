@@ -41,6 +41,7 @@ from . import (
     filesystem_reads,
     jobs_api,
     memory_corrections,
+    memory_forget,
     memory_proposals,
     memory_proposals_api,
     message_forks,
@@ -702,6 +703,25 @@ def run_turn(session_id: str, body: TurnRequest):
                 "request_id": body.request_id,
             },
         ) from exc
+
+
+@app.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
+def preview_memory_forget(memory_id: str):
+    try:
+        return memory_forget.preview(getattr(app.state, "memory_corrections", None), memory_id)
+    except memory_forget.ForgetError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+
+
+@app.post("/memory/forget", dependencies=[Depends(require_owner)])
+def forget_memory(body: memory_forget.Forget):
+    """Remove one memory everywhere it is stored. The source chat is kept."""
+    try:
+        return memory_forget.forget(
+            app.state.store, getattr(app.state, "memory_corrections", None), body
+        )
+    except memory_forget.ForgetError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
 
 
 @app.get("/proposals", dependencies=[Depends(require_key)])

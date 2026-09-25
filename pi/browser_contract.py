@@ -67,11 +67,13 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
+        r"/memory/forget/[A-Za-z0-9_.:-]+",
     ),
     "POST": (
         r"/models/configuration",
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/proposals/passes",
+        r"/memory/forget",
     ),
 }
 
