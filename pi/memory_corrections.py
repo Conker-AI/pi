@@ -65,5 +65,12 @@ class Client:
     def receipt(self, identity):
         return self._request("GET", quote(identity, safe=""))
 
+    def forget(self, identity, memory_id, revision):
+        return self._request(
+            "PUT",
+            "forget/" + quote(identity, safe=""),
+            json={"memory_id": memory_id, "expected_revision": revision},
+        )
+
     def close(self):
         self.http.close()
