@@ -135,7 +135,6 @@ class Terminal:
         with self.lock:
             if self.closed:
                 return
-            self.closed = True
             if hasattr(self, "timer"):
                 self.timer.cancel()
             try:
@@ -143,6 +142,10 @@ class Terminal:
             except ProcessLookupError:
                 pass
             finally:
-                os.close(self.master)
-                self.process.wait(timeout=5)
-                self.buffer.clear()
+                try:
+                    os.close(self.master)
+                    self.process.wait(timeout=5)
+                    self.buffer.clear()
+                finally:
+                    # Report closed only after reaping, and even if reaping fails, so close never runs twice.
+                    self.closed = True
