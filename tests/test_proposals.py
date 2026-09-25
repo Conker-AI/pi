@@ -149,6 +149,31 @@ def test_incognito_harness_disabled_and_forgotten_messages_are_never_read(store)
         assert "secret" not in prompt
 
 
+@pytest.mark.parametrize("decision", [None, "accept", "decline", "never"])
+def test_forgetting_scrubs_proposals_even_when_private_input_was_not_cited(store, decision):
+    # The model saw both sessions, but cites only the public one.
+    say(store, "public one", "public two", "public three", at=DAY.timestamp() - 2000)
+    secret_session, _ = say(store, "orchid-private-marker", at=DAY.timestamp() - 1000)
+    model = Model(reply(proposal("orchid-private-marker", "e1", "e2")))
+    proposals.run_pass(store, model, now=DAY)
+    item = proposals.list_proposals(store)["proposals"][0]
+    if decision:
+        proposals.decide(store, item["id"], proposals.Decision(decision=decision))
+    path = store.path
+    store.close()
+    forgetting.forget(
+        path, secret_session, forgetting.preview(path, secret_session)["confirmation"]
+    )
+    with closing(Store(path)) as reopened:
+        assert proposals.list_proposals(reopened, "all")["proposals"] == []
+        with reopened._connect() as db:
+            assert db.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='proposals_no_delete'"
+            ).fetchone()
+            assert db.execute("SELECT count(*) FROM proposal_passes").fetchone()[0] == 1
+    assert b"orchid-private-marker" not in path.read_bytes()
+
+
 def test_budget_and_quiet_hours_deny_before_any_model_call(store):
     say(store, "a", "b", "c")
     model = Model(reply())
