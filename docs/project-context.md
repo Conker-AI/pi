@@ -31,7 +31,11 @@ sessions, transitively, because their answers/summaries may contain derived sour
 content. This can include a consumer whose preparation failed: conservative
 retention avoids claiming that a partially dispatched helper saw nothing.
 
+The production owner flow selects these associations through the revisioned
+`POST /sessions/{id}/settings` contract. Project create/edit/link operations are available through
+the separate `/api/control/pi/projects` browser surface; neither endpoint accepts source content
+or creates execution authority.
+
 Tests cover actual Loop inputs, stable message boundaries, explicit opt-in,
 unlinked/private/oversized failures, files, inspection without mutation, and
-physical forgetting of a source and its derived reply. Backend-only; no dashboard
-transport or deployment changes.
+physical forgetting of a source and its derived reply.

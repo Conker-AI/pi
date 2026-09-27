@@ -105,7 +105,8 @@ sides of each invocation. The adapter owns WAV validation, duration/byte limits,
 timeouts, credentials, configured capability reporting and no-retry behavior.
 No speech adapter means typed text still works and voice is explicitly unavailable.
 Pi configures the optional adapter with `PI_SPEECH_URL` (including the server's
-API base path), `PI_SPEECH_KEY`, `PI_STT_MODEL`, `PI_TTS_MODEL`, and
+API base path), host-mounted `PI_SPEECH_KEY_FILE` (or legacy `PI_SPEECH_KEY`, never
+both), `PI_STT_MODEL`, `PI_TTS_MODEL`, and
 `PI_TTS_VOICE`. `PI_SPEECH_TIMEOUT_S` defaults to 30 seconds. There is no default
 character adapter: `PI_SPEECH_CHARACTER_VOICE=qwen3-design` explicitly enables
 the documented VoiceDesign extension; its default is `unsupported`. There is no default
@@ -123,6 +124,32 @@ Speech response audio is base64 in a transient JSON envelope, not a persisted fi
 or a browser playback claim. Precise playback/word alignment, live streaming,
 client devices, echo suppression, reconnect UI, incoming calls and cross-device
 handoff remain outside this increment.
+
+### Browser call projection
+
+The owner browser receives a separate exact `/calls/browser/*` contract. It can
+reconnect the latest open call for a conversation, start a call, inspect its bounded
+projection, change focus/character presentation, pause or resume, interrupt, end,
+submit typed English turns, and submit one transient PCM WAV turn through
+`POST /calls/browser/{id}/audio?request_id=...`. Responses are strict schema version 1 projections
+with at most 200 latest events and 100 latest requests plus truncation flags.
+
+The browser capability response reports STT and TTS separately as unconfigured,
+configured, available after a successful operation, or unavailable after a failed
+operation. A configured status is not a health probe. Audio input is held only for
+the request. The persisted message is the transcription; the original response may
+contain a bounded generated WAV and a reduced transient transcription summary.
+Replay never regenerates either. The projection includes no raw media history,
+provider timing arrays, speech credentials, ToolGate receipts or device authority.
+The browser cannot reach recovery-admin call routes. Request identities, generation
+guards, restart recovery and ordinary ToolGate effect controls remain the same.
+
+Gateway clients capture mono 16-bit PCM WAV locally, own browser permission and
+track cleanup, and revoke generated-audio object URLs after playback or dismissal.
+The media relay accepts one exact call route, request identity, MIME and 10 MiB body;
+it never accepts arbitrary destinations or headers. This contract is completed-turn
+voice, not a streaming WebRTC call, and source support alone is not evidence that a
+speech deployment, physical device, latency target or voice quality works on Linux.
 
 ## Verification
 

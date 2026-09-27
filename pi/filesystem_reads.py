@@ -3,6 +3,7 @@
 import json
 import time
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -31,6 +32,67 @@ class Read(StrictModel):
         if not _relative(value):
             raise ValueError("Use a safe relative directory path.")
         return value
+
+
+class FileRoot(StrictModel):
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    path: str = Field(min_length=1, max_length=4097)
+
+
+class RootCapabilities(StrictModel):
+    list: Literal[True]
+    read: Literal[False]
+    write: Literal[False]
+
+
+class RootCatalogue(StrictModel):
+    schemaVersion: Literal[1] = 1
+    mode: Literal["configured", "unavailable"]
+    code: (
+        Literal["disabled", "not_configured", "invalid_configuration", "unsupported_platform"]
+        | None
+    ) = None
+    roots: list[FileRoot] = Field(max_length=64)
+    capabilities: RootCapabilities | None = None
+    authority: Literal["none"] = "none"
+    execution: Literal["directory-listing-only"] = "directory-listing-only"
+    contentIncluded: Literal[False] = False
+
+
+class DirectoryEntry(StrictModel):
+    name: str = Field(min_length=1, max_length=255)
+    path: str = Field(max_length=4096)
+    kind: Literal["directory", "file", "symlink", "other"]
+
+
+class DirectoryListing(StrictModel):
+    mode: Literal["observed"]
+    rootId: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    path: str = Field(max_length=4096)
+    truncated: bool
+    sampledAt: str = Field(max_length=64)
+    entries: list[DirectoryEntry] = Field(max_length=200)
+
+
+class DirectoryView(StrictModel):
+    schemaVersion: Literal[1] = 1
+    requestId: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
+    state: Literal["dispatching", "awaiting_approval", "unknown", "failed", "complete"]
+    limit: int = Field(ge=1, le=200)
+    rootId: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    path: str = Field(max_length=4096)
+    approvalRequired: bool
+    errorCode: Literal["invalid_approval", "invalid_listing", "read_failed"] | None
+    listing: DirectoryListing | None
+    receiptStatus: Literal["unavailable"] | None = None
+    currentAgeSeconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    createdAt: float = Field(ge=0, allow_inf_nan=False)
+    updatedAt: float = Field(ge=0, allow_inf_nan=False)
+    source: Literal["toolgate/system.files-list"]
+    refreshRequiresNewRequest: Literal[True]
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[False] = False
+    execution: Literal["directory-listing-only"] = "directory-listing-only"
 
 
 class FileReadError(RuntimeError):
@@ -156,6 +218,25 @@ def _record(store, identity, outcome):
             result = _view(_row(db, identity))
         db.commit()
     return {**result, "listing": listing, "currentAgeSeconds": age}
+
+
+def browser_view(value):
+    return DirectoryView(
+        requestId=value["requestId"],
+        state=value["state"],
+        limit=value["limit"],
+        rootId=value["rootId"],
+        path=value["path"],
+        approvalRequired=value["state"] == "awaiting_approval",
+        errorCode=value.get("errorCode"),
+        listing=value.get("listing"),
+        receiptStatus=value.get("receiptStatus"),
+        currentAgeSeconds=value.get("currentAgeSeconds"),
+        createdAt=value["createdAt"],
+        updatedAt=value["updatedAt"],
+        source=value["source"],
+        refreshRequiresNewRequest=value["refreshRequiresNewRequest"],
+    )
 
 
 def _dispatch(store, gate, identity, root_id, path, limit, approval=None):

@@ -20,7 +20,10 @@ class JobWorker:
         self._budget_cursor = ""
 
     def tick(self, now=None):
-        jobs.claim_due(self.store, now=now)
+        claimed = jobs.claim_due(self.store, now=now)
+        newly_held = {
+            item["id"] for item in claimed if item["definition"].get("requireBudget", False)
+        }
         # Includes manual admissions and ready runs surviving process restart.
         # dispatching/unknown runs are never automatically replayed.
         with self.store._connect() as db:
@@ -36,7 +39,15 @@ class JobWorker:
             ).fetchall()
             if held:
                 self._budget_cursor = held[-1]["id"]
-            rows = list(rows) + list(held)
+            held = list(held)
+            selected = {row["id"] for row in held}
+            # A run admitted after the cursor advanced can sort behind it. Include
+            # every newly held run once in addition to the rotating old-hold batch.
+            held.extend(
+                {"id": identity, "status": "awaiting_budget"}
+                for identity in sorted(newly_held - selected)
+            )
+            rows = list(rows) + held
         for row in rows:
             if self._stop.is_set():
                 break

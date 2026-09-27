@@ -158,7 +158,13 @@ class OllamaProvider:
             if payload["stream"]:
                 body = self._streamed(payload, timeout)
             else:
-                response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=timeout)
+                response = httpx.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
                 response.raise_for_status()
                 body = response.json()
         except Exception as exc:
@@ -187,7 +193,12 @@ class OllamaProvider:
         text = []
         final: dict = {}
         with httpx.stream(
-            "POST", f"{self.base_url}/api/chat", json=payload, timeout=timeout
+            "POST",
+            f"{self.base_url}/api/chat",
+            json=payload,
+            timeout=timeout,
+            follow_redirects=False,
+            trust_env=False,
         ) as response:
             response.raise_for_status()
             for line in response.iter_lines():
@@ -210,7 +221,12 @@ class OllamaProvider:
 
     def health(self) -> dict:
         try:
-            response = httpx.get(f"{self.base_url}/api/tags", timeout=5.0)
+            response = httpx.get(
+                f"{self.base_url}/api/tags",
+                timeout=5.0,
+                follow_redirects=False,
+                trust_env=False,
+            )
             response.raise_for_status()
         except Exception as exc:
             return {"status": "unavailable", "reason": type(exc).__name__}

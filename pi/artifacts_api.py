@@ -1,8 +1,8 @@
-"""Independent owner-only artifact routes; no gateway allowlist changes."""
+"""Bounded artifact routes for exact owner-browser and recovery-admin use."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from . import artifacts
 
@@ -18,42 +18,50 @@ def router(store, authorize, resolve=None):
         except ValueError as exc:
             raise HTTPException(422, "Invalid artifact content.") from exc
 
-    @routes.get("")
-    def listing():
-        return run(artifacts.list_artifacts)
+    ArtifactPath = Annotated[str, Path(pattern=r"^artifact_[0-9a-f]{32}$")]
 
-    @routes.post("")
+    @routes.get("", response_model=artifacts.ArtifactCollection)
+    def listing(
+        limit: int = Query(default=50, ge=1, le=100),
+        cursor: str | None = Query(default=None, pattern=r"^artifact_[0-9a-f]{32}$"),
+    ):
+        rows = run(artifacts.list_artifacts, limit=limit + 1, cursor=cursor)
+        return artifacts.ArtifactCollection(
+            results=rows[:limit], nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None
+        )
+
+    @routes.post("", response_model=artifacts.ArtifactView)
     def create(body: artifacts.Create):
         return run(artifacts.create, body)
 
-    @routes.post("/from-message")
+    @routes.post("/from-message", response_model=artifacts.ArtifactView)
     def copy(body: artifacts.FromMessage):
         return run(artifacts.create, body)
 
-    @routes.get("/{identity}")
-    def get(identity: str):
+    @routes.get("/{identity}", response_model=artifacts.ArtifactView)
+    def get(identity: ArtifactPath):
         return run(artifacts.get, identity)
 
-    @routes.post("/{identity}/versions")
-    def append(identity: str, body: artifacts.Append):
+    @routes.post("/{identity}/versions", response_model=artifacts.ArtifactView)
+    def append(identity: ArtifactPath, body: artifacts.Append):
         return run(artifacts.mutate, identity, body)
 
-    @routes.post("/{identity}/restore")
-    def restore(identity: str, body: artifacts.Restore):
+    @routes.post("/{identity}/restore", response_model=artifacts.ArtifactView)
+    def restore(identity: ArtifactPath, body: artifacts.Restore):
         return run(artifacts.mutate, identity, body)
 
-    @routes.post("/{identity}/archive")
-    def archive(identity: str, body: artifacts.Archive):
+    @routes.post("/{identity}/archive", response_model=artifacts.ArtifactView)
+    def archive(identity: ArtifactPath, body: artifacts.Archive):
         return run(artifacts.mutate, identity, body)
 
-    @routes.get("/{identity}/export")
-    def export(identity: str, version: int | None = Query(default=None, ge=1)):
+    @routes.get("/{identity}/export", response_model=artifacts.NativeExport)
+    def export(identity: ArtifactPath, version: int | None = Query(default=None, ge=1, le=100)):
         return run(artifacts.export, identity, version)
 
     @routes.get("/{identity}/download")
     def download(
-        identity: str,
-        version: int | None = Query(default=None, ge=1),
+        identity: ArtifactPath,
+        version: int | None = Query(default=None, ge=1, le=100),
         format: Literal["native", "docx", "xlsx"] = "native",
     ):
         result = run(artifacts.export, identity, version, format=format)

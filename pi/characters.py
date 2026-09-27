@@ -23,6 +23,7 @@ from pydantic import (
 from . import agents
 
 MAX_PACKAGE_BYTES = 32 * 1024 * 1024
+MAX_REQUEST_BYTES = 66 * 1024 * 1024
 MAX_HISTORY_BYTES = 128 * 1024 * 1024
 MAX_VERSIONS = 100
 Notes = Annotated[str, Field(max_length=6000)]

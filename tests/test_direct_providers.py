@@ -62,6 +62,7 @@ def test_text_translation_usage_and_timeout(cls, capture):
     url, request = capture[0]
     assert url == provider.url and request["timeout"] == 1.25
     assert request["follow_redirects"] is False
+    assert request["trust_env"] is False
     assert request["json"]["model"] == "requested"
     assert (result.text, result.model, result.provider) == ("Answer", "actual", provider.name)
     assert (result.input_tokens, result.output_tokens, result.cached_tokens) == (12, 3, 5)
@@ -149,11 +150,20 @@ def test_startup_registers_adapters_without_network(tmp_path, monkeypatch):
     async def check():
         async with api.lifespan(api.app):
             assert set(api.app.state.router.adapters()) == {"ollama", "openai", "anthropic"}
+            assert api.app.state.provider_credentials == ["anthropic", "openai"]
             monkeypatch.setattr(api.app.state.local, "health", lambda: {"status": "ok"})
             status = api.models()["direct"]
             assert set(status) == {"openai", "anthropic"}
             assert all(s["health"]["status"] == "unverified" for s in status.values())
             assert "synthetic" not in json.dumps(status)
+            api._health_cache.clear()
+            health = api.health()["checks"]["provider_credentials"]
+            assert health == {
+                "status": "ok",
+                "configured": ["anthropic", "openai"],
+                "verification": "host-revision-bound",
+                "secrets_included": False,
+            }
 
     asyncio.run(check())
 

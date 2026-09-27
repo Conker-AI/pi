@@ -166,7 +166,7 @@ def test_team_snapshots_revalidate_agent_changes_without_widening(store):
     ],
 )
 def test_team_graph_and_budget_validation(mutation):
-    value = team("agent_test").model_dump()
+    value = team("agent_" + "a" * 32).model_dump()
     if mutation in ("role_id", "role_name"):
         second = copy.deepcopy(value["roles"][0])
         second["id" if mutation == "role_name" else "name"] = "other"

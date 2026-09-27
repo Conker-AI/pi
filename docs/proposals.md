@@ -58,4 +58,8 @@ Browser decisions are session-bound writes (Conker ADR-0010): they grant nothing
 | `GET /proposals/passes` | runtime | Recent passes and the watermark, without content |
 | `POST /proposals/passes` | owner | Run a pass now |
 
-Proposals and passes are retained; proposal content cannot be edited after creation.
+Proposal content cannot be edited after creation. Host-authorized conversation
+forgetting removes proposals from every analysis window containing that conversation,
+including accepted and declined ideas. The whole idea is removed because generated
+text can draw on uncited input as well as its listed sources. Content-free pass
+receipts remain; forgetting also removes the affected idea's suppression fingerprint.

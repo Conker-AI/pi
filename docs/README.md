@@ -11,6 +11,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Turns: acting, recording and status](turns.md) | Approvals, `acted_no_reply`, interrupted turns, status words |
 | [Model routing and roles](routing.md) | Which model answers, why, and the helper roles |
 | [Model catalogue and roles](model-roles.md) | Role assignments and adapters |
+| [First-run setup status](setup-status.md) | Versioned owner-only setup evidence |
 | [Direct text providers](direct-providers.md) | Hosted providers without a router |
 | [Browser authentication](browser-auth.md) | Gateway login, sessions, recovery |
 | [Turn submissions](turn-submissions.md) | Durable sends and exact message provenance |

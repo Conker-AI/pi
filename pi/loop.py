@@ -116,6 +116,10 @@ class Loop:
         """
         if self.toolgate is None:
             return []
+        from . import setup_choices
+
+        if setup_choices.current(self.store, "capabilities").choice == "skip":
+            return []
         try:
             tools = self.toolgate.tools()
             if execution and execution["kind"] != "companion":

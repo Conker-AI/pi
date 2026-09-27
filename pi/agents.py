@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
 from typing import Literal
@@ -64,6 +63,26 @@ class AgentInput(StrictModel):
     @classmethod
     def tools(cls, values):
         return references(values)
+
+
+class AgentProfile(StrictModel):
+    schemaVersion: Literal[1] = 1
+    id: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
+    kind: Literal["companion", "agent"]
+    revision: int = Field(ge=1)
+    configuration: AgentInput
+    created_at: float = Field(ge=0, allow_inf_nan=False)
+    updated_at: float = Field(ge=0, allow_inf_nan=False)
+    archived_at: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    change_kind: Literal["created", "updated", "archived", "restored"]
+    authority: Literal["none"] = "none"
+    execution: Literal["not-integrated"] = "not-integrated"
+    reference_validation: Literal["not-performed"] = "not-performed"
+
+
+class AgentCollection(StrictModel):
+    schemaVersion: Literal[1] = 1
+    results: list[AgentProfile]
 
 
 class UpdateAgent(StrictModel):
@@ -158,19 +177,16 @@ def _get(db, identity, revision=None):
     ).fetchone()
     if version is None:
         raise AgentError("version_not_found", "Agent version does not exist.", 404)
-    return {
-        "id": identity,
-        "kind": agent["kind"],
-        "revision": version["revision"],
-        "configuration": json.loads(version["configuration"]),
-        "created_at": agent["created_at"],
-        "updated_at": version["recorded_at"],
-        "archived_at": version["archived_at"],
-        "change_kind": version["change_kind"],
-        "authority": "none",
-        "execution": "not-integrated",
-        "reference_validation": "not-performed",
-    }
+    return AgentProfile(
+        id=identity,
+        kind=agent["kind"],
+        revision=version["revision"],
+        configuration=AgentInput.model_validate_json(version["configuration"]),
+        created_at=agent["created_at"],
+        updated_at=version["recorded_at"],
+        archived_at=version["archived_at"],
+        change_kind=version["change_kind"],
+    ).model_dump()
 
 
 def get(store, identity, revision=None):
@@ -183,27 +199,27 @@ def get(store, identity, revision=None):
 def list_agents(store):
     with store._connect() as db:
         db.execute("BEGIN")
-        return {
-            "results": [
+        return AgentCollection(
+            results=[
                 _get(db, row["id"])
                 for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
             ]
-        }
+        ).model_dump()
 
 
 def history(store, identity):
     with store._connect() as db:
         db.execute("BEGIN")
         _get(db, identity)
-        return {
-            "results": [
+        return AgentCollection(
+            results=[
                 _get(db, identity, row["revision"])
                 for row in db.execute(
                     "SELECT revision FROM agent_versions WHERE agent_id=? ORDER BY revision",
                     (identity,),
                 ).fetchall()
             ]
-        }
+        ).model_dump()
 
 
 def _unique_name(db, configuration, identity=None):
@@ -228,9 +244,9 @@ def create(store, configuration: AgentInput):
     return result
 
 
-def _editable(db, identity, expected_revision):
+def _editable(db, identity, expected_revision, *, allow_companion=False):
     current = _get(db, identity)
-    if current["kind"] == "companion":
+    if current["kind"] == "companion" and not allow_companion:
         raise AgentError("companion_protected", "The singular Companion is managed separately.")
     if current["revision"] != expected_revision:
         raise AgentError(
@@ -265,7 +281,7 @@ def update(store, identity, request: UpdateAgent):
     request = UpdateAgent.model_validate(request.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        current = _editable(db, identity, request.expected_revision)
+        current = _editable(db, identity, request.expected_revision, allow_companion=True)
         if current["archived_at"] is not None:
             raise AgentError("archived", "Restore this agent before editing it.")
         _unique_name(db, request.configuration, identity)

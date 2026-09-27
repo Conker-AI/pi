@@ -22,8 +22,20 @@ class Strict(BaseModel):
 
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
-Identity = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 NodeID = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]
+ArtifactId = Annotated[str, StringConstraints(pattern=r"^artifact_[0-9a-f]{32}$")]
+SessionId = Annotated[str, StringConstraints(pattern=r"^ses_[0-9a-f]{16}$")]
+MessageId = Annotated[str, StringConstraints(pattern=r"^msg_[0-9a-f]{16}$")]
+TaskId = Annotated[str, StringConstraints(pattern=r"^tsk_[0-9a-f]{32}$")]
+CitationRecord = citations.Citation
+Timestamp = Annotated[
+    str,
+    StringConstraints(
+        min_length=20,
+        max_length=40,
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$",
+    ),
+]
 
 
 class Text(Strict):
@@ -154,14 +166,14 @@ def content(value):
 class Create(Strict):
     title: Title
     content: Content
-    taskId: Identity | None = None
+    taskId: TaskId | None = None
 
 
 class FromMessage(Strict):
     title: Title
-    sessionId: Identity
-    messageId: Identity
-    taskId: Identity | None = None
+    sessionId: SessionId
+    messageId: MessageId
+    taskId: TaskId | None = None
 
 
 class Revision(Strict):
@@ -187,6 +199,90 @@ class Privacy(Strict):
     memoryDisabled: bool
     harnessDisabled: bool
     incognito: bool = False
+
+
+class SourceReference(Strict):
+    sessionId: SessionId
+    messageId: MessageId
+
+
+class TaskReference(Strict):
+    taskId: TaskId
+    originSessionId: SessionId
+
+
+class ArtifactVersion(Strict):
+    version: int = Field(ge=1, le=100)
+    title: Title
+    content: Content
+    createdAt: Timestamp
+    author: Literal["source-copy", "owner"]
+    note: str = Field(max_length=1000)
+    restoredFromVersion: int | None = Field(default=None, ge=1, le=100)
+    citations: list[CitationRecord] | None = Field(default=None, max_length=100)
+
+
+Availability = Literal[
+    "available",
+    "source-archived",
+    "source-redacted",
+    "source-unavailable",
+    "source-changed",
+    "privacy-unknown",
+]
+TaskAvailability = Literal["none", "available", "archived", "unavailable", "origin-changed"]
+
+
+class ArtifactSummary(Strict):
+    schemaVersion: Literal[1] = 1
+    id: ArtifactId
+    title: Title
+    revision: int = Field(ge=1)
+    createdAt: Timestamp
+    updatedAt: Timestamp
+    archivedAt: Timestamp | None
+    provenance: Literal["pi"] = "pi"
+    origin: Literal["conversation-copy", "owner-authored"]
+    source: SourceReference | None
+    task: TaskReference | None
+    availability: Availability
+    privacy: Privacy | None
+    privateOrigin: bool | None
+    taskAvailability: TaskAvailability
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[False] = False
+    execution: Literal["not-wired"] = "not-wired"
+    versionCount: int = Field(ge=0, le=100)
+    currentVersion: int = Field(ge=0, le=100)
+
+
+class ArtifactView(ArtifactSummary):
+    contentIncluded: bool
+    versions: list[ArtifactVersion] = Field(max_length=100)
+
+
+class ArtifactCollection(Strict):
+    schemaVersion: Literal[1] = 1
+    results: list[ArtifactSummary] = Field(max_length=100)
+    nextCursor: ArtifactId | None = None
+
+
+class NativeExport(Strict):
+    schemaVersion: Literal[1] = 1
+    artifactId: ArtifactId
+    version: int = Field(ge=1, le=100)
+    filename: str = Field(min_length=1, max_length=110)
+    mime: Literal[
+        "text/plain;charset=utf-8",
+        "text/csv;charset=utf-8",
+        "application/json;charset=utf-8",
+    ]
+    text: str = Field(max_length=400_000)
+    provenance: Literal["pi"] = "pi"
+    privateOrigin: bool
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[True] = True
+    execution: Literal["not-wired"] = "not-wired"
 
 
 SCHEMA = """
@@ -282,10 +378,15 @@ def _view(db, row, resolve):
         )
     ]
     availability, privacy, private = "available", None, False
-    source = None
+    source, has_source = None, bool(row["source_session_id"])
     if row["source_session_id"]:
-        source = {"sessionId": row["source_session_id"], "messageId": row["source_message_id"]}
-        availability, text, privacy = _source(db, source["sessionId"], source["messageId"], resolve)
+        raw_source = {
+            "sessionId": row["source_session_id"],
+            "messageId": row["source_message_id"],
+        }
+        availability, text, privacy = _source(
+            db, raw_source["sessionId"], raw_source["messageId"], resolve
+        )
         if row["purged"]:
             availability = "source-redacted"
         elif text != row["source_text"] and availability in (
@@ -296,13 +397,17 @@ def _view(db, row, resolve):
             availability = "source-changed"
         if availability in ("available", "source-archived", "privacy-unknown"):
             try:
-                current = citations.read(db, source["messageId"])
+                current = citations.read(db, raw_source["messageId"])
                 original = citations.normalize(versions[0].get("citations", []) if versions else [])
                 if current != original:
                     availability = "source-changed"
             except ValueError:
                 availability = "source-changed"
         private = bool(privacy and any(privacy.values()))
+        try:
+            source = SourceReference.model_validate(raw_source).model_dump()
+        except ValueError:
+            availability = "source-unavailable"
     readable = availability in ("available", "source-archived")
     if not readable:
         privacy, private = None, None
@@ -319,26 +424,38 @@ def _view(db, row, resolve):
             if live["archived_at"]
             else "available"
         )
-    return {
-        "id": row["id"],
-        "title": row["title"] if readable else "Unavailable artifact",
-        "revision": row["revision"],
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
-        "archivedAt": row["archived_at"],
-        "provenance": "pi",
-        "origin": "conversation-copy" if source else "owner-authored",
-        "source": source,
-        "task": task,
-        "availability": availability,
-        "privacy": privacy,
-        "privateOrigin": private,
-        "taskAvailability": task_availability,
-        "execution": "not-wired",
-        "versions": versions if readable else [],
-        "versionCount": len(versions),
-        "currentVersion": versions[-1]["version"] if versions else 0,
-    }
+    visible_versions = versions if readable else []
+    result = ArtifactView(
+        id=row["id"],
+        title=row["title"] if readable else "Unavailable artifact",
+        revision=row["revision"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        archivedAt=row["archived_at"],
+        origin="conversation-copy" if has_source else "owner-authored",
+        source=source,
+        task=task,
+        availability=availability,
+        privacy=privacy,
+        privateOrigin=private,
+        taskAvailability=task_availability,
+        contentIncluded=bool(visible_versions),
+        versions=visible_versions,
+        versionCount=len(versions),
+        currentVersion=versions[-1]["version"] if versions else 0,
+    ).model_dump(mode="json")
+    for version in result["versions"]:
+        if version.get("citations") is None:
+            version.pop("citations", None)
+        if version.get("restoredFromVersion") is None:
+            version.pop("restoredFromVersion", None)
+    return result
+
+
+def _summary(view):
+    return ArtifactSummary.model_validate(
+        {key: value for key, value in view.items() if key not in {"versions", "contentIncluded"}}
+    ).model_dump(mode="json")
 
 
 def get(store, identity, resolve=None):
@@ -347,12 +464,22 @@ def get(store, identity, resolve=None):
         return _view(db, _row(db, identity), resolve)
 
 
-def list_artifacts(store, resolve=None):
+def list_artifacts(store, resolve=None, limit=None, cursor=None):
     with store._connect() as db:
         db.execute("BEGIN")
+        where, values = "", []
+        if cursor is not None:
+            position = _row(db, cursor)
+            where = "WHERE created_at>? OR (created_at=? AND id>?)"
+            values = [position["created_at"], position["created_at"], cursor]
+        suffix = " LIMIT ?" if limit is not None else ""
+        if limit is not None:
+            values.append(limit)
         return [
-            _view(db, row, resolve)
-            for row in db.execute("SELECT * FROM artifacts ORDER BY created_at,id")
+            _summary(_view(db, row, resolve))
+            for row in db.execute(
+                f"SELECT * FROM artifacts {where} ORDER BY created_at,id{suffix}", values
+            )
         ]
 
 
@@ -596,16 +723,14 @@ def export(store, identity, version=None, resolve=None, *, format="native"):
             + ("spreadsheetml.sheet" if format == "xlsx" else "wordprocessingml.document"),
             "content": content,
         }
-    return {
-        "artifactId": identity,
-        "version": selected["version"],
-        "filename": f"{base}-v{selected['version']}.{extension}",
-        "mime": mime,
-        "text": text,
-        "provenance": "pi",
-        "privateOrigin": view["privateOrigin"] is True,
-        "execution": "not-wired",
-    }
+    return NativeExport(
+        artifactId=identity,
+        version=selected["version"],
+        filename=f"{base}-v{selected['version']}.{extension}",
+        mime=mime,
+        text=text,
+        privateOrigin=view["privateOrigin"] is True,
+    ).model_dump()
 
 
 def redact(db, session_ids):

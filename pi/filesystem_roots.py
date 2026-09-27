@@ -98,3 +98,14 @@ def read(gate, *, transport=None):
         }
     except Exception:
         raise ActionError("roots_unavailable", "File root metadata is unavailable.", 503) from None
+
+
+def browser_view(value):
+    from .filesystem_reads import RootCatalogue
+
+    return RootCatalogue(
+        mode=value["mode"],
+        code=value.get("code"),
+        roots=value["roots"],
+        capabilities=value.get("capabilities"),
+    )

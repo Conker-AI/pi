@@ -14,7 +14,9 @@ the frontend fixture client. Durable responses identify provenance as `pi`, not
 
 Store initialization executes `artifacts.SCHEMA`. The owner API includes
 `artifacts_api.router(store_factory, owner_authorize, resolve)` with
-`session_settings.source_privacy`; no gateway runtime allowlist entry is implied. The optional internal resolver has signature
+`session_settings.source_privacy`. Pi's browser contract narrowly exposes the JSON
+owner routes listed below; the runtime credential cannot use them. The optional
+internal resolver has signature
 `resolve(db, session_id)` and returns the authoritative boolean fields
 `memoryDisabled`, `harnessDisabled`, and optional `incognito`. It must use the
 provided transaction snapshot and must not accept client privacy assertions.
@@ -30,7 +32,9 @@ and metadata, with empty version history; source copies can never revive.
 
 ## Owner routes
 
-- `GET /artifacts` and `GET /artifacts/{id}` return privacy-resolved views.
+- `GET /artifacts?limit=50&cursor={artifact_id}` returns at most 100 compact,
+  privacy-resolved summaries plus `nextCursor`; summaries never include version bodies.
+- `GET /artifacts/{id}` returns the bounded immutable version history.
 - `POST /artifacts` creates owner content; source metadata is rejected.
 - `POST /artifacts/from-message` copies an exact completed assistant final response.
 - `POST /artifacts/{id}/versions` appends content with `expected_revision`.
@@ -38,6 +42,14 @@ and metadata, with empty version history; source copies can never revive.
   `expected_revision`; history is never overwritten.
 - `POST /artifacts/{id}/archive` uses `archived` and `expected_revision`.
 - `GET /artifacts/{id}/export?version=N` returns an inert JSON export envelope.
+
+Every response is schema version `1`, identifies `provenance: "pi"` and
+`authority: "none"`, and states whether content is included. Artifact views and
+native exports also state `execution: "not-wired"`; no returned value grants tool,
+model, provider, filesystem, or execution authority. IDs are canonical and bounded:
+artifact IDs are `artifact_` plus 32 lowercase hex characters, session/message IDs
+use 16 lowercase hex characters, and task IDs use 32 lowercase hex characters.
+Unknown request fields and near-match browser paths fail closed.
 
 Writes reserve SQLite's writer transaction before reading revision and allocating
 version numbers. Stale writes return 409; unavailable records return 404; malformed
@@ -86,21 +98,28 @@ artifact propagation, forgetting, and raw-file erasure have regression coverage.
 session settings resolver; no session privacy is inferred from global configuration
 or source text. This library does not enforce memory/harness privacy in execution.
 
-No dashboard adapter, gateway wiring, deployment, external download, or execution
+The owner browser surface deliberately excludes
+`GET /artifacts/{id}/download`. Gateway control forwarding is JSON-only and cannot
+faithfully proxy a binary attachment contract, so exposing that route would be
+misleading. The direct recovery-admin API retains download for host recovery, but
+the owner key receives 403 through the exact browser allowlist. No dashboard
+adapter, upload, arbitrary filesystem path, deployment, external fetch, or execution
 is included. Artifact persistence does not implement attachment storage, document
 editing, project context selection, or broader deliverable generation.
 
 ## Evidence
 
-`python -m pytest tests/test_artifacts.py -q` exercises temporary databases only:
+`python -m pytest tests/test_artifacts.py tests/test_artifact_downloads.py
+tests/test_citations.py tests/test_forgetting.py -q` exercises temporary databases only:
 restart persistence, database immutable history, competing revision writes,
 restore/archive, strict schemas and size bounds, source privacy/provenance changes,
 source archive/read/export, irreversible derived-content purge, task origins,
 formula-safe CSV, inert HTML export, and authenticated route validation. The actual offline forgetting entry point is also exercised using authoritative
 session settings, followed by Store reopen and raw database/sidecar byte inspection:
 source text, private title, and derived versions disappear while unrelated
-owner-authored artifacts survive. The artifact and forgetting suites pass together
-(36 tests).
+owner-authored artifacts survive. Connected API coverage also verifies owner/runtime
+credential separation, exact browser paths, compact cursor pagination, strict DTOs,
+restart durability, stale-write conflicts, and denial of binary owner downloads.
 
 
 ## Downloadable deliverables
@@ -124,4 +143,5 @@ is written into the server filesystem. Other artifact/format pairs return 422.
 Runtime dependencies are pinned to [python-docx 1.2.0](https://pypi.org/project/python-docx/1.2.0/)
 and [openpyxl 3.1.5](https://pypi.org/project/openpyxl/3.1.5/). Tests reopen the actual
 Office packages and verify values, structure, auth, safe filenames, source checks,
-version errors, and inert content. No dashboard/gateway wiring is implied.
+version errors, and inert content. This binary route remains a direct recovery-admin
+operation and is not part of the owner browser contract.

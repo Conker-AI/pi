@@ -7,6 +7,7 @@ socket answers exactly what ToolGate answers, including the replay.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -53,6 +54,26 @@ class FakeToolGate(BaseHTTPRequestHandler):
             return self._send(200, type(self).tools)
         if self.path.endswith("/v2/agent/status"):
             return self._send(200, {"code": "OK", "lockdown": type(self).lockdown})
+        if self.path.endswith("/v2/agent/policy-summary"):
+            evidence = {
+                "lockdown": type(self).lockdown,
+                "scopePatterns": ["t_echo"],
+                "tools": [
+                    {
+                        "id": "t_echo",
+                        "name": "echo",
+                        "authorization": "auto",
+                        "executionType": "echo",
+                        "usageLimits": {"max_per_hour": 10},
+                    }
+                ],
+            }
+            canonical = json.dumps(
+                evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            )
+            return self._send(
+                200, {**evidence, "digest": hashlib.sha256(canonical.encode()).hexdigest()}
+            )
         self._send(404, {"detail": {"code": "NOT_FOUND", "message": "no"}})
 
     def do_POST(self):
@@ -116,6 +137,12 @@ def test_only_scoped_tools_are_visible(client):
     not: it has no idea what the owner scoped anyone to."""
     tools = client.tools()
     assert [t.id for t in tools] == ["t_echo"]
+
+
+def test_policy_summary_digest_is_verified(client):
+    summary = client.policy_summary()
+    assert summary["tools"][0]["id"] == "t_echo"
+    assert len(summary["digest"]) == 64
 
 
 def test_every_request_carries_the_execution_key(client):

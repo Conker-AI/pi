@@ -79,7 +79,9 @@ Precedence is environment, then file, then default. The essentials:
 | `PI_DB_PATH` | `/data/pi.db` | Conversations and history. **Back this up**: MemoryGate's evidence cites its message IDs. |
 | `PI_OLLAMA_URL` | `http://ollama:11434` | The local model server. |
 | `PI_MODEL` | `qwen3:4b` | The local model for ordinary conversation. |
-| `PI_OPENROUTER_KEY` | *(empty)* | Optional hosted models. Without it Pi answers locally and says so. |
+| `PI_OPENROUTER_KEY` / `PI_OPENROUTER_KEY_FILE` | *(empty)* | Optional hosted models; Conker mounts the file form read-only. Configure only one. |
+| `PI_OPENAI_KEY` / `PI_OPENAI_KEY_FILE` | *(empty)* | Optional direct OpenAI text models; Conker mounts the file form read-only. |
+| `PI_ANTHROPIC_KEY` / `PI_ANTHROPIC_KEY_FILE` | *(empty)* | Optional direct Anthropic text models; Conker mounts the file form read-only. |
 | `PI_ALLOW_PAID_MODELS` | *(off)* | Off means free models only, enforced in code. |
 | `PI_TOOLGATE_URL` | `http://toolgate-api:8010` | The action boundary. |
 | `PI_TOOLGATE_KEY` | *(empty)* | A scoped ToolGate key. Without it Pi acts on nothing and reports `not_configured`. |
@@ -99,6 +101,9 @@ Every variable is in [`.env.example`](.env.example).
 | `GET /approvals` · `POST /turns/{id}/resume` | Turns waiting on the owner, and continuing them. |
 | `GET /turns/unreplied` | Turns that acted but never reported back. |
 | `GET /models` | Models Pi can route to now, free and paid. |
+| `GET /setup/status` | Owner-only, versioned first-run setup evidence. |
+| `GET /agents` · `POST /agents/{id}/update` | Owner-only durable agent and Companion profiles. |
+| `GET /projects` · `POST /projects/{id}/link` | Owner-only projects and canonical source links. |
 
 Full reference: [Pi OpenAPI](docs/pi-openapi.json) · [Gateway OpenAPI](docs/gateway-openapi.json).
 Every turn records provider, model, tokens, cost and latency; an unknown price shows as unknown,

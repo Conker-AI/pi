@@ -6,6 +6,81 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Load OpenRouter, OpenAI and Anthropic credentials once from fixed absolute regular files,
+  reject ambiguous environment-plus-file configuration, and expose only configured provider
+  identities through the secret-free health projection.
+
+- Prevent newly admitted budget-held jobs from sorting behind the scheduler's fairness cursor.
+  New holds are attempted once alongside the bounded rotating backlog, so cursor position cannot
+  skip them while older held work still receives a fixed batch on every tick.
+
+- Replace FastAPI's input-reflecting validation response with a static 422 body in Pi and
+  Gateway. Rejected owner payloads can no longer echo an accidentally submitted credential.
+
+- Add exact owner-browser routes for durable typed calls. Strict bounded projections expose
+  call state, transcript events and retained request identities without audio, speech-provider,
+  device, raw-media or credential fields. Start, update, interrupt, end and text turns preserve
+  the existing call ledger and recovery rules; unrelated call and media routes remain admin-only.
+
+- Promote configured file roots and durable directory receipts to exact owner-browser routes.
+  Strict versioned projections expose names and entry kinds only; file contents, writes,
+  recursive crawling, ToolGate action IDs and approval IDs remain outside the browser contract.
+
+- Expose the canonical team definition lifecycle through exact owner-browser routes with
+  bounded strict DTOs, active agent reference checks, compare-and-swap writes and immutable
+  team revision history. Legacy stores retain their real current revision; restore revalidates
+  selections. Configuration does not grant authority or expose preparation/execution routes.
+
+- Add an exact owner-browser contract for read-only host inventory and configured target
+  metadata. Strict versioned projections replace PIDs, daemon IDs and port identities with
+  persistent keyed aliases; command lines, images, addresses, source paths, approvals and raw
+  receipts remain hidden. Dependency failure stays unavailable, and no system mutation route
+  is granted.
+
+- Connect the canonical Companion character package to the owner browser contract. Current,
+  immutable history and inert export are readable; save, import and restore require exact
+  operation-bound verification and expected-revision checks. The 66-MiB character-only request
+  envelope carries already bounded embedded media without raising ordinary browser limits or
+  exposing other agent IDs.
+
+- Add a schema-versioned owner-browser contract for existing schedules and redacted run
+  history. Optimistic pause/enable, idempotent manual admission, cancellation, budget
+  binding, approval resume and reconciliation use exact routes without returning target
+  arguments, receipts or authority identifiers. Full schedule authoring remains recovery-only
+  until Pi can validate arguments against authoritative ToolGate publication schemas.
+
+- Add a schema-versioned, paginated owner-control contract for the durable artifact library.
+  Conversation copies resolve exact completed assistant messages and authoritative privacy;
+  responses carry explicit no-authority/content/execution markers, native exports stay inert,
+  and binary downloads remain recovery-admin only because browser control is JSON-only.
+
+- Add a schema-versioned, paginated owner-control contract for durable projects and canonical
+  conversation/task/file links. Archive/restore preserves owner-visible tombstones; project
+  removal, metadata search and caller-supplied privacy previews remain outside the browser
+  allowlist. Responses include no source content or execution authority.
+
+- Expose durable agent configuration through a schema-versioned, narrowly allowlisted owner
+  control contract. Companion edits now append ordinary optimistic revisions while archive and
+  delete remain impossible; runtime credentials and near-match browser paths are denied.
+
+- Add one bounded, secret-free diagnostic contract shared by authenticated
+  `GET /api/diagnostics` and the host-only `python -m gateway doctor` command.
+  Findings have stable identities and identical recovery actions in the CLI and UI.
+
+- Replace the impossible first-run setup ceiling with durable owner-attested evidence receipts for
+  boundary review, protection verification and assembled rehearsal. Receipts are revisioned,
+  restart-safe, expiry-aware and conflict-safe; recording one never executes or fabricates the
+  external operation it references.
+
+- Prevent Pi's internal-service and model-provider HTTP clients from inheriting ambient proxy
+  routing, and keep redirects disabled at every runtime HTTP entry point.
+
+- Add owner-only `GET /setup/status`, a schema-versioned read projection for the eight-step
+  first-run workflow. States come from persisted Companion/model revisions and live dependency
+  checks; typed prerequisites, reason codes, current step and one bounded next operation keep
+  clients from inferring workflow semantics. Missing cross-service and host receipts remain
+  visibly degraded or not started.
+
 ## 0.4.0
 
 Memory, forgetting, browser auth, and the 2026-09-12 audit fixes.

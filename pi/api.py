@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -52,10 +53,12 @@ from . import (
     project_sources,
     projects_api,
     proposals,
+    provider_secrets,
     response_retries,
     response_versions,
     session_settings,
     session_settings_api,
+    setup_status_api,
     speech,
     submissions,
     system_actions,
@@ -118,9 +121,13 @@ async def lifespan(app: FastAPI):
             '    echo "PI_ADMIN_KEY=$(openssl rand -base64 24)" >> .env\n'
             "    docker compose up -d pi\n"
         )
+    try:
+        provider_environment = provider_secrets.load(os.environ)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from None
     speech_client = speech.SpeechClient(
         url=os.environ.get("PI_SPEECH_URL", "").strip(),
-        key=os.environ.get("PI_SPEECH_KEY", "").strip(),
+        key=provider_environment.get("PI_SPEECH_KEY", "").strip(),
         stt_model=os.environ.get("PI_STT_MODEL", "").strip(),
         tts_model=os.environ.get("PI_TTS_MODEL", "").strip(),
         voice=os.environ.get("PI_TTS_VOICE", "").strip(),
@@ -156,7 +163,7 @@ async def lifespan(app: FastAPI):
     # hosted provider only exists if one was supplied, and even then it refuses
     # paid models unless PI_ALLOW_PAID_MODELS says otherwise - spending is a
     # deliberate act, never a default or a typo.
-    openrouter_key = os.environ.get("PI_OPENROUTER_KEY", "").strip()
+    openrouter_key = provider_environment.get("PI_OPENROUTER_KEY", "").strip()
     hosted = None
     if openrouter_key:
         hosted = OpenRouterProvider(
@@ -240,6 +247,9 @@ async def lifespan(app: FastAPI):
         ) from None
     app.state.memory_corrections = correction
     app.state.speech = speech_client
+    app.state.speech_credential_configured = bool(
+        provider_environment.get("PI_SPEECH_KEY", "").strip()
+    )
     memory.start()
     app.state.admin_key = admin_key
     app.state.gateway_key_hash = runtime_hash
@@ -247,6 +257,15 @@ async def lifespan(app: FastAPI):
     app.state.store = store
     app.state.local = local
     app.state.hosted = hosted
+    app.state.provider_credentials = sorted(
+        name
+        for name, environment_name in (
+            ("openrouter", "PI_OPENROUTER_KEY"),
+            ("openai", "PI_OPENAI_KEY"),
+            ("anthropic", "PI_ANTHROPIC_KEY"),
+        )
+        if provider_environment.get(environment_name, "").strip()
+    )
     app.state.toolgate = toolgate
     app.state.job_executor = PublishedJobs({"companion": toolgate}) if toolgate else None
     app.state.interrupted_at_startup = interrupted
@@ -254,7 +273,7 @@ async def lifespan(app: FastAPI):
         local_provider=local,
         hosted_provider=hosted,
         providers=configured_direct_providers(
-            os.environ, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
+            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
         ),
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
@@ -308,6 +327,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Pi", version=SERVICE_VERSION, lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(request: Request, exc: RequestValidationError):
+    # FastAPI's default body includes rejected input values. Owner requests may
+    # accidentally contain credentials, so validation responses are deliberately static.
+    return JSONResponse({"detail": "Request validation failed."}, status_code=422)
 
 
 @app.exception_handler(tasks.TaskError)
@@ -365,21 +391,21 @@ def require_owner(
 app.include_router(
     projects_api.router(
         lambda: app.state.store,
-        require_admin,
+        require_owner,
         lambda reference: project_sources.resolve(app.state.store, reference),
     )
 )
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
-app.include_router(characters_api.router(lambda: app.state.store, require_admin))
+app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     system_inventory_api.router(
-        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_admin
+        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_owner
     )
 )
 app.include_router(
     filesystem_api.router(
-        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_admin
+        lambda: app.state.store, lambda: getattr(app.state, "toolgate", None), require_owner
     )
 )
 app.include_router(
@@ -394,11 +420,13 @@ app.include_router(
     calls_api.router(
         lambda: app.state.store,
         lambda: app.state.loop,
-        require_admin,
+        require_owner,
         lambda: getattr(app.state, "speech", None),
     )
 )
-app.include_router(collaboration_api.create_router(lambda: app.state.store, require_admin))
+app.include_router(
+    collaboration_api.create_router(lambda: app.state.store, require_admin, require_owner)
+)
 app.include_router(
     memory_proposals_api.router(
         lambda: app.state.store,
@@ -411,9 +439,20 @@ app.include_router(
 )
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(
-    artifacts_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy)
+    artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
+app.include_router(
+    setup_status_api.router(
+        lambda: app.state.store,
+        lambda: len(getattr(app.state, "owner_key_hash", "")) == 64,
+        lambda: app.state.memory,
+        lambda: getattr(app.state, "toolgate", None),
+        lambda: app.state.router,
+        lambda: getattr(app.state, "speech", None),
+        require_owner,
+    )
+)
 from . import memory_explorer_api  # noqa: E402 - registered after the routers it follows
 
 app.include_router(memory_explorer_api.router(lambda: app.state.memory, require_owner))
@@ -429,7 +468,7 @@ app.include_router(
 )
 app.include_router(
     jobs_api.router(
-        lambda: app.state.store, require_admin, lambda: getattr(app.state, "job_executor", None)
+        lambda: app.state.store, require_owner, lambda: getattr(app.state, "job_executor", None)
     )
 )
 
@@ -464,43 +503,63 @@ async def agent_error(request: Request, exc: agents.AgentError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-@app.get("/agents", dependencies=[Depends(require_admin)])
+@app.get("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentCollection)
 def list_agents():
     return agents.list_agents(app.state.store)
 
 
-@app.post("/agents", dependencies=[Depends(require_admin)])
+@app.post("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile)
 def create_agent(body: agents.AgentInput):
     return agents.create(app.state.store, body)
 
 
-@app.get("/agents/{identity}", dependencies=[Depends(require_admin)])
+@app.get(
+    "/agents/{identity}", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile
+)
 def get_agent(identity: str):
     return agents.get(app.state.store, identity)
 
 
-@app.get("/agents/{identity}/versions", dependencies=[Depends(require_admin)])
+@app.get(
+    "/agents/{identity}/versions",
+    dependencies=[Depends(require_owner)],
+    response_model=agents.AgentCollection,
+)
 def agent_history(identity: str):
     return agents.history(app.state.store, identity)
 
 
-@app.get("/agents/{identity}/versions/{revision}", dependencies=[Depends(require_admin)])
+@app.get(
+    "/agents/{identity}/versions/{revision}",
+    dependencies=[Depends(require_owner)],
+    response_model=agents.AgentProfile,
+)
 def agent_version(identity: str, revision: int):
     return agents.get(app.state.store, identity, revision)
 
 
-@app.post("/agents/{identity}/update", dependencies=[Depends(require_admin)])
+@app.post(
+    "/agents/{identity}/update",
+    dependencies=[Depends(require_owner)],
+    response_model=agents.AgentProfile,
+)
 def update_agent(identity: str, body: agents.UpdateAgent):
     return agents.update(app.state.store, identity, body)
 
 
-@app.post("/agents/{identity}/archive", dependencies=[Depends(require_admin)])
+@app.post(
+    "/agents/{identity}/archive",
+    dependencies=[Depends(require_owner)],
+    response_model=agents.AgentProfile,
+)
 def archive_agent(identity: str, body: agents.ArchiveAgent):
     return agents.archive(app.state.store, identity, body)
 
 
 class NewSession(BaseModel):
     title: str = ""
+    agent_id: str | None = Field(default=None, pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
+    privacy: dict[Literal["memoryDisabled", "harnessDisabled"], bool] | None = None
 
 
 class TurnRequest(BaseModel):
@@ -601,6 +660,27 @@ def health():
             if app.state.hosted
             else {"status": "not_configured", "reason": "no API key"}
         ),
+        "provider_credentials": {
+            "status": "ok" if app.state.provider_credentials else "not_configured",
+            "configured": app.state.provider_credentials,
+            "verification": "host-revision-bound",
+            "secrets_included": False,
+        },
+        "speech": {
+            "status": (
+                "ok"
+                if any(
+                    item["status"] in {"configured", "available"}
+                    for item in app.state.speech.capabilities().values()
+                    if isinstance(item, dict) and "status" in item
+                )
+                else "not_configured"
+            ),
+            "input": app.state.speech.capabilities()["stt"]["status"],
+            "output": app.state.speech.capabilities()["tts"]["status"],
+            "credentialConfigured": app.state.speech_credential_configured,
+            "secrets_included": False,
+        },
         "action_boundary": (
             app.state.toolgate.health()
             if app.state.toolgate
@@ -623,7 +703,11 @@ def health():
 
 @app.post("/sessions", dependencies=[Depends(require_key)])
 def create_session(body: NewSession):
-    return {"session_id": app.state.store.create_session(title=body.title)}
+    return {
+        "session_id": app.state.store.create_session(
+            title=body.title, agent_id=body.agent_id, privacy=body.privacy
+        )
+    }
 
 
 @app.get("/sessions", dependencies=[Depends(require_key)])

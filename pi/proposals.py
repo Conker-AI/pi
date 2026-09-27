@@ -319,6 +319,55 @@ def run_pass(store, complete, *, now: datetime | None = None, role_enabled: bool
     )
 
 
+def redact(db, session_ids: list[str]) -> None:
+    """Forget derived ideas inside the caller's exclusive forgetting transaction.
+
+    A model can use any message in its input, not only the citations it returns.
+    Remove every proposal from a pass whose input window overlaps a forgotten
+    message. This intentionally favors privacy over keeping a mixed-source idea.
+    Pass receipts contain counts and timestamps, never the generated private text.
+    """
+    if (
+        not session_ids
+        or not db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='proposals'"
+        ).fetchone()
+    ):
+        return
+    placeholders = ",".join("?" for _ in session_ids)
+    affected = {
+        row[0]
+        for row in db.execute(
+            f"SELECT DISTINCT p.id FROM proposal_passes p JOIN messages m "
+            f"ON m.created_at > COALESCE(p.watermark_from, 0) "
+            f"AND m.created_at <= COALESCE(p.watermark_to, p.started_at) "
+            f"WHERE m.session_id IN ({placeholders})",
+            session_ids,
+        )
+    }
+    message_ids = {
+        row[0]
+        for row in db.execute(
+            f"SELECT id FROM messages WHERE session_id IN ({placeholders})", session_ids
+        )
+    }
+    targets = [
+        row["id"]
+        for row in db.execute("SELECT id, pass_id, evidence FROM proposals")
+        if row["pass_id"] in affected or message_ids.intersection(json.loads(row["evidence"]))
+    ]
+    if not targets:
+        return
+    trigger = db.execute(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='proposals_no_delete'"
+    ).fetchone()
+    if not trigger:
+        raise RuntimeError("Proposal retention trigger is missing; repair before forgetting.")
+    db.execute("DROP TRIGGER proposals_no_delete")
+    db.executemany("DELETE FROM proposals WHERE id=?", [(identity,) for identity in targets])
+    db.execute(trigger["sql"])
+
+
 def _view(db, row) -> dict:
     cited = []
     for message_id in json.loads(row["evidence"]):

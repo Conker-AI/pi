@@ -13,14 +13,17 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from pi.browser_contract import owner_allowed, runtime_allowed, session_only_write
-from pi.owner_terminal import Terminal, TerminalError
+from pi.owner_terminal import TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
+from .diagnostics import collect_diagnostics
 from .operations import fingerprint, parse_object
 from .store import AuthError, AuthStore
+from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
 
 COOKIE = "__Host-conker"
@@ -36,8 +39,8 @@ class Config:
     owner_key: str = ""
     dashboard_dir: str = ""
     idle_timeout_seconds: int = 1800
-    terminal_shell: str = ""
-    terminal_directory: str = ""
+    terminal_socket: str = ""
+    terminal_workspace_label: str = ""
     pi_owner_key: str = ""
     toolgate_execution_key: str = ""
 
@@ -54,12 +57,14 @@ class Config:
             len(self.pi_owner_key) < 32 or self.pi_owner_key in {self.pi_key, self.owner_key}
         ):
             raise ValueError("Provision a distinct Pi owner-control key of at least 32 characters.")
-        if bool(self.terminal_shell) != bool(self.terminal_directory):
-            raise ValueError("Configure terminal shell and directory together.")
-        if self.terminal_shell and (
-            not os.path.isabs(self.terminal_shell) or not os.path.isabs(self.terminal_directory)
+        if bool(self.terminal_socket) != bool(self.terminal_workspace_label):
+            raise ValueError("Configure terminal socket and workspace label together.")
+        if self.terminal_socket and (
+            not os.path.isabs(self.terminal_socket)
+            or not 1 <= len(self.terminal_workspace_label) <= 120
+            or any(character in "\x00\r\n" for character in self.terminal_workspace_label)
         ):
-            raise ValueError("Terminal configuration requires absolute paths.")
+            raise ValueError("Terminal configuration is invalid.")
         if (
             type(self.idle_timeout_seconds) is not int
             or not 60 <= self.idle_timeout_seconds <= 86400
@@ -108,8 +113,8 @@ class Config:
             os.environ.get("GATEWAY_TOOLGATE_OWNER_KEY", ""),
             os.environ.get("GATEWAY_DASHBOARD_DIR", ""),
             int(os.environ.get("GATEWAY_IDLE_TIMEOUT_SECONDS", "1800")),
-            os.environ.get("GATEWAY_TERMINAL_SHELL", ""),
-            os.environ.get("GATEWAY_TERMINAL_DIRECTORY", ""),
+            os.environ.get("GATEWAY_TERMINAL_SOCKET", ""),
+            os.environ.get("GATEWAY_TERMINAL_WORKSPACE_LABEL", ""),
             os.environ.get("GATEWAY_PI_OWNER_KEY", ""),
             os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
         )
@@ -121,7 +126,7 @@ def create_app(
     store: AuthStore | None = None,
     transport: httpx.BaseTransport | None = None,
     stream_transport: httpx.AsyncBaseTransport | None = None,
-    terminal_factory=Terminal,
+    terminal_factory=None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -134,13 +139,27 @@ def create_app(
         app.state.auth = store or AuthStore(
             settings.database, idle_seconds=settings.idle_timeout_seconds
         )
-        app.state.terminals = (
-            Terminals(
-                settings.terminal_shell, settings.terminal_directory, factory=terminal_factory
+        app.state.terminal_readiness = None
+        app.state.terminal_sidecar = None
+        if settings.terminal_socket:
+            if terminal_factory is None:
+                sidecar = TerminalSidecar(settings.terminal_socket)
+                app.state.terminal_readiness = sidecar.readiness()
+                app.state.terminal_sidecar = sidecar
+
+                def factory(socket_path, workspace_label, request_identity):
+                    del socket_path
+                    return RemoteTerminal(sidecar, workspace_label, request_identity)
+
+            else:
+                factory = terminal_factory
+            app.state.terminals = Terminals(
+                settings.terminal_socket,
+                settings.terminal_workspace_label,
+                factory=factory,
             )
-            if settings.terminal_shell
-            else None
-        )
+        else:
+            app.state.terminals = None
         with httpx.Client(
             transport=transport, timeout=660, follow_redirects=False, trust_env=False
         ) as client:
@@ -150,6 +169,8 @@ def create_app(
             finally:
                 if app.state.terminals:
                     app.state.terminals.close()
+                if app.state.terminal_sidecar:
+                    app.state.terminal_sidecar.close()
 
     app = FastAPI(
         title="Conker browser gateway",
@@ -158,6 +179,10 @@ def create_app(
         docs_url=None,
         redoc_url=None,
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error(request: Request, exc: RequestValidationError):
+        return JSONResponse({"detail": "Request validation failed."}, status_code=422)
 
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
@@ -216,6 +241,14 @@ def create_app(
                 else "Run conker auth setup on the host",
             }
         }
+        checks["owner_terminal"] = {
+            "status": "ok" if app.state.terminals else "not_configured",
+            "reason": (
+                "Isolated terminal sidecar ready"
+                if app.state.terminals
+                else "Terminal sidecar is not configured"
+            ),
+        }
         for name, url, header, key in (
             (
                 "runtime",
@@ -257,6 +290,13 @@ def create_app(
             "checked_at": datetime.now(UTC).isoformat(),
             "age_seconds": 0.0,
         }
+
+    @app.get("/api/diagnostics")
+    def diagnostics(request: Request):
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Diagnostics do not accept query parameters.", 422)
+        return collect_diagnostics(app.state.config, app.state.auth, app.state.client)
 
     @app.get("/auth/session")
     def auth_session(request: Request):
@@ -307,7 +347,10 @@ def create_app(
     @app.post("/auth/verify")
     async def verify(request: Request):
         session(request)
-        body = await json_body(request)
+        # A verified Character Studio operation may carry bounded embedded media.
+        # The caller is already an authenticated owner; fingerprint still rejects
+        # every route outside the explicit browser contract.
+        body = await json_body(request, max_bytes=66 * 1024 * 1024)
         operation = body.get("operation")
         if (
             set(body) != {"password", "operation"}
@@ -447,6 +490,17 @@ def create_app(
             owner["id"], body["requestId"], validate, lambda: admit_write(request, body)
         )
 
+    @app.get("/api/terminal/current")
+    def terminal_current(request: Request):
+        owner, manager = terminal_access(request)
+        return {
+            "lease": manager.current(owner["id"]),
+            "workspace": app.state.config.terminal_workspace_label,
+            "maximumLifetimeSeconds": 900,
+            "commandsPersisted": False,
+            "outputPersisted": False,
+        }
+
     @app.get("/api/terminal/{identity}")
     def terminal_read(identity: str, request: Request, cursor: int = Query(default=0, ge=0)):
         owner, manager = terminal_access(request)
@@ -556,6 +610,74 @@ def create_app(
             request.scope["query_string"],
         )
 
+    @app.post("/api/control/pi/calls/browser/{identity}/audio")
+    async def control_call_audio(identity: str, request: Request):
+        """Relay one bounded transient WAV turn without converting media to JSON."""
+        session(request)
+        if not re.fullmatch(r"call_[a-f0-9]{32}", identity):
+            raise AuthError("Invalid call identity.", 422)
+        params = request.query_params
+        request_id = params.get("request_id", "")
+        if (
+            set(params) != {"request_id"}
+            or len(params.getlist("request_id")) != 1
+            or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id)
+        ):
+            raise AuthError("Audio turns require exactly one valid request_id.", 422)
+        if not app.state.config.pi_owner_key:
+            raise AuthError("Pi owner-control connection is not configured.", 503)
+        media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media not in {"audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave"}:
+            raise AuthError("Audio turns require PCM WAV audio.", 415)
+        declared = request.headers.get("content-length")
+        if declared:
+            if not declared.isdecimal():
+                raise AuthError("Invalid audio content length.", 400)
+            if int(declared) > 10 * 1024 * 1024:
+                raise AuthError("Audio exceeds 10 MiB.", 413)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 10 * 1024 * 1024:
+                raise AuthError("Audio exceeds 10 MiB.", 413)
+            body.extend(chunk)
+        if not body:
+            raise AuthError("Audio is empty.", 422)
+
+        def relay_audio():
+            try:
+                outgoing = app.state.client.build_request(
+                    "POST",
+                    app.state.config.pi_url.rstrip("/") + f"/calls/browser/{identity}/audio",
+                    headers={
+                        "X-Pi-Owner-Key": app.state.config.pi_owner_key,
+                        "Content-Type": "audio/wav",
+                        "Accept": "application/json",
+                    },
+                    params={"request_id": request_id},
+                    content=bytes(body),
+                    timeout=660,
+                )
+                outgoing.headers.pop("cookie", None)
+                response = app.state.client.send(outgoing)
+            except (httpx.HTTPError, UnicodeError):
+                raise AuthError(
+                    "Speech service unavailable. The turn was not retried; check the saved call.",
+                    503,
+                ) from None
+            if 300 <= response.status_code < 400:
+                raise AuthError("Speech service returned an unexpected redirect.", 502)
+            if len(response.content) > 32 * 1024 * 1024:
+                raise AuthError("Speech response exceeded the browser boundary.", 502)
+            try:
+                data = response.json()
+            except ValueError:
+                raise AuthError("Speech service returned an unreadable response.", 502) from None
+            return JSONResponse(data, status_code=response.status_code)
+
+        from starlette.concurrency import run_in_threadpool
+
+        return await run_in_threadpool(relay_audio)
+
     @app.get("/api/control/pi/{path:path}", operation_id="control_read")
     @app.post("/api/control/pi/{path:path}", operation_id="control_write")
     async def control(path: str, request: Request):
@@ -565,9 +687,22 @@ def create_app(
             raise AuthError("This owner operation is not available through the gateway.", 403)
         if not app.state.config.pi_owner_key:
             raise AuthError("Pi owner-control connection is not configured.", 503)
-        body = await json_body(request) if request.method == "POST" else None
+        body = (
+            await json_body(
+                request,
+                max_bytes=66 * 1024 * 1024
+                if target.startswith("/characters/companion/")
+                else 65536,
+            )
+            if request.method == "POST"
+            else None
+        )
         if body is not None:
-            admit_write(request, body)
+            if session_only_write(request.method, target):
+                if request.scope["query_string"]:
+                    raise AuthError("Write operations must not include query parameters.", 422)
+            else:
+                admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
 
         return await run_in_threadpool(
@@ -843,14 +978,16 @@ def create_app(
     return app
 
 
-async def json_body(request: Request) -> dict:
+async def json_body(request: Request, *, max_bytes: int = 65536) -> dict:
     if request.headers.get("content-type", "").split(";")[0] != "application/json":
         raise AuthError("Send application/json.", 415)
     raw = bytearray()
     async for chunk in request.stream():
         raw.extend(chunk)
-        if len(raw) > 65536:
-            raise AuthError("Request is too large; keep it below 64 KiB.", 413)
+        if len(raw) > max_bytes:
+            raise AuthError(
+                "Request is too large; keep it below the operation-specific limit.", 413
+            )
     return parse_object(raw)
 
 

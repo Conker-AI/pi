@@ -58,6 +58,14 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      - id: terminal-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-owner-terminal
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -68,6 +76,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - id: terminal-build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.terminal
+          push: true
+          tags: ${{ steps.terminal-meta.outputs.tags }}
+          labels: ${{ steps.terminal-meta.outputs.labels }}
+          cache-from: type=gha,scope=owner-terminal
+          cache-to: type=gha,mode=max,scope=owner-terminal
+
       - uses: actions/attest-build-provenance@v2
         # Not available for user-owned private repositories. The image is
         # already pushed by this point, so failing here would report a
@@ -76,4 +95,11 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - uses: actions/attest-build-provenance@v2
+        if: ${{ !github.event.repository.private }}
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository }}-owner-terminal
+          subject-digest: ${{ steps.terminal-build.outputs.digest }}
           push-to-registry: true

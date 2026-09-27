@@ -6,10 +6,10 @@ import json
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from .agents import StrictModel
 
@@ -76,6 +76,94 @@ class Update(StrictModel):
     definition: Definition
 
 
+JobId = Annotated[str, StringConstraints(pattern=r"^job_[a-f0-9]{32}$")]
+RunId = Annotated[str, StringConstraints(pattern=r"^scheduled_[a-f0-9]{32}$")]
+
+
+class StateChange(StrictModel):
+    expected_revision: int = Field(ge=1)
+    enabled: bool
+
+
+class TargetSummary(StrictModel):
+    kind: Literal["tool", "automation"]
+    id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.-]+$")
+    publishedVersion: int = Field(ge=1)
+    digest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    inputsConfigured: bool
+
+
+class DefinitionSummary(StrictModel):
+    name: str = Field(min_length=1, max_length=80)
+    instructionsConfigured: bool
+    agentId: str = Field(min_length=1, max_length=200)
+    timing: Timing
+    timeZone: str = Field(min_length=1, max_length=100)
+    enabled: bool
+    state: Literal["enabled", "paused"]
+    target: TargetSummary
+    overlap: Literal["skip"]
+    requireBudget: bool
+    budgetAllowanceConfigured: bool
+
+
+class JobView(StrictModel):
+    schemaVersion: Literal[1] = 1
+    id: JobId
+    revision: int = Field(ge=1)
+    definition: DefinitionSummary
+    createdAt: float = Field(ge=0, allow_inf_nan=False)
+    nextAt: float = Field(ge=0, allow_inf_nan=False)
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[False] = False
+    execution: Literal["not-triggered"] = "not-triggered"
+
+
+class JobCollection(StrictModel):
+    schemaVersion: Literal[1] = 1
+    results: list[JobView] = Field(max_length=100)
+    nextCursor: JobId | None = None
+
+
+RunStatus = Literal[
+    "ready",
+    "awaiting_budget",
+    "dispatching",
+    "completed",
+    "failed",
+    "awaiting_approval",
+    "outcome_unknown",
+    "cancelled",
+]
+
+
+class RunView(StrictModel):
+    schemaVersion: Literal[1] = 1
+    id: RunId
+    jobId: JobId
+    jobRevision: int = Field(ge=1)
+    scheduledAt: float = Field(ge=0, allow_inf_nan=False)
+    startedAt: float = Field(ge=0, allow_inf_nan=False)
+    status: RunStatus
+    manual: bool
+    budgetBound: bool
+    receiptRecorded: bool
+    outcomeCode: str | None = Field(default=None, pattern=r"^[A-Z0-9_]{1,64}$")
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[False] = False
+    execution: Literal["admitted-only", "waiting", "dispatched", "resolved", "uncertain"]
+
+
+class RunCollection(StrictModel):
+    schemaVersion: Literal[1] = 1
+    results: list[RunView] = Field(max_length=100)
+    nextCursor: RunId | None = None
+
+
+class RunActionView(RunView):
+    replayed: bool
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
  id TEXT PRIMARY KEY, revision INTEGER NOT NULL, definition TEXT NOT NULL,
@@ -97,7 +185,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS scheduled_once ON scheduled_runs(job_id,schedu
 
 
 class JobError(RuntimeError):
-    pass
+    def __init__(self, detail, status=409):
+        super().__init__(detail)
+        self.detail = detail
+        self.status = status
 
 
 def next_due(definition, after, *, anchor):
@@ -124,7 +215,7 @@ def next_due(definition, after, *, anchor):
 def _row(db, identity):
     row = db.execute("SELECT * FROM scheduled_jobs WHERE id=?", (identity,)).fetchone()
     if row is None:
-        raise JobError("Job not found.")
+        raise JobError("Job not found.", 404)
     return row
 
 
@@ -132,11 +223,27 @@ def _view(row):
     return {**dict(row), "definition": json.loads(row["definition"])}
 
 
-def list_jobs(store):
+def list_jobs(store, limit=None, cursor=None):
     with store._connect() as db:
+        where, values = "", []
+        if cursor is not None:
+            position = _row(db, cursor)
+            where = "WHERE created_at>? OR (created_at=? AND id>?)"
+            values = [position["created_at"], position["created_at"], cursor]
+        suffix = " LIMIT ?" if limit is not None else ""
+        if limit is not None:
+            values.append(limit)
         return [
-            _view(row) for row in db.execute("SELECT * FROM scheduled_jobs ORDER BY created_at,id")
+            _view(row)
+            for row in db.execute(
+                f"SELECT * FROM scheduled_jobs {where} ORDER BY created_at,id{suffix}", values
+            )
         ]
+
+
+def get_job(store, identity):
+    with store._connect() as db:
+        return _view(_row(db, identity))
 
 
 def create(store, definition, now=None):
@@ -167,6 +274,20 @@ def update(store, identity, body, now=None):
         result = _view(_row(db, identity))
         db.commit()
         return result
+
+
+def set_enabled(store, identity, body, now=None):
+    body = StateChange.model_validate(body.model_dump())
+    with store._connect() as db:
+        row = _row(db, identity)
+        definition = Definition.model_validate_json(row["definition"])
+    definition.enabled = body.enabled
+    return update(
+        store,
+        identity,
+        Update(expected_revision=body.expected_revision, definition=definition),
+        now=now,
+    )
 
 
 def _claim(db, row, now, request_id=None):
@@ -254,22 +375,122 @@ def finish(store, identity, status, receipt):
             raise JobError("Run is not awaiting a dispatch result.")
 
 
-def runs(store, identity):
+def _run_row(db, identity):
+    row = db.execute(
+        "SELECT r.*, b.budget_id AS spending_budget_id FROM scheduled_runs r "
+        "LEFT JOIN scheduled_run_budgets b ON b.run_id=r.id WHERE r.id=?",
+        (identity,),
+    ).fetchone()
+    if row is None:
+        raise JobError("Run not found.", 404)
+    return row
+
+
+def _run_view(row):
+    return {
+        **dict(row),
+        "definition": json.loads(row["definition"]),
+        "receipt": json.loads(row["receipt"]) if row["receipt"] else None,
+    }
+
+
+def get_run(store, identity):
+    with store._connect() as db:
+        return _run_view(_run_row(db, identity))
+
+
+def runs(store, identity, limit=100, cursor=None):
     with store._connect() as db:
         _row(db, identity)
+        where, values = "", [identity]
+        if cursor is not None:
+            position = _run_row(db, cursor)
+            if position["job_id"] != identity:
+                raise JobError("Run cursor belongs to a different job.")
+            where = "AND (r.started_at<? OR (r.started_at=? AND r.id<?))"
+            values.extend([position["started_at"], position["started_at"], cursor])
+        values.append(limit)
         return [
-            {
-                **dict(row),
-                "definition": json.loads(row["definition"]),
-                "receipt": json.loads(row["receipt"]) if row["receipt"] else None,
-            }
+            _run_view(row)
             for row in db.execute(
                 "SELECT r.*, b.budget_id AS spending_budget_id FROM scheduled_runs r "
                 "LEFT JOIN scheduled_run_budgets b ON b.run_id=r.id "
-                "WHERE r.job_id=? ORDER BY r.started_at DESC LIMIT 100",
-                (identity,),
+                f"WHERE r.job_id=? {where} ORDER BY r.started_at DESC,r.id DESC LIMIT ?",
+                values,
             )
         ]
+
+
+def browser_job(row):
+    definition = Definition.model_validate(row["definition"])
+    target = definition.target
+    return JobView(
+        id=row["id"],
+        revision=row["revision"],
+        definition=DefinitionSummary(
+            name=definition.name,
+            instructionsConfigured=bool(definition.instructions),
+            agentId=definition.agentId,
+            timing=definition.timing,
+            timeZone=definition.timeZone,
+            enabled=definition.enabled,
+            state="enabled" if definition.enabled else "paused",
+            target=TargetSummary(
+                kind=target.kind,
+                id=target.id,
+                publishedVersion=target.publishedVersion,
+                digest=target.digest,
+                inputsConfigured=bool(target.args),
+            ),
+            overlap=definition.overlap,
+            requireBudget=definition.requireBudget,
+            budgetAllowanceConfigured=definition.budgetAllowanceId is not None,
+        ),
+        createdAt=row["created_at"],
+        nextAt=row["next_at"],
+    )
+
+
+def browser_run(row):
+    receipt = row.get("receipt")
+    code = receipt.get("code") if isinstance(receipt, dict) else None
+    if (
+        not isinstance(code, str)
+        or not code.isascii()
+        or code != code.upper()
+        or not code.replace("_", "").isalnum()
+        or len(code) > 64
+    ):
+        code = None
+    status = row["status"]
+    execution = (
+        "admitted-only"
+        if status == "ready"
+        else "waiting"
+        if status in {"awaiting_budget", "awaiting_approval"}
+        else "dispatched"
+        if status == "dispatching"
+        else "uncertain"
+        if status == "outcome_unknown"
+        else "resolved"
+    )
+    return RunView(
+        id=row["id"],
+        jobId=row["job_id"],
+        jobRevision=row["job_revision"],
+        scheduledAt=row["scheduled_at"],
+        startedAt=row["started_at"],
+        status=status,
+        manual=row["request_id"] is not None,
+        budgetBound=row.get("spending_budget_id") is not None,
+        receiptRecorded=receipt is not None,
+        outcomeCode=code,
+        execution=execution,
+    )
+
+
+def browser_run_action(row, replayed):
+    return RunActionView(**browser_run(row).model_dump(), replayed=replayed)
 
 
 def dispatch_claim(store, run, invoke, *, resume=False):

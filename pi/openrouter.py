@@ -104,7 +104,13 @@ class OpenRouterProvider:
         if self._catalogue and not force and now - self._fetched_at < CATALOGUE_TTL_SECONDS:
             return self._catalogue
         try:
-            response = httpx.get(CATALOGUE_URL, headers=self._headers(), timeout=30.0)
+            response = httpx.get(
+                CATALOGUE_URL,
+                headers=self._headers(),
+                timeout=30.0,
+                follow_redirects=False,
+                trust_env=False,
+            )
             response.raise_for_status()
             data = response.json()["data"]
         except Exception as exc:
@@ -217,7 +223,14 @@ class OpenRouterProvider:
 
     def _posted(self, payload: dict, model: str, timeout: float) -> dict:
         try:
-            response = httpx.post(CHAT_URL, json=payload, headers=self._headers(), timeout=timeout)
+            response = httpx.post(
+                CHAT_URL,
+                json=payload,
+                headers=self._headers(),
+                timeout=timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
         except Exception as exc:
             raise ProviderUnavailable(type(exc).__name__) from exc
         self._check_model_status(response, model)
@@ -236,6 +249,8 @@ class OpenRouterProvider:
                 json={**payload, "stream": True},
                 headers=self._headers(),
                 timeout=timeout,
+                follow_redirects=False,
+                trust_env=False,
             ) as response:
                 self._check_model_status(response, model)
                 response.raise_for_status()

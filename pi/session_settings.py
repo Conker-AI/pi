@@ -16,7 +16,7 @@ class Privacy(agents.StrictModel):
 class Settings(agents.StrictModel):
     agentId: str = Field(min_length=1, max_length=200)
     privacy: Privacy
-    projectId: str | None = Field(default=None, min_length=1, max_length=200)
+    projectId: projects.ProjectId | None = None
     projectSources: list[projects.Reference] = Field(default_factory=list, max_length=20)
     presentationMode: Literal["focus", "character"] | None = None
 
@@ -69,9 +69,17 @@ def _load(db, identity):
     if row is None or row[0] == "forgotten":
         raise agents.AgentError("not_found", "Conversation unavailable.", 404)
     stored = db.execute("SELECT * FROM session_settings WHERE session_id=?", (identity,)).fetchone()
+    default = json.loads(json.dumps(DEFAULT))
+    if stored is None:
+        choice = db.execute(
+            "SELECT choice FROM setup_optional_choices WHERE step='memory' "
+            "ORDER BY revision DESC LIMIT 1"
+        ).fetchone()
+        if choice and choice[0] == "skip":
+            default["privacy"]["memoryDisabled"] = True
     return {
         "revision": stored["revision"] if stored else 0,
-        "settings": json.loads(stored["settings"]) if stored else json.loads(json.dumps(DEFAULT)),
+        "settings": json.loads(stored["settings"]) if stored else default,
     }
 
 

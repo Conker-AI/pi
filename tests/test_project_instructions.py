@@ -57,7 +57,7 @@ def test_unknown_project_rejected_before_settings_are_saved(tmp_path):
                     expected_revision=0,
                     settings=session_settings.Settings(
                         agentId="companion",
-                        projectId="missing",
+                        projectId="project_" + "f" * 32,
                         privacy=session_settings.Privacy(
                             memoryDisabled=False, harnessDisabled=False
                         ),
