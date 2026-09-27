@@ -1,5 +1,6 @@
 """Ephemeral owner-session terminal leases; no command or token persistence."""
 
+import contextlib
 import re
 import threading
 
@@ -30,7 +31,7 @@ class Terminals:
                 return {"id": identity, "closed": previous["terminal"].closed, "replayed": True}
             if (
                 len(self.entries) >= 1000
-                or sum(not entry["terminal"].closed for entry in self.entries.values()) >= 4
+                or sum(not entry["terminal"].closed for entry in self.entries.values()) >= 1
             ):
                 raise TerminalError("Terminal session limit reached.")
             if any(
@@ -41,7 +42,7 @@ class Terminals:
             validate()
             authorize()
             try:
-                terminal = self.factory(self.shell, self.directory)
+                terminal = self.factory(self.shell, self.directory, identity)
             except (OSError, ValueError):
                 raise TerminalError(
                     "Terminal could not start. Check operator configuration."
@@ -57,11 +58,23 @@ class Terminals:
             try:
                 entry["validate"]()
             except Exception:
-                entry["terminal"].close()
+                with contextlib.suppress(TerminalError):
+                    entry["terminal"].close()
                 raise TerminalError("Terminal authorization expired.") from None
             if operation not in ("read", "write", "resize", "close"):
                 raise TerminalError("Invalid terminal operation.")
             return getattr(entry["terminal"], operation)(*args)
+
+    def current(self, owner):
+        with self.lock:
+            active = [
+                identity
+                for identity, entry in self.entries.items()
+                if entry["owner"] == owner and not entry["terminal"].closed
+            ]
+            if len(active) > 1:
+                raise TerminalError("Terminal lease state is inconsistent.")
+            return active[0] if active else None
 
     def sweep(self):
         with self.lock:
@@ -71,7 +84,8 @@ class Terminals:
                 try:
                     entry["validate"]()
                 except Exception:
-                    entry["terminal"].close()
+                    with contextlib.suppress(TerminalError):
+                        entry["terminal"].close()
 
     def _watch(self):
         while not self.stop.wait(self.interval):
@@ -81,6 +95,7 @@ class Terminals:
         self.stop.set()
         with self.lock:
             for entry in self.entries.values():
-                entry["terminal"].close()
+                with contextlib.suppress(TerminalError):
+                    entry["terminal"].close()
         if threading.current_thread() is not self.thread:
             self.thread.join(timeout=6)

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi import agents, characters, characters_api
+from pi.browser_contract import owner_allowed, runtime_allowed
 from pi.store import Store
 
 
@@ -273,6 +274,12 @@ def test_owner_api_and_stream_bound(store, monkeypatch):
             client.get("/characters/companion/export", headers=headers).json()["format"]
             == "conker-character"
         )
+        assert client.get("/characters/companion/history", headers=headers).json()["results"][0]["revision"] == 1
+        assert client.post(
+            "/characters/companion/save",
+            headers=headers,
+            json={"expected_revision": 1, "profile": profile()},
+        ).json()["revision"] == 2
         assert (
             client.put(
                 "/characters/companion",
@@ -281,8 +288,35 @@ def test_owner_api_and_stream_bound(store, monkeypatch):
             ).status_code
             == 409
         )
-        monkeypatch.setattr(characters, "MAX_PACKAGE_BYTES", 10)
+        monkeypatch.setattr(characters, "MAX_REQUEST_BYTES", 10)
         assert (
             client.put("/characters/companion", headers=headers, content=b"x" * 11).status_code
             == 413
         )
+
+
+def test_browser_contract_exposes_only_companion_studio_operations():
+    for path in (
+        "/characters/companion",
+        "/characters/companion/history",
+        "/characters/companion/export",
+    ):
+        assert owner_allowed("GET", path)
+        assert not runtime_allowed("GET", path)
+    for path in (
+        "/characters/companion/save",
+        "/characters/companion/import",
+        "/characters/companion/restore",
+    ):
+        assert owner_allowed("POST", path)
+        assert not runtime_allowed("POST", path)
+    for method, path in (
+        ("POST", "/characters/companion"),
+        ("PUT", "/characters/companion"),
+        ("GET", "/characters/agent_" + "a" * 32),
+        ("POST", "/characters/agent_" + "a" * 32 + "/save"),
+        ("GET", "/characters/companion/import"),
+        ("POST", "/characters/companion/export"),
+        ("DELETE", "/characters/companion"),
+    ):
+        assert not owner_allowed(method, path)

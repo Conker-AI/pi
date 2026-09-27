@@ -1,11 +1,16 @@
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime
 
 import pytest
+from fastapi.testclient import TestClient
 
-from pi import jobs
+from pi import api, jobs
+from pi.browser_contract import owner_allowed, runtime_allowed
 from pi.store import Store
+
+OWNER = "jobs-owner-control-key-" + "o" * 32
 
 
 def definition(**changes):
@@ -238,7 +243,6 @@ def test_approval_resume_timeout_never_resubmits(store):
 
 def test_api_authorization_validation_and_receipts(store):
     from fastapi import FastAPI, HTTPException
-    from fastapi.testclient import TestClient
 
     from pi.jobs_api import router
 
@@ -255,7 +259,9 @@ def test_api_authorization_validation_and_receipts(store):
         assert client.post("/jobs/runs/unknown/resume").status_code == 403
         assert client.post("/jobs/runs/unknown/reconcile").status_code == 403
         allowed = True
-        assert client.post("/jobs/runs/unknown/resume").status_code == 503
+        assert client.post("/jobs/runs/unknown/resume").status_code == 422
+        missing = "scheduled_" + "0" * 32
+        assert client.post(f"/jobs/runs/{missing}/resume").status_code == 503
         invalid = definition().model_dump()
         invalid["timeZone"] = "invalid/zone"
         assert client.post("/jobs", json=invalid).status_code == 422
@@ -264,7 +270,7 @@ def test_api_authorization_validation_and_receipts(store):
         identity = response.json()["id"]
         run = client.post(f"/jobs/{identity}/run", json={"request_id": "owner_manual_request"})
         assert run.status_code == 202
-        assert client.get(f"/jobs/{identity}/runs").json()[0]["id"] == run.json()["id"]
+        assert client.get(f"/jobs/{identity}/runs").json()["results"][0]["id"] == run.json()["id"]
         assert (
             client.post(
                 f"/jobs/{identity}/update",
@@ -272,3 +278,220 @@ def test_api_authorization_validation_and_receipts(store):
             ).status_code
             == 409
         )
+
+
+def test_connected_owner_schedule_contract_is_redacted_bounded_and_restart_safe(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "owner-jobs.db"
+    store = Store(path)
+    seeded = definition(
+        instructions="Run the published report with never-return-instructions.",
+        enabled=False,
+        target={
+            "kind": "automation",
+            "id": "report",
+            "publishedVersion": 1,
+            "digest": "a" * 64,
+            "args": {"credential": "never-return-this", "path": "C:\\private\\input.txt"},
+        },
+    )
+    job = jobs.create(store, seeded, now=100)
+    monkeypatch.setattr(api.app.state, "store", store, raising=False)
+    monkeypatch.setattr(api.app.state, "admin_key", "jobs-admin-" + "a" * 32, raising=False)
+    monkeypatch.setattr(
+        api.app.state, "owner_key_hash", hashlib.sha256(OWNER.encode()).hexdigest(), raising=False
+    )
+    monkeypatch.setattr(
+        api.app.state,
+        "gateway_key_hash",
+        hashlib.sha256(("r" * 32).encode()).hexdigest(),
+        raising=False,
+    )
+    monkeypatch.setattr(api.app.state, "job_executor", None, raising=False)
+    headers = {"X-Pi-Owner-Key": OWNER}
+    client = TestClient(api.app)
+
+    assert client.get("/jobs").status_code == 401
+    assert client.get("/jobs", headers={"X-Pi-Gateway-Key": "r" * 32}).status_code == 401
+    assert client.post("/jobs", headers=headers, json=seeded.model_dump()).status_code == 403
+    assert (
+        client.post(
+            f"/jobs/{job['id']}/update",
+            headers=headers,
+            json={"expected_revision": 1, "definition": seeded.model_dump()},
+        ).status_code
+        == 403
+    )
+
+    listing = client.get("/jobs?limit=1", headers=headers)
+    assert listing.status_code == 200
+    payload = listing.json()
+    assert payload["schemaVersion"] == 1 and payload["nextCursor"] is None
+    view = payload["results"][0]
+    assert view["authority"] == "none" and view["execution"] == "not-triggered"
+    assert view["definition"]["state"] == "paused"
+    assert view["definition"]["target"]["inputsConfigured"] is True
+    assert view["definition"]["instructionsConfigured"] is True
+    assert "instructions" not in view["definition"]
+    assert "args" not in view["definition"]["target"]
+    assert "never-return" not in listing.text and "private" not in listing.text
+
+    enabled = client.post(
+        f"/jobs/{job['id']}/state",
+        headers=headers,
+        json={"expected_revision": 1, "enabled": True},
+    )
+    assert enabled.status_code == 200
+    assert enabled.json()["revision"] == 2
+    assert enabled.json()["definition"]["state"] == "enabled"
+    assert enabled.json()["execution"] == "not-triggered"
+    assert (
+        client.post(
+            f"/jobs/{job['id']}/state",
+            headers=headers,
+            json={"expected_revision": 1, "enabled": False},
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            f"/jobs/{job['id']}/state",
+            headers=headers,
+            json={"expected_revision": 2, "enabled": True, "credential": "forbidden"},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            f"/jobs/{job['id']}/run",
+            headers=headers,
+            json={"request_id": "contains whitespace"},
+        ).status_code
+        == 422
+    )
+
+    request_id = "owner_manual_run_0001"
+    first = client.post(f"/jobs/{job['id']}/run", headers=headers, json={"request_id": request_id})
+    assert first.status_code == 202
+    assert first.json()["status"] == "ready"
+    assert first.json()["execution"] == "admitted-only"
+    assert first.json()["replayed"] is False
+    repeated = client.post(
+        f"/jobs/{job['id']}/run", headers=headers, json={"request_id": request_id}
+    )
+    assert repeated.status_code == 202 and repeated.json()["replayed"] is True
+    run_id = first.json()["id"]
+    cancelled = client.post(f"/jobs/runs/{run_id}/cancel", headers=headers)
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
+    assert client.post(f"/jobs/runs/{run_id}/cancel", headers=headers).json()["replayed"] is True
+
+    class Executor:
+        calls = []
+
+        def __call__(self, target, **kwargs):
+            self.calls.append((target, kwargs))
+            return {"status": "completed", "reason": "never-return-receipt"}
+
+        def reconcile(self, target, **kwargs):
+            self.calls.append((target, kwargs))
+            return {"status": "completed", "code": "OK", "detail": "never-return-detail"}
+
+        def validate_budget(self, budget_id, **kwargs):
+            self.calls.append((budget_id, kwargs))
+            return True
+
+    executor = Executor()
+    monkeypatch.setattr(api.app.state, "job_executor", executor, raising=False)
+    approval = jobs.run_now(store, job["id"], "owner_approval_run_01", now=102)
+    jobs.dispatch_claim(
+        store,
+        approval,
+        lambda *args, **kwargs: {
+            "status": "awaiting_approval",
+            "request_id": "approval-secret-id",
+        },
+    )
+    resumed = client.post(f"/jobs/runs/{approval['id']}/resume", headers=headers)
+    assert resumed.status_code == 200 and resumed.json()["status"] == "completed"
+    assert "approval-secret-id" not in resumed.text and "never-return" not in resumed.text
+
+    unknown = jobs.run_now(store, job["id"], "owner_unknown_run_001", now=103)
+    jobs.dispatch_claim(store, unknown, lambda *args, **kwargs: {"status": "outcome_unknown"})
+    reconciled = client.post(f"/jobs/runs/{unknown['id']}/reconcile", headers=headers)
+    assert reconciled.status_code == 200 and reconciled.json()["status"] == "completed"
+    assert reconciled.json()["outcomeCode"] == "OK"
+    assert "never-return-detail" not in reconciled.text
+
+    budget_job = jobs.create(store, definition(name="Budgeted", requireBudget=True), now=104)
+    budget_run = jobs.run_now(store, budget_job["id"], "owner_budget_run_0001", now=105)
+    budget_id = "job_" + "c" * 32
+    bound = client.post(
+        f"/jobs/runs/{budget_run['id']}/budget",
+        headers=headers,
+        json={"budget_id": budget_id},
+    )
+    assert bound.status_code == 200 and bound.json()["budgetBound"] is True
+    assert budget_id not in bound.text
+    jobs_page = client.get("/jobs?limit=1", headers=headers).json()
+    assert jobs_page["nextCursor"] == jobs_page["results"][0]["id"]
+    jobs_next = client.get(
+        "/jobs", headers=headers, params={"limit": 1, "cursor": jobs_page["nextCursor"]}
+    ).json()
+    assert len(jobs_next["results"]) == 1
+    assert jobs_next["results"][0]["id"] != jobs_page["results"][0]["id"]
+
+    history = client.get(f"/jobs/{job['id']}/runs?limit=1", headers=headers).json()
+    assert history["schemaVersion"] == 1 and len(history["results"]) == 1
+    assert history["nextCursor"] == history["results"][0]["id"]
+    next_history = client.get(
+        f"/jobs/{job['id']}/runs",
+        headers=headers,
+        params={"limit": 1, "cursor": history["nextCursor"]},
+    ).json()
+    assert len(next_history["results"]) == 1
+    assert "definition" not in history["results"][0]
+    assert "receipt" not in history["results"][0]
+    assert "request_id" not in history["results"][0]
+    assert client.get("/jobs/job_short", headers=headers).status_code == 403
+    monkeypatch.setattr(api.app.state, "job_executor", None, raising=False)
+    assert client.post(f"/jobs/runs/{run_id}/provision-budget", headers=headers).status_code == 503
+
+    store.close()
+    reopened = Store(path)
+    monkeypatch.setattr(api.app.state, "store", reopened, raising=False)
+    try:
+        saved = client.get(f"/jobs/{job['id']}", headers=headers)
+        assert saved.status_code == 200 and saved.json()["revision"] == 2
+        saved_history = client.get(f"/jobs/{job['id']}/runs", headers=headers).json()
+        assert {row["status"] for row in saved_history["results"]} == {"cancelled", "completed"}
+    finally:
+        reopened.close()
+
+
+def test_owner_job_browser_allowlist_is_exact():
+    job_id = "job_" + "a" * 32
+    run_id = "scheduled_" + "b" * 32
+    for path in ("/jobs", f"/jobs/{job_id}", f"/jobs/{job_id}/runs"):
+        assert owner_allowed("GET", path)
+        assert not runtime_allowed("GET", path)
+    for path in (
+        f"/jobs/{job_id}/state",
+        f"/jobs/{job_id}/run",
+        f"/jobs/runs/{run_id}/budget",
+        f"/jobs/runs/{run_id}/provision-budget",
+        f"/jobs/runs/{run_id}/cancel",
+        f"/jobs/runs/{run_id}/resume",
+        f"/jobs/runs/{run_id}/reconcile",
+    ):
+        assert owner_allowed("POST", path)
+        assert not runtime_allowed("POST", path)
+    for method, path in (
+        ("POST", "/jobs"),
+        ("POST", f"/jobs/{job_id}/update"),
+        ("DELETE", f"/jobs/{job_id}"),
+        ("GET", "/jobs/job_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        ("POST", f"/jobs/runs/{run_id}/dispatch"),
+        ("GET", f"/jobs/{job_id}/runs/extra"),
+    ):
+        assert not owner_allowed(method, path)

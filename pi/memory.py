@@ -18,7 +18,11 @@ class MemoryClient:
         self, url, ingest_key, read_key, agent_id="default", *, timeout=5.0, transport=None
     ):
         self.http = httpx.Client(
-            base_url=url.rstrip("/"), timeout=timeout, follow_redirects=False, transport=transport
+            base_url=url.rstrip("/"),
+            timeout=timeout,
+            follow_redirects=False,
+            trust_env=False,
+            transport=transport,
         )
         self.ingest_headers = {"X-MemoryGate-Conversation-Key": ingest_key, "X-Agent-Id": agent_id}
         self.agent_id = agent_id

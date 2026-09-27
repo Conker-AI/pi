@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from pi import setup_choices
 from pi.loop import ActedWithoutReply, Loop, TurnFailed
 from pi.providers import Completion, ProviderUnavailable
 from pi.routing import Router
@@ -88,6 +89,32 @@ def build(store, replies, gate):
     provider = Scripted(replies)
     router = Router(local_provider=provider, local_model="test-model")
     return Loop(store, router, toolgate=gate), provider
+
+
+def test_setup_capability_skip_removes_tools_until_owner_includes_them(store):
+    gate = FakeGate()
+    loop, _provider = build(store, ["done"], gate)
+    setup_choices.record(
+        store,
+        "capabilities",
+        setup_choices.ChoiceInput(
+            requestId="setup-capabilities-runtime-skip",
+            choice="skip",
+            expectedRevision=0,
+        ),
+    )
+    assert loop._available_tools() == []
+
+    setup_choices.record(
+        store,
+        "capabilities",
+        setup_choices.ChoiceInput(
+            requestId="setup-capabilities-runtime-include",
+            choice="include",
+            expectedRevision=1,
+        ),
+    )
+    assert [tool.id for tool in loop._available_tools()] == ["t_echo"]
 
 
 CALL = '{"tool": "t_echo", "args": {"text": "hi"}}'

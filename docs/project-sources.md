@@ -19,4 +19,5 @@ grants, including when privacy modes are enabled.
 
 File references now resolve through the attachment store's authoritative session
 and immutable privacy metadata. Removed/forgotten files become unavailable.
-Runtime linked-content selection remains outstanding.
+Runtime linked-content selection is explicit through session settings and remains bounded by the
+project-context capture rules; linking a source alone imports nothing.

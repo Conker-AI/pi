@@ -77,6 +77,7 @@ class _DirectProvider:
                     json={**payload, **self._stream_options()},
                     timeout=timeout,
                     follow_redirects=False,
+                    trust_env=False,
                 ) as response:
                     response.raise_for_status()
                     body = self._collect(sse_events(response))
@@ -87,6 +88,7 @@ class _DirectProvider:
                     json=payload,
                     timeout=timeout,
                     follow_redirects=False,
+                    trust_env=False,
                 )
                 response.raise_for_status()
                 body = response.json()

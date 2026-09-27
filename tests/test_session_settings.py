@@ -13,6 +13,7 @@ from pi import (
     api,
     context_controls,
     memory_store,
+    setup_choices,
     submissions,
 )
 from pi import (
@@ -69,6 +70,85 @@ def client(handler):
     return MemoryClient(
         "http://memory.test", "ingest_test", "read_test", transport=httpx.MockTransport(handler)
     )
+
+
+def test_setup_memory_choice_becomes_a_stable_new_conversation_default(tmp_path):
+    with closing(Store(tmp_path / "test.db")) as store:
+        setup_choices.record(
+            store,
+            "memory",
+            setup_choices.ChoiceInput(
+                requestId="setup-memory-default-skip",
+                choice="skip",
+                expectedRevision=0,
+            ),
+        )
+        private = store.create_session()
+        assert settings.load(store, private)["settings"]["privacy"]["memoryDisabled"] is True
+
+        setup_choices.record(
+            store,
+            "memory",
+            setup_choices.ChoiceInput(
+                requestId="setup-memory-default-include",
+                choice="include",
+                expectedRevision=1,
+            ),
+        )
+        enabled = store.create_session()
+        assert settings.load(store, enabled)["settings"]["privacy"]["memoryDisabled"] is False
+        assert settings.load(store, private)["settings"]["privacy"]["memoryDisabled"] is True
+
+
+def test_new_conversation_selects_an_active_agent_atomically(tmp_path, monkeypatch):
+    with closing(Store(tmp_path / "test.db")) as store:
+        setup_choices.record(
+            store,
+            "memory",
+            setup_choices.ChoiceInput(
+                requestId="agent-memory-default-skip",
+                choice="skip",
+                expectedRevision=0,
+            ),
+        )
+        agent = agents.create(store, config())
+        monkeypatch.setattr(api.app.state, "store", store, raising=False)
+        selected = api.create_session(
+            api.NewSession(title="Research", agent_id=agent["id"])
+        )["session_id"]
+        saved = settings.load(store, selected)
+        assert saved["revision"] == 1
+        assert saved["settings"] == {
+            "agentId": agent["id"],
+            "privacy": {"memoryDisabled": True, "harnessDisabled": False},
+        }
+        turn = store.start_turn(selected)
+        store.append_message(
+            selected, "assistant", "Attributed", turn_id=turn, purpose="final"
+        )
+        assert store.messages(selected)[0]["agent_id"] == agent["id"]
+
+        restricted = api.create_session(
+            api.NewSession(
+                title="Private",
+                agent_id="companion",
+                privacy={"memoryDisabled": False, "harnessDisabled": True},
+            )
+        )["session_id"]
+        assert settings.load(store, restricted)["settings"]["privacy"] == {
+            "memoryDisabled": False,
+            "harnessDisabled": True,
+        }
+
+        agents.archive(
+            store,
+            agent["id"],
+            agents.ArchiveAgent(expected_revision=1, archived=True),
+        )
+        before = len(store.list_sessions())
+        with pytest.raises(agents.AgentError, match="active agent"):
+            store.create_session(title="Must not exist", agent_id=agent["id"])
+        assert len(store.list_sessions()) == before
 
 
 def test_future_privacy_retains_prior_queue_and_never_backfills_private_text(tmp_path):

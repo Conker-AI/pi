@@ -1,10 +1,55 @@
 # Templates and team preparation
 
-These admin-only APIs persist configuration and immutable preparations. They do not
-create agents from templates, dispatch turns, schedule work, transport handoffs or
-grant permissions. Gateway wiring remains deferred.
+These APIs persist configuration, immutable team revisions and preparations. Team
+definition operations are available through the separate Pi owner-browser credential.
+Templates, preparation creation, removal and execution remain recovery-admin operations.
+Saving configuration does not dispatch turns, schedule work or grant permissions.
 
-All routes are under `/collaboration` and require `X-Pi-Key`. GET the prefix to list
+## Owner team contract
+
+Exact routes under `/collaboration/teams` use `X-Pi-Owner-Key` (the gateway forwards
+this server-side credential only after its ordinary owner authentication). Runtime
+credentials cannot access them. All response models are strict, schema version `1`,
+and use `authority: none`, `execution: configuration-only`, `contentIncluded`, and
+`reference_validation: external-references-unverified`. Responses are not cached.
+
+- `GET /collaboration/teams?limit=50&cursor={team_id}` returns compact metadata
+  `{schemaVersion, results, nextCursor}`; the limit is 1-100. No definitions appear
+  in collection summaries. Archived teams remain listed.
+- `POST /collaboration/teams` accepts the existing strict `Team` definition below.
+- `GET /collaboration/teams/{team_id}` returns the definition and live
+  `agentReferenceState`: `available`, `unavailable`, or `selection-conflict`.
+  `agentReferences` lists role IDs, canonical agent IDs and currently resolved
+  revisions when validation succeeds. These are observations, not pinned execution
+  snapshots; changing an agent does not rewrite the team or authorize a run.
+- `POST /collaboration/teams/{team_id}/update` accepts `{expected_revision, definition}`.
+- `POST /collaboration/teams/{team_id}/archive` accepts `{expected_revision, archived}`.
+- `POST /collaboration/teams/{team_id}/restore` accepts `{expected_revision}` and
+  unarchives the current definition. Both ways of restoring revalidate active agent
+  references and narrowed selections; this is not rollback to an old revision.
+- `GET /collaboration/teams/{team_id}/versions?limit=50&after=0` returns paginated
+  revision summaries `{schemaVersion, results, nextRevision}`. Pass `nextRevision`
+  as `after` to continue. `GET .../versions/{revision}` returns the exact historical
+  definition with `historical: true`, without claiming live agent availability.
+
+Team IDs are `team_` plus 32 lowercase hex digits. Roles reference `companion` or
+`agent_` plus 32 lowercase hex digits. Missing agents, archived agents, widened
+tool/memory selections and stale team revisions fail closed. Unknown request fields,
+credentials, target argument objects and owner selectors are rejected. Malformed
+stored definitions produce a static unavailable response without echoing their data.
+Pi has one owner namespace per Store; this API adds no tenant selector or cross-store
+lookup. Multi-owner isolation within one Store is not provided by the existing model.
+
+All team writes and revision snapshots share one SQLite transaction. Triggers prevent
+revision overwrite/delete/replacement and enforce advancing revisions on team changes.
+Startup adds `team_definition_revisions` and backfills only each legacy team's actual
+current revision. Earlier revisions cannot be reconstructed and return 404. Repeated
+startup is idempotent; SQLite backups preserve the history and existing preparations.
+No separate team model or execution snapshot is created by these owner routes.
+
+## Recovery operations
+
+The broader recovery routes are under `/collaboration` and require `X-Pi-Key`. GET the prefix to list
 templates, teams and preparations. For either `/templates` or `/teams`, POST creates
 a definition, GET `/{id}` reads it, POST `/{id}/update` accepts
 `{expected_revision, definition}`, POST `/{id}/archive` accepts

@@ -53,6 +53,11 @@ from . import (
     response_retries,
     response_versions,
     session_settings,
+    setup_choices,
+    setup_model_probes,
+    setup_protection,
+    setup_receipts,
+    setup_rehearsal,
     submissions,
     system_actions,
     system_inventory,
@@ -256,12 +261,18 @@ def _message_with_attachments(db, row):
         if version:
             item["response_family"] = dict(version)
         binding = db.execute(
-            "SELECT s.snapshot FROM turn_messages tm JOIN turn_settings s "
-            "ON s.turn_id=tm.turn_id WHERE tm.message_id=? AND tm.purpose='input'",
+            "SELECT tm.purpose,s.snapshot FROM turn_messages tm JOIN turn_settings s "
+            "ON s.turn_id=tm.turn_id WHERE tm.message_id=?",
             (item["id"],),
         ).fetchone()
-        if binding and (target := json.loads(binding[0]).get("replyToMessageId")):
-            item["reply_to"] = target
+        if binding:
+            snapshot = json.loads(binding["snapshot"])
+            if item["role"] == "assistant" and snapshot.get("agentId"):
+                item["agent_id"] = snapshot["agentId"]
+            if binding["purpose"] == "input" and (
+                target := snapshot.get("replyToMessageId")
+            ):
+                item["reply_to"] = target
     files = attachments.message_views(db, item["id"], session_settings.source_privacy)
     if files:
         item["attachments"] = files
@@ -298,6 +309,11 @@ class Store:
                 self._migrate(db)
                 db.executescript(FORGETTING_SCHEMA)
                 db.executescript(session_settings.SCHEMA)
+                setup_receipts.initialize(db)
+                setup_choices.initialize(db)
+                setup_model_probes.initialize(db)
+                setup_protection.initialize(db)
+                setup_rehearsal.initialize(db)
                 db.executescript(memory_store.SCHEMA)
                 db.executescript(memory_proposals.SCHEMA)
                 db.executescript(proposals.SCHEMA)
@@ -321,6 +337,7 @@ class Store:
                 db.executescript(context_controls.SCHEMA)
                 db.executescript(context_retrieval.SCHEMA)
                 db.executescript(collaboration.SCHEMA)
+                collaboration.initialize(db)
                 db.executescript(team_execution.SCHEMA)
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
@@ -333,6 +350,7 @@ class Store:
                 db.executescript(calls.SCHEMA)
                 db.executescript(characters.SCHEMA)
                 db.executescript(system_inventory.SCHEMA)
+                system_inventory.initialize(db)
                 db.executescript(filesystem_reads.SCHEMA)
                 db.executescript(system_actions.SCHEMA)
         except BaseException:
@@ -382,15 +400,50 @@ class Store:
     # --- sessions ---------------------------------------------------------
 
     def create_session(
-        self, title: str = "", parent_id: str | None = None, summary: str | None = None
+        self,
+        title: str = "",
+        parent_id: str | None = None,
+        summary: str | None = None,
+        agent_id: str | None = None,
+        privacy: dict[str, bool] | None = None,
     ) -> str:
+        if privacy is not None and (
+            not set(privacy) <= {"memoryDisabled", "harnessDisabled"}
+            or any(type(value) is not bool for value in privacy.values())
+        ):
+            raise ValueError("Use only boolean memoryDisabled and harnessDisabled restrictions.")
         session_id = f"ses_{uuid.uuid4().hex[:16]}"
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            initial_settings = None
+            if parent_id is None:
+                initial_settings = json.loads(json.dumps(session_settings.DEFAULT))
+                choice = db.execute(
+                    "SELECT choice FROM setup_optional_choices WHERE step='memory' "
+                    "ORDER BY revision DESC LIMIT 1"
+                ).fetchone()
+                if choice is not None:
+                    initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
+                if privacy:
+                    initial_settings["privacy"].update(privacy)
+                if agent_id is not None:
+                    selected = agents._get(db, agent_id)
+                    if selected["archived_at"] is not None:
+                        raise agents.AgentError("agent_archived", "Select an active agent.")
+                    initial_settings["agentId"] = selected["id"]
+                elif choice is None and not privacy:
+                    initial_settings = None
             db.execute(
                 "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"
                 " VALUES (?,?,?,'open',?,?)",
                 (session_id, parent_id, title, time.time(), summary),
             )
+            if initial_settings is not None:
+                db.execute(
+                    "INSERT INTO session_settings VALUES (?,?,?)",
+                    (session_id, 1, json.dumps(initial_settings)),
+                )
+            db.commit()
         return session_id
 
     def get_session(self, session_id: str) -> dict | None:
@@ -530,12 +583,15 @@ class Store:
             snapshot = db.execute(
                 "SELECT snapshot FROM turn_settings WHERE turn_id=?", (turn_id,)
             ).fetchone()
-            calls.guard_db(db, json.loads(snapshot[0]) if snapshot else None)
+            execution = json.loads(snapshot[0]) if snapshot else None
+            calls.guard_db(db, execution)
             turn_control.guard_db(db, turn_id, reply_request_id)
             turn_steering.guard_db(db, turn_id)
             message = submissions.append(
                 db, row["session_id"], "assistant", text, turn_id=turn_id, purpose="final"
             )
+            if execution and execution.get("agentId"):
+                message["agent_id"] = execution["agentId"]
             from . import attachment_passages
 
             citations = attachment_passages.citations(db, turn_id, text, citations)

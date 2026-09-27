@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+exec python -I -S -c 'import sys; sys.path.insert(0,"/app"); from pi.terminal_sidecar import main; raise SystemExit(main())' "$@"

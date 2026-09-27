@@ -64,3 +64,21 @@ def test_revocation_closes_without_client_polling_and_denied_create_does_not_spa
         assert "terminal_request_02" not in manager.entries
     finally:
         manager.close()
+
+
+def test_only_one_browser_owner_can_hold_the_global_terminal():
+    manager = Terminals("/bin/bash", "/synthetic", factory=FakeTerminal)
+    try:
+        manager.create("first-owner", "terminal_request_01", lambda: None, lambda: None)
+        with pytest.raises(TerminalError, match="session limit"):
+            manager.create("second-owner", "terminal_request_02", lambda: None, lambda: None)
+
+        manager.use("first-owner", "terminal_request_01", "close")
+        created = manager.create("second-owner", "terminal_request_02", lambda: None, lambda: None)
+        assert created == {
+            "id": "terminal_request_02",
+            "closed": False,
+            "replayed": False,
+        }
+    finally:
+        manager.close()

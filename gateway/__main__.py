@@ -103,15 +103,38 @@ def main() -> None:
             "revoke-all",
             "certificate",
             "health",
+            "doctor",
+            "inspect",
+            "apply",
+            "record-setup-receipt",
+            "review-boundaries",
+            "set-setup-choice",
+            "setup-model-options",
+            "set-setup-model",
+            "setup-protection",
+            "set-setup-protection",
+            "setup-rehearsal",
             "renew-certificate",
         ],
     )
+    parser.add_argument("resource", nargs="?")
     parser.add_argument("--db", default=os.environ.get("GATEWAY_DB_PATH", "/auth/auth.db"))
     parser.add_argument("--port", type=int, default=8050)
     args = parser.parse_args()
     # The database's sidecars must have the same protection as the password verifier.
     if os.name == "posix":
         os.umask(0o077)
+    argument_commands = {
+        "apply",
+        "inspect",
+        "record-setup-receipt",
+        "review-boundaries",
+        "set-setup-choice",
+        "set-setup-model",
+        "setup-rehearsal",
+    }
+    if args.command not in argument_commands and args.resource is not None:
+        parser.error(f"{args.command} does not accept a resource")
     if args.command == "serve":
         import uvicorn
 
@@ -130,6 +153,131 @@ def main() -> None:
             ssl_keyfile=str(key),
             proxy_headers=False,
         )
+    elif args.command == "doctor":
+        import json
+
+        import httpx
+
+        from .api import Config
+        from .diagnostics import collect_diagnostics
+
+        config = Config.environment()
+        config.validate()
+        auth = AuthStore(args.db)
+        with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
+            report = collect_diagnostics(config, auth, client)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if report["status"] != "ok":
+            raise SystemExit(1)
+    elif args.command in {"apply", "inspect"}:
+        import json
+
+        import httpx
+
+        from .api import Config
+        from .inspection import inspect_resource, resources
+        from .mutation import apply_resource
+        from .mutation import resources as mutation_resources
+
+        if args.resource is None:
+            choices = mutation_resources() if args.command == "apply" else resources()
+            parser.error(f"{args.command} requires one of: " + ", ".join(choices))
+        config = Config.environment()
+        config.validate()
+        with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
+            if args.command == "apply":
+                value = apply_resource(config, args.resource, sys.stdin.buffer, client)
+            else:
+                value = inspect_resource(config, args.resource, client)
+        print(json.dumps(value, indent=2, sort_keys=True))
+    elif args.command == "setup-model-options":
+        import json
+
+        import httpx
+
+        from .api import Config
+        from .setup_control import model_options
+
+        config = Config.environment()
+        config.validate()
+        with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
+            value = model_options(config, client)
+        print(json.dumps(value, indent=2, sort_keys=True))
+    elif args.command in {"setup-protection", "set-setup-protection"}:
+        import json
+
+        import httpx
+
+        from .api import Config
+        from .setup_control import protection_policy, set_protection_policy
+
+        config = Config.environment()
+        config.validate()
+        with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
+            value = (
+                set_protection_policy(config, sys.stdin.buffer, client)
+                if args.command == "set-setup-protection"
+                else protection_policy(config, client)
+            )
+        print(json.dumps(value, indent=2, sort_keys=True))
+    elif args.command in {
+        "record-setup-receipt",
+        "review-boundaries",
+        "set-setup-choice",
+        "set-setup-model",
+        "setup-rehearsal",
+    }:
+        import json
+
+        import httpx
+
+        from .api import Config
+        from .setup_control import (
+            activate_setup_model,
+            finalize_rehearsal,
+            record_external_receipt,
+            rehearsal_status,
+            resume_rehearsal_approval,
+            review_boundaries,
+            review_rehearsal_memory,
+            set_setup_choice,
+            start_rehearsal_approval,
+        )
+
+        if args.resource is None:
+            parser.error(f"{args.command} requires an argument")
+        config = Config.environment()
+        config.validate()
+        with httpx.Client(trust_env=False, follow_redirects=False, timeout=75) as client:
+            if args.command == "record-setup-receipt":
+                value = record_external_receipt(config, args.resource, sys.stdin.buffer, client)
+            elif args.command == "set-setup-choice":
+                parts = args.resource.split(":")
+                if len(parts) != 2:
+                    parser.error("set-setup-choice requires STEP:include|skip")
+                value = set_setup_choice(config, parts[0], parts[1], client)
+            elif args.command == "set-setup-model":
+                value = activate_setup_model(config, args.resource, client)
+            elif args.command == "setup-rehearsal":
+                action, separator, request_id = args.resource.partition(":")
+                if action == "status" and not separator:
+                    value = rehearsal_status(config, client)
+                elif action == "review-memory" and not separator:
+                    value = review_rehearsal_memory(config, client)
+                elif action == "start-approval" and not separator:
+                    value = start_rehearsal_approval(config, client)
+                elif action == "resume-approval" and separator:
+                    value = resume_rehearsal_approval(config, request_id, client)
+                elif action == "finalize" and not separator:
+                    value = finalize_rehearsal(config, client)
+                else:
+                    parser.error(
+                        "setup-rehearsal requires status, review-memory, start-approval, "
+                        "resume-approval:REQUEST_ID, or finalize"
+                    )
+            else:
+                value = review_boundaries(config, args.resource, client)
+        print(json.dumps(value, indent=2, sort_keys=True))
     elif args.command == "health":
         import httpx
 
@@ -139,7 +287,9 @@ def main() -> None:
         config.validate()
         # Reach the local listener while retaining the configured TLS name and Host.
         context = ssl.create_default_context(cafile=str(Path(config.database).parent / "tls.crt"))
-        with httpx.Client(verify=context, trust_env=False, timeout=10) as client:
+        with httpx.Client(
+            verify=context, trust_env=False, follow_redirects=False, timeout=10
+        ) as client:
             response = client.get(
                 "https://localhost:8050/health", headers={"Host": urlsplit(config.origin).netloc}
             )

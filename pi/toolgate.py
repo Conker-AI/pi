@@ -18,6 +18,8 @@ story that is not true.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass
@@ -115,7 +117,11 @@ class ToolGateClient:
         """Only what this key is scoped to. ToolGate decides, not Pi."""
         try:
             response = httpx.get(
-                f"{self.base_url}/v2/agent/tools", headers=self._headers(), timeout=self.timeout
+                f"{self.base_url}/v2/agent/tools",
+                headers=self._headers(),
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
             )
             response.raise_for_status()
             rows = response.json()
@@ -123,6 +129,8 @@ class ToolGateClient:
                 f"{self.base_url}/v2/agent/published-workflows",
                 headers=self._headers(),
                 timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
             )
             # Older ToolGate deployments retain individual tools until upgraded.
             if workflows.status_code != 404:
@@ -145,6 +153,42 @@ class ToolGateClient:
             )
             for row in rows
         ]
+
+    def policy_summary(self) -> dict:
+        """Secret-free evidence of the exact capability policy effective for Pi."""
+        try:
+            response = httpx.get(
+                f"{self.base_url}/v2/agent/policy-summary",
+                headers=self._headers(),
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+            response.raise_for_status()
+            value = response.json()
+            if not isinstance(value, dict) or not re.fullmatch(
+                r"[0-9a-f]{64}", str(value.get("digest", ""))
+            ):
+                raise ValueError("Invalid policy summary")
+            tools = value.get("tools")
+            scopes = value.get("scopePatterns")
+            if (
+                not isinstance(value.get("lockdown"), bool)
+                or not isinstance(tools, list)
+                or len(tools) > 1000
+                or not isinstance(scopes, list)
+                or len(scopes) > 1000
+            ):
+                raise ValueError("Invalid policy summary")
+            evidence = {"lockdown": value["lockdown"], "scopePatterns": scopes, "tools": tools}
+            canonical = json.dumps(
+                evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            )
+            if hashlib.sha256(canonical.encode()).hexdigest() != value["digest"]:
+                raise ValueError("Policy summary digest mismatch")
+            return value
+        except Exception as exc:
+            raise ToolGateUnavailable(type(exc).__name__) from exc
 
     # --- acting ----------------------------------------------------------
 
@@ -179,6 +223,8 @@ class ToolGateClient:
                 json=payload,
                 headers=self._headers(),
                 timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
             )
         except Exception as exc:
             return ToolPending(
@@ -203,6 +249,8 @@ class ToolGateClient:
                 f"{self.base_url}/v2/agent/actions/{action_id}",
                 headers=self._headers(),
                 timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
             )
         except httpx.HTTPError:
             return ToolPending(
@@ -275,7 +323,11 @@ class ToolGateClient:
             return {"status": "not_configured", "reason": "no execution key"}
         try:
             response = httpx.get(
-                f"{self.base_url}/v2/agent/status", headers=self._headers(), timeout=5.0
+                f"{self.base_url}/v2/agent/status",
+                headers=self._headers(),
+                timeout=5.0,
+                follow_redirects=False,
+                trust_env=False,
             )
         except Exception as exc:
             return {"status": "unavailable", "reason": type(exc).__name__}

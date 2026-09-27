@@ -21,7 +21,9 @@ class Tags:
     def __init__(self, names):
         self.names = names
 
-    def __call__(self, url, timeout=None):
+    def __call__(self, url, **kwargs):
+        assert kwargs["trust_env"] is False
+        assert kwargs["follow_redirects"] is False
         request = httpx.Request("GET", url)
         return httpx.Response(
             200, json={"models": [{"name": n} for n in self.names]}, request=request
@@ -60,7 +62,7 @@ def test_an_unreachable_ollama_is_unavailable_not_misconfigured(monkeypatch):
     """Unreachable and not-installed are different facts, and the owner needs
     different actions for each."""
 
-    def boom(url, timeout=None):
+    def boom(url, **kwargs):
         raise httpx.ConnectError("refused")
 
     monkeypatch.setattr(httpx, "get", boom)

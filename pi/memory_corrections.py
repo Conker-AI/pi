@@ -20,6 +20,7 @@ class Client:
             base_url=url.rstrip("/"),
             timeout=5,
             follow_redirects=False,
+            trust_env=False,
             headers={"X-MemoryGate-Correction-Key": key, "X-Agent-Id": agent_id},
             transport=transport,
         )

@@ -15,4 +15,6 @@ Changing a schedule never expands ToolGate authority. The owner must create a ne
 matching allowance when changing target version, digest, arguments or actor.
 Cancellation racing allocation may consume an unused ceiling but cannot dispatch
 the cancelled run; ceilings are never automatically refunded. Unknown dispatched
-effects still require reconciliation, not replay. Browser wiring is deferred.
+effects still require reconciliation, not replay. The exact owner browser routes may
+bind or provision one saved run explicitly, but return only `budgetBound`; allowance
+and budget identifiers remain redacted from browser reads.

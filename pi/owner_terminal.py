@@ -1,11 +1,14 @@
 """Ephemeral Linux owner PTY. Network admission belongs to the owner gateway."""
 
+import contextlib
 import os
 import signal
 import subprocess
 import sys
 import threading
 import time
+
+KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 class TerminalError(RuntimeError):
@@ -15,7 +18,15 @@ class TerminalError(RuntimeError):
 class Terminal:
     """No stored commands, credentials, output logs, shell replays or reconnection spawn."""
 
-    def __init__(self, shell, directory, *, lifetime=600, output_limit=1024 * 1024):
+    def __init__(
+        self,
+        shell,
+        directory,
+        *,
+        lifetime=600,
+        output_limit=1024 * 1024,
+        cleanup=None,
+    ):
         if sys.platform != "linux":
             raise TerminalError("Owner PTY requires Linux.")
         if (
@@ -30,6 +41,7 @@ class Terminal:
         import pty
 
         self.lock = threading.RLock()
+        self.cleanup = cleanup
         self.deadline = time.monotonic() + lifetime
         self.limit, self.buffer, self.offset = output_limit, bytearray(), 0
         self.closed = False
@@ -138,14 +150,14 @@ class Terminal:
             if hasattr(self, "timer"):
                 self.timer.cancel()
             try:
-                os.killpg(self.process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            finally:
-                try:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(self.process.pid, KILL_SIGNAL)
+                with contextlib.suppress(OSError):
                     os.close(self.master)
-                    self.process.wait(timeout=5)
-                    self.buffer.clear()
-                finally:
-                    # Report closed only after reaping, and even if reaping fails, so close never runs twice.
-                    self.closed = True
+                self.process.wait(timeout=5)
+                self.buffer.clear()
+            finally:
+                # Report closed only after a close attempt, so cleanup never runs twice.
+                self.closed = True
+                if self.cleanup is not None:
+                    self.cleanup()

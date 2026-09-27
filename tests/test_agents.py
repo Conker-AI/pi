@@ -10,7 +10,10 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi import agents, api
+from pi.browser_contract import owner_allowed, runtime_allowed
 from pi.store import Store
+
+OWNER = "agent-owner-control-key-" + "o" * 32
 
 
 def configuration(**changes):
@@ -49,6 +52,8 @@ def test_durability_history_archive_and_restore(tmp_path):
             store, identity, agents.ArchiveAgent(expected_revision=2, archived=True)
         )
         assert archived["revision"] == 3 and archived["archived_at"] is not None
+        assert original["schemaVersion"] == 1
+        assert agents.list_agents(store)["schemaVersion"] == 1
         assert agents.get(store, identity, 1) == original
         assert agents.get(store, identity, 2) == edited
         assert len(agents.list_agents(store)["results"]) == 2
@@ -122,11 +127,6 @@ def test_cas_race_and_atomic_name_collision(store):
 def test_singular_companion_and_archived_name_protection(store):
     for action in (
         lambda: agents.create(store, configuration(name="CONKER")),
-        lambda: agents.update(
-            store,
-            "companion",
-            agents.UpdateAgent(expected_revision=1, configuration=configuration()),
-        ),
         lambda: agents.archive(
             store, "companion", agents.ArchiveAgent(expected_revision=1, archived=True)
         ),
@@ -141,6 +141,35 @@ def test_singular_companion_and_archived_name_protection(store):
         with pytest.raises(agents.AgentError) as failure:
             agents.get(store, identity, revision)
         assert failure.value.status == 404
+
+
+def test_companion_edits_are_revisioned_restart_safe_and_never_archivable(tmp_path):
+    path = tmp_path / "test.db"
+    updated_configuration = configuration(
+        name="My Companion",
+        role="Daily planning companion",
+        instructions="Help the owner plan clearly and preserve uncertainty.",
+    )
+    with closing(Store(path)) as store:
+        updated = agents.update(
+            store,
+            "companion",
+            agents.UpdateAgent(expected_revision=1, configuration=updated_configuration),
+        )
+        assert updated["revision"] == 2
+        assert updated["configuration"] == updated_configuration.model_dump()
+        with pytest.raises(agents.AgentError) as protected:
+            agents.archive(
+                store, "companion", agents.ArchiveAgent(expected_revision=2, archived=True)
+            )
+        assert protected.value.detail["code"] == "companion_protected"
+
+    with closing(Store(path)) as reopened:
+        assert agents.get(reopened, "companion") == updated
+        assert [item["revision"] for item in agents.history(reopened, "companion")["results"]] == [
+            1,
+            2,
+        ]
 
 
 @pytest.mark.parametrize(
@@ -195,9 +224,12 @@ def test_selections_are_not_authority_and_snapshots_cannot_be_rewritten(store):
     assert agents.get(store, item["id"]) == item
 
 
-def test_http_admin_only_and_validation(store, monkeypatch):
+def test_http_owner_control_and_validation(store, monkeypatch):
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "owner_admin_test_key", raising=False)
+    monkeypatch.setattr(
+        api.app.state, "owner_key_hash", hashlib.sha256(OWNER.encode()).hexdigest(), raising=False
+    )
     monkeypatch.setattr(
         api.app.state,
         "gateway_key_hash",
@@ -205,9 +237,24 @@ def test_http_admin_only_and_validation(store, monkeypatch):
         raising=False,
     )
     client = TestClient(api.app)
-    headers = {"X-Pi-Key": "owner_admin_test_key"}
+    headers = {"X-Pi-Owner-Key": OWNER}
     item = client.post("/agents", headers=headers, json=configuration().model_dump()).json()
     identity = item["id"]
+    assert item["schemaVersion"] == 1
+    assert set(item) == {
+        "schemaVersion",
+        "id",
+        "kind",
+        "revision",
+        "configuration",
+        "created_at",
+        "updated_at",
+        "archived_at",
+        "change_kind",
+        "authority",
+        "execution",
+        "reference_validation",
+    }
     requests = [
         ("get", "/agents", None),
         ("post", "/agents", configuration().model_dump()),
@@ -228,7 +275,7 @@ def test_http_admin_only_and_validation(store, monkeypatch):
             getattr(client, method)(
                 path, headers={"X-Pi-Gateway-Key": "runtime_test_key"}, **args
             ).status_code
-            == 403
+            == 401
         )
     assert client.get(f"/agents/{identity}", headers=headers).json() == item
     assert client.get(f"/agents/{identity}/versions/1", headers=headers).json() == item
@@ -240,4 +287,58 @@ def test_http_admin_only_and_validation(store, monkeypatch):
         ).status_code
         == 422
     )
-    assert client.get("/agents/missing", headers=headers).status_code == 404
+    assert client.get("/agents/agent_" + "f" * 32, headers=headers).status_code == 404
+
+    companion_update = {
+        "expected_revision": 1,
+        "configuration": configuration(name="Owner Companion").model_dump(),
+    }
+    saved = client.post("/agents/companion/update", headers=headers, json=companion_update)
+    assert saved.status_code == 200
+    assert saved.json()["revision"] == 2
+    stale = client.post("/agents/companion/update", headers=headers, json=companion_update)
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["current_revision"] == 2
+    assert (
+        client.post(
+            "/agents/companion/update",
+            headers=headers,
+            json={**companion_update, "credential": "must-not-be-accepted"},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/agents/companion/archive",
+            headers=headers,
+            json={"expected_revision": 2, "archived": True},
+        ).status_code
+        == 403
+    )
+    assert client.get("/agents", headers={"X-Pi-Key": "owner_admin_test_key"}).status_code == 200
+
+
+def test_browser_owner_agent_allowlist_is_exact():
+    identity = "agent_" + "a" * 32
+    for path in (
+        "/agents",
+        "/agents/companion",
+        f"/agents/{identity}",
+        "/agents/companion/versions",
+        f"/agents/{identity}/versions/1",
+    ):
+        assert owner_allowed("GET", path)
+        assert not runtime_allowed("GET", path)
+    for path in ("/agents", "/agents/companion/update", f"/agents/{identity}/update"):
+        assert owner_allowed("POST", path)
+        assert not runtime_allowed("POST", path)
+    assert owner_allowed("POST", f"/agents/{identity}/archive")
+    for method, path in (
+        ("POST", "/agents/companion/archive"),
+        ("DELETE", f"/agents/{identity}"),
+        ("GET", "/agents/missing"),
+        ("GET", "/agents/agent_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        ("GET", f"/agents/{identity}/versions/0"),
+        ("GET", f"/agents/{identity}/versions/1/extra"),
+    ):
+        assert not owner_allowed(method, path)

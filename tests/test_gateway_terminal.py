@@ -24,6 +24,15 @@ def test_terminal_requires_password_proof_csrf_and_live_owner_session(request):
     assert client.post("/api/terminal", json=body, headers=admitted).status_code == 200
     assert client.post("/api/terminal", json=body, headers=headers).json()["replayed"]
     assert len(spawned) == 1
+    current = client.get("/api/terminal/current")
+    assert current.status_code == 200
+    assert current.json() == {
+        "lease": "terminal_request_01",
+        "workspace": "",
+        "maximumLifetimeSeconds": 900,
+        "commandsPersisted": False,
+        "outputPersisted": False,
+    }
     path = "/api/terminal/terminal_request_01/input"
     data = {"data": base64.b64encode(b"synthetic input").decode()}
     assert client.post(path, json=data).status_code == 403

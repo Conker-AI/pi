@@ -12,11 +12,17 @@ import time
 import uuid
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+ProjectId = Annotated[str, StringConstraints(pattern=r"^project_[0-9a-f]{32}$")]
+SessionId = Annotated[str, StringConstraints(pattern=r"^ses_[0-9a-f]{16}$")]
+TaskId = Annotated[str, StringConstraints(pattern=r"^tsk_[0-9a-f]{32}$")]
+FileId = Annotated[str, StringConstraints(pattern=r"^attachment_[0-9a-f]{32}$")]
 
 
 class Fields(Strict):
@@ -35,18 +41,18 @@ class Fields(Strict):
 
 class Conversation(Strict):
     kind: Literal["conversation"]
-    sessionId: str = Field(min_length=1, max_length=200)
+    sessionId: SessionId
 
 
 class Task(Strict):
     kind: Literal["task"]
-    taskId: str = Field(min_length=1, max_length=200)
+    taskId: TaskId
 
 
 class File(Strict):
     kind: Literal["file"]
-    sessionId: str = Field(min_length=1, max_length=200)
-    fileId: str = Field(min_length=1, max_length=200)
+    sessionId: SessionId
+    fileId: FileId
 
 
 Reference = Annotated[Conversation | Task | File, Field(discriminator="kind")]
@@ -59,10 +65,47 @@ class Privacy(Strict):
 
 
 class Source(Strict):
-    originSessionId: str
-    label: str
+    originSessionId: SessionId
+    label: str = Field(min_length=1, max_length=500)
     archived: bool
     privacy: Privacy
+
+
+class LinkSnapshot(Strict):
+    originSessionId: SessionId
+    linkedAt: float = Field(ge=0, allow_inf_nan=False)
+
+
+class ProjectLink(Strict):
+    reference: Reference
+    mode: Literal["live-reference"]
+    snapshot: LinkSnapshot
+    availability: Literal["available", "archived", "unavailable", "origin-changed"]
+    label: str = Field(min_length=1, max_length=500)
+    labelSource: Literal["live-source", "unavailable"]
+    privacy: Privacy | None
+
+
+class ProjectView(Strict):
+    schemaVersion: Literal[1] = 1
+    id: ProjectId
+    revision: int = Field(ge=1)
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(max_length=2000)
+    instructions: str = Field(max_length=16000)
+    createdAt: float = Field(ge=0, allow_inf_nan=False)
+    updatedAt: float = Field(ge=0, allow_inf_nan=False)
+    archivedAt: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    links: list[ProjectLink] = Field(max_length=1000)
+    authority: Literal["none"] = "none"
+    contentIncluded: Literal[False] = False
+    grantsInherited: Literal[False] = False
+
+
+class ProjectCollection(Strict):
+    schemaVersion: Literal[1] = 1
+    results: list[ProjectView] = Field(max_length=200)
+    nextCursor: ProjectId | None = None
 
 
 class Revision(Strict):
@@ -107,7 +150,12 @@ def _row(db, identity, revision=None):
 
 def _source(resolve, reference):
     value = resolve(reference) if resolve else None
-    return Source.model_validate(value) if value is not None else None
+    if value is None:
+        return None
+    try:
+        return Source.model_validate(value)
+    except ValueError:
+        return None
 
 
 def _links(row, resolve):
@@ -135,15 +183,15 @@ def _links(row, resolve):
 
 
 def _view(row, resolve=None):
-    return {
-        "id": row["id"],
-        "revision": row["revision"],
+    return ProjectView(
+        id=row["id"],
+        revision=row["revision"],
         **json.loads(row["fields"]),
-        "createdAt": row["created_at"],
-        "updatedAt": row["updated_at"],
-        "archivedAt": row["archived_at"],
-        "links": _links(row, resolve),
-    }
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        archivedAt=row["archived_at"],
+        links=_links(row, resolve),
+    ).model_dump()
 
 
 def get(store, identity, resolve=None):
@@ -151,11 +199,21 @@ def get(store, identity, resolve=None):
         return _view(_row(db, identity), resolve)
 
 
-def list_projects(store, resolve=None):
+def list_projects(store, resolve=None, limit=None, cursor=None):
     with store._connect() as db:
+        where, values = "", []
+        if cursor is not None:
+            position = _row(db, cursor)
+            where = "WHERE created_at>? OR (created_at=? AND id>?)"
+            values = [position["created_at"], position["created_at"], cursor]
+        suffix = " LIMIT ?" if limit is not None else ""
+        if limit is not None:
+            values.append(limit)
         return [
             _view(row, resolve)
-            for row in db.execute("SELECT * FROM projects ORDER BY created_at,id")
+            for row in db.execute(
+                f"SELECT * FROM projects {where} ORDER BY created_at,id{suffix}", values
+            )
         ]
 
 

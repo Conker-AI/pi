@@ -28,17 +28,20 @@ configuration, not copied conversation history or synthesized memories.
 Mount `characters_api.router(store_factory, authorize)` under the owner API:
 
 - `GET /characters/{agent_id}?revision=N`: current or historical full profile.
-- `PUT /characters/{agent_id}`: `{expected_revision, profile}`; initially revision 0.
-- `GET /characters/{agent_id}/history`: revision/time/restore-source metadata.
+- `PUT /characters/{agent_id}` or `POST /characters/{agent_id}/save`:
+  `{expected_revision, profile}`; initially revision 0.
+- `GET /characters/{agent_id}/history`: `{results}` containing
+  revision/time/restore-source metadata.
 - `GET /characters/{agent_id}/export?revision=N`: Conker v1 JSON package.
 - `POST /characters/{agent_id}/restore`: `{expected_revision, revision}`.
 - `POST /characters/{agent_id}/import`: `{text}` containing package JSON; returns a
   draft without saving it. A subsequent CAS save is required.
 
 All routes depend on owner authorization. JSON responses are no-store and nosniff.
-Mutation request streams are capped at 32 MiB before JSON parsing, including the
-JSON wrapper. Stored serialized profiles and raw import strings have independent
-32 MiB UTF-8 limits. Character errors expose static messages; validation errors do
+Mutation request streams are capped at 66 MiB before JSON parsing so a bounded
+32-MiB package can remain inside a JSON import wrapper. Stored serialized profiles
+and raw import strings have independent 32 MiB UTF-8 limits. Character errors expose
+static messages; validation errors do
 not echo potentially large embedded data. Missing historical revisions return 404.
 
 Conker v1 import validates the entire profile. Character Card V2/V3 imports map
@@ -101,3 +104,9 @@ immutable versions, CAS races, restoration, archived/Companion boundaries, reduc
 snapshots, package/media/history limits, rejected URLs/animated images/references,
 import drafts, and owner API enforcement. Tests use temporary databases and
 synthetic media only; no network, hardware, model download, or synthesis occurs.
+
+The browser owner contract deliberately exposes only `companion`: GET current,
+history and export plus POST save, import and restore. Gateway verification binds
+the complete operation before forwarding it with the separate Pi owner credential.
+Other agents, PUT, deletion and character runtime authority remain unavailable to
+the browser.

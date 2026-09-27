@@ -23,8 +23,11 @@ def test_authenticated_gateway_controls_real_pty_and_revocation(tmp_path, monkey
     monkeypatch.setenv("CONKER_SYNTHETIC_SECRET", "synthetic-do-not-inherit")
     spawned = []
 
-    def factory(shell, directory):
-        terminal = Terminal(shell, directory, lifetime=30)
+    def factory(socket_path, workspace_label, request_identity):
+        assert socket_path == "/synthetic/terminal.sock"
+        assert workspace_label == "Temporary test workspace"
+        assert request_identity == "linux_terminal_contract"
+        terminal = Terminal("/bin/bash", str(tmp_path), lifetime=30)
         spawned.append(terminal)
         return terminal
 
@@ -33,8 +36,8 @@ def test_authenticated_gateway_controls_real_pty_and_revocation(tmp_path, monkey
         str(auth.path),
         "http://pi.invalid",
         "x" * 32,
-        terminal_shell="/bin/bash",
-        terminal_directory=str(tmp_path),
+        terminal_socket="/synthetic/terminal.sock",
+        terminal_workspace_label="Temporary test workspace",
     )
 
     def upstream(request):

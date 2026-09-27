@@ -5,9 +5,39 @@ Each definition targets one exact published tool or automation version and SHA-2
 digest; instructions describe its purpose, rather than asking an AI to reconstruct
 the workflow at each tick. Agent IDs are selection metadata, not credentials.
 
-Owner-only `/jobs` routes create/list definitions, update with an expected revision,
-read run receipts, and admit manual runs using a stable request ID. Disabling a
+Recovery-admin `/jobs` routes create definitions and replace their complete pinned
+target with an expected revision. The narrower owner-browser contract can list and
+inspect existing schedules, pause or enable one with an expected revision, inspect
+redacted run history, and admit a manual run using a stable request ID. Disabling a
 schedule stops future automatic admission; an explicit manual run remains possible.
+
+The browser routes are exact and schema version `1`:
+
+- `GET /jobs?limit=50&cursor={job_id}` and `GET /jobs/{id}` return bounded safe
+  projections. Free-form instructions, target arguments and allowance identifiers
+  are replaced by configured booleans.
+- `POST /jobs/{id}/state` accepts only `expected_revision` and `enabled`. It changes
+  durable schedule state and reports `execution: not-triggered`; it does not dispatch
+  as part of the request. Enabling permits the separate worker to admit future due
+  occurrences.
+- `GET /jobs/{id}/runs?limit=50&cursor={run_id}` returns at most 100 redacted rows.
+  Raw definitions, arguments, request IDs, approval IDs, budget IDs and receipts are
+  never returned.
+- `POST /jobs/{id}/run` explicitly admits one manual occurrence. Its 16-128 character
+  request ID is the durable idempotency key. The response distinguishes admission,
+  waiting, dispatched, resolved and uncertain state; admission never claims the
+  external operation ran.
+- `POST /jobs/runs/{id}/budget`, `/provision-budget`, `/cancel`, `/resume`, and
+  `/reconcile` are explicit owner actions against one canonical saved run. Their
+  responses expose only bounded status evidence and no credential or authority.
+
+Every safe job/run DTO declares `authority: none` and whether content was included.
+The conversation runtime credential cannot use these routes. Creation and full
+definition replacement are deliberately absent from the owner browser allowlist:
+Pi cannot currently inspect a ToolGate publication's argument schema, so accepting
+browser-supplied target arguments would permit arbitrary values, including paths or
+credential-shaped content. Recovery admins retain the pre-existing authoring API
+until an authoritative publication catalogue and schema resolver exist.
 
 Daily and weekly schedules use IANA time zones. Missing daylight-saving slots are
 skipped; repeated slots run once at the first occurrence. Intervals use elapsed
@@ -63,8 +93,8 @@ recurring grants and proactive owner-budget reservations remains outstanding. Ex
 owner schedules are distinct from unsolicited proactive suggestions; notification
 quiet hours should not silently cancel a deliberately scheduled operation.
 Manual run admission records `ready`; execution requires the worker to be enabled.
-Browser gateway/frontend integration is deferred
-until owner review. Tests use temporary databases and no external effects.
+Reading a schedule or run never admits or dispatches work. Tests use temporary
+databases and injected adapters; they make no external effects.
 
 
 ## Withdrawing waiting runs
@@ -81,4 +111,4 @@ Continuity treats cancellation as a resolved status rather than an attention ale
 This operation withdraws Pi's dispatch only. It does not revoke a ToolGate approval
 or return a spending grant to a reusable pool. Saved approvals remain evidence;
 ToolGate authority outside this scheduler is administered separately. No browser
-route or frontend adapter was wired in this phase.
+response exposes the saved approval, receipt or budget identifier.
