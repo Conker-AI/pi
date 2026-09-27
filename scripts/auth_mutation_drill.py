@@ -152,15 +152,15 @@ CASES = [
     (
         "upstream-cookie-replayed",
         "gateway/api.py",
-        'outgoing.headers.pop("cookie", None)',
-        "pass",
+        '        outgoing.headers.pop("cookie", None)\n        return app.state.client.send(outgoing)',
+        "        pass\n        return app.state.client.send(outgoing)",
         API + "test_proxy_keeps_credentials_separate_and_preserves_memory_status",
     ),
     (
         "upstream-redirect-accepted",
         "gateway/api.py",
-        "if 300 <= response.status_code < 400:",
-        "if False:",
+        '        if 300 <= response.status_code < 400:\n            raise AuthError(\n                "Service returned an unexpected redirect. Check gateway service URLs on the host.",',
+        '        if False:\n            raise AuthError(\n                "Service returned an unexpected redirect. Check gateway service URLs on the host.",',
         API + "test_upstream_failure_is_explicit_and_never_retried[redirect]",
     ),
 ]
