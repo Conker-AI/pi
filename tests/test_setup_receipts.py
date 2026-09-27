@@ -189,12 +189,8 @@ def test_expiry_is_explicit_and_setup_can_reach_complete(tmp_path):
         )
         router = Router(Adapter())
         verify_model(store, router, "setup-model-receipts-complete")
-        memory_choice = choose_optional(
-            store, "memory", "include", "setup-memory-receipts-include"
-        )
-        choose_optional(
-            store, "capabilities", "include", "setup-capabilities-receipts-include"
-        )
+        memory_choice = choose_optional(store, "memory", "include", "setup-memory-receipts-include")
+        choose_optional(store, "capabilities", "include", "setup-capabilities-receipts-include")
         setup_receipts.record(
             store, "boundaries", receipt("receipt-boundaries", digest="1" * 64), now=NOW
         )

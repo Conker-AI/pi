@@ -237,9 +237,7 @@ def test_turn_apply_uses_only_runtime_recovery_routes(payload, path):
         return httpx.Response(200, json={"status": "cancelled"})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "turns", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "turns", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["status"] == "cancelled"
     request = seen[0]
@@ -268,9 +266,7 @@ def test_turn_apply_rejects_non_recovery_operations_and_invalid_identities():
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "turns", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "turns", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize(
@@ -317,9 +313,7 @@ def test_turn_apply_rejects_non_recovery_operations_and_invalid_identities():
         ),
     ],
 )
-def test_read_only_system_apply_uses_fixed_owner_routes(
-    resource, payload, path, forwarded
-):
+def test_read_only_system_apply_uses_fixed_owner_routes(resource, payload, path, forwarded):
     seen = []
 
     def upstream(request: httpx.Request):
@@ -451,9 +445,10 @@ def test_character_apply_uses_the_character_response_envelope():
     )
     payload = {"operation": "restore", "expected_revision": 2, "revision": 1}
     with httpx.Client(transport=httpx.MockTransport(lambda _request: response)) as client:
-        assert apply_resource(
-            config(), "character", io.BytesIO(json.dumps(payload).encode()), client
-        ) == {}
+        assert (
+            apply_resource(config(), "character", io.BytesIO(json.dumps(payload).encode()), client)
+            == {}
+        )
 
 
 @pytest.mark.parametrize(
@@ -524,9 +519,7 @@ def test_call_apply_uses_typed_only_owner_routes(payload, path, forwarded):
         return httpx.Response(200, json={"schemaVersion": 1, "audioIncluded": False})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "calls", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "calls", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["audioIncluded"] is False
     request = seen[0]
@@ -560,9 +553,7 @@ def test_call_apply_rejects_media_and_untyped_routes_before_network():
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "calls", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "calls", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize(
@@ -637,9 +628,7 @@ def test_tool_apply_keeps_owner_and_execution_channels_separate(
         return httpx.Response(200, json={"status": "recorded"})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "tools", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "tools", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["status"] == "recorded"
     request = seen[0]
@@ -699,9 +688,7 @@ def test_tool_apply_rejects_unreviewed_shapes_before_network():
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "tools", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "tools", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 def test_tool_execution_apply_requires_both_scoped_credentials_before_network():
@@ -760,9 +747,7 @@ def test_tool_execution_apply_requires_both_scoped_credentials_before_network():
         ),
     ],
 )
-def test_agent_apply_resolves_strict_operation_to_fixed_owner_route(
-    payload, path, forwarded
-):
+def test_agent_apply_resolves_strict_operation_to_fixed_owner_route(payload, path, forwarded):
     seen = []
 
     def upstream(request: httpx.Request):
@@ -800,9 +785,7 @@ def test_agent_apply_rejects_unknown_operation_companion_archive_and_extra_field
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "agents", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "agents", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize(
@@ -955,9 +938,7 @@ def test_project_apply_rejects_removal_and_invalid_reference_before_network():
         ),
     ],
 )
-def test_team_apply_changes_configuration_without_exposing_execution(
-    payload, path, forwarded
-):
+def test_team_apply_changes_configuration_without_exposing_execution(payload, path, forwarded):
     seen = []
 
     def upstream(request: httpx.Request):
@@ -965,9 +946,7 @@ def test_team_apply_changes_configuration_without_exposing_execution(
         return httpx.Response(200, json={"schemaVersion": 1, "revision": 5})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "teams", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "teams", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["revision"] == 5
     assert seen[0].url.path == path
@@ -1002,9 +981,7 @@ def test_team_apply_rejects_prepare_execute_and_invalid_budget_before_network():
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "teams", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "teams", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize(
@@ -1033,9 +1010,7 @@ def test_team_apply_rejects_prepare_execute_and_invalid_budget_before_network():
         ),
     ],
 )
-def test_job_apply_matches_connected_state_and_run_operations(
-    payload, path, forwarded, status
-):
+def test_job_apply_matches_connected_state_and_run_operations(payload, path, forwarded, status):
     seen = []
 
     def upstream(request: httpx.Request):
@@ -1043,9 +1018,7 @@ def test_job_apply_matches_connected_state_and_run_operations(
         return httpx.Response(status, json={"schemaVersion": 1, "status": "ready"})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "jobs", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "jobs", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["status"] == "ready"
     assert seen[0].url.path == path
@@ -1069,9 +1042,7 @@ def test_job_apply_rejects_raw_authoring_and_unstable_run_identity_before_networ
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "jobs", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "jobs", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 def test_memory_forget_apply_preserves_review_revision_and_request_identity():
@@ -1123,9 +1094,7 @@ def test_memory_apply_rejects_generic_delete_and_missing_review_revision():
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "memory", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "memory", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize("decision", ["accept", "decline", "never"])
@@ -1245,9 +1214,7 @@ def test_task_apply_uses_typed_runtime_operations(payload, path, forwarded):
         return httpx.Response(200, json={"id": "tsk_" + "1" * 32, "revision": 5})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(
-            config(), "tasks", io.BytesIO(json.dumps(payload).encode()), client
-        )
+        result = apply_resource(config(), "tasks", io.BytesIO(json.dumps(payload).encode()), client)
 
     assert result["revision"] == 5
     request = seen[0]
@@ -1280,9 +1247,7 @@ def test_task_apply_rejects_invalid_transition_and_unstable_request_before_netwo
     ) as client:
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
-                apply_resource(
-                    config(), "tasks", io.BytesIO(json.dumps(payload).encode()), client
-                )
+                apply_resource(config(), "tasks", io.BytesIO(json.dumps(payload).encode()), client)
 
 
 @pytest.mark.parametrize(
@@ -1453,11 +1418,7 @@ def test_session_apply_rejects_missing_revision_invalid_sources_and_authority():
         base
         | {
             "settings": base["settings"]
-            | {
-                "projectSources": [
-                    {"kind": "conversation", "sessionId": "ses_1234567890abcdef"}
-                ]
-            }
+            | {"projectSources": [{"kind": "conversation", "sessionId": "ses_1234567890abcdef"}]}
         },
         base | {"authority": "admin"},
     ]
@@ -1482,9 +1443,7 @@ def test_apply_rejects_unknown_invalid_and_oversized_input_before_network():
         with pytest.raises(MutationError, match="JSON object"):
             apply_resource(config(), "models", io.BytesIO(b"[]"), client)
         with pytest.raises(MutationError, match="exceeded 2 MiB"):
-            apply_resource(
-                config(), "models", io.BytesIO(b"x" * (MAX_REQUEST_BYTES + 1)), client
-            )
+            apply_resource(config(), "models", io.BytesIO(b"x" * (MAX_REQUEST_BYTES + 1)), client)
 
 
 @pytest.mark.parametrize(

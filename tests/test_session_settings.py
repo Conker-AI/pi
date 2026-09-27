@@ -113,9 +113,9 @@ def test_new_conversation_selects_an_active_agent_atomically(tmp_path, monkeypat
         )
         agent = agents.create(store, config())
         monkeypatch.setattr(api.app.state, "store", store, raising=False)
-        selected = api.create_session(
-            api.NewSession(title="Research", agent_id=agent["id"])
-        )["session_id"]
+        selected = api.create_session(api.NewSession(title="Research", agent_id=agent["id"]))[
+            "session_id"
+        ]
         saved = settings.load(store, selected)
         assert saved["revision"] == 1
         assert saved["settings"] == {
@@ -123,9 +123,7 @@ def test_new_conversation_selects_an_active_agent_atomically(tmp_path, monkeypat
             "privacy": {"memoryDisabled": True, "harnessDisabled": False},
         }
         turn = store.start_turn(selected)
-        store.append_message(
-            selected, "assistant", "Attributed", turn_id=turn, purpose="final"
-        )
+        store.append_message(selected, "assistant", "Attributed", turn_id=turn, purpose="final")
         assert store.messages(selected)[0]["agent_id"] == agent["id"]
 
         restricted = api.create_session(

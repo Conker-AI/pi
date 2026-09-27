@@ -47,9 +47,7 @@ def test_policy_is_revisioned_replay_safe_and_append_only(tmp_path):
         assert setup_protection.save(store, policy_input(), now=NOW) == first
 
         with pytest.raises(setup_protection.ProtectionError) as conflict:
-            setup_protection.save(
-                store, policy_input(destination="/media/other"), now=NOW
-            )
+            setup_protection.save(store, policy_input(destination="/media/other"), now=NOW)
         assert conflict.value.code == "replay_conflict"
 
         with pytest.raises(setup_protection.ProtectionError) as stale:
@@ -94,9 +92,7 @@ def test_protection_receipt_is_bound_to_current_policy(tmp_path):
         assert saved.state == "valid"
 
 
-def test_owner_api_configures_policy_and_accepts_only_matching_host_evidence(
-    tmp_path, monkeypatch
-):
+def test_owner_api_configures_policy_and_accepts_only_matching_host_evidence(tmp_path, monkeypatch):
     store = Store(tmp_path / "pi.db")
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(

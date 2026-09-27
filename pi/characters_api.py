@@ -47,7 +47,9 @@ def router(store, authorize):
 
     @routes.get("/{agent_id}/history")
     def history(agent_id: str):
-        return execute(lambda current, selected: {"results": characters.history(current, selected)}, agent_id)
+        return execute(
+            lambda current, selected: {"results": characters.history(current, selected)}, agent_id
+        )
 
     @routes.get("/{agent_id}/export")
     def export(agent_id: str, revision: int | None = Query(default=None, ge=1)):

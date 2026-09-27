@@ -38,9 +38,7 @@ INSPECTIONS = {
     "character-history": Inspection("owner", "/characters/companion/history"),
     "call-capabilities": Inspection("owner", "/calls/browser/capabilities"),
     "file-roots": Inspection("owner", "/system/files/roots"),
-    "inventory-containers": Inspection(
-        "owner", "/system/inventory/configured/containers"
-    ),
+    "inventory-containers": Inspection("owner", "/system/inventory/configured/containers"),
     "inventory-services": Inspection("owner", "/system/inventory/configured/services"),
     "jobs": Inspection("owner", "/jobs"),
     "memory": Inspection("owner", "/memory/objects"),
@@ -57,9 +55,7 @@ INSPECTIONS = {
         "/v2/owner/editor-capabilities",
         (("kind", "tool"), ("limit", "50")),
     ),
-    "tool-drafts": Inspection(
-        "toolgate-owner", "/v2/owner/editor-drafts", (("limit", "50"),)
-    ),
+    "tool-drafts": Inspection("toolgate-owner", "/v2/owner/editor-drafts", (("limit", "50"),)),
     "tools": Inspection("runtime", "/tools"),
     "workflow-capabilities": Inspection(
         "toolgate-owner",
@@ -96,21 +92,15 @@ def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dic
     if operation is None:
         selected = APPROVAL.fullmatch(resource)
         if selected:
-            operation = Inspection(
-                "toolgate-owner", f"/v2/owner/requests/{selected.group(1)}"
-            )
+            operation = Inspection("toolgate-owner", f"/v2/owner/requests/{selected.group(1)}")
     if operation is None:
         selected = SUBMISSION.fullmatch(resource)
         if selected:
-            operation = Inspection(
-                "runtime", f"/turn-submissions/{selected.group(1)}"
-            )
+            operation = Inspection("runtime", f"/turn-submissions/{selected.group(1)}")
     if operation is None:
         selected = FILE_LISTING.fullmatch(resource)
         if selected:
-            operation = Inspection(
-                "owner", f"/system/files/listings/{selected.group(1)}"
-            )
+            operation = Inspection("owner", f"/system/files/listings/{selected.group(1)}")
     if operation is None:
         selected = INVENTORY.fullmatch(resource)
         if selected:
@@ -122,15 +112,11 @@ def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dic
     if operation is None:
         selected = ACTIVE_CALL.fullmatch(resource)
         if selected:
-            operation = Inspection(
-                "owner", f"/calls/browser/active/{selected.group(1)}"
-            )
+            operation = Inspection("owner", f"/calls/browser/active/{selected.group(1)}")
     if operation is None:
         selected = TOOL_DRAFT.fullmatch(resource)
         if selected:
-            operation = Inspection(
-                "toolgate-owner", f"/v2/owner/editor-drafts/{selected.group(1)}"
-            )
+            operation = Inspection("toolgate-owner", f"/v2/owner/editor-drafts/{selected.group(1)}")
     if operation is None:
         selected = TOOL_VALIDATION.fullmatch(resource)
         if selected:
@@ -223,20 +209,19 @@ def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dic
                 raise InspectionError(
                     f"{service} rejected {resource} inspection (HTTP {response.status_code})."
                 )
-            if response.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+            if (
+                response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                != "application/json"
+            ):
                 raise InspectionError(f"{service} returned a non-JSON inspection response.")
             declared = response.headers.get("content-length")
             if declared and (not declared.isdigit() or int(declared) > response_limit):
-                raise InspectionError(
-                    f"{service} inspection response exceeded {limit_label}."
-                )
+                raise InspectionError(f"{service} inspection response exceeded {limit_label}.")
             body = bytearray()
             for chunk in response.iter_bytes():
                 body.extend(chunk)
                 if len(body) > response_limit:
-                    raise InspectionError(
-                        f"{service} inspection response exceeded {limit_label}."
-                    )
+                    raise InspectionError(f"{service} inspection response exceeded {limit_label}.")
     except InspectionError:
         raise
     except (httpx.HTTPError, OSError):

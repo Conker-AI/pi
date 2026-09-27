@@ -108,11 +108,7 @@ def options(store, router) -> Options:
     route = getattr(router, "local_model", "")
     if local is not None and isinstance(route, str) and route.strip():
         matching = next(
-            (
-                item
-                for item in values
-                if item.providerId == local.name and item.route == route
-            ),
+            (item for item in values if item.providerId == local.name and item.route == route),
             None,
         )
         if matching is None:
@@ -200,9 +196,7 @@ def select(store, router, body: Selection) -> dict:
             )
         else:
             provider["enabled"] = True
-        model = next(
-            (item for item in configuration["models"] if item["id"] == candidate.id), None
-        )
+        model = next((item for item in configuration["models"] if item["id"] == candidate.id), None)
         if model is None:
             configuration["models"].append(
                 {

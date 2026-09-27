@@ -202,9 +202,7 @@ def test_persisted_revisions_and_live_checks_drive_status(tmp_path):
         router = Router(Adapter())
         verify_model(store, router, "setup-model-status-complete")
         choose_optional(store, "memory", "include", "setup-memory-status-include")
-        choose_optional(
-            store, "capabilities", "include", "setup-capabilities-status-include"
-        )
+        choose_optional(store, "capabilities", "include", "setup-capabilities-status-include")
         result = setup_status.load(
             store,
             owner_key_configured=True,
@@ -251,9 +249,7 @@ def test_configured_but_unverified_dependencies_are_degraded(tmp_path):
         router = Router(Adapter())
         verify_model(store, router, "setup-model-status-skips")
         choose_optional(store, "memory", "include", "setup-memory-degraded-include")
-        choose_optional(
-            store, "capabilities", "include", "setup-capabilities-degraded-include"
-        )
+        choose_optional(store, "capabilities", "include", "setup-capabilities-degraded-include")
         result = setup_status.load(
             store,
             owner_key_configured=True,
@@ -415,9 +411,12 @@ def test_model_activation_is_an_exact_owner_write_route(tmp_path, monkeypatch):
     }
     try:
         assert client.post("/setup/models/activate", json=body).status_code == 401
-        assert client.post(
-            "/setup/models/activate", json=body, headers={"X-Pi-Gateway-Key": "r" * 32}
-        ).status_code == 401
+        assert (
+            client.post(
+                "/setup/models/activate", json=body, headers={"X-Pi-Gateway-Key": "r" * 32}
+            ).status_code
+            == 401
+        )
         response = client.post(
             "/setup/models/activate", json=body, headers={"X-Pi-Owner-Key": OWNER}
         )

@@ -138,7 +138,9 @@ def review_memory(store, body: MemoryReviewInput, memory, *, now: float | None =
             409,
         )
     if choice.revision != body.expectedChoiceRevision:
-        raise RehearsalError("revision_conflict", f"Expected memory choice revision {choice.revision}.", 409)
+        raise RehearsalError(
+            "revision_conflict", f"Expected memory choice revision {choice.revision}.", 409
+        )
     service_state = "off"
     if choice.choice == "include":
         try:
@@ -219,8 +221,14 @@ def start_approval(store, body: ApprovalInput, toolgate, *, now: float | None = 
         outcome = toolgate.invoke(TOOL_ID, TOOL_ARGUMENTS, action_id=action_id)
     except ToolRefused as exc:
         _set_approval(store, body.requestId, "refused", observed)
-        raise RehearsalError("tool_refused", "ToolGate refused the rehearsal approval request.", 409) from exc
-    if isinstance(outcome, ApprovalRequired) and outcome.tool_id == TOOL_ID and outcome.args == TOOL_ARGUMENTS:
+        raise RehearsalError(
+            "tool_refused", "ToolGate refused the rehearsal approval request.", 409
+        ) from exc
+    if (
+        isinstance(outcome, ApprovalRequired)
+        and outcome.tool_id == TOOL_ID
+        and outcome.args == TOOL_ARGUMENTS
+    ):
         _set_approval(
             store,
             body.requestId,
@@ -372,8 +380,7 @@ def status(store, *, now: datetime | None = None) -> Status:
     }
     approval_phase = Phase(state=projected, detail=details[projected])
     ready = all(
-        phase.state == "complete"
-        for phase in (conversation_phase, memory_phase, approval_phase)
+        phase.state == "complete" for phase in (conversation_phase, memory_phase, approval_phase)
     )
     current_digest = _rehearsal_digest(conversation, memory, approval)
     complete = (
@@ -398,7 +405,12 @@ def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
         conversation = _conversation(db)
         memory = _memory_review(db, memory_choice.revision)
         approval = _approval(db)
-    if conversation is None or memory is None or approval is None or approval["state"] != "complete":
+    if (
+        conversation is None
+        or memory is None
+        or approval is None
+        or approval["state"] != "complete"
+    ):
         raise RehearsalError(
             "rehearsal_incomplete",
             "Complete one conversation, review memory, and finish the harmless approval flow.",
@@ -427,7 +439,12 @@ def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
 
 
 def _rehearsal_digest(conversation, memory, approval) -> str | None:
-    if conversation is None or memory is None or approval is None or approval["state"] != "complete":
+    if (
+        conversation is None
+        or memory is None
+        or approval is None
+        or approval["state"] != "complete"
+    ):
         return None
     return _digest(
         {

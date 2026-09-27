@@ -687,10 +687,16 @@ def create_app(
             raise AuthError("This owner operation is not available through the gateway.", 403)
         if not app.state.config.pi_owner_key:
             raise AuthError("Pi owner-control connection is not configured.", 503)
-        body = await json_body(
-            request,
-            max_bytes=66 * 1024 * 1024 if target.startswith("/characters/companion/") else 65536,
-        ) if request.method == "POST" else None
+        body = (
+            await json_body(
+                request,
+                max_bytes=66 * 1024 * 1024
+                if target.startswith("/characters/companion/")
+                else 65536,
+            )
+            if request.method == "POST"
+            else None
+        )
         if body is not None:
             if session_only_write(request.method, target):
                 if request.scope["query_string"]:

@@ -81,8 +81,15 @@ class BrowserEvent(Strict):
 class BrowserRequest(Strict):
     requestId: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     state: Literal[
-        "reserved", "transcribing", "model", "synthesizing", "complete", "held",
-        "failed", "unknown", "forgotten",
+        "reserved",
+        "transcribing",
+        "model",
+        "synthesizing",
+        "complete",
+        "held",
+        "failed",
+        "unknown",
+        "forgotten",
     ]
     inputKind: Literal["text", "audio"]
     speechStatus: str = Field(max_length=100)
@@ -386,9 +393,21 @@ def browser_view(value):
         **{
             key: value[key]
             for key in (
-                "id", "conversationId", "sessionId", "agentId", "name", "startedAt",
-                "endedAt", "revision", "generation", "phase", "paused", "channels", "mode",
-                "modelId", "privacy",
+                "id",
+                "conversationId",
+                "sessionId",
+                "agentId",
+                "name",
+                "startedAt",
+                "endedAt",
+                "revision",
+                "generation",
+                "phase",
+                "paused",
+                "channels",
+                "mode",
+                "modelId",
+                "privacy",
             )
         },
         events=events,
@@ -438,7 +457,9 @@ def browser_availability(speech=None):
     def status(name):
         value = capabilities.get(name, {})
         selected = value.get("status") if isinstance(value, dict) else value
-        return selected if selected in {"configured", "available", "unavailable"} else "unconfigured"
+        return (
+            selected if selected in {"configured", "available", "unavailable"} else "unconfigured"
+        )
 
     return BrowserCallAvailability(speechInput=status("stt"), speechOutput=status("tts"))
 

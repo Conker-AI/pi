@@ -200,7 +200,14 @@ def _companion(store):
             "companion",
             "blocked",
             True,
-            [_evidence("pi.agent.companion", "missing", "Durable Companion configuration is unavailable.", companion["revision"])],
+            [
+                _evidence(
+                    "pi.agent.companion",
+                    "missing",
+                    "Durable Companion configuration is unavailable.",
+                    companion["revision"],
+                )
+            ],
             "companion_configuration_unavailable",
         )
     choice = setup_choices.current(store, "companion")
@@ -388,9 +395,7 @@ def _memory(store, memory):
                 _evidence(
                     "memorygate",
                     "ok" if healthy else "degraded",
-                    "MemoryGate is available."
-                    if healthy
-                    else "MemoryGate is not fully available.",
+                    "MemoryGate is available." if healthy else "MemoryGate is not fully available.",
                 ),
             ],
             "memory_choice_unreviewed" if healthy else "memory_unavailable",
@@ -447,7 +452,11 @@ def _speech_evidence(speech):
             "degraded",
             "Voice is configured but its latest operation was unavailable. Check conker speech status on the host.",
         )
-    output = "speech replies are configured" if output_status in {"configured", "available"} else "replies remain text-only"
+    output = (
+        "speech replies are configured"
+        if output_status in {"configured", "available"}
+        else "replies remain text-only"
+    )
     return _evidence(
         "speech",
         "ok",
@@ -551,7 +560,7 @@ def _capabilities(store, toolgate, speech=None):
                 "missing",
                 "Choose whether model turns may use available capabilities.",
                 choice.revision,
-            )
+            ),
         )
     evidence.append(speech_evidence)
     return _step("capabilities", state, False, evidence, reason)

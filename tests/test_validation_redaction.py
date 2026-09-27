@@ -8,7 +8,9 @@ from pi import api
 def test_validation_errors_never_reflect_submitted_secret(monkeypatch):
     secret = "secret-sentinel-never-return-4729"
     owner = "owner-validation-test-" + "o" * 32
-    monkeypatch.setattr(api.app.state, "admin_key", "admin-validation-test-" + "a" * 32, raising=False)
+    monkeypatch.setattr(
+        api.app.state, "admin_key", "admin-validation-test-" + "a" * 32, raising=False
+    )
     monkeypatch.setattr(
         api.app.state,
         "owner_key_hash",

@@ -129,8 +129,10 @@ def current(store, step: ChoiceStep) -> Choice:
             f"SELECT * FROM {table} WHERE step=? ORDER BY revision DESC LIMIT 1",
             (step,),
         ).fetchone()
-    return _project(row) if row else Choice(
-        step=step, revision=0, requestId=None, choice="undecided", recordedAt=None
+    return (
+        _project(row)
+        if row
+        else Choice(step=step, revision=0, requestId=None, choice="undecided", recordedAt=None)
     )
 
 

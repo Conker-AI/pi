@@ -113,17 +113,16 @@ def test_rehearsal_requires_real_conversation_memory_review_and_approval(tmp_pat
         changed = setup_rehearsal.status(store, now=NOW)
         assert changed.state == "in_progress"
         assert changed.memoryReview.state == "missing"
-        assert setup_status._receipt_step(store, "rehearsal", now=NOW).state == (
-            "degraded"
-        )
+        assert setup_status._receipt_step(store, "rehearsal", now=NOW).state == ("degraded")
 
 
 def test_memory_review_is_revision_bound_idempotent_and_content_free(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         choice = choose_memory(store, "skip")
-        assert "off for new conversations" in setup_rehearsal.status(
-            store, now=NOW
-        ).memoryReview.detail
+        assert (
+            "off for new conversations"
+            in setup_rehearsal.status(store, now=NOW).memoryReview.detail
+        )
         body = setup_rehearsal.MemoryReviewInput(
             requestId="memory-review-1", expectedChoiceRevision=choice.revision
         )
@@ -180,9 +179,7 @@ def test_finalize_refuses_claims_without_all_three_proofs(tmp_path):
         assert setup_receipts.current(store, "rehearsal", now=NOW) is None
 
 
-def test_owner_api_runs_exact_rehearsal_routes_and_rejects_uploaded_receipts(
-    tmp_path, monkeypatch
-):
+def test_owner_api_runs_exact_rehearsal_routes_and_rejects_uploaded_receipts(tmp_path, monkeypatch):
     store = Store(tmp_path / "pi.db")
     choice = choose_memory(store)
     complete_conversation(store, ended_at=time.time() - 30)
@@ -238,9 +235,7 @@ def test_owner_api_runs_exact_rehearsal_routes_and_rejects_uploaded_receipts(
             json=uploaded.model_dump(mode="json"),
         )
         assert rejected.status_code == 403
-        assert setup_receipts.current(store, "rehearsal").source == (
-            "conker.first-run-rehearsal"
-        )
+        assert setup_receipts.current(store, "rehearsal").source == ("conker.first-run-rehearsal")
     finally:
         store.close()
 

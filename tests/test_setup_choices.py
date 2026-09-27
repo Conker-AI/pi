@@ -14,9 +14,7 @@ NOW = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 
 
 def value(request_id, choice, revision):
-    return setup_choices.ChoiceInput(
-        requestId=request_id, choice=choice, expectedRevision=revision
-    )
+    return setup_choices.ChoiceInput(requestId=request_id, choice=choice, expectedRevision=revision)
 
 
 def test_optional_choices_are_append_only_revisioned_and_restart_stable(tmp_path):

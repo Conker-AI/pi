@@ -269,9 +269,7 @@ def _message_with_attachments(db, row):
             snapshot = json.loads(binding["snapshot"])
             if item["role"] == "assistant" and snapshot.get("agentId"):
                 item["agent_id"] = snapshot["agentId"]
-            if binding["purpose"] == "input" and (
-                target := snapshot.get("replyToMessageId")
-            ):
+            if binding["purpose"] == "input" and (target := snapshot.get("replyToMessageId")):
                 item["reply_to"] = target
     files = attachments.message_views(db, item["id"], session_settings.source_privacy)
     if files:

@@ -31,12 +31,8 @@ def test_terminal_launcher_is_fixed_and_does_not_load_site_packages():
 
 
 def test_terminal_container_acceptance_covers_hostile_replacement_and_boundaries():
-    acceptance = (ROOT / "scripts" / "terminal_container_acceptance.sh").read_text(
-        encoding="utf-8"
-    )
-    probe = (ROOT / "scripts" / "terminal_container_probe.py").read_text(
-        encoding="utf-8"
-    )
+    acceptance = (ROOT / "scripts" / "terminal_container_acceptance.sh").read_text(encoding="utf-8")
+    probe = (ROOT / "scripts" / "terminal_container_probe.py").read_text(encoding="utf-8")
 
     for required in (
         "--network none",
@@ -49,7 +45,7 @@ def test_terminal_container_acceptance_covers_hostile_replacement_and_boundaries
         "fake-listener-accepted",
     ):
         assert required in acceptance
-    assert "choices=(\"normal\", \"attack\")" in probe
+    assert 'choices=("normal", "attack")' in probe
     assert "fake-listener-ready" in probe
     assert "os.kill(pid,signal.SIGTERM)" in probe
     assert "supervisor termination did not close the gateway channel" in probe

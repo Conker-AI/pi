@@ -558,9 +558,7 @@ def archive_agent(identity: str, body: agents.ArchiveAgent):
 
 class NewSession(BaseModel):
     title: str = ""
-    agent_id: str | None = Field(
-        default=None, pattern=r"^(?:companion|agent_[0-9a-f]{32})$"
-    )
+    agent_id: str | None = Field(default=None, pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
     privacy: dict[Literal["memoryDisabled", "harnessDisabled"], bool] | None = None
 
 

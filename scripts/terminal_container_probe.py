@@ -71,7 +71,7 @@ def normal_probe(connection: socket.socket, path: Path, identity: str) -> None:
         b"ANTHROPIC_|OPENROUTER_)'; then printf 'boundary-failed\\n'; "
         b"elif [ -e /run/secrets ] || [ -e /auth ] || [ -S /var/run/docker.sock ]; "
         b"then printf 'boundary-failed\\n'; "
-        b"elif [ \"$(wc -l < /proc/net/route)\" -ne 1 ]; "
+        b'elif [ "$(wc -l < /proc/net/route)" -ne 1 ]; '
         b"then printf 'boundary-failed\\n'; else printf 'boundary-ok\\n'; fi; "
         b"setsid -f /bin/sh -c 'printf escaped-descendant-ready\\n; sleep 300' &\n"
     )
@@ -125,7 +125,7 @@ else:
 
     terminate = (
         "python -c 'import json,os,signal,time; time.sleep(0.3); "
-        "pid=json.load(open(\"/run/conker-terminal/health.json\"))[\"pid\"]; "
+        'pid=json.load(open("/run/conker-terminal/health.json"))["pid"]; '
         "os.kill(pid,signal.SIGTERM)' &\n"
     ).encode("ascii")
     write(connection, identity, terminate)

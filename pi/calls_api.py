@@ -125,7 +125,10 @@ def router(store, loop, authorize, speech=None):
         request: Request,
         request_id: str = Query(pattern=r"^[A-Za-z0-9_-]{16,128}$"),
     ):
-        if set(request.query_params) != {"request_id"} or len(request.query_params.getlist("request_id")) != 1:
+        if (
+            set(request.query_params) != {"request_id"}
+            or len(request.query_params.getlist("request_id")) != 1
+        ):
             raise HTTPException(422, "Audio turns require exactly one request_id parameter.")
         media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if media not in {"audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave"}:

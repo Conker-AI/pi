@@ -47,9 +47,7 @@ def test_all_inspection_resources_use_fixed_allowlisted_get_routes():
         operation = INSPECTIONS[name]
         assert request.method == "GET"
         base = (
-            "http://toolgate.test"
-            if operation.authority == "toolgate-owner"
-            else "http://pi.test"
+            "http://toolgate.test" if operation.authority == "toolgate-owner" else "http://pi.test"
         )
         assert request.url.copy_with(query=None) == httpx.URL(base + operation.path)
         assert dict(request.url.params) == dict(operation.query)
@@ -143,9 +141,7 @@ def test_submission_inspection_resolves_one_validated_runtime_identity():
         result = inspect_resource(config(), f"submission:{request_id}", client)
 
     assert result == {"request_id": request_id, "status": "running"}
-    assert seen[0].url == httpx.URL(
-        f"http://pi.test/turn-submissions/{request_id}"
-    )
+    assert seen[0].url == httpx.URL(f"http://pi.test/turn-submissions/{request_id}")
     assert runtime_allowed("GET", seen[0].url.path)
     assert seen[0].headers["x-pi-gateway-key"] == config().pi_key
     assert "x-pi-owner-key" not in seen[0].headers
@@ -280,7 +276,10 @@ def test_read_only_system_detail_rejects_invalid_identity_before_network(resourc
     [
         (httpx.Response(302, headers={"location": "https://attacker.invalid"}), "HTTP 302"),
         (httpx.Response(200, text="not-json"), "non-JSON"),
-        (httpx.Response(200, content=b"[]", headers={"content-type": "application/json"}), "unsupported"),
+        (
+            httpx.Response(200, content=b"[]", headers={"content-type": "application/json"}),
+            "unsupported",
+        ),
         (httpx.Response(403, text="secret upstream detail"), "HTTP 403"),
     ],
 )
@@ -295,13 +294,16 @@ def test_inspection_rejects_redirects_malformed_shapes_and_denials(response, mes
 
 def test_inspection_bounds_streamed_response_bytes():
     body = json.dumps({"value": "x" * MAX_RESPONSE_BYTES}).encode()
-    with httpx.Client(
-        transport=httpx.MockTransport(
-            lambda _request: httpx.Response(
-                200, content=body, headers={"content-type": "application/json"}
+    with (
+        httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200, content=body, headers={"content-type": "application/json"}
+                )
             )
-        )
-    ) as client, pytest.raises(InspectionError, match="exceeded 8 MiB"):
+        ) as client,
+        pytest.raises(InspectionError, match="exceeded 8 MiB"),
+    ):
         inspect_resource(config(), "agents", client)
 
 

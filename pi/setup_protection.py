@@ -121,13 +121,17 @@ def current(store) -> Policy:
         row = db.execute(
             "SELECT * FROM setup_protection_policies ORDER BY revision DESC LIMIT 1"
         ).fetchone()
-    return _project(row) if row else Policy(
-        revision=0,
-        requestId=None,
-        destination=None,
-        retentionCopies=None,
-        policyDigest=None,
-        recordedAt=None,
+    return (
+        _project(row)
+        if row
+        else Policy(
+            revision=0,
+            requestId=None,
+            destination=None,
+            retentionCopies=None,
+            policyDigest=None,
+            recordedAt=None,
+        )
     )
 
 

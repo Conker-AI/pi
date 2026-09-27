@@ -123,7 +123,9 @@ def _selected(saved: dict, candidate_id: str) -> tuple[dict, dict]:
         raise ProbeError("model_configuration_missing", "Choose an answer model before testing it.")
     answer = configuration["roleSettings"]["roles"]["answer"]
     if answer["modelId"] != candidate_id:
-        raise ProbeError("model_selection_changed", "The selected answer model changed; reload setup.", 409)
+        raise ProbeError(
+            "model_selection_changed", "The selected answer model changed; reload setup.", 409
+        )
     model = next((item for item in configuration["models"] if item["id"] == candidate_id), None)
     if model is None or not model["enabled"]:
         raise ProbeError("model_selection_unavailable", "The selected answer model is unavailable.")
@@ -132,7 +134,9 @@ def _selected(saved: dict, candidate_id: str) -> tuple[dict, dict]:
         None,
     )
     if provider is None or not provider["enabled"]:
-        raise ProbeError("model_selection_unavailable", "The selected answer-model provider is unavailable.")
+        raise ProbeError(
+            "model_selection_unavailable", "The selected answer-model provider is unavailable."
+        )
     return model, provider
 
 
@@ -151,7 +155,9 @@ def _claim(store, body: ProbeInput, now: datetime) -> ProbeReceipt | None:
             )
             if not same:
                 db.execute("ROLLBACK")
-                raise ProbeError("replay_conflict", "requestId was already used for another model probe.", 409)
+                raise ProbeError(
+                    "replay_conflict", "requestId was already used for another model probe.", 409
+                )
             if prior["state"] == "passed":
                 receipt = db.execute(
                     "SELECT * FROM setup_model_probe_receipts WHERE request_id=?",
@@ -159,7 +165,9 @@ def _claim(store, body: ProbeInput, now: datetime) -> ProbeReceipt | None:
                 ).fetchone()
                 db.execute("COMMIT")
                 if receipt is None:
-                    raise ProbeError("receipt_unavailable", "The saved model probe receipt is unavailable.", 503)
+                    raise ProbeError(
+                        "receipt_unavailable", "The saved model probe receipt is unavailable.", 503
+                    )
                 return _project(receipt)
             db.execute("ROLLBACK")
             detail = (
@@ -170,7 +178,15 @@ def _claim(store, body: ProbeInput, now: datetime) -> ProbeReceipt | None:
             raise ProbeError("probe_not_replayable", detail, 409)
         db.execute(
             "INSERT INTO setup_model_probe_requests VALUES (?,?,?,?,?,?,?)",
-            (body.requestId, body.expectedRevision, body.candidateId, "started", None, now.timestamp(), None),
+            (
+                body.requestId,
+                body.expectedRevision,
+                body.candidateId,
+                "started",
+                None,
+                now.timestamp(),
+                None,
+            ),
         )
         db.execute("COMMIT")
     return None
@@ -196,7 +212,9 @@ def probe(store, router, body: ProbeInput, *, now: datetime | None = None) -> Pr
     adapters = router.adapters()
     adapter = adapters.get(model["providerId"])
     if adapter is None or not callable(getattr(adapter, "complete_bounded", None)):
-        raise ProbeError("provider_unavailable", "The selected answer-model provider cannot be tested.", 503)
+        raise ProbeError(
+            "provider_unavailable", "The selected answer-model provider cannot be tested.", 503
+        )
     replay = _claim(store, body, observed)
     if replay is not None:
         return replay
@@ -209,16 +227,22 @@ def probe(store, router, body: ProbeInput, *, now: datetime | None = None) -> Pr
         )
     except ProviderUnavailable:
         _failed(store, body.requestId, "provider_unavailable", datetime.now(UTC))
-        raise ProbeError("provider_unavailable", "The selected answer model did not answer the setup test.", 503) from None
+        raise ProbeError(
+            "provider_unavailable", "The selected answer model did not answer the setup test.", 503
+        ) from None
     except Exception:
         _failed(store, body.requestId, "provider_error", datetime.now(UTC))
-        raise ProbeError("provider_error", "The selected answer model could not complete the setup test.", 503) from None
+        raise ProbeError(
+            "provider_error", "The selected answer model could not complete the setup test.", 503
+        ) from None
 
     text = completion.text.strip() if isinstance(completion.text, str) else ""
     actual = completion.model.strip() if isinstance(completion.model, str) else ""
     if not text or len(text) > MAX_RESPONSE_CHARACTERS or not actual or len(actual) > 300:
         _failed(store, body.requestId, "invalid_response", datetime.now(UTC))
-        raise ProbeError("invalid_response", "The selected answer model returned an invalid setup response.")
+        raise ProbeError(
+            "invalid_response", "The selected answer model returned an invalid setup response."
+        )
     execution = "local" if adapter is getattr(router, "local", None) else "hosted"
     completed = datetime.now(UTC)
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()

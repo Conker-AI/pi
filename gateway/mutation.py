@@ -50,9 +50,7 @@ class Mutation:
     method: str
     path: str
     payload: dict
-    authority: Literal[
-        "owner", "runtime", "toolgate-owner", "toolgate-owner-execution"
-    ] = "owner"
+    authority: Literal["owner", "runtime", "toolgate-owner", "toolgate-owner-execution"] = "owner"
 
 
 class StrictModel(BaseModel):
@@ -231,11 +229,7 @@ class ArtifactArchive(artifacts.Archive):
 
 
 ArtifactMutation = Annotated[
-    ArtifactCreate
-    | ArtifactFromMessage
-    | ArtifactAppend
-    | ArtifactRestore
-    | ArtifactArchive,
+    ArtifactCreate | ArtifactFromMessage | ArtifactAppend | ArtifactRestore | ArtifactArchive,
     Field(discriminator="operation"),
 ]
 ARTIFACT_MUTATION = TypeAdapter(ArtifactMutation)
@@ -276,9 +270,7 @@ class FileListingResume(StrictModel):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
 
 
-FileMutation = Annotated[
-    FileListingRequest | FileListingResume, Field(discriminator="operation")
-]
+FileMutation = Annotated[FileListingRequest | FileListingResume, Field(discriminator="operation")]
 FILE_MUTATION = TypeAdapter(FileMutation)
 
 
@@ -291,9 +283,7 @@ class InventoryResume(StrictModel):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
 
 
-InventoryMutation = Annotated[
-    InventoryRequest | InventoryResume, Field(discriminator="operation")
-]
+InventoryMutation = Annotated[InventoryRequest | InventoryResume, Field(discriminator="operation")]
 INVENTORY_MUTATION = TypeAdapter(InventoryMutation)
 
 
@@ -515,20 +505,14 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         except ValidationError:
             raise MutationError("Proposal apply request has an unsupported shape.") from None
         body = proposals.Decision(decision=value.decision).model_dump()
-        return Mutation(
-            "POST", f"/proposals/{value.id}/decision", body, authority="runtime"
-        )
+        return Mutation("POST", f"/proposals/{value.id}/decision", body, authority="runtime")
     if resource == "tasks":
         try:
             value = TASK_MUTATION.validate_python(payload)
         except ValidationError:
             raise MutationError("Task apply request has an unsupported shape.") from None
         body = value.model_dump(exclude={"operation", "id"})
-        path = (
-            "/tasks"
-            if isinstance(value, TaskCreate)
-            else f"/tasks/{value.id}/{value.operation}"
-        )
+        path = "/tasks" if isinstance(value, TaskCreate) else f"/tasks/{value.id}/{value.operation}"
         return Mutation("POST", path, body, authority="runtime")
     if resource == "artifacts":
         try:
@@ -650,12 +634,8 @@ def apply_resource(
 ) -> dict:
     if resource not in MUTATIONS:
         raise MutationError("Unknown apply resource. Choose one of: " + ", ".join(resources()))
-    request_limit = (
-        characters.MAX_REQUEST_BYTES if resource == "character" else MAX_REQUEST_BYTES
-    )
-    response_limit = (
-        characters.MAX_REQUEST_BYTES if resource == "character" else MAX_RESPONSE_BYTES
-    )
+    request_limit = characters.MAX_REQUEST_BYTES if resource == "character" else MAX_REQUEST_BYTES
+    response_limit = characters.MAX_REQUEST_BYTES if resource == "character" else MAX_RESPONSE_BYTES
     limit_label = "66 MiB" if resource == "character" else "2 MiB"
     raw = stream.read(request_limit + 1)
     if len(raw) > request_limit:
@@ -692,9 +672,7 @@ def apply_resource(
         if (
             not config.owner_key
             or not config.toolgate_execution_key
-            or not owner_editor_allowed(
-                operation.method, operation.path, execution=True
-            )
+            or not owner_editor_allowed(operation.method, operation.path, execution=True)
         ):
             raise MutationError("ToolGate editor execution is not configured.")
         base_url = config.toolgate_url
@@ -722,19 +700,13 @@ def apply_resource(
             if content_type.split(";", 1)[0].strip().lower() != "application/json":
                 raise MutationError(f"{service} returned a non-JSON mutation response.")
             declared = response.headers.get("content-length")
-            if declared and (
-                not declared.isdigit() or int(declared) > response_limit
-            ):
-                raise MutationError(
-                    f"{service} mutation response exceeded {limit_label}."
-                )
+            if declared and (not declared.isdigit() or int(declared) > response_limit):
+                raise MutationError(f"{service} mutation response exceeded {limit_label}.")
             body = bytearray()
             for chunk in response.iter_bytes():
                 body.extend(chunk)
                 if len(body) > response_limit:
-                    raise MutationError(
-                        f"{service} mutation response exceeded {limit_label}."
-                    )
+                    raise MutationError(f"{service} mutation response exceeded {limit_label}.")
     except MutationError:
         raise
     except (httpx.HTTPError, OSError):

@@ -31,8 +31,7 @@ def _read(path_value: str, name: str) -> str:
     except UnicodeDecodeError as exc:
         raise ValueError(f"{name}_FILE must contain ASCII.") from exc
     if text and any(
-        character.isspace() or ord(character) < 33 or ord(character) > 126
-        for character in text
+        character.isspace() or ord(character) < 33 or ord(character) > 126 for character in text
     ):
         raise ValueError(f"{name}_FILE must contain one printable token without spaces.")
     return text

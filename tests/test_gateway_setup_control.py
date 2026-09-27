@@ -113,9 +113,7 @@ def test_boundary_review_binds_receipt_to_fresh_policy_digest():
         )
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        saved = review_boundaries(
-            config(), digest, client, now=datetime(2026, 9, 27, tzinfo=UTC)
-        )
+        saved = review_boundaries(config(), digest, client, now=datetime(2026, 9, 27, tzinfo=UTC))
 
     assert saved["step"] == "boundaries"
     assert [request.method for request in seen] == ["GET", "GET", "POST"]
@@ -216,7 +214,9 @@ def test_protection_policy_rejects_unbounded_or_extra_input_before_write():
         with pytest.raises(SetupControlError, match="exceeds 16 KiB"):
             set_protection_policy(config(), io.BytesIO(b"x" * (MAX_INPUT_BYTES + 1)), client)
         with pytest.raises(SetupControlError, match="unsupported shape"):
-            set_protection_policy(config(), io.BytesIO(b'{"destination":"/mnt/x","extra":1}'), client)
+            set_protection_policy(
+                config(), io.BytesIO(b'{"destination":"/mnt/x","extra":1}'), client
+            )
 
 
 @pytest.mark.parametrize(
@@ -320,12 +320,20 @@ def test_activate_setup_model_uses_one_verified_owner_write():
                 200,
                 json={
                     "revision": 4,
-                    "candidates": [{
-                        "id": "hosted-answer", "providerId": "openai", "providerName": "OpenAI",
-                        "name": "Answer", "route": "answer", "status": "unverified", "selected": False,
-                        "execution": "hosted", "dataNotice": "The setup test is sent to OpenAI.",
-                        "costNotice": "Provider billing may apply.",
-                    }],
+                    "candidates": [
+                        {
+                            "id": "hosted-answer",
+                            "providerId": "openai",
+                            "providerName": "OpenAI",
+                            "name": "Answer",
+                            "route": "answer",
+                            "status": "unverified",
+                            "selected": False,
+                            "execution": "hosted",
+                            "dataNotice": "The setup test is sent to OpenAI.",
+                            "costNotice": "Provider billing may apply.",
+                        }
+                    ],
                 },
             )
         body = json.loads(request.content)
@@ -337,10 +345,17 @@ def test_activate_setup_model_uses_one_verified_owner_write():
                 "revision": 5,
                 "candidateId": "hosted-answer",
                 "probe": {
-                    "schemaVersion": 1, "requestId": body["requestId"], "configurationRevision": 5,
-                    "candidateId": "hosted-answer", "providerId": "openai", "requestedModel": "answer",
-                    "actualModel": "answer-2026", "execution": "hosted", "responseDigest": "b" * 64,
-                    "completedAt": "2026-09-27T00:00:00Z", "recordedAt": "2026-09-27T00:00:00Z",
+                    "schemaVersion": 1,
+                    "requestId": body["requestId"],
+                    "configurationRevision": 5,
+                    "candidateId": "hosted-answer",
+                    "providerId": "openai",
+                    "requestedModel": "answer",
+                    "actualModel": "answer-2026",
+                    "execution": "hosted",
+                    "responseDigest": "b" * 64,
+                    "completedAt": "2026-09-27T00:00:00Z",
+                    "recordedAt": "2026-09-27T00:00:00Z",
                 },
             },
         )
@@ -439,9 +454,7 @@ def test_external_receipt_is_bounded_and_strict():
                 config(), "protection", io.BytesIO(b"x" * (MAX_INPUT_BYTES + 1)), client
             )
         with pytest.raises(SetupControlError, match="unsupported shape"):
-            record_external_receipt(
-                config(), "protection", io.BytesIO(b'{"extra":true}'), client
-            )
+            record_external_receipt(config(), "protection", io.BytesIO(b'{"extra":true}'), client)
 
 
 def test_setup_errors_never_include_upstream_body():

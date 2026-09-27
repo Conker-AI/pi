@@ -48,9 +48,10 @@ class RootCapabilities(StrictModel):
 class RootCatalogue(StrictModel):
     schemaVersion: Literal[1] = 1
     mode: Literal["configured", "unavailable"]
-    code: Literal[
-        "disabled", "not_configured", "invalid_configuration", "unsupported_platform"
-    ] | None = None
+    code: (
+        Literal["disabled", "not_configured", "invalid_configuration", "unsupported_platform"]
+        | None
+    ) = None
     roots: list[FileRoot] = Field(max_length=64)
     capabilities: RootCapabilities | None = None
     authority: Literal["none"] = "none"

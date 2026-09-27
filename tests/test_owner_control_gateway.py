@@ -167,7 +167,9 @@ def test_typed_browser_calls_use_session_csrf_without_operation_password(tmp_pat
         assert len(seen) == 2
         assert (
             client.post(
-                "/api/control/pi/models/configuration", json={"expected_revision": 1}, headers=headers
+                "/api/control/pi/models/configuration",
+                json={"expected_revision": 1},
+                headers=headers,
             ).status_code
             == 428
         )

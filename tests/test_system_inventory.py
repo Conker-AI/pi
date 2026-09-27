@@ -291,6 +291,7 @@ def test_connected_owner_inventory_is_redacted_exact_and_restart_safe(tmp_path, 
     assert ports[1]["addressScope"] == "all-interfaces"
     assert ports[0]["processId"] == process["id"]
     assert ports[1]["containerId"] == container["id"]
+
     def leaves(item):
         if isinstance(item, dict):
             for key, child in item.items():

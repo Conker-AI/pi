@@ -93,7 +93,9 @@ def test_existing_advanced_roles_survive_answer_selection(tmp_path):
         )
 
         assert saved["configuration"]["roleSettings"]["roles"]["proposals"]["timeoutMs"] == 54321
-        assert saved["configuration"]["roleSettings"]["roles"]["answer"]["modelId"] == new_candidate.id
+        assert (
+            saved["configuration"]["roleSettings"]["roles"]["answer"]["modelId"] == new_candidate.id
+        )
 
 
 def test_probe_is_revision_bound_idempotent_and_stores_no_response_text(tmp_path):

@@ -274,12 +274,20 @@ def test_owner_api_and_stream_bound(store, monkeypatch):
             client.get("/characters/companion/export", headers=headers).json()["format"]
             == "conker-character"
         )
-        assert client.get("/characters/companion/history", headers=headers).json()["results"][0]["revision"] == 1
-        assert client.post(
-            "/characters/companion/save",
-            headers=headers,
-            json={"expected_revision": 1, "profile": profile()},
-        ).json()["revision"] == 2
+        assert (
+            client.get("/characters/companion/history", headers=headers).json()["results"][0][
+                "revision"
+            ]
+            == 1
+        )
+        assert (
+            client.post(
+                "/characters/companion/save",
+                headers=headers,
+                json={"expected_revision": 1, "profile": profile()},
+            ).json()["revision"]
+            == 2
+        )
         assert (
             client.put(
                 "/characters/companion",

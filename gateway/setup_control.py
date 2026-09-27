@@ -69,9 +69,7 @@ def _request_json(
             if content_type.split(";", 1)[0].strip().lower() != "application/json":
                 raise SetupControlError("Pi returned a non-JSON setup response.")
             declared = response.headers.get("content-length")
-            if declared and (
-                not declared.isdigit() or int(declared) > MAX_RESPONSE_BYTES
-            ):
+            if declared and (not declared.isdigit() or int(declared) > MAX_RESPONSE_BYTES):
                 raise SetupControlError("Pi setup response exceeded 256 KiB.")
             value = bytearray()
             for chunk in response.iter_bytes():
@@ -91,12 +89,8 @@ def _request_json(
     return decoded
 
 
-def _current_revision(
-    config: Config, client: httpx.Client, step: str
-) -> int:
-    current = _request_json(
-        config, client, "GET", f"/setup/receipts/{step}", missing=True
-    )
+def _current_revision(config: Config, client: httpx.Client, step: str) -> int:
+    current = _request_json(config, client, "GET", f"/setup/receipts/{step}", missing=True)
     if current is None:
         return 0
     try:
@@ -108,9 +102,7 @@ def _current_revision(
     return receipt.revision
 
 
-def _record(
-    config: Config, client: httpx.Client, step: str, payload: dict
-) -> dict:
+def _record(config: Config, client: httpx.Client, step: str, payload: dict) -> dict:
     revision = _current_revision(config, client, step)
     try:
         value = ReceiptInput.model_validate({**payload, "expectedRevision": revision})
@@ -198,9 +190,7 @@ def protection_policy(config: Config, client: httpx.Client) -> dict:
     return result.model_dump(mode="json")
 
 
-def set_protection_policy(
-    config: Config, stream: BinaryIO, client: httpx.Client
-) -> dict:
+def set_protection_policy(config: Config, stream: BinaryIO, client: httpx.Client) -> dict:
     raw = stream.read(MAX_INPUT_BYTES + 1)
     if len(raw) > MAX_INPUT_BYTES:
         raise SetupControlError("Protection policy exceeds 16 KiB.")
@@ -267,9 +257,7 @@ def set_setup_choice(
         choice=choice,
         expectedRevision=observed.revision,
     )
-    saved = _request_json(
-        config, client, "POST", path, body=value.model_dump(mode="json")
-    )
+    saved = _request_json(config, client, "POST", path, body=value.model_dump(mode="json"))
     try:
         result = Choice.model_validate(saved, strict=False)
     except ValidationError:
@@ -333,9 +321,7 @@ def start_rehearsal_approval(config: Config, client: httpx.Client) -> dict:
     return result.model_dump(mode="json")
 
 
-def resume_rehearsal_approval(
-    config: Config, request_id: str, client: httpx.Client
-) -> dict:
+def resume_rehearsal_approval(config: Config, request_id: str, client: httpx.Client) -> dict:
     if not REQUEST_ID.fullmatch(request_id):
         raise SetupControlError("Use the approval request ID returned by the rehearsal status.")
     value = _request_json(
