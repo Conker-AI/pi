@@ -27,6 +27,7 @@ from typing import Any
 
 from . import (
     actions,
+    universal_search,
     agents,
     artifacts,
     attachments,
@@ -327,6 +328,7 @@ class Store:
                 db.executescript(response_retries.SCHEMA)
                 db.executescript(turn_steering.SCHEMA)
                 db.executescript(research_usage.SCHEMA)
+                db.executescript(universal_search.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
                 agents.initialize(db)

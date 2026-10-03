@@ -68,6 +68,8 @@ def session_only_write(method: str, path: str) -> bool:
 # conversation runtime credential. Expand only alongside the corresponding UI.
 OWNER_ROUTES = {
     "GET": (
+        r"/search",
+        r"/search/(?:settings|capabilities)",
         r"/artifacts",
         r"/collaboration/teams",
         r"/collaboration/teams/team_[0-9a-f]{32}",
@@ -108,6 +110,7 @@ OWNER_ROUTES = {
         r"/memory/forget/[A-Za-z0-9_.:-]+",
     ),
     "POST": (
+        r"/search/settings",
         r"/artifacts",
         r"/collaboration/teams",
         r"/collaboration/teams/team_[0-9a-f]{32}/(?:update|archive|restore)",

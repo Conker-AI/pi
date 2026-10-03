@@ -7,10 +7,11 @@ def search(store, query, limit=30, cursor=None):
     query = query.strip()
     if not 1 <= len(query) <= 500 or type(limit) is not int or not 1 <= limit <= 50:
         raise ValueError("Use 1-500 search characters and a limit of 1-50.")
-    pattern = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    pattern = "%" + query.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     params = [query, pattern]
     after = ""
     with store._connect() as db:
+        db.create_function("search_casefold", 1, lambda value: value.casefold() if isinstance(value, str) else "", deterministic=True)
         if cursor is not None:
             boundary = db.execute(
                 "SELECT created_at,id FROM messages WHERE id=?", (cursor,)
@@ -24,11 +25,11 @@ def search(store, query, limit=30, cursor=None):
             r"""
             SELECT m.id,m.session_id,m.seq,m.role,m.created_at,s.title,
                    substr(json_extract(m.content,'$'),
-                       max(1,instr(lower(json_extract(m.content,'$')),lower(?))-100),500) AS excerpt
+                       max(1,instr(search_casefold(json_extract(m.content,'$')),search_casefold(?))-100),500) AS excerpt
             FROM messages m JOIN sessions s ON s.id=m.session_id
             WHERE s.status!='forgotten' AND m.role IN ('user','assistant')
               AND json_valid(m.content) AND json_type(m.content)='text'
-              AND json_extract(m.content,'$') LIKE ? ESCAPE '\'
+              AND search_casefold(json_extract(m.content,'$')) LIKE ? ESCAPE '\'
               AND NOT EXISTS(SELECT 1 FROM session_settings settings
                   WHERE settings.session_id=s.id AND (
                     json_extract(settings.settings,'$.privacy.memoryDisabled')=1 OR

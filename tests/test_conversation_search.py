@@ -40,10 +40,11 @@ def test_private_history_excluded_even_after_privacy_disabled(tmp_path):
 def test_unicode_and_nontext_or_tool_data(tmp_path):
     with closing(Store(tmp_path / "search.db")) as store:
         sid = store.create_session()
-        message = store.append_message(sid, "assistant", "שלום привет")
+        message = store.append_message(sid, "assistant", "שלום Привет")
         store.append_message(sid, "tool", "שלום")
         store.append_message(sid, "assistant", {"private_payload": "שלום"})
         assert [item["id"] for item in search.search(store, "שלום")["results"]] == [message["id"]]
+        assert [item["id"] for item in search.search(store, "привет")["results"]] == [message["id"]]
 
 
 def test_excerpt_centers_match_and_forgetting_removes_result(tmp_path):

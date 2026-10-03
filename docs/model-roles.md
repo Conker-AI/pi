@@ -14,6 +14,13 @@ Successful configured answers record `route_tier= configured`, `route_reason=con
 
 Validation:
 
+The development search API has a separate optional `search-ranking` role,
+migrated disabled with a 2,000ms transport timeout. It does not reuse memory
+ranking or conversation context selection. Owner search settings must explicitly
+enable it after a valid enabled model role is configured. It receives a bounded
+set of permitted excerpts; invalid output falls back to literal results. These
+settings do not enable autonomous work or alter conversation privacy.
+
 ```sh
 python -m pytest tests/test_model_role_execution.py tests/test_model_roles.py tests/test_session_settings.py tests/test_loop.py tests/test_submissions.py tests/test_tool_turns.py -q
 ```

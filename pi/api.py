@@ -456,6 +456,9 @@ app.include_router(
 from . import memory_explorer_api  # noqa: E402 - registered after the routers it follows
 
 app.include_router(memory_explorer_api.router(lambda: app.state.memory, require_owner))
+from . import universal_search  # noqa: E402
+
+app.include_router(universal_search.router(lambda: app.state.store, lambda: app.state.memory, lambda: getattr(app.state, "toolgate", None), lambda: app.state.router.adapters(), require_owner))
 app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
 app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
 app.include_router(
