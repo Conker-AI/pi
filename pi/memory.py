@@ -143,11 +143,21 @@ class Memory:
         elif client:
             try:
                 # Legacy Companion behavior remains unchanged unless settings were explicitly saved.
-                if selected.get("revision", 0) == 0 and selected["kind"] == "companion":
+                if (
+                    selected.get("revision", 0) == 0
+                    and selected["kind"] == "companion"
+                    and selected.get("agentVersion", 1) == 1
+                ):
                     package = client.retrieve(query)
                 else:
                     configuration = selected["configuration"]
                     scope = configuration["memory"]["scope"]
+                    if scope == "owner":
+                        if selected["kind"] != "companion" or selected["agentId"] != "companion":
+                            raise ValueError("Owner memory is restricted to Companion.")
+                        # The configured read credential still limits the namespace;
+                        # this is not an administrative or cross-agent read.
+                        scope = "all"
                     package = client.retrieve(
                         query,
                         scope=scope,

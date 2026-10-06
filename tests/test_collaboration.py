@@ -149,6 +149,13 @@ def test_team_snapshots_revalidate_agent_changes_without_widening(store):
         c.remove(store, record["id"], "team", c.Revision(expected_revision=1))
 
 
+def test_team_role_cannot_inherit_companion_owner_memory():
+    value = team("companion").model_dump()
+    value["roles"][0]["memory"] = {"scope": "owner", "memoryIds": []}
+    with pytest.raises(ValidationError, match="not available to team roles"):
+        c.Team.model_validate(value)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

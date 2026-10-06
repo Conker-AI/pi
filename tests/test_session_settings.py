@@ -72,6 +72,90 @@ def client(handler):
     )
 
 
+@pytest.mark.parametrize(
+    "scope,private,expected",
+    [
+        ("conversation", False, "conversation"),
+        ("owner", False, "all"),
+        ("owner", True, None),
+    ],
+)
+def test_saved_companion_scope_controls_new_chat_retrieval(tmp_path, scope, private, expected):
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body)
+        return httpx.Response(
+            200,
+            json={
+                "scope": body.get("scope", "all"),
+                "memories": [],
+                "retrieval": {"mode": "semantic", "semantic": {"status": "ok"}},
+            },
+        )
+
+    with closing(Store(tmp_path / "test.db")) as store, closing(client(handler)) as remote:
+        companion = agents.get(store, "companion")
+        profile = agents.AgentInput.model_validate(companion["configuration"])
+        profile.memory = agents.MemorySelection(scope=scope, memoryIds=[])
+        agents.update(
+            store,
+            "companion",
+            agents.UpdateAgent(
+                expected_revision=companion["revision"],
+                configuration=profile,
+            ),
+        )
+        sid = store.create_session(agent_id="companion", privacy={"memoryDisabled": private})
+        result = Loop(
+            store,
+            Router(local_provider=Provider(), local_model="fixed"),
+            memory=Memory(store, remote),
+        ).run_turn(sid, "Plan my week")
+        assert settings.load(store, sid)["revision"] == 1
+        if expected is None:
+            assert seen == []
+            assert result["memory"]["retrieval"]["status"] == "disabled"
+        else:
+            assert len(seen) == 1
+            assert seen[0].get("scope", "all") == expected
+            assert remote.read_headers["X-Agent-Id"] == "default"
+            if expected == "conversation":
+                assert seen[0]["session_id"] == sid
+
+
+def test_authored_companion_profile_applies_even_to_legacy_chat(tmp_path):
+    seen = []
+    with closing(Store(tmp_path / "test.db")) as store:
+        sid = store.create_session()
+        profile = agents.AgentInput.model_validate(agents.get(store, "companion")["configuration"])
+        agents.update(
+            store, "companion", agents.UpdateAgent(expected_revision=1, configuration=profile)
+        )
+
+        def handler(request):
+            body = json.loads(request.content)
+            seen.append(body)
+            return httpx.Response(
+                200,
+                json={
+                    "scope": "conversation",
+                    "memories": [],
+                    "retrieval": {"mode": "explicit-scope", "semantic": {"status": "not-used"}},
+                },
+            )
+
+        with closing(client(handler)) as remote:
+            Loop(
+                store,
+                Router(local_provider=Provider(), local_model="fixed"),
+                memory=Memory(store, remote),
+            ).run_turn(sid, "Use my configured scope")
+        assert seen[0]["scope"] == "conversation"
+        assert seen[0]["session_id"] == sid
+
+
 def test_setup_memory_choice_becomes_a_stable_new_conversation_default(tmp_path):
     with closing(Store(tmp_path / "test.db")) as store:
         setup_choices.record(

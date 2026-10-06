@@ -36,6 +36,30 @@ def store(tmp_path):
         yield value
 
 
+def test_owner_memory_scope_requires_the_singular_companion(store):
+    scoped = configuration(memory={"scope": "owner", "memoryIds": []})
+    with pytest.raises(agents.AgentError, match="only to Companion"):
+        agents.create(store, scoped)
+    custom = agents.create(store, configuration())
+    with pytest.raises(agents.AgentError, match="only to Companion"):
+        agents.update(
+            store, custom["id"], agents.UpdateAgent(expected_revision=1, configuration=scoped)
+        )
+    assert agents.get(store, custom["id"])["revision"] == 1
+    companion = agents.get(store, "companion")
+    assert companion["configuration"]["memory"]["scope"] == "conversation"
+    scoped.name = companion["configuration"]["name"]
+    accepted = agents.update(
+        store,
+        "companion",
+        agents.UpdateAgent(
+            expected_revision=companion["revision"],
+            configuration=scoped,
+        ),
+    )
+    assert accepted["configuration"]["memory"]["scope"] == "owner"
+
+
 def test_durability_history_archive_and_restore(tmp_path):
     path = tmp_path / "test.db"
     with closing(Store(path)) as store:

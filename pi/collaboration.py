@@ -65,6 +65,8 @@ class Role(agents.StrictModel):
     @field_validator("memory")
     @classmethod
     def memory_limit(cls, value):
+        if value.scope == "owner":
+            raise ValueError("Across-chat owner memory is not available to team roles.")
         if len(value.memoryIds) > 100:
             raise ValueError("Use at most 100 selected memory records.")
         return value

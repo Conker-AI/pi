@@ -8,6 +8,9 @@ be a decision with visible consequences.
 
 ## 0.5.1
 
+- Add an explicit owner-authorized across-chat Companion memory scope. Existing
+  profile defaults remain unchanged; custom agents and team roles cannot inherit
+  this scope. Turn snapshots, private exclusions and namespace read keys still apply.
 - Mark selected cancelled requests as historical, not pending work, when preparing
   subsequent answers. Preserve exact transcript text and context exclusions, and
   freeze the cancellation notice with the original turn context for truthful replay.

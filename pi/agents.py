@@ -22,7 +22,7 @@ def references(values):
 
 
 class MemorySelection(StrictModel):
-    scope: Literal["none", "conversation", "selected"]
+    scope: Literal["none", "conversation", "selected", "owner"]
     memoryIds: list[str] = Field(max_length=1000)
 
     @field_validator("memoryIds")
@@ -234,6 +234,10 @@ def _unique_name(db, configuration, identity=None):
 
 def create(store, configuration: AgentInput):
     configuration = AgentInput.model_validate(configuration.model_dump())
+    if configuration.memory.scope == "owner":
+        raise AgentError(
+            "companion_memory_only", "Across-chat owner memory is available only to Companion.", 422
+        )
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         _unique_name(db, configuration)
@@ -279,6 +283,10 @@ def _append(db, current, configuration, archived_at, change):
 
 def update(store, identity, request: UpdateAgent):
     request = UpdateAgent.model_validate(request.model_dump())
+    if request.configuration.memory.scope == "owner" and identity != "companion":
+        raise AgentError(
+            "companion_memory_only", "Across-chat owner memory is available only to Companion.", 422
+        )
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         current = _editable(db, identity, request.expected_revision, allow_companion=True)
