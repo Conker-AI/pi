@@ -6,6 +6,16 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.5
+
+- Add authenticated, operation-password-bound provider control through an optional
+  private Conker host Unix socket. Credential inputs are write-only; strict status
+  projections omit secrets, subprocess output and provider response bodies. Only
+  named credential and paid-request-policy operations are admitted; no shell,
+  Docker socket, arbitrary endpoint or environment editor is exposed.
+- Require exact one-use password proofs for browser-session revocation and reject
+  mismatched targets, request bodies and write query parameters.
+
 ## 0.5.4
 
 - Preserve the router's bounded recent-exchange input scope in saved model-selection

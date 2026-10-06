@@ -44,12 +44,18 @@ class Config:
     pi_owner_key: str = ""
     toolgate_execution_key: str = ""
     cookie_namespace: str = ""
+    provider_control_socket: str = ""
 
     @property
     def cookie_name(self) -> str:
         return f"{COOKIE}-{self.cookie_namespace}" if self.cookie_namespace else COOKIE
 
     def validate(self) -> None:
+        if self.provider_control_socket and (
+            not os.path.isabs(self.provider_control_socket)
+            or any(c in self.provider_control_socket for c in "\x00\r\n")
+        ):
+            raise ValueError("Set GATEWAY_PROVIDER_CONTROL_SOCKET to an absolute private socket.")
         if self.cookie_namespace and not re.fullmatch(
             r"[a-z0-9][a-z0-9-]{0,39}", self.cookie_namespace
         ):
@@ -129,6 +135,7 @@ class Config:
             os.environ.get("GATEWAY_PI_OWNER_KEY", ""),
             os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
             os.environ.get("GATEWAY_COOKIE_NAMESPACE", ""),
+            os.environ.get("GATEWAY_PROVIDER_CONTROL_SOCKET", ""),
         )
 
 
@@ -139,6 +146,7 @@ def create_app(
     transport: httpx.BaseTransport | None = None,
     stream_transport: httpx.AsyncBaseTransport | None = None,
     terminal_factory=None,
+    provider_transport: httpx.BaseTransport | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -405,14 +413,24 @@ def create_app(
         return {"results": app.state.auth.sessions()}
 
     @app.post("/auth/sessions/{identity}/revoke")
-    def revoke(identity: str, request: Request):
+    async def revoke(identity: str, request: Request):
         session(request)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", identity):
+            raise AuthError("Invalid browser session identity.", 422)
+        body = await json_body(request, max_bytes=1024)
+        if body:
+            raise AuthError("Session revocation takes an empty operation object.", 422)
+        admit_write(request, body)
         app.state.auth.revoke(identity)
         return {"revoked": True}
 
     @app.post("/auth/revoke-all")
-    def revoke_all(request: Request):
+    async def revoke_all(request: Request):
         session(request)
+        body = await json_body(request, max_bytes=1024)
+        if body:
+            raise AuthError("Session revocation takes an empty operation object.", 422)
+        admit_write(request, body)
         app.state.auth.revoke()
         return {"revoked": True}
 
@@ -487,6 +505,37 @@ def create_app(
             request.headers.get("x-conker-verification", ""),
             binding,
         )
+
+    @app.get("/api/host/providers")
+    @app.post("/api/host/providers")
+    async def host_providers(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import provider_control
+
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Provider control does not accept query parameters.", 422)
+        body = None
+        if request.method == "POST":
+            try:
+                body = provider_control.validate_operation(
+                    await json_body(request, max_bytes=16384)
+                )
+            except provider_control.ProviderControlError:
+                raise AuthError("Invalid provider operation.", 422) from None
+            admit_write(request, body)
+        try:
+            value = await run_in_threadpool(
+                provider_control.request,
+                app.state.config.provider_control_socket,
+                request.method,
+                body,
+                transport=provider_transport,
+            )
+        except provider_control.ProviderControlError as error:
+            raise AuthError(str(error), 503) from None
+        return JSONResponse(value)
 
     def terminal_access(request):
         owner = session(request)
