@@ -537,6 +537,36 @@ def create_app(
             raise AuthError(str(error), 503) from None
         return JSONResponse(value)
 
+    @app.get("/api/host/chatgpt")
+    @app.post("/api/host/chatgpt")
+    async def host_chatgpt(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import chatgpt
+        from .provider_control import ProviderControlError
+
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Subscription control does not accept query parameters.", 422)
+        body = None
+        if request.method == "POST":
+            try:
+                body = chatgpt.validate_operation(await json_body(request, max_bytes=1024))
+            except ProviderControlError:
+                raise AuthError("Invalid subscription operation.", 422) from None
+            admit_write(request, body)
+        try:
+            value = await run_in_threadpool(
+                chatgpt.request,
+                app.state.config.provider_control_socket,
+                request.method,
+                body,
+                transport=provider_transport,
+            )
+        except ProviderControlError as error:
+            raise AuthError(str(error), 503) from None
+        return JSONResponse(value)
+
     def terminal_access(request):
         owner = session(request)
         if app.state.terminals is None:
