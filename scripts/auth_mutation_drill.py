@@ -43,16 +43,23 @@ CASES = [
     (
         "insecure-cookie",
         "gateway/api.py",
-        "token, secure=True, httponly=True",
-        "token, secure=False, httponly=True",
+        "token,\n            secure=True,\n            httponly=True",
+        "token,\n            secure=False,\n            httponly=True",
         API + "test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate",
     ),
     (
         "script-readable-cookie",
         "gateway/api.py",
-        "token, secure=True, httponly=True",
-        "token, secure=True, httponly=False",
+        "token,\n            secure=True,\n            httponly=True",
+        "token,\n            secure=True,\n            httponly=False",
         API + "test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate",
+    ),
+    (
+        "cookie-namespace-ignored",
+        "gateway/api.py",
+        'return f"{COOKIE}-{self.cookie_namespace}" if self.cookie_namespace else COOKIE',
+        "return COOKIE",
+        "tests/test_gateway_cookie_namespace.py::test_two_ports_share_a_cookie_jar_without_replacing_sessions",
     ),
     (
         "csrf-disabled",
@@ -183,6 +190,7 @@ def main() -> int:
             "test_gateway_store.py",
             "test_gateway_tls.py",
             "test_gateway_verification.py",
+            "test_gateway_cookie_namespace.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:
