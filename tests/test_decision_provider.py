@@ -80,6 +80,50 @@ def test_service_failure_uses_only_explicit_helper_fallback():
     assert result["attempts"][1]["modelId"] == "a"
 
 
+@pytest.mark.parametrize("follow_up", [False, True])
+def test_dispatch_preserves_known_routing_scope_without_prompt_content(follow_up):
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "choice": "b",
+                "confidence": 0.8,
+                "model": "laya-pinned",
+                "probabilities": {"a": 0.2, "b": 0.8},
+            },
+        )
+
+    value, decision = setup(httpx.MockTransport(handler))
+    messages = [Message("system", "PRIVATE_SYSTEM_SENTINEL")]
+    if follow_up:
+        messages.extend([Message("user", "Previous question"), Message("assistant", "Answer")])
+    messages.append(Message("user", "Current question"))
+    result = model_roles.dispatch(
+        value, "answer", messages, {"decisions": decision, "one": Adapter(), "two": Adapter()}
+    )
+    evidence = result["attempts"][0]["decision"]
+    assert evidence["inputScope"] == ("recent-exchange" if follow_up else "latest-user-request")
+    assert evidence["confidence"] == 0.8
+    assert evidence["inputCharacters"] > 0
+    assert not any(
+        text in json.dumps(result["attempts"])
+        for text in ["PRIVATE_SYSTEM_SENTINEL", "Previous question", "Current question"]
+    )
+
+
+@pytest.mark.parametrize("scope", ["all-private-files", [], {"scope": "recent-exchange"}])
+def test_decision_evidence_rejects_unknown_scope_and_arbitrary_fields(scope):
+    from pi.providers import Completion
+
+    completion = Completion(
+        text="answer",
+        model="laya",
+        provider="decisions",
+        raw={"decision": {"inputScope": scope, "prompt": "PRIVATE_SENTINEL"}},
+    )
+    assert model_roles.decision_evidence(completion) == {}
+
+
 def test_routing_projection_excludes_system_memory_and_old_history_without_truncating_request():
     calls = []
 

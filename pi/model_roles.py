@@ -164,8 +164,8 @@ def decision_evidence(completion):
         item = value.get(key)
         if type(item) in (int, float) and math.isfinite(item) and item >= 0:
             result[key] = item
-    if value.get("inputScope") == "latest-user-request":
-        result["inputScope"] = "latest-user-request"
+    if value.get("inputScope") in ("latest-user-request", "recent-exchange"):
+        result["inputScope"] = value["inputScope"]
     return {"decision": result} if result else {}
 
 

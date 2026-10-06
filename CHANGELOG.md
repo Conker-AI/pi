@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.4
+
+- Preserve the router's bounded recent-exchange input scope in saved model-selection
+  evidence, alongside current-request-only scope. Keep prompts, memory, credentials
+  and unknown provider fields out of that public receipt; authority is unchanged.
+
 ## 0.5.3
 
 - Apply saved Companion instructions to model context, matching custom agents.

@@ -87,7 +87,7 @@ from .toolgate import ToolGateClient
 
 log = logging.getLogger("pi")
 
-SERVICE_VERSION = "0.5.3"
+SERVICE_VERSION = "0.5.4"
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
