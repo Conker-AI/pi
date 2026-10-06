@@ -73,6 +73,7 @@ def fingerprint(method: str, path: str, body: dict) -> str:
             )
             or path == "/api/terminal"
             or path == "/api/host/providers"
+            or path == "/api/host/chatgpt"
             or path == "/auth/revoke-all"
             or re.fullmatch(r"/auth/sessions/[A-Za-z0-9_-]{16,128}/revoke", path)
         )

@@ -6,6 +6,16 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.6
+
+- Add a distinct ChatGPT subscription provider via Conker's private inference
+  socket, using the official Codex managed device-code sign-in on the host.
+  Keep OAuth credentials and refresh outside containers and the browser;
+  Conker/Pi retains tools, permissions, streaming and stop authority.
+- Add owner-authenticated, exact single-use verified subscription login, cancel,
+  disconnect and catalogue operations. No API-key fallback or Codex agent runtime
+  is introduced. Connection status is not proof of model entitlement.
+
 ## 0.5.5
 
 - Add authenticated, operation-password-bound provider control through an optional

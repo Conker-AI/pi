@@ -297,10 +297,12 @@ def collect_chat_stream(events) -> dict:
 def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dict:
     """Pure factory: never loads .env, contacts providers, or reads UI key drafts."""
     allowed = environment.get("PI_ALLOW_PAID_MODELS", "").strip() in {"1", "true", "yes"}
+    from .chatgpt_provider import configured as chatgpt_providers
     from .decision_provider import configured as decision_providers
 
     return {
         **decision_providers(environment),
+        **chatgpt_providers(environment, timeout),
         **{
             adapter.name: adapter(environment[key], allow_paid=allowed, timeout=timeout)
             for key, adapter in (
