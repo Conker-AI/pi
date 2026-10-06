@@ -63,7 +63,11 @@ def test_retry_exact_boundary_selected_model_no_duplicate_input_or_later_context
         from pi import turn_context
 
         assert turn_context.replay(store, result["turn_id"])["messages"] == second.messages[0]
-        assert [m.content for m in second.messages[0]] == [retries.NARRATION, "Original request"]
+        assert [m.content for m in second.messages[0]] == [
+            retries.NARRATION,
+            "Act as the owner's daily companion.",
+            "Original request",
+        ]
         assert second.calls == [("actual-b", 1.0)]
         assert [r["content"] for r in context_controls.history(store, sid)] == [
             "Original request",

@@ -262,8 +262,9 @@ class Loop:
         messages: list[Message] = []
         if self.system_prompt:
             messages.append(Message("system", self.system_prompt))
-        if execution["kind"] != "companion":
-            messages.append(Message("system", execution["configuration"]["instructions"]))
+        configuration = execution.get("configuration")
+        if configuration is not None:
+            messages.append(Message("system", configuration["instructions"]))
         messages.extend(character_context.messages(execution))
         project = execution.get("project")
         if project and project["instructions"].strip():

@@ -88,7 +88,8 @@ def test_actual_turn_uses_frozen_profile_after_edit(tmp_path, monkeypatch):
         frozen = session_settings.execution(store, session, first["turn_id"])
         assert frozen["character"]["revision"] == 1
         assert "data:image" not in json.dumps(frozen)
-        assert '"name": "Conker"' in provider.seen[0][0].content
+        assert provider.seen[0][0].content == frozen["configuration"]["instructions"]
+        assert '"name": "Conker"' in provider.seen[0][1].content
         assert "Changed after acceptance" not in str(provider.seen[0])
         app = FastAPI()
         app.include_router(session_settings_api.router(lambda: store, lambda: None))
@@ -99,7 +100,7 @@ def test_actual_turn_uses_frozen_profile_after_edit(tmp_path, monkeypatch):
 
         monkeypatch.setattr(loop, "_run_bound", bound)
         loop.run_turn(session, "Again", request_id="frozen_character_02")
-        assert "Changed after acceptance" in provider.seen[1][0].content
+        assert "Changed after acceptance" in provider.seen[1][1].content
 
 
 def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
@@ -151,7 +152,7 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
             speech=Speech(),
         )
         assert first["call"]["requests"][0]["textStatus"] == "complete"
-        presentation = provider.seen[0][0].content
+        presentation = provider.seen[0][1].content
         assert '"mode": "focus"' in presentation
         assert "Authored history" not in presentation
         assert "Edited while transcribing" not in presentation
@@ -164,7 +165,7 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
                 text="Continue",
             ),
         )
-        presentation = provider.seen[1][0].content
+        presentation = provider.seen[1][1].content
         assert '"mode": "character"' in presentation
         assert "Authored history" in presentation
         assert "Edited while transcribing" in presentation

@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.3
+
+- Apply saved Companion instructions to model context, matching custom agents.
+  Keep the submitted profile revision frozen and leave legacy turns without an
+  execution snapshot unchanged. Instructions do not grant tool or memory access.
+
 ## 0.5.2
 
 - Support an explicit browser-cookie namespace for trusted instances sharing a

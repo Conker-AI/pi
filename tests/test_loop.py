@@ -91,6 +91,7 @@ def test_history_is_resent_in_order(store):
     sent = provider.calls[-1]
     assert [(m.role, m.content) for m in sent] == [
         ("system", "be brief"),
+        ("system", "Act as the owner's daily companion."),
         ("user", "first"),
         ("assistant", "answered"),
         ("user", "second"),

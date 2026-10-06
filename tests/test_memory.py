@@ -126,7 +126,7 @@ def test_context_is_used_and_stored_before_model_call(tmp_path):
     provider.complete = complete
     session = store.create_session()
     result = loop.run_turn(session, "When should I train?")
-    assert json.dumps(package, ensure_ascii=False) in provider.calls[0][0].content
+    assert json.dumps(package, ensure_ascii=False) in provider.calls[0][1].content
     assert result["memory"]["retrieval"]["package"] == package
     memory.close()
     store.close()
@@ -214,7 +214,7 @@ def test_resume_uses_original_context_without_another_retrieval(tmp_path):
     provider = Provider()
     loop = Loop(store, Router(local_provider=provider, local_model="test"), memory=memory)
     result = loop.resume_turn(turn)
-    assert json.dumps(package) in provider.calls[0][0].content
+    assert json.dumps(package) in provider.calls[0][1].content
     assert result["memory"]["retrieval"]["package"] == package
     memory.close()
     store.close()

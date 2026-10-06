@@ -45,6 +45,7 @@ def test_selection_keeps_original_slot_and_preserves_transcript(tmp_path):
         provider = Recorder()
         loop_with(store, provider).run_turn(sid, "Next question")
         assert [m.content for m in provider.calls[0]] == [
+            "Act as the owner's daily companion.",
             "First question",
             "Alternative answer",
             "Later question",
