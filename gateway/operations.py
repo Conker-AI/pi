@@ -72,6 +72,9 @@ def fingerprint(method: str, path: str, body: dict) -> str:
                 path,
             )
             or path == "/api/terminal"
+            or path == "/api/host/providers"
+            or path == "/auth/revoke-all"
+            or re.fullmatch(r"/auth/sessions/[A-Za-z0-9_-]{16,128}/revoke", path)
         )
     )
     if not allowed or not isinstance(body, dict):

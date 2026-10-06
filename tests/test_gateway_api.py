@@ -270,10 +270,11 @@ def test_session_revocation_endpoint_and_expiry_block_proxy(gateway):
     headers = sign_in(client)
     sessions = client.get("/auth/sessions").json()["results"]
     assert len(sessions) == 1 and "token_hash" not in sessions[0] and "csrf" not in sessions[0]
-    assert (
-        client.post(f"/auth/sessions/{sessions[0]['id']}/revoke", headers=headers).status_code
-        == 200
-    )
+    path = f"/auth/sessions/{sessions[0]['id']}/revoke"
+    assert client.post(path, json={}, headers=headers).status_code == 428
+    proof = verified_headers(client, headers, path, {})
+    assert client.post("/auth/revoke-all", json={}, headers=proof).status_code == 428
+    assert client.post(path, json={}, headers=proof).status_code == 200
     assert client.get("/api/pi/sessions").status_code == 401
     sign_in(client)
     auth.clock = lambda: sessions[0]["expires"] + 1000

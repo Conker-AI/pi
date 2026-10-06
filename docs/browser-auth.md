@@ -43,13 +43,21 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}`; returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
 | `POST /auth/logout` | Revokes the current session and clears its cookie. |
 | `GET /auth/sessions` | Lists session IDs and timestamps, never bearer tokens. |
-| `POST /auth/sessions/{id}/revoke` | Revokes one session. |
-| `POST /auth/revoke-all` | Revokes every session, including the caller's. |
+| `POST /auth/sessions/{id}/revoke` | Empty JSON object and exact one-use password proof; revokes one session. |
+| `POST /auth/revoke-all` | Empty JSON object and exact one-use password proof; revokes every session, including the caller's. |
 | `/api/pi/{path}` | Only methods and paths in `pi/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
 | `GET /api/owner/requests` | Reads the approval list through the dedicated ToolGate owner channel. |
 | `GET /api/owner/requests/{id}` | Reads the canonical owner-request projection for review or lost-decision reconciliation. |
 | `POST /api/owner/requests/{id}/decision` | JSON `status` (`approved`, `rejected`, `dismissed`) and optional `note`; uses only the owner channel. |
 | `GET /health` | Reports login setup and dependency health without returning conversation or approval content. |
+
+`GET /api/host/providers` returns strict secret-free provider revisions and spending
+policy from an optional private Unix-socket worker. Without a configured socket it
+reports unavailable. `POST` admits only named stage, verify, activate, recover,
+discard, issuer-revocation-attestation and paid-policy operations, each bound to
+fresh owner verification. Keys are write-only; host output, secret reads, arbitrary
+URLs, filesystem paths, shell commands and Docker access are not browser capabilities.
+This requires the matching Conker host worker; it is not ChatGPT/Codex account login.
 
 For every unsafe request, including login, send the exact configured `Origin`,
 `X-CSRF-Token` from `/auth/session`, the cookie, and `Content-Type: application/json`
