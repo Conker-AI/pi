@@ -130,15 +130,22 @@ def test_excluded_cancelled_input_does_not_leak_into_context_notice(store):
         sid, "user", "Excluded private request", turn_id=cancelled, purpose="input"
     )
     store.finish_turn(cancelled, "cancelled")
-    context_controls.save(store, sid, context_controls.Update(
-        expected_revision=0,
-        policy=context_controls.Policy(
-            sessionInstructions="", messagePolicies={original["id"]: "exclude"},
-            budget=context_controls.Budget(
-                contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0,
+    context_controls.save(
+        store,
+        sid,
+        context_controls.Update(
+            expected_revision=0,
+            policy=context_controls.Policy(
+                sessionInstructions="",
+                messagePolicies={original["id"]: "exclude"},
+                budget=context_controls.Budget(
+                    contextWindowTokens=10000,
+                    outputReserveTokens=100,
+                    otherInputTokens=0,
+                ),
             ),
         ),
-    ))
+    )
     loop.run_turn(sid, "Next question")
     assert all(original["id"] not in m.content for m in provider.calls[-1])
     assert all("Excluded private request" not in m.content for m in provider.calls[-1])

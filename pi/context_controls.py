@@ -274,13 +274,17 @@ def cancelled_input_ids(store, rows):
     cancelled = set()
     with store._connect() as db:
         for offset in range(0, len(identities), 500):
-            batch = identities[offset:offset + 500]
+            batch = identities[offset : offset + 500]
             placeholders = ",".join("?" for _ in batch)
-            cancelled.update(row[0] for row in db.execute(
-                "SELECT tm.message_id FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
-                "WHERE tm.purpose='input' AND t.status='cancelled' "
-                f"AND tm.message_id IN ({placeholders})", batch,
-            ))
+            cancelled.update(
+                row[0]
+                for row in db.execute(
+                    "SELECT tm.message_id FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
+                    "WHERE tm.purpose='input' AND t.status='cancelled' "
+                    f"AND tm.message_id IN ({placeholders})",
+                    batch,
+                )
+            )
     return [identity for identity in identities if identity in cancelled]
 
 
