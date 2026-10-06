@@ -332,9 +332,20 @@ class Loop:
                     "uncertainty honestly.",
                 )
             )
-        prefix_messages = list(messages)
         known_history = context_controls.history(self.store, session_id)
         selected_history = context_controls.select_history(policy, known_history, retrieved_ids)
+        cancelled = context_controls.cancelled_input_ids(self.store, selected_history)
+        if cancelled:
+            messages.append(Message(
+                "system",
+                "The owner cancelled earlier requests with message IDs: "
+                + ", ".join(cancelled)
+                + ". Their original text remains conversation history, not pending tasks. "
+                "Do not resume those requests unless the latest user request explicitly asks "
+                "to continue them. Answer the latest request. Cancellation does not prove "
+                "that completed external actions were reversed.",
+            ))
+        prefix_messages = list(messages)
         reply_to = execution.get("replyToMessageId")
         if reply_to and not any(row["id"] == reply_to for row in selected_history):
             raise context_controls.ContextError(

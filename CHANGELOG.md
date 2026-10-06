@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.1
+
+- Mark selected cancelled requests as historical, not pending work, when preparing
+  subsequent answers. Preserve exact transcript text and context exclusions, and
+  freeze the cancellation notice with the original turn context for truthful replay.
+- Add regression coverage for cancellation context and excluded private requests.
+  A model notice does not replace durable cancellation or reverse external actions.
+
 ## 0.5.0
 
 - Publish the connected owner workspace: verified setup, projects, artifacts, agents,

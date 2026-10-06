@@ -82,6 +82,21 @@ def test_replay_uses_original_instructions_reply_and_boundary(tmp_path):
         assert len(provider.calls) == 1
 
 
+def test_cancelled_request_notice_is_frozen_for_exact_replay(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        cancelled = store.start_turn(sid)
+        original = store.append_message(
+            sid, "user", "Write a long guide", turn_id=cancelled, purpose="input"
+        )
+        store.finish_turn(cancelled, "cancelled")
+        provider = Recorder()
+        result = loop_with(store, provider).run_turn(sid, "Only answer this new question")
+        saved = turn_context.load(store, result["turn_id"])
+        assert any(original["id"] in item["content"] for item in saved["prefix"])
+        assert turn_context.replay(store, result["turn_id"])["messages"] == provider.calls[0]
+
+
 def test_replay_keeps_recorded_tool_results_without_dispatch(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()

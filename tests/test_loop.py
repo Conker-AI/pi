@@ -97,6 +97,53 @@ def test_history_is_resent_in_order(store):
     ]
 
 
+def test_cancelled_input_is_history_not_an_outstanding_request(store):
+    provider = Recorder()
+    loop = loop_with(store, provider)
+    sid = store.create_session()
+    cancelled = store.start_turn(sid)
+    original = store.append_message(
+        sid, "user", "Write a thirty-day guide", turn_id=cancelled, purpose="input"
+    )
+    store.finish_turn(cancelled, "cancelled")
+
+    loop.run_turn(sid, "What is 2 + 2? Only the number.")
+
+    sent = provider.calls[-1]
+    notices = [m.content for m in sent if m.role == "system" and "cancelled" in m.content]
+    assert len(notices) == 1
+    assert original["id"] in notices[0]
+    assert "not pending tasks" in notices[0]
+    assert "Do not resume" in notices[0]
+    assert ("user", "Write a thirty-day guide") in [(m.role, m.content) for m in sent]
+    assert store.get_message(original["id"])["content"] == "Write a thirty-day guide"
+
+
+def test_excluded_cancelled_input_does_not_leak_into_context_notice(store):
+    from pi import context_controls
+
+    provider = Recorder()
+    loop = loop_with(store, provider)
+    sid = store.create_session()
+    cancelled = store.start_turn(sid)
+    original = store.append_message(
+        sid, "user", "Excluded private request", turn_id=cancelled, purpose="input"
+    )
+    store.finish_turn(cancelled, "cancelled")
+    context_controls.save(store, sid, context_controls.Update(
+        expected_revision=0,
+        policy=context_controls.Policy(
+            sessionInstructions="", messagePolicies={original["id"]: "exclude"},
+            budget=context_controls.Budget(
+                contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0,
+            ),
+        ),
+    ))
+    loop.run_turn(sid, "Next question")
+    assert all(original["id"] not in m.content for m in provider.calls[-1])
+    assert all("Excluded private request" not in m.content for m in provider.calls[-1])
+
+
 def test_a_failed_turn_keeps_what_the_owner_said(store):
     """The message was said. A transcript that drops it because the answer
     failed is not a transcript, and the owner would retype into a void."""
