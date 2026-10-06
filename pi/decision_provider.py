@@ -143,7 +143,9 @@ class DecisionProvider:
         if model in {"memory-ranking", "search-ranking"}:
             try:
                 envelope = json.loads(messages[-1].content)
-                previews = envelope["search_previews" if model == "search-ranking" else "memory_previews"]
+                previews = envelope[
+                    "search_previews" if model == "search-ranking" else "memory_previews"
+                ]
                 if not isinstance(previews, dict) or not 2 <= len(previews) <= 8:
                     raise ValueError()
                 data = self.choose(

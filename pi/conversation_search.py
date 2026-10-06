@@ -7,11 +7,18 @@ def search(store, query, limit=30, cursor=None):
     query = query.strip()
     if not 1 <= len(query) <= 500 or type(limit) is not int or not 1 <= limit <= 50:
         raise ValueError("Use 1-500 search characters and a limit of 1-50.")
-    pattern = "%" + query.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    pattern = (
+        "%" + query.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    )
     params = [query, pattern]
     after = ""
     with store._connect() as db:
-        db.create_function("search_casefold", 1, lambda value: value.casefold() if isinstance(value, str) else "", deterministic=True)
+        db.create_function(
+            "search_casefold",
+            1,
+            lambda value: value.casefold() if isinstance(value, str) else "",
+            deterministic=True,
+        )
         if cursor is not None:
             boundary = db.execute(
                 "SELECT created_at,id FROM messages WHERE id=?", (cursor,)

@@ -6,6 +6,15 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.0
+
+- Publish the connected owner workspace: verified setup, projects, artifacts, agents,
+  calls, schedules, host inventory and exact operation-bound browser controls.
+- Publish staged, authenticated universal search with explicit opt-in semantic and
+  ranking settings, source privacy checks and literal fallback.
+- Include streamed and cancellable turns, source-bound memory forgetting,
+  proactive proposals and pinned workflow capabilities.
+
 - Load OpenRouter, OpenAI and Anthropic credentials once from fixed absolute regular files,
   reject ambiguous environment-plus-file configuration, and expose only configured provider
   identities through the secret-free health projection.
