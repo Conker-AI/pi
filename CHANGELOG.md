@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.5.2
+
+- Support an explicit browser-cookie namespace for trusted instances sharing a
+  hostname on different ports. Preserve the default cookie and all authentication,
+  CSRF, proof, expiry and revocation controls; never fall back to another namespace.
+
 ## 0.5.1
 
 - Add an explicit owner-authorized across-chat Companion memory scope. Existing

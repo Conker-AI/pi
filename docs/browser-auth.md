@@ -16,6 +16,16 @@ Successful login rotates the session. Logout, expiry, password reset and explici
 revocation invalidate server-side sessions. Password recovery requires access to
 the host, never an email link or a service execution credential.
 
+Browsers share cookies across ports on the same hostname. When running another
+trusted Conker instance on that hostname (for example, isolated QA), set a distinct
+`GATEWAY_COOKIE_NAMESPACE` on that instance. It accepts 1-40 lowercase letters,
+digits or hyphens and changes only the cookie name to `__Host-conker-NAMESPACE`.
+The default remains `__Host-conker`, preserving existing main-instance logins.
+No fallback to another instance's cookie is allowed. Changing a namespace requires
+signing in again; it does not change the password, permissions or session deadlines.
+This avoids accidental cookie replacement, not same-host security isolation:
+untrusted instances must use separate hostnames because cookies are still host-scoped.
+
 ToolGate integration contract requested from its owner: `X-ToolGate-Owner-Key`
 on `GET /v2/owner/requests` and `POST /v2/owner/requests/{id}/decision`.
 No fallback to ToolGate's admin or execution channel is permitted.

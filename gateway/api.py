@@ -43,8 +43,19 @@ class Config:
     terminal_workspace_label: str = ""
     pi_owner_key: str = ""
     toolgate_execution_key: str = ""
+    cookie_namespace: str = ""
+
+    @property
+    def cookie_name(self) -> str:
+        return f"{COOKIE}-{self.cookie_namespace}" if self.cookie_namespace else COOKIE
 
     def validate(self) -> None:
+        if self.cookie_namespace and not re.fullmatch(
+            r"[a-z0-9][a-z0-9-]{0,39}", self.cookie_namespace
+        ):
+            raise ValueError(
+                "GATEWAY_COOKIE_NAMESPACE must be 1-40 lowercase letters, digits or hyphens."
+            )
         if self.toolgate_execution_key and (
             not self.toolgate_execution_key.startswith("tgx_")
             or len(self.toolgate_execution_key) < 32
@@ -117,6 +128,7 @@ class Config:
             os.environ.get("GATEWAY_TERMINAL_WORKSPACE_LABEL", ""),
             os.environ.get("GATEWAY_PI_OWNER_KEY", ""),
             os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
+            os.environ.get("GATEWAY_COOKIE_NAMESPACE", ""),
         )
 
 
@@ -218,7 +230,7 @@ def create_app(
 
     def session(request: Request, *, authenticated: bool = True) -> dict:
         auth = app.state.auth
-        token = request.cookies.get(COOKIE, "")
+        token = request.cookies.get(app.state.config.cookie_name, "")
         value = auth.session(token, authenticated=authenticated)
         if request.method not in {"GET", "HEAD", "OPTIONS"}:  # noqa: SIM102 - group unsafe-method checks
             if request.headers.get("origin") != app.state.config.origin or not hmac.compare_digest(
@@ -228,7 +240,14 @@ def create_app(
         return value
 
     def cookie(response: JSONResponse, token: str) -> JSONResponse:
-        response.set_cookie(COOKIE, token, secure=True, httponly=True, samesite="strict", path="/")
+        response.set_cookie(
+            app.state.config.cookie_name,
+            token,
+            secure=True,
+            httponly=True,
+            samesite="strict",
+            path="/",
+        )
         return response
 
     @app.get("/health")
@@ -327,7 +346,7 @@ def create_app(
 
         value = await run_in_threadpool(
             app.state.auth.login,
-            request.cookies.get(COOKIE, ""),
+            request.cookies.get(app.state.config.cookie_name, ""),
             body["password"],
             request.client.host if request.client else "unknown",
         )
@@ -364,7 +383,7 @@ def create_app(
 
         return await run_in_threadpool(
             app.state.auth.verify,
-            request.cookies.get(COOKIE, ""),
+            request.cookies.get(app.state.config.cookie_name, ""),
             body["password"],
             request.client.host if request.client else "unknown",
             binding,
@@ -375,7 +394,9 @@ def create_app(
         value = session(request)
         app.state.auth.revoke(value["id"])
         response = JSONResponse({"authenticated": False})
-        response.delete_cookie(COOKIE, path="/", secure=True, httponly=True, samesite="strict")
+        response.delete_cookie(
+            app.state.config.cookie_name, path="/", secure=True, httponly=True, samesite="strict"
+        )
         return response
 
     @app.get("/auth/sessions")
@@ -462,7 +483,7 @@ def create_app(
             raise AuthError("Write operations must not include query parameters.", 422)
         binding = fingerprint(request.method, request.url.path, body)
         app.state.auth.consume(
-            request.cookies.get(COOKIE, ""),
+            request.cookies.get(app.state.config.cookie_name, ""),
             request.headers.get("x-conker-verification", ""),
             binding,
         )
@@ -479,7 +500,7 @@ def create_app(
         body = await json_body(request)
         if set(body) != {"requestId"} or request.scope["query_string"]:
             raise AuthError("Supply only a terminal requestId.", 422)
-        token = request.cookies.get(COOKIE, "")
+        token = request.cookies.get(app.state.config.cookie_name, "")
 
         def validate():
             current = app.state.auth.session(token)
