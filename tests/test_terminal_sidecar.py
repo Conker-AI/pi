@@ -56,17 +56,21 @@ def connected_sidecar():
     if not hasattr(socket, "AF_UNIX") or not hasattr(socket, "SO_PEERCRED"):
         pytest.skip("Linux Unix peer credentials are unavailable")
     path = Path(tempfile.gettempdir()) / f"conker-{uuid.uuid4().hex}.sock"
+    health_path = path.with_suffix(".json")
     sessions = TerminalSessions("/bin/bash", "/workspace", factory=FakeTerminal)
     thread = threading.Thread(
         target=serve,
         args=(path, sessions, os.getuid()),
-        kwargs={"install_signal_handlers": False},
+        kwargs={"install_signal_handlers": False, "health_path": health_path},
         daemon=True,
     )
     thread.start()
     deadline = time.monotonic() + 5
-    while not path.exists() and time.monotonic() < deadline:
+    # The socket exists after bind(), before listen(). The heartbeat starts
+    # only after listen(), without consuming the single accepted connection.
+    while not health(health_path) and time.monotonic() < deadline:
         time.sleep(0.01)
+    assert health(health_path), "sidecar did not finish listening"
     client = TerminalSidecar(str(path))
     assert client.readiness()["status"] == "ready"
     try:
@@ -75,6 +79,7 @@ def connected_sidecar():
         client.close()
         thread.join(timeout=5)
         path.unlink(missing_ok=True)
+        health_path.unlink(missing_ok=True)
         assert not thread.is_alive()
 
 
