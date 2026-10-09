@@ -59,6 +59,7 @@ from . import (
     setup_protection,
     setup_receipts,
     setup_rehearsal,
+    skills,
     submissions,
     system_actions,
     system_inventory,
@@ -309,6 +310,7 @@ class Store:
                 self._migrate(db)
                 db.executescript(FORGETTING_SCHEMA)
                 db.executescript(session_settings.SCHEMA)
+                db.executescript(skills.SCHEMA)
                 setup_receipts.initialize(db)
                 setup_choices.initialize(db)
                 setup_model_probes.initialize(db)

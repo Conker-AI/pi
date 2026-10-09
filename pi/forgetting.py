@@ -28,6 +28,7 @@ from . import (
     memory_proposals,
     memory_store,
     session_settings,
+    skills,
     submissions,
     tasks,
     turn_context,
@@ -171,6 +172,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         from . import context_controls, proposals
 
         context_controls.redact(db, plan["session_ids"])
+        skills.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])
         turn_queue.redact(db, plan["session_ids"])

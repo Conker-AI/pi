@@ -13,6 +13,8 @@ RUNTIME_ROUTES = {
         r"/turn-submissions/[A-Za-z0-9_-]+/stream",
         r"/approvals",
         r"/tools",
+        r"/skills",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}",
         r"/models",
         r"/messages/[A-Za-z0-9_-]+",
         r"/memory",
@@ -70,6 +72,8 @@ def session_only_write(method: str, path: str) -> bool:
 # conversation runtime credential. Expand only alongside the corresponding UI.
 OWNER_ROUTES = {
     "GET": (
+        r"/skills",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}",
         r"/search",
         r"/search/(?:settings|capabilities)",
         r"/artifacts",
@@ -112,6 +116,8 @@ OWNER_ROUTES = {
         r"/memory/forget/[A-Za-z0-9_.:-]+",
     ),
     "POST": (
+        r"/skills/import",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}/state",
         r"/search/settings",
         r"/artifacts",
         r"/collaboration/teams",

@@ -249,8 +249,10 @@ def validate_reply(db, identity, reply_to):
         )
 
 
-def reserve(db, request_id, identity, model_id=None, reply_to=None, research_mode="off"):
-    from . import project_context
+def reserve(
+    db, request_id, identity, model_id=None, reply_to=None, research_mode="off", skill_ids=None
+):
+    from . import project_context, skills
 
     snapshot = _snapshot(db, identity)
     from . import research
@@ -264,6 +266,8 @@ def reserve(db, request_id, identity, model_id=None, reply_to=None, research_mod
         snapshot["replyToMessageId"] = reply_to
     if model_id is not None:
         snapshot["answerModelId"] = model_id
+    if skill_ids:
+        snapshot["skills"] = skills.snapshot(db, skill_ids, snapshot)
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
 

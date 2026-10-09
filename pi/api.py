@@ -60,6 +60,7 @@ from . import (
     session_settings,
     session_settings_api,
     setup_status_api,
+    skills_api,
     speech,
     submissions,
     system_actions,
@@ -398,6 +399,21 @@ app.include_router(
         lambda reference: project_sources.resolve(app.state.store, reference),
     )
 )
+
+
+def require_skill_read(
+    request: Request,
+    owner_key: str | None = Header(None, alias="X-Pi-Owner-Key"),
+    x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
+    gateway_key: str | None = Header(None, alias="X-Pi-Gateway-Key"),
+) -> None:
+    if owner_key:
+        require_owner(request, owner_key, x_pi_key)
+    else:
+        require_key(request, x_pi_key, gateway_key)
+
+
+app.include_router(skills_api.router(lambda: app.state.store, require_skill_read, require_owner))
 app.include_router(context_api.router(lambda: app.state.store, require_admin))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
@@ -598,6 +614,7 @@ class TurnRequest(BaseModel):
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     research_mode: Literal["off", "web", "deep"] = "off"
+    skill_ids: list[str] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def task_submission(self):
@@ -776,6 +793,7 @@ def run_turn(session_id: str, body: TurnRequest):
             **({"model_id": body.model_id} if body.model_id is not None else {}),
             **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
             **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
+            **({"skill_ids": body.skill_ids} if body.skill_ids else {}),
         )
     except ActedWithoutReply as exc:
         # Deliberately not an error status. A tool ran, so this request did the

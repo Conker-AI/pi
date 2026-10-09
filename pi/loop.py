@@ -35,6 +35,7 @@ from . import (
     memory_store,
     model_roles,
     session_settings,
+    skills,
     submissions,
     tasks,
     turn_context,
@@ -273,6 +274,7 @@ class Loop:
             messages.append(Message("system", project["instructions"]))
         if policy and policy["sessionInstructions"].strip():
             messages.append(Message("system", policy["sessionInstructions"]))
+        messages.extend(skills.messages(execution))
         from . import agents, attachments, project_context
 
         try:
@@ -766,6 +768,7 @@ class Loop:
         model_id=None,
         reply_to=None,
         research_mode="off",
+        skill_ids=None,
     ) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
@@ -798,6 +801,7 @@ class Loop:
                 **({"model_id": model_id} if model_id is not None else {}),
                 **({"reply_to": reply_to} if reply_to is not None else {}),
                 **({"research_mode": research_mode} if research_mode != "off" else {}),
+                **({"skill_ids": skill_ids} if skill_ids is not None else {}),
             )
         except tasks.TaskError as exc:
             if explicit:
