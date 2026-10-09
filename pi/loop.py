@@ -664,6 +664,7 @@ class Loop:
             from . import research
 
             research.validate_narration(execution, completion.text)
+            tool_protocol.validate_answer(completion.text)
             turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             reason = getattr(exc, "reason", type(exc).__name__)
@@ -993,7 +994,7 @@ class Loop:
                 limit = 1
             elif execution.get("researchMode") == "deep":
                 limit = min(limit, research.plan(self.store, turn_id)["search_limit"])
-            for _ in range(max(0, limit - used)):
+            for step in range(max(0, limit - used)):
                 call = tool_protocol.parse(completion.text, allowed)
                 if call is None:
                     break
@@ -1095,11 +1096,13 @@ class Loop:
                     acted = True
                 history = self._history(
                     session_id,
-                    tools=[] if execution.get("researchMode") == "web" else available,
+                    tools=[] if used + step + 1 >= limit else available,
                     turn_id=turn_id,
+                    reply_only=used + step + 1 >= limit,
                 )
                 route, completion, skipped = self._call(history, ctx, execution)
             research.validate_narration(execution, completion.text)
+            tool_protocol.validate_answer(completion.text)
             turn_control.guard(self.store, execution)
         except (ProviderUnavailable, RuntimeError) as exc:
             # The user's message stays. It was said, and a transcript that drops

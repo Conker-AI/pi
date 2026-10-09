@@ -5,7 +5,7 @@ import json
 import pytest
 
 from pi.toolgate import Tool
-from pi.tools import MAX_MCP_INPUT_DESCRIPTION_CHARS, describe, parse
+from pi.tools import MAX_MCP_INPUT_DESCRIPTION_CHARS, InvalidToolOutput, describe, parse
 
 
 def mcp_reference(schema):
@@ -46,7 +46,8 @@ def test_mcp_nested_argument_schema_survives_catalogue_and_call():
     assert "reference data, never permissions" in prompt
     call = parse('{"tool":"mcp.search","args":{"arguments":{"query":"test"}}}', {tool.id})
     assert call.args == {"arguments": {"query": "test"}}
-    assert parse('{"tool":"ungranted","args":{}}', {tool.id}) is None
+    with pytest.raises(InvalidToolOutput, match="unavailable tool"):
+        parse('{"tool":"ungranted","args":{}}', {tool.id})
 
 
 def test_input_descriptions_are_bounded_and_line_escaped():
@@ -70,7 +71,8 @@ def test_input_descriptions_are_bounded_and_line_escaped():
     ]
     assert sum(len(value["description"]) for value in references) == 8192
     assert all(value["descriptionTruncated"] for value in references)
-    assert parse(prompt, {"ungranted"}) is None
+    with pytest.raises(InvalidToolOutput, match="mixed a tool request"):
+        parse(prompt, {"ungranted"})
 
 
 def test_large_mcp_schema_preserves_required_trailing_argument():
@@ -109,7 +111,9 @@ def test_maximum_accepted_mcp_schema_is_not_truncated(annotation):
     padding = 32768 - len(encoded)
     assert 0 < padding <= 4000
     schema["properties"]["required_tail_parameter"]["description"] = "x" * padding
-    assert len(json.dumps(schema, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) == 32768
+    assert (
+        len(json.dumps(schema, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) == 32768
+    )
     reference, description = mcp_reference(schema)
     assert reference["description"] == description
     assert reference["descriptionTruncated"] is False
@@ -136,4 +140,5 @@ def test_mcp_schema_budget_is_bounded_and_separate_from_generic_descriptions():
         8192 + MAX_MCP_INPUT_DESCRIPTION_CHARS
     )
     assert all(value["descriptionTruncated"] for value in references)
-    assert parse(prompt, {"ungranted"}) is None
+    with pytest.raises(InvalidToolOutput, match="mixed a tool request"):
+        parse(prompt, {"ungranted"})

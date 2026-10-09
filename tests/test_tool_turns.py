@@ -226,7 +226,8 @@ def test_a_tool_the_key_is_not_scoped_to_is_never_forwarded(store):
     loop, _ = build(store, ['{"tool": "t_secret", "args": {}}'], gate)
     s = store.create_session()
 
-    loop.run_turn(s, "use something else")
+    with pytest.raises(TurnFailed, match="unavailable tool"):
+        loop.run_turn(s, "use something else")
 
     assert gate.invocations == []
 
@@ -259,7 +260,8 @@ def test_a_model_looping_on_a_tool_is_stopped(store):
     loop, _ = build(store, [CALL] * 12, gate)
     s = store.create_session()
 
-    loop.run_turn(s, "loop forever")
+    with pytest.raises(ActedWithoutReply, match="another tool request"):
+        loop.run_turn(s, "loop forever")
 
     assert len(gate.invocations) <= 4
 

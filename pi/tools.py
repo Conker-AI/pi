@@ -4,7 +4,7 @@ Pi executes nothing itself. This module reads what the model asked for, hands it
 to ToolGate, and hands the answer back - including "the owner has to confirm
 this", which parks the turn rather than failing it.
 
-The request format is a JSON object the model emits on its own line. Deliberately
+The request format is one JSON object comprising the whole response. Deliberately
 not a provider's native tool-calling schema: Pi routes across local models, free
 hosted models and paid ones, and their tool formats disagree. A format the loop
 owns behaves identically everywhere, which is the whole reason the loop is thin.
@@ -15,15 +15,21 @@ without changing what ToolGate sees.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 
 from .toolgate import Tool
 
-# A line that is exactly a JSON object with a "tool" key. Anchored and
-# single-line on purpose: a looser parser would find "tool calls" inside prose
-# the model wrote about tools, and act on a sentence.
-_CALL = re.compile(r'^\s*(\{\s*"tool"\s*:.*\})\s*$', re.MULTILINE)
+# Only an entire response can request an action. Never extract executable JSON
+# from prose or a code example. These markers also recognize broken requests so
+# they cannot silently become a completed conversational answer.
+_REQUEST_FIELD = re.compile(
+    r"""(?:^|[,{])\s*["'](?:tool|tool_calls|function_call)["']\s*:"""
+    r"""|["']type["']\s*:\s*["'](?:tool_use|function_call)["']"""
+)
+_FENCE = re.compile(r"^```(?:json)?\s*\n(.*?)\n```$", re.DOTALL | re.IGNORECASE)
+MAX_TOOL_REQUEST_CHARS = 1_048_576
 MAX_INPUT_DESCRIPTION_CHARS = 4096
 MAX_TOOL_INPUT_DESCRIPTION_CHARS = 8192
 # ToolGate accepts MCP schemas up to 32 KiB of UTF-8 JSON and exports them
@@ -39,6 +45,15 @@ class ToolCall:
     args: dict
 
 
+class InvalidToolOutput(RuntimeError):
+    """A model request was not executable and must not be saved as an answer."""
+
+    def __init__(self, reason: str) -> None:
+        # Reasons are static protocol errors, never a model's payload or args.
+        self.reason = reason
+        super().__init__(reason)
+
+
 def describe(tools: list[Tool]) -> str:
     """The system text that tells a model what it may ask for.
 
@@ -49,10 +64,17 @@ def describe(tools: list[Tool]) -> str:
         return ""
     lines = [
         (
-            "You can ask to run a tool. To do so, reply with a single line that is "
-            "exactly one JSON object and nothing else:"
+            "Answer the user conversationally by default. Use a tool only when its action "
+            "is needed to fulfill the request; greetings and simple replies need no tool. "
+            "To request an action, reply with exactly one JSON object and nothing else:"
         ),
         '{"tool": "<id>", "args": {...}}',
+        (
+            "Use an exact ID from Available tools below, with only the keys tool and args. "
+            "args must be an object, even when empty. Never invent a tool or use a memory "
+            "namespace, provider name, or model name as a tool ID. Do not wrap a request "
+            "in a code fence."
+        ),
         "",
         "Ask for one tool at a time, and wait for the result before asking again.",
         (
@@ -105,21 +127,102 @@ def describe(tools: list[Tool]) -> str:
 
 
 def parse(text: str, allowed: set[str]) -> ToolCall | None:
-    """Find a tool request, or None.
+    """Decode one exact request, distinguish prose, and refuse broken protocol.
 
-    `allowed` is what ToolGate said this key is scoped to. A request for
-    anything else is ignored here and never sent - ToolGate would refuse it
-    anyway, but forwarding it would put an unscoped tool id in its audit trail
-    on Pi's authority, which is not Pi's to spend.
+    `allowed` is the current ToolGate scope, not model-supplied authority. An
+    invalid request never reaches ToolGate and is never repaired or retried.
+    Ordinary prose (including quoted examples) and non-protocol JSON are answers.
     """
-    for match in _CALL.finditer(text or ""):
-        try:
-            payload = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-        tool_id = payload.get("tool")
-        if not isinstance(tool_id, str) or tool_id not in allowed:
-            continue
-        args = payload.get("args")
-        return ToolCall(tool_id=tool_id, args=args if isinstance(args, dict) else {})
-    return None
+    payload = _request(text)
+    if payload is None:
+        return None
+    if set(payload) != {"tool", "args"} or not isinstance(payload.get("args"), dict):
+        raise InvalidToolOutput(
+            "The model returned an invalid tool request. Expected only tool and object args; "
+            "this request was not executed."
+        )
+    tool_id = payload.get("tool")
+    if not isinstance(tool_id, str) or tool_id not in allowed:
+        raise InvalidToolOutput(
+            "The model requested an unavailable tool. This request was not executed."
+        )
+    return ToolCall(tool_id=tool_id, args=payload["args"])
+
+
+def validate_answer(text: str) -> None:
+    """Reply-only recovery and an exhausted action budget must end in an answer."""
+    if _request(text) is not None:
+        raise InvalidToolOutput(
+            "The model returned another tool request where an answer was required. "
+            "This request was not executed; recorded action results are unchanged."
+        )
+
+
+def _request_shape(value) -> bool:
+    if isinstance(value, list):
+        return any(_request_shape(item) for item in value if isinstance(item, dict))
+    return isinstance(value, dict) and (
+        bool({"tool", "tool_calls", "function_call"} & value.keys())
+        or value.get("type") in ("tool_use", "function_call")
+    )
+
+
+def _request(text: str) -> dict | None:
+    candidate = (text or "").strip()
+    fenced = _FENCE.fullmatch(candidate)
+    if fenced:
+        candidate = fenced.group(1).strip()
+    if not candidate.startswith(("{", "[")):
+        # A narrated action is still invalid protocol, not an answer. Fenced
+        # examples with explanatory prose are quoted data and never executable.
+        in_example = False
+        for line in candidate.splitlines():
+            if line.lstrip().startswith("```"):
+                in_example = not in_example
+            elif (
+                not in_example
+                and line.lstrip().startswith(("{", "["))
+                and _REQUEST_FIELD.search(line)
+            ):
+                raise InvalidToolOutput(
+                    "The model mixed a tool request with other text. This request was not executed."
+                )
+        return None
+    malformed = False
+
+    def pairs(items):
+        nonlocal malformed
+        value = {}
+        for key, item in items:
+            if key in value:
+                malformed = True
+            value[key] = item
+        return value
+
+    def number(raw):
+        nonlocal malformed
+        value = float(raw)
+        if not math.isfinite(value):
+            malformed = True
+        return value
+
+    try:
+        if len(candidate) > MAX_TOOL_REQUEST_CHARS:
+            raise ValueError("request size")
+        value = json.loads(
+            candidate, object_pairs_hook=pairs, parse_constant=number, parse_float=number
+        )
+    except (ValueError, RecursionError):
+        if not _REQUEST_FIELD.search(candidate):
+            return None
+        raise InvalidToolOutput(
+            "The model returned malformed or oversized tool JSON. This request was not executed."
+        ) from None
+    if not _request_shape(value):
+        return None
+    if fenced or malformed or not isinstance(value, dict):
+        raise InvalidToolOutput(
+            "The model returned an ambiguous or unsupported tool request. "
+            "This request was not executed."
+        )
+    return value
