@@ -411,43 +411,50 @@ class Store:
         agent_id: str | None = None,
         privacy: dict[str, bool] | None = None,
     ) -> str:
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            session_id = self._create_session(db, title, parent_id, summary, agent_id, privacy)
+            db.commit()
+            return session_id
+
+    def _create_session(
+        self, db, title="", parent_id=None, summary=None, agent_id=None, privacy=None
+    ) -> str:
+        """Insert a session inside the caller's transaction, without inference."""
         if privacy is not None and (
             not set(privacy) <= {"memoryDisabled", "harnessDisabled"}
             or any(type(value) is not bool for value in privacy.values())
         ):
             raise ValueError("Use only boolean memoryDisabled and harnessDisabled restrictions.")
         session_id = f"ses_{uuid.uuid4().hex[:16]}"
-        with self._connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            initial_settings = None
-            if parent_id is None:
-                initial_settings = json.loads(json.dumps(session_settings.DEFAULT))
-                choice = db.execute(
-                    "SELECT choice FROM setup_optional_choices WHERE step='memory' "
-                    "ORDER BY revision DESC LIMIT 1"
-                ).fetchone()
-                if choice is not None:
-                    initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
-                if privacy:
-                    initial_settings["privacy"].update(privacy)
-                if agent_id is not None:
-                    selected = agents._get(db, agent_id)
-                    if selected["archived_at"] is not None:
-                        raise agents.AgentError("agent_archived", "Select an active agent.")
-                    initial_settings["agentId"] = selected["id"]
-                elif choice is None and not privacy:
-                    initial_settings = None
+        initial_settings = None
+        if parent_id is None:
+            initial_settings = json.loads(json.dumps(session_settings.DEFAULT))
+            choice = db.execute(
+                "SELECT choice FROM setup_optional_choices WHERE step='memory' "
+                "ORDER BY revision DESC LIMIT 1"
+            ).fetchone()
+            if choice is not None:
+                initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
+            if privacy:
+                initial_settings["privacy"].update(privacy)
+            if agent_id is not None:
+                selected = agents._get(db, agent_id)
+                if selected["archived_at"] is not None:
+                    raise agents.AgentError("agent_archived", "Select an active agent.")
+                initial_settings["agentId"] = selected["id"]
+            elif choice is None and not privacy:
+                initial_settings = None
+        db.execute(
+            "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"
+            " VALUES (?,?,?,'open',?,?)",
+            (session_id, parent_id, title, time.time(), summary),
+        )
+        if initial_settings is not None:
             db.execute(
-                "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"
-                " VALUES (?,?,?,'open',?,?)",
-                (session_id, parent_id, title, time.time(), summary),
+                "INSERT INTO session_settings VALUES (?,?,?)",
+                (session_id, 1, json.dumps(initial_settings)),
             )
-            if initial_settings is not None:
-                db.execute(
-                    "INSERT INTO session_settings VALUES (?,?,?)",
-                    (session_id, 1, json.dumps(initial_settings)),
-                )
-            db.commit()
         return session_id
 
     def get_session(self, session_id: str) -> dict | None:

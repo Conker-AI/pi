@@ -486,7 +486,7 @@ app.include_router(
         require_owner,
     )
 )
-app.include_router(drafts_api.router(lambda: app.state.store, require_admin))
+app.include_router(drafts_api.router(lambda: app.state.store, require_owner))
 app.include_router(conversation_search.router(lambda: app.state.store, require_admin))
 app.include_router(
     attachments_api.router(lambda: app.state.store, require_admin, session_settings.source_privacy)

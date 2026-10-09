@@ -149,6 +149,9 @@ def _view(db, row):
         "SELECT snapshot FROM submission_settings WHERE request_id=?", (row["request_id"],)
     ).fetchone()
     selected = json.loads(selection[0]) if available and selection else {}
+    draft = db.execute(
+        "SELECT revision FROM submitted_drafts WHERE request_id=?", (row["request_id"],)
+    ).fetchone()
     return {
         "request_id": row["request_id"],
         "requested_session_id": row["requested_session_id"],
@@ -182,6 +185,7 @@ def _view(db, row):
         "skill_ids": [skill["id"] for skill in selected.get("skills", [])],
         "model_id": selected.get("answerModelId"),
         "think": selected.get("think", False) if available else False,
+        "draft_revision": draft[0] if available and draft else None,
     }
 
 
@@ -396,7 +400,16 @@ def reserve(
 
             try:
                 drafts.reserve(
-                    db, request_id, session_id, task_id, draft_revision, text, research_mode
+                    db,
+                    request_id,
+                    session_id,
+                    task_id,
+                    draft_revision,
+                    text,
+                    research_mode,
+                    model_id,
+                    skill_ids,
+                    think,
                 )
             except drafts.DraftError as exc:
                 raise SubmissionError("draft_changed", str(exc)) from exc
