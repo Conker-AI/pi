@@ -33,6 +33,7 @@ class Enqueue(BaseModel):
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     research_mode: Literal["off", "web", "deep"] = "off"
+    think: bool = False
 
 
 class Edit(BaseModel):
@@ -49,6 +50,7 @@ class Revision(BaseModel):
 class Review(Revision):
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
+    think: bool = False
 
 
 class QueueRevision(BaseModel):
@@ -76,8 +78,9 @@ def _source(db, sid, *, open_required=True):
 
 
 def _files(db, sid, payload, snapshot):
-    from . import research
+    from . import background_thinking, research
 
+    background_thinking.validate_request(payload.get("think", False), json.loads(snapshot)["execution"])
     research.validate(payload.get("research_mode", "off"), json.loads(snapshot)["execution"])
     session_settings.validate_answer_model(
         json.loads(snapshot)["execution"], payload.get("model_id")
@@ -179,6 +182,8 @@ def enqueue(store, sid, body):
         payload["reply_to"] = body.reply_to
     if body.research_mode != "off":
         payload["research_mode"] = body.research_mode
+    if body.think:
+        payload["think"] = True
     digest = hashlib.sha256(_encode(payload).encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -227,6 +232,8 @@ def change(store, sid, identity, body, operation):
                 payload["reply_to"] = body.reply_to
             if "model_id" in body.model_fields_set:
                 payload["model_id"] = body.model_id
+            if "think" in body.model_fields_set:
+                payload["think"] = body.think
             snapshot = _snapshot(db, sid)
             _files(db, sid, payload, snapshot)
         elif operation == "remove":
@@ -288,6 +295,7 @@ def admit(
     model_id=None,
     reply_to=None,
     research_mode="off",
+    think=False,
 ):
     """Called inside the submission writer transaction, never a separate claim."""
     _source(db, sid)
@@ -305,6 +313,7 @@ def admit(
         or model_id != payload.get("model_id")
         or reply_to != payload.get("reply_to")
         or research_mode != payload.get("research_mode", "off")
+        or think != payload.get("think", False)
     ):
         raise tasks.TaskError("queue_changed", "Execution does not match the queued message.")
     validate(db, row)
@@ -371,6 +380,7 @@ def run_next(store, loop, sid):
             request_id=submission_identity(entry["id"], entry["revision"]),
             attachment_ids=entry["payload"]["attachment_ids"],
             model_id=entry["payload"].get("model_id"),
+            **({"think": True} if entry["payload"].get("think") else {}),
             reply_to=entry["payload"].get("reply_to"),
             **(
                 {"research_mode": entry["payload"]["research_mode"]}

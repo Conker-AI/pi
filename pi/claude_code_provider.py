@@ -2,6 +2,7 @@
 
 import httpx
 
+from . import inference_control
 from .chatgpt_provider import ChatGPTProvider
 from .private_transport import PrivateTransport
 from .providers import Completion, ProviderUnavailable, require_images
@@ -13,15 +14,17 @@ class ClaudeCodeProvider(ChatGPTProvider):
     def complete_bounded(self, messages, *, model, timeout):
         require_images(self, messages)
         try:
-            with self.client(min(timeout, 180) + 5) as client:
+            with self.cancelable_request() as cancellation, self.client(min(timeout, 180) + 5) as client:
                 result = client.post(
                     "http://conker-chatgpt/responses",
                     json={
                         "model": model,
                         "messages": [{"role": m.role, "content": m.content} for m in messages],
                         "timeout": min(max(timeout, 1), 180),
+                        **cancellation,
                     },
                 )
+                inference_control.check()
                 result.raise_for_status()
                 if len(result.content) > 2_000_000:
                     raise ValueError()
@@ -51,6 +54,7 @@ def configured(environment, timeout):
                 transport=PrivateTransport(
                     url, environment.get("PI_SUBSCRIPTION_KEY", ""), prefix="/inference/claude"
                 ),
+                request_cancellation=True,
             )
         }
         if url

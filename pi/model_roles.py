@@ -143,6 +143,35 @@ class Update(Strict):
     expected_revision: int = Field(ge=0)
     configuration: Configuration
 
+    @model_validator(mode="after")
+    def supported_assignments(self):
+        # Keep old catalogues readable so the owner can repair them. Validate
+        # new writes separately from loading historical execution snapshots.
+        config = self.configuration
+        models = {model.id: model for model in config.models}
+        if config.defaultModelId and models[config.defaultModelId].providerId == "decisions":
+            raise ValueError("A decision classifier cannot be the default talking model.")
+        for role, assignment in config.roleSettings.roles.items():
+            for identity in assignment.eligibleModelIds:
+                model = models[identity]
+                if model.providerId == "decisions" and model.route != {
+                    "routing": "model-routing",
+                    "memory-ranking": "memory-ranking",
+                    "search-ranking": "search-ranking",
+                }.get(role):
+                    raise ValueError(f"The decision adapter cannot perform the {role} role.")
+        routing = config.roleSettings.roles["routing"]
+        uses_laya = any(
+            models[identity].providerId == "decisions"
+            for identity in (routing.modelId, routing.fallbackModelId)
+            if identity is not None
+        )
+        if config.roleSettings.answerMode == "router" and uses_laya and len(
+            config.roleSettings.roles["answer"].eligibleModelIds
+        ) > 8:
+            raise ValueError("Laya supports a shortlist of at most eight talking models.")
+        return self
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS model_role_settings (
@@ -235,11 +264,14 @@ def dispatch(
     )
     selected = override if role == "answer" and override is not None else assignment.modelId
     attempts = []
-    if role == "answer" and not locked:
-        if harness_disabled:
-            raise SelectionError(
-                "No harness disables routing helpers; select a manual answer model."
-            )
+    if role == "answer" and not locked and harness_disabled:
+        raise SelectionError(
+            "No harness disables routing helpers; select a manual answer model."
+        )
+    single_candidate = role == "answer" and not locked and len(eligible) == 1
+    if single_candidate:
+        selected = next(iter(eligible))
+    if role == "answer" and not locked and not single_candidate:
         route_messages = [
             Message(
                 "system",
@@ -333,6 +365,7 @@ def dispatch(
                 "requestedModel": model.route,
                 "actualModel": completion.model,
                 "status": "completed",
+                **({"selectionReason": "single_eligible_model"} if single_candidate else {}),
                 **decision_evidence(completion),
             }
         )

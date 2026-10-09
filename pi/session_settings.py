@@ -250,14 +250,17 @@ def validate_reply(db, identity, reply_to):
 
 
 def reserve(
-    db, request_id, identity, model_id=None, reply_to=None, research_mode="off", skill_ids=None
+    db, request_id, identity, model_id=None, reply_to=None, research_mode="off", skill_ids=None,
+    think=False,
 ):
-    from . import project_context, skills
+    from . import background_thinking, project_context, skills
 
     snapshot = _snapshot(db, identity)
     from . import research
 
     research.validate(research_mode, snapshot)
+    background_thinking.validate_request(think, snapshot)
+    snapshot["think"] = think
     if research_mode != "off":
         snapshot["researchMode"] = research_mode
     validate_answer_model(snapshot, model_id)

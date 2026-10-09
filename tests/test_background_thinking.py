@@ -53,7 +53,7 @@ def test_talking_completes_while_thinking_is_blocked(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         loop, provider = setup(store)
         session = store.create_session()
-        result = loop.run_turn(session, "Compare these choices")
+        result = loop.run_turn(session, "Compare these choices", think=True)
         assert provider.started.wait(2)
         assert result["message"]["content"] == "Talking reply"
         assert background_thinking.list_for_session(store, session)[0]["status"] == "running"
@@ -67,8 +67,8 @@ def test_new_input_supersedes_old_result_and_cancel_discards_new(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         loop, provider = setup(store)
         session = store.create_session()
-        old = loop.run_turn(session, "First task")["turn_id"]
-        new = loop.run_turn(session, "Changed task")["turn_id"]
+        old = loop.run_turn(session, "First task", think=True)["turn_id"]
+        new = loop.run_turn(session, "Changed task", think=True)["turn_id"]
         background_thinking.cancel(store, session, new)
         wait_workers(loop, provider)
         rows = {row["turn_id"]: row for row in background_thinking.list_for_session(store, session)}
@@ -83,7 +83,7 @@ def test_no_harness_prevents_background_use_and_restart_never_retries(tmp_path):
         loop.run_turn(session, "Private request")
         assert background_thinking.list_for_session(store, session) == []
         session = store.create_session()
-        loop.run_turn(session, "Analysis")
+        loop.run_turn(session, "Analysis", think=True)
         background_thinking.recover_interrupted(store)
         wait_workers(loop, provider)
         row = background_thinking.list_for_session(store, session)[0]

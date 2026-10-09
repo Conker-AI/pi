@@ -8,20 +8,52 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Mapping
+from contextlib import ExitStack, contextmanager
 
 import httpx
 
-from . import live_stream
+from . import inference_control, live_stream
 from .providers import Completion, Message, ProviderUnavailable, chat_content
+from .tool_evidence import project_tool_evidence
 
 
 def _count(value):
     return value if type(value) is int and value >= 0 else None
 
 
+@contextmanager
+def provider_stream(method, url, *, timeout, **kwargs):
+    """Close only this inference's client/response when its owner stops it."""
+    token = inference_control.current()
+    if token is None:
+        with httpx.stream(method, url, timeout=timeout, **kwargs) as response:
+            yield response
+        return
+    with ExitStack() as stack:
+        client = stack.enter_context(
+            httpx.Client(
+                timeout=timeout,
+                follow_redirects=kwargs.pop("follow_redirects", False),
+                trust_env=kwargs.pop("trust_env", False),
+            )
+        )
+        active = []
+        stack.enter_context(
+            token.register(
+                lambda: inference_control.close_response(active[0]) if active else client.close()
+            )
+        )
+        response = stack.enter_context(client.stream(method, url, **kwargs))
+        active.append(response)
+        token.check()
+        yield response
+        token.check()
+
+
 def sse_events(response: httpx.Response) -> Iterator[dict]:
     """JSON payloads of a server-sent event stream; `[DONE]` ends it."""
     for line in response.iter_lines():
+        inference_control.check()
         if not line.startswith("data:"):
             continue
         data = line[5:].strip()
@@ -55,22 +87,17 @@ class _DirectProvider:
     def complete_bounded(
         self, messages: list[Message], *, model: str, timeout: float
     ) -> Completion:
+        inference_control.check()
         if not self.api_key or not self.allow_paid:
             raise ProviderUnavailable("direct provider requires a key and paid-model opt-in")
-        if (
-            not model.strip()
-            or not messages
-            or any(
-                m.role not in {"system", "user", "assistant"} or not isinstance(m.content, str)
-                for m in messages
-            )
-        ):
+        if not model.strip():
             raise ProviderUnavailable("unsupported direct text request")
+        messages = project_tool_evidence(messages)
         payload = self._payload(messages, model)
         try:
-            if live_stream.active():
+            if live_stream.active() or inference_control.current() is not None:
                 live_stream.begin_attempt()
-                with httpx.stream(
+                with provider_stream(
                     "POST",
                     self.url,
                     headers=self._headers(),
@@ -94,8 +121,12 @@ class _DirectProvider:
                 body = response.json()
             if not isinstance(body, dict):
                 raise ValueError()
+            inference_control.check()
             return self._completion(body, model)
+        except inference_control.InferenceCancelled:
+            raise
         except Exception as exc:
+            inference_control.check()
             # Provider bodies, URLs, and exception text can contain credentials or
             # prompts. Only the exception class crosses the adapter boundary.
             raise ProviderUnavailable(type(exc).__name__) from None

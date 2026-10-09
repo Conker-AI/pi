@@ -135,6 +135,9 @@ class Loop:
             return []
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
+        from . import inference_control
+
+        inference_control.check()
         if role == "answer":
             turn_steering.guard(self.store, execution)
             with live_stream.answering():
@@ -147,6 +150,7 @@ class Loop:
             except turn_steering.Pending:
                 turn_steering.discarded(self.store, execution["turnExecutionId"], result[1])
                 raise
+        inference_control.check()
         return result
 
     def _call_once(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
@@ -156,6 +160,12 @@ class Loop:
         gave. Falling through is not a silent retry: what was skipped and why
         is returned and recorded on the turn.
         """
+        from . import inference_control
+
+        def guard():
+            inference_control.check()
+            turn_control.guard(self.store, execution)
+
         configuration = execution.get("modelConfiguration") if execution else None
         override = (
             (
@@ -183,7 +193,7 @@ class Loop:
                 adapters,
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None,
-                guard=lambda: turn_control.guard(self.store, execution),
+                guard=guard,
             )
             completion = result["completion"]
             evidence = {
@@ -769,6 +779,7 @@ class Loop:
         reply_to=None,
         research_mode="off",
         skill_ids=None,
+        think=False,
     ) -> dict:
         """One turn. Returns the assistant message and where it landed.
 
@@ -802,6 +813,7 @@ class Loop:
                 **({"reply_to": reply_to} if reply_to is not None else {}),
                 **({"research_mode": research_mode} if research_mode != "off" else {}),
                 **({"skill_ids": skill_ids} if skill_ids is not None else {}),
+                think=think,
             )
         except tasks.TaskError as exc:
             if explicit:
@@ -951,16 +963,20 @@ class Loop:
         ctx = TurnContext(history_chars=self._history_size(history), **context)
 
         try:
-            if not continued:
-                self.thinking.start(session_id, turn_id, history, ctx, execution)
-            if (
-                execution.get("researchMode") == "deep"
-                and research.plan(self.store, turn_id) is None
-            ):
-                _, planned, _ = self._call([*history, research.PLAN_PROMPT], ctx, execution)
-                research.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
-                history = self._history(session_id, tools=available, turn_id=turn_id)
-            route, completion, skipped = self._call(history, ctx, execution)
+            from . import inference_control
+
+            local_keys = background_thinking.foreground_local_keys(self, execution)
+            with inference_control.foreground_intent(local_keys):
+                if not continued:
+                    self.thinking.start(session_id, turn_id, history, ctx, execution)
+                if (
+                    execution.get("researchMode") == "deep"
+                    and research.plan(self.store, turn_id) is None
+                ):
+                    _, planned, _ = self._call([*history, research.PLAN_PROMPT], ctx, execution)
+                    research.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
+                    history = self._history(session_id, tools=available, turn_id=turn_id)
+                route, completion, skipped = self._call(history, ctx, execution)
 
             web_research = execution.get("researchMode") in ("web", "deep")
             if web_research and not research.action_count(self.store, turn_id):

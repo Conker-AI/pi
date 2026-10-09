@@ -65,7 +65,10 @@ def cancel(store, turn_id):
         db.execute("BEGIN IMMEDIATE")
         result = _cancel_db(db, turn_id)
         db.commit()
-        return result
+    from . import background_thinking
+
+    background_thinking.cancel_for_turn(store, turn_id)
+    return result
 
 
 def cancel_submission(store, request_id):
@@ -94,7 +97,11 @@ def cancel_submission(store, request_id):
             raise tasks.TaskError("not_preparing", "This submission has already finished.", 409)
         result = submissions._view(db, submissions._row(db, request_id))
         db.commit()
-        return result
+    if row["turn_id"]:
+        from . import background_thinking
+
+        background_thinking.cancel_for_turn(store, row["turn_id"])
+    return result
 
 
 def guard_db(db, turn_id, reply_request_id=None):

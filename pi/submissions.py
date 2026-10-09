@@ -181,6 +181,7 @@ def _view(db, row):
         ),
         "skill_ids": [skill["id"] for skill in selected.get("skills", [])],
         "model_id": selected.get("answerModelId"),
+        "think": selected.get("think", False) if available else False,
     }
 
 
@@ -282,6 +283,7 @@ def reserve(
     reply_to=None,
     research_mode="off",
     skill_ids=None,
+    think=False,
 ):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError(
@@ -293,8 +295,9 @@ def reserve(
         raise SubmissionError("invalid_task", "Task identity and revision belong together.", 422)
     if task_revision is not None and (type(task_revision) is not int or task_revision < 1):
         raise SubmissionError("invalid_task", "Provide the current task revision.", 422)
-    from . import research, skills
+    from . import background_thinking, research, skills
 
+    background_thinking.validate_request(think)
     research.validate(research_mode)
     skills.validate_ids([] if skill_ids is None else skill_ids)
     payload = {
@@ -308,6 +311,8 @@ def reserve(
         payload["research_mode"] = research_mode
     if skill_ids:
         payload["skill_ids"] = skill_ids
+    if think:
+        payload["think"] = True
     if model_id is not None:
         payload["model_id"] = model_id
     if reply_to is not None:
@@ -361,6 +366,7 @@ def reserve(
                 model_id,
                 reply_to,
                 research_mode,
+                think,
             )
         head = db.execute(
             "SELECT COALESCE(MAX(seq),0) FROM messages WHERE session_id=?", (session_id,)
@@ -373,7 +379,7 @@ def reserve(
             (request_id, session_id, task_id, task_revision, digest, text, head, now, now),
         )
         session_settings.reserve(
-            db, request_id, session_id, model_id, reply_to, research_mode, skill_ids
+            db, request_id, session_id, model_id, reply_to, research_mode, skill_ids, think
         )
         context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:

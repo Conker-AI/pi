@@ -14,13 +14,14 @@ that only ever saw one provider would grow assumptions about it.
 from __future__ import annotations
 
 import json
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
 
 from . import citations as message_citations
-from . import live_stream
+from . import inference_control, live_stream
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,7 @@ class OllamaProvider:
 
     def __init__(self, base_url: str, timeout: float = 120.0, model: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self.local_capacity_key = "ollama:" + self.base_url
         self.timeout = timeout
         # Which model this provider is expected to serve, so health can ask
         # about *that* one rather than about the existence of any model at all.
@@ -152,21 +154,24 @@ class OllamaProvider:
                 }
                 for m in messages
             ],
-            "stream": live_stream.active(),
+            "stream": live_stream.active() or inference_control.current() is not None,
         }
         try:
-            if payload["stream"]:
-                body = self._streamed(payload, timeout)
-            else:
-                response = httpx.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload,
-                    timeout=timeout,
-                    follow_redirects=False,
-                    trust_env=False,
-                )
-                response.raise_for_status()
-                body = response.json()
+            with inference_control.local_capacity(self.local_capacity_key, timeout):
+                if payload["stream"]:
+                    body = self._streamed(payload, timeout)
+                else:
+                    response = httpx.post(
+                        f"{self.base_url}/api/chat",
+                        json=payload,
+                        timeout=timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+        except inference_control.InferenceCancelled:
+            raise
         except Exception as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}") from exc
 
@@ -192,16 +197,30 @@ class OllamaProvider:
         live_stream.begin_attempt()
         text = []
         final: dict = {}
-        with httpx.stream(
-            "POST",
-            f"{self.base_url}/api/chat",
-            json=payload,
-            timeout=timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as response:
+        with ExitStack() as stack:
+            token = inference_control.current()
+            if token is not None:
+                client = stack.enter_context(httpx.Client(
+                    timeout=timeout, follow_redirects=False, trust_env=False
+                ))
+                active_response = []
+                stack.enter_context(token.register(
+                    lambda: inference_control.close_response(active_response[0])
+                    if active_response else client.close()
+                ))
+                stream = client.stream("POST", f"{self.base_url}/api/chat", json=payload)
+            else:
+                stream = httpx.stream(
+                    "POST", f"{self.base_url}/api/chat", json=payload, timeout=timeout,
+                    follow_redirects=False, trust_env=False,
+                )
+            response = stack.enter_context(stream)
+            if token is not None:
+                active_response.append(response)
+                token.check()
             response.raise_for_status()
             for line in response.iter_lines():
+                inference_control.check()
                 if not line.strip():
                     continue
                 chunk = json.loads(line)

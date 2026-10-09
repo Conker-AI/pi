@@ -615,6 +615,7 @@ class TurnRequest(BaseModel):
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     research_mode: Literal["off", "web", "deep"] = "off"
     skill_ids: list[str] = Field(default_factory=list, max_length=3)
+    think: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def task_submission(self):
@@ -766,6 +767,19 @@ def get_session(session_id: str):
     }
 
 
+@app.get("/sessions/{session_id}/thinking", dependencies=[Depends(require_key)])
+def thinking_status(session_id: str):
+    session = app.state.store.get_session(session_id)
+    if session is None:
+        raise HTTPException(404, "no such session")
+    return {
+        "schemaVersion": 1,
+        "session_id": session_id,
+        "content_status": "forgotten" if session["status"] == "forgotten" else "available",
+        "results": background_thinking.list_for_session(app.state.store, session_id),
+    }
+
+
 @app.post("/sessions/{session_id}/thinking/{turn_id}/cancel", dependencies=[Depends(require_key)])
 def cancel_thinking(session_id: str, turn_id: str):
     try:
@@ -794,6 +808,7 @@ def run_turn(session_id: str, body: TurnRequest):
             **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
             **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
             **({"skill_ids": body.skill_ids} if body.skill_ids else {}),
+            **({"think": True} if body.think else {}),
         )
     except ActedWithoutReply as exc:
         # Deliberately not an error status. A tool ran, so this request did the

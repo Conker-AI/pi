@@ -7,6 +7,7 @@ RUNTIME_ROUTES = {
         r"/health",
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+",
+        r"/sessions/[A-Za-z0-9_-]+/thinking",
         r"/sessions/[A-Za-z0-9_-]+/submissions",
         r"/turns/unreplied",
         r"/turn-submissions/[A-Za-z0-9_-]+",

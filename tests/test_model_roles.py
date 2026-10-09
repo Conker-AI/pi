@@ -183,3 +183,51 @@ def test_interruption_before_provider_prevents_call():
     with pytest.raises(ProviderUnavailable, match="Call paused"):
         r.dispatch(config(), "answer", [], {"one": adapter}, guard=guard)
     assert not adapter.calls
+
+
+def test_single_answer_candidate_skips_classifier_but_preserves_privacy():
+    value = config()
+    value["roleSettings"]["answerMode"] = "router"
+    value["roleSettings"]["roles"]["routing"] = {**value["roleSettings"]["roles"]["answer"]}
+    value["roleSettings"]["roles"]["answer"]["eligibleModelIds"] = ["a"]
+    adapter = Adapter()
+    result = r.dispatch(value, "answer", [Message("user", "Hello")], {"one": adapter})
+    assert len(adapter.calls) == 1
+    assert result["modelId"] == "a"
+    assert result["attempts"][0]["selectionReason"] == "single_eligible_model"
+    with pytest.raises(r.SelectionError, match="No harness"):
+        r.dispatch(value, "answer", [], {"one": adapter}, harness_disabled=True)
+    assert len(adapter.calls) == 1
+
+
+def test_decision_classifier_cannot_be_saved_as_talking_model_but_old_data_is_readable():
+    value = config()
+    value["providers"][0]["id"] = "decisions"
+    value["models"][0].update(providerId="decisions", route="model-routing")
+    r.Configuration.model_validate(value)
+    with pytest.raises(ValidationError, match="default talking model"):
+        r.Update(expected_revision=0, configuration=value)
+
+
+def test_laya_shortlist_rejects_nine_candidates_at_save():
+    value = config()
+    value["providers"].append(dict(id="decisions", name="Laya", enabled=True))
+    value["models"].append(dict(id="router", providerId="decisions", name="Laya", route="model-routing", enabled=True))
+    value["models"].extend(dict(id=f"m{i}", providerId="one", name=f"M{i}", route=f"model{i}", enabled=True) for i in range(7))
+    roles = value["roleSettings"]["roles"]
+    roles["answer"]["eligibleModelIds"] += [f"m{i}" for i in range(7)]
+    roles["routing"] = {**roles["answer"], "eligibleModelIds": ["router"], "modelId": "router"}
+    value["roleSettings"]["answerMode"] = "router"
+    with pytest.raises(ValidationError, match="at most eight"):
+        r.Update(expected_revision=0, configuration=value)
+    roles["answer"]["eligibleModelIds"].pop()
+    r.Update(expected_revision=0, configuration=value)
+
+
+def test_decision_route_must_match_assigned_helper_role():
+    value = config()
+    value["providers"].append(dict(id="decisions", name="Laya", enabled=True))
+    value["models"].append(dict(id="ranker", providerId="decisions", name="Ranking", route="memory-ranking", enabled=True))
+    value["roleSettings"]["roles"]["summarization"].update(eligibleModelIds=["ranker"])
+    with pytest.raises(ValidationError, match="summarization role"):
+        r.Update(expected_revision=0, configuration=value)
