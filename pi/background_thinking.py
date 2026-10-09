@@ -304,12 +304,27 @@ class Thinking:
                             ).rowcount
                         if not changed:
                             return
-                        _, completion, evidence = self.loop._call(
-                            messages, context, execution, role="thinking"
-                        )
+                        assignment = execution.get("modelConfiguration", {}).get(
+                            "roleSettings", {}
+                        ).get("roles", {}).get("thinking", {})
+                        timeout = min(120.0, assignment.get("timeoutMs", 120000) / 1000)
+                        # Provider read timeouts reset as data arrives. This
+                        # separate wall deadline also stops never-ending streams.
+                        with control.token.deadline(timeout):
+                            _, completion, evidence = self.loop._call(
+                                messages, context, execution, role="thinking"
+                            )
                         inference_control.check()
                     break
                 except inference_control.InferenceCancelled:
+                    if control.token.reason == "deadline":
+                        with store._connect() as db:
+                            db.execute(
+                                "UPDATE background_thinking SET status='failed',ended_at=?,detail=? "
+                                "WHERE turn_id=? AND status IN ('queued','running')",
+                                (time.time(), "Background analysis reached its time limit. It was not automatically restarted.", turn_id),
+                            )
+                        return
                     if control.token.reason != "preempted" or attempt or not control.renew():
                         with store._connect() as db:
                             db.execute(

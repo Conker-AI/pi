@@ -32,7 +32,9 @@ def setup(store):
         dict(id="thinker", providerId="one", name="Thinker", route="think", enabled=True)
     )
     value["roleSettings"]["roles"]["thinking"].update(
-        enabled=True, eligibleModelIds=["thinker"], modelId="thinker"
+        # These tests hold inference across several SQLite-backed foreground
+        # turns. Deadline-specific tests override this generous fixture budget.
+        enabled=True, eligibleModelIds=["thinker"], modelId="thinker", timeoutMs=10000
     )
     model_roles.save(store, model_roles.Update(expected_revision=0, configuration=value))
     provider = ConcurrentProvider()
