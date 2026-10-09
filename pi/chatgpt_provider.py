@@ -128,5 +128,18 @@ class ChatGPTProvider:
 
 
 def configured(environment, timeout):
+    url = environment.get("PI_SUBSCRIPTION_URL", "")
+    if url:
+        from .private_transport import PrivateTransport
+
+        return {
+            "chatgpt": ChatGPTProvider(
+                "",
+                timeout,
+                transport=PrivateTransport(
+                    url, environment.get("PI_SUBSCRIPTION_KEY", ""), prefix="/inference"
+                ),
+            )
+        }
     socket = environment.get("PI_CHATGPT_SOCKET", "")
     return {"chatgpt": ChatGPTProvider(socket, timeout)} if socket.startswith("/") else {}

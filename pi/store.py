@@ -30,6 +30,7 @@ from . import (
     agents,
     artifacts,
     attachments,
+    background_thinking,
     calls,
     characters,
     collaboration,
@@ -341,6 +342,7 @@ class Store:
                 db.executescript(team_execution.SCHEMA)
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
+                db.executescript(background_thinking.SCHEMA)
                 db.executescript(jobs.SCHEMA)
                 continuity.initialize(db)
                 db.executescript(drafts.SCHEMA)

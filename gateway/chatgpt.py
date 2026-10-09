@@ -62,7 +62,7 @@ def validate_operation(body):
 
 
 def request(socket, method, body=None, *, transport=None):
-    if not socket:
+    if not socket and transport is None:
         if method == "GET":
             return Status(
                 available=False,

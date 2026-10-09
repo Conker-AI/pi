@@ -28,6 +28,7 @@ RUNTIME_ROUTES = {
     "POST": (
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+/turns",
+        r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
         r"/sessions/[A-Za-z0-9_-]+/fork",
         r"/turns/[A-Za-z0-9_-]+/resume",
         r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
@@ -46,6 +47,7 @@ def runtime_allowed(method: str, path: str) -> bool:
 # origin) but not a fresh password proof. Their real-world effects still pass
 # ToolGate approval. Every other browser write keeps operation-bound verification.
 SESSION_ONLY_WRITES = (
+    r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
     r"/sessions",
     r"/sessions/[A-Za-z0-9_-]+/turns",
     r"/sessions/[A-Za-z0-9_-]+/fork",

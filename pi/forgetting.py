@@ -177,6 +177,11 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         turn_context.redact(db, plan["session_ids"])
         turn_steering.redact(db, plan["session_ids"])
         context_summaries.redact(db, plan["session_ids"])
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='background_thinking'").fetchone():
+            db.executemany(
+                "DELETE FROM background_thinking WHERE session_id=?",
+                [(value,) for value in plan["session_ids"]],
+            )
         attachments.redact(db, plan["session_ids"])
         memory_proposals.redact(db, plan["session_ids"])
         proposals.redact(db, plan["session_ids"])

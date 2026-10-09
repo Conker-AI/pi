@@ -25,8 +25,8 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     """What the router sees: the latest request, plus the previous exchange for short follow-ups.
 
     Only conversation turns are eligible; system prompts, instructions and recalled
-    memory never reach the classifier. The latest request is never cut: over 1600
-    characters it is refused, and the caller's configured fallback answers instead.
+    memory never reach the classifier. Long requests use a marked head/tail
+    excerpt plus length evidence, keeping the classifier within its context window.
     """
     turns = [
         item
@@ -39,9 +39,18 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     if last is None:
         raise ValueError()
     latest = turns[last]["content"]
-    if not latest.strip() or len(latest) > 1600:
+    if not latest.strip():
         raise ValueError()
     current = {"role": "user", "content": latest}
+    if len(latest) > 800:
+        current.update(
+            content=latest[:500] + " … " + latest[-250:],
+            excerpt=True,
+            requestCharacters=len(latest),
+            conversationCharacters=sum(len(row["content"]) for row in turns),
+            conversationTurns=len(turns),
+        )
+        return [current], "complexity-excerpt"
     if len(latest) >= FOLLOW_UP_CHARACTERS:
         return [current], "latest-user-request"
     earlier = [
@@ -177,8 +186,8 @@ class DecisionProvider:
                 raise ValueError()
             # A small classifier routes the current request, not the answer's
             # entire system prompt, retrieved memory and conversation history.
-            # Keep this projection explicit; never silently cut an oversized
-            # request. A short follow-up ("and in Python?") is ambiguous alone,
+            # The projection marks excerpts and retains complexity evidence.
+            # A short follow-up ("and in Python?") is ambiguous alone,
             # so it carries the previous exchange as marked, bounded excerpts.
             task = envelope["task"]
             if not isinstance(task, list):

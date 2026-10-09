@@ -173,9 +173,11 @@ def test_routing_projection_excludes_system_memory_and_old_history_without_trunc
         {"role": "user", "content": envelope["task"][-1]["content"]}
     ]
     envelope["task"][-1]["content"] = "x" * 1601
-    with pytest.raises(ProviderUnavailable):
-        invoke()
-    assert len(calls) == 2
+    assert invoke().raw["decision"]["inputScope"] == "complexity-excerpt"
+    excerpt = json.loads(calls[-1]["state"])[0]
+    assert excerpt["excerpt"] is True and excerpt["requestCharacters"] == 1601
+    assert len(excerpt["content"]) < 800 and excerpt["conversationTurns"] == 3
+    assert "private system" not in calls[-1]["state"]
 
 
 def test_follow_up_context_is_bounded_and_marked():

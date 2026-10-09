@@ -12,6 +12,7 @@ from .providers import Message, ProviderUnavailable, require_images
 
 ROLES = (
     "answer",
+    "thinking",
     "routing",
     "context-selection",
     "summarization",
@@ -22,7 +23,7 @@ ROLES = (
 # Roles added after configurations were first saved. Older saved settings gain them
 # disabled: a new background use of the owner's conversations is never switched on
 # by an upgrade.
-LATER_ROLES = ("memory-ranking", "proposals", "search-ranking")
+LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking")
 
 
 class Strict(BaseModel):
@@ -164,7 +165,7 @@ def decision_evidence(completion):
         item = value.get(key)
         if type(item) in (int, float) and math.isfinite(item) and item >= 0:
             result[key] = item
-    if value.get("inputScope") in ("latest-user-request", "recent-exchange"):
+    if value.get("inputScope") in ("latest-user-request", "recent-exchange", "complexity-excerpt"):
         result["inputScope"] = value["inputScope"]
     return {"decision": result} if result else {}
 
@@ -261,16 +262,16 @@ def dispatch(
                 ),
             ),
         ]
-        decision = dispatch(
-            config.model_dump(),
-            "routing",
-            route_messages,
-            providers,
-            allowed_model_ids=allowed_model_ids,
-            guard=guard,
-        )
-        attempts.extend(decision["attempts"])
         try:
+            decision = dispatch(
+                config.model_dump(),
+                "routing",
+                route_messages,
+                providers,
+                allowed_model_ids=allowed_model_ids,
+                guard=guard,
+            )
+            attempts.extend(decision["attempts"])
             choice = json.loads(decision["completion"].text)
             if (
                 not isinstance(choice, dict)
@@ -279,10 +280,22 @@ def dispatch(
             ):
                 raise ValueError()
             selected = choice["modelId"]
-        except (ValueError, TypeError):
-            raise SelectionError(
-                "Routing helper returned an invalid or ineligible model choice."
-            ) from None
+        except (ValueError, TypeError, SelectionError):
+            if guard is not None:
+                guard()
+            if assignment.failure != "fallback":
+                raise SelectionError(
+                    "Routing helper unavailable or returned an ineligible choice."
+                ) from None
+            selected = assignment.fallbackModelId
+            attempts.append(
+                {
+                    "role": "routing",
+                    "modelId": config.roleSettings.roles["routing"].modelId,
+                    "status": "unavailable",
+                    "fallbackModelId": selected,
+                }
+            )
     candidates = [selected]
     if not locked and assignment.failure == "fallback":
         candidates.append(assignment.fallbackModelId)

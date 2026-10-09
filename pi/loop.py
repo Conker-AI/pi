@@ -26,6 +26,7 @@ import uuid
 
 from . import (
     actions,
+    background_thinking,
     calls,
     character_context,
     context_controls,
@@ -106,6 +107,7 @@ class Loop:
         # ToolGate is that - but a model looping on a failing tool would
         # otherwise spend indefinitely without ever answering.
         self.max_tool_steps = max_tool_steps
+        self.thinking = background_thinking.Thinking(self)
 
     def _available_tools(self, execution=None):
         """What this key is scoped to right now, or nothing.
@@ -945,6 +947,8 @@ class Loop:
         ctx = TurnContext(history_chars=self._history_size(history), **context)
 
         try:
+            if not continued:
+                self.thinking.start(session_id, turn_id, history, ctx, execution)
             if (
                 execution.get("researchMode") == "deep"
                 and research.plan(self.store, turn_id) is None

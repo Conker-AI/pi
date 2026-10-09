@@ -45,12 +45,20 @@ class Config:
     toolgate_execution_key: str = ""
     cookie_namespace: str = ""
     provider_control_socket: str = ""
+    provider_control_url: str = ""
+    provider_control_key: str = ""
 
     @property
     def cookie_name(self) -> str:
         return f"{COOKIE}-{self.cookie_namespace}" if self.cookie_namespace else COOKIE
 
     def validate(self) -> None:
+        if self.provider_control_url:
+            from pi.private_transport import PrivateTransport
+
+            PrivateTransport(self.provider_control_url, self.provider_control_key).close()
+            if self.provider_control_socket:
+                raise ValueError("Choose one private provider transport.")
         if self.provider_control_socket and (
             not os.path.isabs(self.provider_control_socket)
             or any(c in self.provider_control_socket for c in "\x00\r\n")
@@ -136,6 +144,8 @@ class Config:
             os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
             os.environ.get("GATEWAY_COOKIE_NAMESPACE", ""),
             os.environ.get("GATEWAY_PROVIDER_CONTROL_SOCKET", ""),
+            os.environ.get("GATEWAY_PROVIDER_CONTROL_URL", ""),
+            os.environ.get("GATEWAY_PROVIDER_CONTROL_KEY", ""),
         )
 
 
@@ -153,6 +163,13 @@ def create_app(
         settings = config or Config.environment()
         settings.validate()
         app.state.config = settings
+        app.state.provider_transport = provider_transport
+        if settings.provider_control_url:
+            from pi.private_transport import PrivateTransport
+
+            app.state.provider_transport = PrivateTransport(
+                settings.provider_control_url, settings.provider_control_key
+            )
         app.state.dashboard = (
             DashboardAssets(settings.dashboard_dir) if settings.dashboard_dir else None
         )
@@ -187,6 +204,8 @@ def create_app(
             try:
                 yield
             finally:
+                if settings.provider_control_url:
+                    app.state.provider_transport.shutdown()
                 if app.state.terminals:
                     app.state.terminals.close()
                 if app.state.terminal_sidecar:
@@ -531,7 +550,9 @@ def create_app(
                 app.state.config.provider_control_socket,
                 request.method,
                 body,
-                transport=provider_transport,
+                transport=app.state.provider_transport
+                if app.state.config.provider_control_socket
+                else None,
             )
         except provider_control.ProviderControlError as error:
             raise AuthError(str(error), 503) from None
@@ -561,11 +582,42 @@ def create_app(
                 app.state.config.provider_control_socket,
                 request.method,
                 body,
-                transport=provider_transport,
+                transport=app.state.provider_transport,
             )
         except ProviderControlError as error:
             raise AuthError(str(error), 503) from None
         return JSONResponse(value)
+
+    @app.get("/api/host/claude")
+    @app.post("/api/host/claude")
+    async def host_claude(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import native_claude
+        from .provider_control import ProviderControlError
+
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Native control does not accept query parameters.", 422)
+        body = None
+        if request.method == "POST":
+            try:
+                body = native_claude.Operation.model_validate(
+                    await json_body(request, max_bytes=1024)
+                ).model_dump(exclude_none=True)
+                if body["operation"] != "login" and "billing" in body:
+                    raise ValueError()
+            except ValueError:
+                raise AuthError("Invalid native authentication operation.", 422) from None
+            admit_write(request, body)
+        try:
+            return JSONResponse(
+                await run_in_threadpool(
+                    native_claude.request, app.state.provider_transport, request.method, body
+                )
+            )
+        except ProviderControlError as exc:
+            raise AuthError(str(exc), 503) from None
 
     def terminal_access(request):
         owner = session(request)

@@ -28,6 +28,7 @@ from . import (
     agents,
     artifacts_api,
     attachments_api,
+    background_thinking,
     calls,
     calls_api,
     characters_api,
@@ -140,6 +141,7 @@ async def lifespan(app: FastAPI):
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()
     model_evaluations.recover_interrupted(store)
+    background_thinking.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
@@ -314,6 +316,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        app.state.loop.thinking.close()
         if proposal_worker:
             proposal_worker.close()
         if queue_worker:
@@ -742,7 +745,16 @@ def get_session(session_id: str):
             for turn in app.state.store.turns(session_id)
         ],
         "memory": app.state.loop.memory.status(session_id),
+        "thinking": background_thinking.list_for_session(app.state.store, session_id),
     }
+
+
+@app.post("/sessions/{session_id}/thinking/{turn_id}/cancel", dependencies=[Depends(require_key)])
+def cancel_thinking(session_id: str, turn_id: str):
+    try:
+        return background_thinking.cancel(app.state.store, session_id, turn_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
 
 
 @app.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
