@@ -294,12 +294,21 @@ class Loop:
         # changing recall so providers can reuse the static prompt prefix.
         if tools:
             messages.append(Message("system", tool_protocol.describe(tools)))
+        acknowledgement_generation = None
         if turn_id:
             saved = memory_store.context(self.store, turn_id)
             if session_settings.memory_allowed(execution):
                 memory_prompt = memory_store.prompt_context(saved)
                 if memory_prompt:
                     messages.append(Message("system", memory_prompt))
+            if execution.get("kind") == "companion":
+                from . import memory_delivery
+
+                acknowledgement, acknowledgement_generation = memory_delivery.prepare_note(
+                    self.store, turn_id
+                )
+                if acknowledgement:
+                    messages.append(Message("system", acknowledgement))
         from . import research
 
         research_used = (
@@ -389,7 +398,10 @@ class Loop:
                 messages.append(attached)
         context_controls.check_budget(policy, messages)
         if turn_id:
-            turn_context.capture(self.store, turn_id, selected_history, prefix_messages, reply_to)
+            turn_context.capture(
+                self.store, turn_id, selected_history, prefix_messages, reply_to,
+                acknowledgement_generation=acknowledgement_generation,
+            )
             turn_steering.consume(
                 self.store,
                 turn_id,

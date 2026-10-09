@@ -8,6 +8,8 @@ RUNTIME_ROUTES = {
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+",
         r"/sessions/[A-Za-z0-9_-]+/thinking",
+        r"/sessions/[A-Za-z0-9_-]{1,128}/memory-delivery",
+        r"/sessions/[A-Za-z0-9_-]{1,128}/messages/[A-Za-z0-9_-]{1,128}/memory-delivery",
         r"/sessions/[A-Za-z0-9_-]+/submissions",
         r"/turns/unreplied",
         r"/turns/[A-Za-z0-9_-]{1,128}/usage",

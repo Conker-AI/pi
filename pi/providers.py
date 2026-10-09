@@ -22,6 +22,7 @@ import httpx
 
 from . import citations as message_citations
 from . import inference_control, live_stream
+from .loopback_http import verification
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,7 @@ class OllamaProvider:
                 else:
                     response = httpx.post(
                         f"{self.base_url}/api/chat",
+                        verify=verification(self.base_url),
                         json=payload,
                         timeout=timeout,
                         follow_redirects=False,
@@ -201,7 +203,12 @@ class OllamaProvider:
             token = inference_control.current()
             if token is not None:
                 client = stack.enter_context(
-                    httpx.Client(timeout=timeout, follow_redirects=False, trust_env=False)
+                    httpx.Client(
+                        timeout=timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                        verify=verification(self.base_url),
+                    )
                 )
                 active_response = []
                 stack.enter_context(
@@ -218,6 +225,7 @@ class OllamaProvider:
                 stream = httpx.stream(
                     "POST",
                     f"{self.base_url}/api/chat",
+                    verify=verification(self.base_url),
                     json=payload,
                     timeout=timeout,
                     follow_redirects=False,
@@ -251,6 +259,7 @@ class OllamaProvider:
         try:
             response = httpx.get(
                 f"{self.base_url}/api/tags",
+                verify=verification(self.base_url),
                 timeout=5.0,
                 follow_redirects=False,
                 trust_env=False,

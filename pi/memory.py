@@ -4,11 +4,10 @@ import json
 import logging
 import threading
 import time
-from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
-from . import memory_store, session_settings
+from . import memory_delivery, memory_store, session_settings
 
 log = logging.getLogger("pi.memory")
 
@@ -117,31 +116,35 @@ class MemoryClient:
     def deliver(self, operation, message, *, agent_id):
         url = "/runtime/conversation/" + message["id"]
         headers = {**self.ingest_headers, "X-Agent-Id": agent_id}
-        if operation == "delete":
-            response = self.http.delete(url, headers=headers)
-        else:
-            response = self.http.put(
-                url,
-                headers=headers,
-                json={
-                    "session_id": message["session_id"],
-                    "content": message["content"],
-                    "created_at": message["created_at"],
-                },
-            )
-        response.raise_for_status()
-        receipt = response.json()
-        allowed = {"deleted"} if operation == "delete" else {"admitted", "filtered", "deleted"}
-        expected_id = str(uuid5(NAMESPACE_URL, f"pi:{agent_id}:{message['id']}"))
-        if (
-            receipt.get("id") != expected_id
-            or receipt.get("message_id") != message["id"]
-            or receipt.get("state") not in allowed
-        ):
-            raise ValueError("MemoryGate did not acknowledge the expected message")
+        arguments = {} if operation == "delete" else {
+            "json": {
+                "session_id": message["session_id"],
+                "content": message["content"],
+                "created_at": message["created_at"],
+            }
+        }
+        with self.http.stream(
+            "DELETE" if operation == "delete" else "PUT", url, headers=headers, **arguments
+        ) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes():
+                if len(raw) + len(chunk) > memory_delivery.MAX_RECEIPT_BYTES:
+                    raise ValueError("MemoryGate acknowledgement exceeded its size limit.")
+                raw.extend(chunk)
+        try:
+            value = json.loads(raw)
+        except (ValueError, RecursionError) as exc:
+            raise ValueError("MemoryGate returned an invalid acknowledgement.") from exc
+        receipt = memory_delivery.validate_receipt(value, message["id"], agent_id)
+        if operation == "delete" and receipt["state"] != "deleted":
+            raise ValueError("MemoryGate did not acknowledge deletion.")
+        # This local stamp records the responding destination, never a credential
+        # or authority supplied in the remote payload. Legacy receipts have none.
         return {
-            key: receipt.get(key)
-            for key in ("id", "message_id", "state", "memory_id", "value_score")
+            **receipt,
+            "receipt_version": 1,
+            "destination": memory_delivery.destination_digest(self.http.base_url),
         }
 
     def retrieve(self, query, *, scope="all", session_id=None, memory_ids=None):

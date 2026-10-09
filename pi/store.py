@@ -254,6 +254,10 @@ def _message(row: sqlite3.Row) -> dict:
 
 def _message_with_attachments(db, row):
     item = _message(row)
+    if item["role"] == "user":
+        from . import memory_delivery
+
+        item["memory_delivery"] = memory_delivery.for_message(db, item)
     if item.get("content_status") != "forgotten":
         version = db.execute(
             "SELECT v.root_message_id,v.retry_of,f.selected_message_id,f.revision "

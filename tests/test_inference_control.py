@@ -2,7 +2,7 @@
 
 import json
 import threading
-from contextlib import closing
+from contextlib import closing, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
@@ -94,7 +94,9 @@ def test_native_cancel_targets_only_the_bound_request(adapter):
         seen.append((request.url.path, payload))
         if request.url.path == "/cancel":
             canceled.set()
-            return httpx.Response(200, json={"request_id": payload["request_id"], "status": "cancel_requested"})
+            return httpx.Response(
+                200, json={"request_id": payload["request_id"], "status": "cancel_requested"}
+            )
         started.set()
         assert canceled.wait(3)
         return httpx.Response(503, json={"error": "canceled"})
@@ -123,11 +125,24 @@ def test_legacy_subscription_worker_keeps_its_original_payload_when_thinking():
 
     def handle(request):
         seen.append(json.loads(request.content))
-        return httpx.Response(200, headers={"content-type": "application/x-ndjson"}, text="\n".join([
-            json.dumps({"type": "text", "delta": "Findings"}),
-            json.dumps({"type": "done", "model": "test", "inputTokens": 1,
-                        "outputTokens": 1, "cachedTokens": None}),
-        ]))
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/x-ndjson"},
+            text="\n".join(
+                [
+                    json.dumps({"type": "text", "delta": "Findings"}),
+                    json.dumps(
+                        {
+                            "type": "done",
+                            "model": "test",
+                            "inputTokens": 1,
+                            "outputTokens": 1,
+                            "cachedTokens": None,
+                        }
+                    ),
+                ]
+            ),
+        )
 
     provider = ChatGPTProvider("/legacy.sock", transport=httpx.MockTransport(handle))
     token = inference_control.Token()
@@ -147,6 +162,7 @@ class SharedLocal:
         self.calls = 0
         self.block_again = block_again
         self.messages = []
+        self.tokens = []
 
     def complete_bounded(self, messages, *, model, timeout):
         with inference_control.local_capacity(self.local_capacity_key, 3):
@@ -157,33 +173,58 @@ class SharedLocal:
                 self.started[attempt].set()
                 if attempt == 0 or self.block_again:
                     token = inference_control.current()
-                    assert token.stopped.wait(3)
+                    self.tokens.append(token)
+                    # Foreground admission may perform slow local DB work.
+                    # Stay active until real preemption or test cleanup stops us.
+                    token.stopped.wait()
                     token.check()
                 return Completion("Frozen findings", model, self.name)
             return Completion("Talking stays responsive", model, self.name)
 
 
 @pytest.mark.parametrize("second_preemption", [False, True])
-def test_foreground_preempts_local_thinker_with_at_most_one_frozen_requeue(tmp_path, second_preemption):
+def test_foreground_preempts_local_thinker_with_at_most_one_frozen_requeue(
+    tmp_path, second_preemption, monkeypatch
+):
+    @contextmanager
+    def no_wall_deadline(token, _seconds):
+        # This test owns admission/preemption ordering. Timer expiry is covered
+        # by test_thinking_deadline, independently of foreground DB latency.
+        token.check()
+        yield
+        token.check()
+
+    monkeypatch.setattr(inference_control.Token, "deadline", no_wall_deadline)
     with closing(Store(tmp_path / "pi.db")) as store:
         loop, _ = setup(store)
         provider = SharedLocal(block_again=second_preemption)
         loop.router.local = provider
-        original = store.create_session()
-        loop.run_turn(original, "Keep this exact input", think=True)
-        assert provider.started[0].wait(2)
-        reply = loop.run_turn(original, "An urgent ordinary follow-up")
-        assert reply["message"]["content"] == "Talking stays responsive"
-        assert provider.started[1].wait(2)
-        if second_preemption:
-            loop.run_turn(original, "Another ordinary follow-up")
-        with loop.thinking.lock:
-            workers = list(loop.thinking.threads)
-        for worker in workers:
-            join(worker)
-        row = background_thinking.list_for_session(store, original)[0]
-        assert row["status"] == ("skipped" if second_preemption else "completed")
-        assert provider.calls == 2
-        assert provider.messages[0] == provider.messages[1]
-        assert not any("ordinary follow-up" in message.content for message in provider.messages[1])
-        assert row["result"] == (None if second_preemption else "Frozen findings")
+        try:
+            original = store.create_session()
+            loop.run_turn(original, "Keep this exact input", think=True)
+            assert provider.started[0].wait(5)
+            reply = loop.run_turn(original, "An urgent ordinary follow-up")
+            assert reply["message"]["content"] == "Talking stays responsive"
+            assert provider.started[1].wait(5)
+            if second_preemption:
+                loop.run_turn(original, "Another ordinary follow-up")
+            with loop.thinking.lock:
+                workers = list(loop.thinking.threads)
+            for worker in workers:
+                join(worker)
+            row = background_thinking.list_for_session(store, original)[0]
+            assert row["status"] == ("skipped" if second_preemption else "completed")
+            assert provider.calls == 2
+            assert provider.messages[0] == provider.messages[1]
+            assert not any(
+                "ordinary follow-up" in message.content for message in provider.messages[1]
+            )
+            assert row["result"] == (None if second_preemption else "Frozen findings")
+            assert len(provider.tokens) == (2 if second_preemption else 1)
+            assert all(token.reason == "preempted" for token in provider.tokens)
+        finally:
+            loop.thinking.close()
+            with loop.thinking.lock:
+                workers = list(loop.thinking.threads)
+            for worker in workers:
+                join(worker)

@@ -247,9 +247,11 @@ def prompt_context(saved):
 
 
 def status(store, session_id=None, turn_id=None, *, configured=False):
+    from . import memory_delivery
+
     with store._connect() as db:
         rows = db.execute(
-            "SELECT o.operation,o.state,o.error,o.receipt FROM memory_outbox o"
+            "SELECT o.operation,o.state,o.error,o.receipt,o.message_id,o.destination_agent_id FROM memory_outbox o"
             " JOIN messages m ON m.id=o.message_id"
             + (" WHERE m.session_id=?" if session_id else ""),
             (session_id,) if session_id else (),
@@ -257,7 +259,25 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
     pending = sum(row["state"] == "pending" and row["operation"] == "ingest" for row in rows)
     blocked = sum(row["state"] == "blocked" for row in rows)
     deleting = pending_deletions(store)
-    receipts = [json.loads(row["receipt"]) for row in rows if row["receipt"]]
+    receipts = []
+    for row in rows:
+        raw = row["receipt"]
+        try:
+            if (
+                row["state"] != "sent"
+                or not isinstance(raw, str)
+                or len(raw.encode("utf-8")) > memory_delivery.MAX_RECEIPT_BYTES
+            ):
+                continue
+            receipts.append(
+                memory_delivery.validate_receipt(
+                    json.loads(raw), row["message_id"], row["destination_agent_id"]
+                )
+            )
+        except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            # Historical acknowledgement metadata cannot make the transcript
+            # unavailable or establish a save from a malformed receipt.
+            continue
     admission = {
         state: sum(receipt.get("state") == state for receipt in receipts)
         for state in ("admitted", "filtered", "deleted")

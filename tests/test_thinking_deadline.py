@@ -1,13 +1,11 @@
 """Background wall deadlines stop owned I/O and fence late, uncooperative adapters."""
 
 import json
-import ssl
 import threading
 from contextlib import closing, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
-import httpx
 import pytest
 from test_background_thinking import setup
 
@@ -17,7 +15,7 @@ from pi.store import Store
 
 
 @pytest.mark.parametrize("continuous", [False, True])
-def test_absolute_deadline_disconnects_stalled_and_continuous_http(continuous, monkeypatch):
+def test_absolute_deadline_disconnects_stalled_and_continuous_http(continuous):
     started, disconnected, finished = threading.Event(), threading.Event(), threading.Event()
     stop_server = threading.Event()
     chunks, failures = [], []
@@ -56,15 +54,6 @@ def test_absolute_deadline_disconnects_stalled_and_continuous_http(continuous, m
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
-    client_type = httpx.Client
-
-    def local_client(**kwargs):
-        # This real transport only visits our HTTP peer. Avoid loading the
-        # unrelated default CA bundle before testing socket cancellation;
-        # certificate verification remains required if HTTPS is ever used.
-        return client_type(**kwargs, verify=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
-
-    monkeypatch.setattr(httpx, "Client", local_client)
     provider = OllamaProvider(f"http://127.0.0.1:{server.server_port}")
     token = inference_control.Token()
 

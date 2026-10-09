@@ -767,6 +767,38 @@ def get_session(session_id: str):
     }
 
 
+def _memory_delivery_status(session_id, request, message_id=None):
+    from . import memory_delivery
+
+    if request.url.query or any(
+        not 1 <= len(value) <= 128
+        or not all(
+            character.isascii() and (character.isalnum() or character in "_-")
+            for character in value
+        )
+        for value in (session_id, message_id)
+        if value is not None
+    ):
+        raise HTTPException(422, "Invalid memory delivery request.")
+    try:
+        return memory_delivery.read(app.state.store, session_id, message_id)
+    except ValueError:
+        raise HTTPException(404, "Memory delivery unavailable.") from None
+
+
+@app.get("/sessions/{session_id}/memory-delivery", dependencies=[Depends(require_key)])
+def memory_delivery_status(session_id: str, request: Request):
+    return _memory_delivery_status(session_id, request)
+
+
+@app.get(
+    "/sessions/{session_id}/messages/{message_id}/memory-delivery",
+    dependencies=[Depends(require_key)],
+)
+def message_memory_delivery_status(session_id: str, message_id: str, request: Request):
+    return _memory_delivery_status(session_id, request, message_id)
+
+
 @app.get("/sessions/{session_id}/thinking", dependencies=[Depends(require_key)])
 def thinking_status(session_id: str):
     session = app.state.store.get_session(session_id)

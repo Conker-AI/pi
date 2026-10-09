@@ -21,12 +21,14 @@ def client(agent, handler):
 def receipt(request, *, agent=None):
     message_id = request.url.path.rsplit("/", 1)[-1]
     destination = agent or request.headers["X-Agent-Id"]
+    receipt_id = str(uuid5(NAMESPACE_URL, f"pi:{destination}:{message_id}"))
     return httpx.Response(
         200,
         json={
-            "id": str(uuid5(NAMESPACE_URL, f"pi:{destination}:{message_id}")),
+            "id": receipt_id,
             "message_id": message_id,
             "state": "deleted" if request.method == "DELETE" else "admitted",
+            "memory_id": str(uuid5(NAMESPACE_URL, receipt_id + ":memory")),
         },
     )
 

@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .loopback_http import verification
 from .providers import Completion, ProviderUnavailable
 
 FOLLOW_UP_CHARACTERS = 400
@@ -93,7 +94,11 @@ class DecisionProvider:
     def health(self):
         try:
             with httpx.Client(
-                transport=self.transport, trust_env=False, timeout=2, follow_redirects=False
+                transport=self.transport,
+                trust_env=False,
+                timeout=2,
+                follow_redirects=False,
+                verify=verification(self.url),
             ) as client:
                 response = client.get(self.url + "/health", headers={"X-Decision-Key": self.key})
                 response.raise_for_status()
@@ -110,6 +115,7 @@ class DecisionProvider:
                 raise ValueError()
             with httpx.Client(
                 transport=self.transport,
+                verify=verification(self.url),
                 trust_env=False,
                 timeout=min(max(timeout, 0.1), 30),
                 follow_redirects=False,

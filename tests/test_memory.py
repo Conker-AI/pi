@@ -88,6 +88,12 @@ def test_lost_ack_retries_same_identity_after_restart(tmp_path):
                 "id": str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")),
                 "message_id": message["id"],
                 "state": "admitted",
+                "memory_id": str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")) + ":memory",
+                    )
+                ),
             },
         )
 
@@ -238,6 +244,12 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
                 "id": str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")),
                 "message_id": message["id"],
                 "state": "admitted",
+                "memory_id": str(
+                    uuid5(
+                        NAMESPACE_URL,
+                        str(uuid5(NAMESPACE_URL, f"pi:default:{message['id']}")) + ":memory",
+                    )
+                ),
             },
         )
 
