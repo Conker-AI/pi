@@ -24,17 +24,24 @@ def _count(value):
 @contextmanager
 def provider_stream(method, url, *, timeout, **kwargs):
     """Close only this inference's client/response when its owner stops it."""
+    if (
+        kwargs.pop("trust_env", False) is not False
+        or kwargs.pop("follow_redirects", False) is not False
+    ):
+        raise ValueError("Provider transport cannot use proxies or follow redirects.")
     token = inference_control.current()
     if token is None:
-        with httpx.stream(method, url, timeout=timeout, **kwargs) as response:
+        with httpx.stream(
+            method, url, timeout=timeout, trust_env=False, follow_redirects=False, **kwargs
+        ) as response:
             yield response
         return
     with ExitStack() as stack:
         client = stack.enter_context(
             httpx.Client(
                 timeout=timeout,
-                follow_redirects=kwargs.pop("follow_redirects", False),
-                trust_env=kwargs.pop("trust_env", False),
+                follow_redirects=False,
+                trust_env=False,
             )
         )
         active = []

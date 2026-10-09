@@ -15,7 +15,17 @@ from test_loop import Recorder, loop_with
 from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi import agents, api, drafts, forgetting, session_settings, skills, submissions, tasks
+from pi import (
+    agents,
+    api,
+    drafts,
+    forgetting,
+    session_settings,
+    setup_choices,
+    skills,
+    submissions,
+    tasks,
+)
 from pi.loop import TurnFailed
 from pi.store import Store
 
@@ -129,6 +139,42 @@ def test_concurrent_start_creates_exactly_one_session(store):
         outcomes = list(pool.map(start, range(2)))
     assert len([value for value in outcomes if value]) == 1
     assert len(store.list_sessions()) == 1
+
+
+def test_new_draft_preserves_inherited_memory_default_and_explicit_override(store):
+    setup_choices.record(
+        store,
+        "memory",
+        setup_choices.ChoiceInput(
+            requestId="draft_memory_default_skip", choice="skip", expectedRevision=0
+        ),
+    )
+    drafts.save_new(store, drafts.NewSave(expected_revision=0, text="Inherit my privacy"))
+    inherited = drafts.start(
+        store, drafts.Start(request_id="inherit_private_default", expected_revision=1)
+    )
+    assert (
+        session_settings.load(store, inherited["session_id"])["settings"]["privacy"][
+            "memoryDisabled"
+        ]
+        is True
+    )
+    drafts.save_new(
+        store,
+        drafts.NewSave(
+            expected_revision=2, text="Explicit owner override", privacy={"memoryDisabled": False}
+        ),
+    )
+    assert drafts.load_new(store)["privacy"] == {"memoryDisabled": False}
+    explicit = drafts.start(
+        store, drafts.Start(request_id="explicit_memory_override", expected_revision=3)
+    )
+    assert (
+        session_settings.load(store, explicit["session_id"])["settings"]["privacy"][
+            "memoryDisabled"
+        ]
+        is False
+    )
 
 
 def test_failed_promotion_rolls_back_all_changes_and_can_retry(store, monkeypatch):

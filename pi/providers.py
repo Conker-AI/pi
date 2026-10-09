@@ -108,14 +108,14 @@ def _installed(wanted: str, models: list[str]) -> bool:
     """Whether the wanted model is among those Ollama has.
 
     Ollama reports `qwen3:4b`, and a request for `qwen3` is served by
-    `qwen3:latest` - so a bare name matches any tag of it, while an explicit
-    tag must match exactly. Being lax here would recreate the bug in miniature.
+    `qwen3:latest` - so a bare name requires that exact default tag. An installed
+    `qwen3:4b` does not make an unqualified `qwen3` request available.
     """
     if wanted in models:
         return True
     if ":" in wanted:
         return False
-    return any(name.split(":", 1)[0] == wanted for name in models)
+    return wanted + ":latest" in models
 
 
 class OllamaProvider:
@@ -200,19 +200,28 @@ class OllamaProvider:
         with ExitStack() as stack:
             token = inference_control.current()
             if token is not None:
-                client = stack.enter_context(httpx.Client(
-                    timeout=timeout, follow_redirects=False, trust_env=False
-                ))
+                client = stack.enter_context(
+                    httpx.Client(timeout=timeout, follow_redirects=False, trust_env=False)
+                )
                 active_response = []
-                stack.enter_context(token.register(
-                    lambda: inference_control.close_response(active_response[0])
-                    if active_response else client.close()
-                ))
+                stack.enter_context(
+                    token.register(
+                        lambda: (
+                            inference_control.close_response(active_response[0])
+                            if active_response
+                            else client.close()
+                        )
+                    )
+                )
                 stream = client.stream("POST", f"{self.base_url}/api/chat", json=payload)
             else:
                 stream = httpx.stream(
-                    "POST", f"{self.base_url}/api/chat", json=payload, timeout=timeout,
-                    follow_redirects=False, trust_env=False,
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
                 )
             response = stack.enter_context(stream)
             if token is not None:
@@ -247,9 +256,18 @@ class OllamaProvider:
                 trust_env=False,
             )
             response.raise_for_status()
+            body = response.json()
+            entries = body.get("models") if isinstance(body, dict) else None
+            if not isinstance(entries, list) or any(
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("name"), str)
+                or not entry["name"]
+                for entry in entries
+            ):
+                return {"status": "unavailable", "reason": "invalid_model_inventory"}
+            models = [entry["name"] for entry in entries]
         except Exception as exc:
             return {"status": "unavailable", "reason": type(exc).__name__}
-        models = [m.get("name", "") for m in response.json().get("models", [])]
         if not models:
             return {"status": "not_configured", "reason": "no models pulled"}
         # Any model is not the model. An install where the embedding model
