@@ -26,6 +26,11 @@ from .toolgate import Tool
 _CALL = re.compile(r'^\s*(\{\s*"tool"\s*:.*\})\s*$', re.MULTILINE)
 MAX_INPUT_DESCRIPTION_CHARS = 4096
 MAX_TOOL_INPUT_DESCRIPTION_CHARS = 8192
+# ToolGate accepts MCP schemas up to 32 KiB of UTF-8 JSON and exports them
+# without ASCII escaping. Keep the complete schema plus its fixed reference
+# prefix; slicing it can hide required properties or other constraints.
+MAX_MCP_INPUT_DESCRIPTION_CHARS = 32768 + 256
+_MCP_TOOL = re.compile(r"^mcp\.[a-z0-9][a-z0-9.-]{1,74}$")
 
 
 @dataclass(frozen=True)
@@ -65,12 +70,25 @@ def describe(tools: list[Tool]) -> str:
             + (f" | args: {fields}" if fields else " | args: none")
         )
         remaining = MAX_TOOL_INPUT_DESCRIPTION_CHARS
+        mcp_remaining = MAX_MCP_INPUT_DESCRIPTION_CHARS if _MCP_TOOL.fullmatch(tool.id) else 0
         for field in tool.inputs:
             description = field.get("description")
-            if not isinstance(description, str) or not description.strip() or remaining <= 0:
+            if not isinstance(description, str) or not description.strip():
                 continue
-            excerpt = description[: min(MAX_INPUT_DESCRIPTION_CHARS, remaining)]
-            remaining -= len(excerpt)
+            mcp_arguments = (
+                _MCP_TOOL.fullmatch(tool.id)
+                and field.get("name") == "arguments"
+                and field.get("type") == "object"
+                and field.get("required") is True
+            )
+            limit = mcp_remaining if mcp_arguments else min(MAX_INPUT_DESCRIPTION_CHARS, remaining)
+            if limit <= 0:
+                continue
+            excerpt = description[:limit]
+            if mcp_arguments:
+                mcp_remaining -= len(excerpt)
+            else:
+                remaining -= len(excerpt)
             lines.append(
                 "  Input reference: "
                 + json.dumps(
