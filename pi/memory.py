@@ -12,6 +12,92 @@ from . import memory_store, session_settings
 
 log = logging.getLogger("pi.memory")
 
+CONTEXT_LIMIT_BYTES = 32768
+# Allows eight full Unicode conversation records and supporting context while
+# bounding transport and JSON parsing independently of the much smaller model budget.
+CONTEXT_RESPONSE_BYTES = 2 * 1024 * 1024
+CONTEXT_GROUPS = ("memories", "entities", "episodes", "evidence")
+BUDGET_RECEIPT = "pi_context_budget"
+
+
+def _context_size(package):
+    return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+
+
+def _budget_context(package):
+    """Select complete evidence records; never rewrite text or its provenance."""
+    if (
+        not isinstance(package, dict)
+        or not isinstance(package.get("memories"), list)
+        or not isinstance(package.get("retrieval"), dict)
+        or any(
+            key in package
+            and (
+                not isinstance(package[key], list)
+                or len(package[key]) > 100
+                or any(not isinstance(item, dict) for item in package[key])
+            )
+            for key in CONTEXT_GROUPS
+        )
+    ):
+        raise ValueError("Invalid context package")
+    if _context_size(package) <= CONTEXT_LIMIT_BYTES:
+        return package
+    previous = package["retrieval"].get(BUDGET_RECEIPT)
+    received = (
+        previous["received"]
+        if previous
+        else {key: len(package.get(key, [])) for key in CONTEXT_GROUPS}
+    )
+    retained = dict.fromkeys(CONTEXT_GROUPS, 0)
+    optional = [key for key in ("briefing", "query") if key in package]
+    omitted_fields = list(
+        dict.fromkeys([*(previous["omitted_fields"] if previous else []), *optional])
+    )
+    result = {
+        key: value for key, value in package.items() if key not in (*CONTEXT_GROUPS, *optional)
+    }
+    result.update({key: [] for key in CONTEXT_GROUPS if key in package})
+
+    def candidate(content, counts, omitted):
+        # Query is only an echo of the already-present user input, not recalled evidence.
+        status = "partial" if any(counts.values()) or content.get("briefing") else "empty"
+        return {
+            **content,
+            "retrieval": {
+                **package["retrieval"],
+                BUDGET_RECEIPT: {
+                    "status": status,
+                    "limit_bytes": CONTEXT_LIMIT_BYTES,
+                    "received": received,
+                    "retained": counts,
+                    "omitted": {key: received[key] - counts[key] for key in CONTEXT_GROUPS},
+                    "omitted_fields": omitted,
+                },
+            },
+        }
+
+    result = candidate(result, retained, omitted_fields)
+    if _context_size(result) > CONTEXT_LIMIT_BYTES:
+        raise ValueError("Memory context metadata exceeds the turn budget")
+    # Preserve retrieval order within each collection. A large early item must
+    # not prevent later complete items from fitting. Memories take precedence
+    # over supporting collections, a broad briefing, and the redundant query echo.
+    for key in CONTEXT_GROUPS:
+        for record in package.get(key, []):
+            counts = {**retained, key: retained[key] + 1}
+            trial = candidate(
+                {**result, key: [*result.get(key, []), record]}, counts, omitted_fields
+            )
+            if _context_size(trial) <= CONTEXT_LIMIT_BYTES:
+                result, retained = trial, counts
+    for key in optional:
+        fields = [field for field in omitted_fields if field != key]
+        trial = candidate({**result, key: package[key]}, retained, fields)
+        if _context_size(trial) <= CONTEXT_LIMIT_BYTES:
+            result, omitted_fields = trial, fields
+    return result
+
 
 class MemoryClient:
     def __init__(
@@ -62,13 +148,19 @@ class MemoryClient:
         payload = {"query": query[:16000], "max_items": 8, "include_evidence": False}
         if scope != "all":
             payload.update(scope=scope, memory_ids=memory_ids or [], session_id=session_id)
-        response = self.http.post(
+        with self.http.stream(
+            "POST",
             "/runtime/context",
             headers=self.read_headers,
             json=payload,
-        )
-        response.raise_for_status()
-        package = response.json()
+        ) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes():
+                if len(raw) + len(chunk) > CONTEXT_RESPONSE_BYTES:
+                    raise ValueError("Memory context exceeded response budget")
+                raw.extend(chunk)
+            package = json.loads(raw)
         if scope != "all" and (not isinstance(package, dict) or package.get("scope") != scope):
             raise ValueError("MemoryGate did not enforce the requested scope.")
         if (
@@ -77,11 +169,11 @@ class MemoryClient:
             or not isinstance(package.get("retrieval"), dict)
         ):
             raise ValueError("Invalid context package")
-        # Store exactly what is supplied to the model, bounded independently of
-        # the remote service. Oversize context is a visible gap, never truncation.
-        if len(json.dumps(package, ensure_ascii=False).encode()) > 32768:
-            raise ValueError("Memory context exceeds the turn budget")
-        return package
+        if BUDGET_RECEIPT in package["retrieval"]:
+            raise ValueError("MemoryGate supplied reserved local receipt metadata")
+        # Store exactly what reaches the model. Omitted complete records are
+        # counted in the local receipt; their text is never silently shortened.
+        return _budget_context(package)
 
     def close(self):
         self.http.close()
@@ -171,7 +263,24 @@ class Memory:
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):
-                    package = self.ranker.rank_memories(query, package)
+                    original = package
+                    try:
+                        package = _budget_context(self.ranker.rank_memories(query, original))
+                    except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+                        package = _budget_context(
+                            {
+                                **original,
+                                "retrieval": {
+                                    **original["retrieval"],
+                                    "reranking": {
+                                        "status": "fallback",
+                                        "reason": "Ranking metadata was unavailable or exceeded the context budget.",
+                                    },
+                                },
+                            }
+                        )
+                else:
+                    package = _budget_context(package)
                 state = (
                     "ok"
                     if (
@@ -184,8 +293,18 @@ class Memory:
                     and not package["retrieval"].get("pending_conversation_index")
                     else "degraded"
                 )
-            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-                state = "unavailable"
+                budget = package["retrieval"].get(BUDGET_RECEIPT)
+                if budget:
+                    state = "unavailable" if budget["status"] == "empty" else "degraded"
+            except (
+                httpx.HTTPError,
+                ValueError,
+                TypeError,
+                KeyError,
+                AttributeError,
+                RecursionError,
+            ):
+                state, package = "unavailable", None
         memory_store.save_context(self.store, turn_id, state, package)
 
     def status(self, session_id=None, turn_id=None):

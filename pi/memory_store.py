@@ -170,6 +170,30 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
             "Memory context is incomplete or unavailable for this turn; "
             "the conversation continues with that gap."
         )
+    package = (retrieval or {}).get("package")
+    metadata = package.get("retrieval") if isinstance(package, dict) else None
+    budget = metadata.get("pi_context_budget") if isinstance(metadata, dict) else None
+    if (
+        isinstance(budget, dict)
+        and budget.get("status") in {"partial", "empty"}
+        and all(
+            isinstance(budget.get(key), dict)
+            and all(type(value) is int and value >= 0 for value in budget[key].values())
+            for key in ("received", "retained", "omitted")
+        )
+    ):
+        if budget["status"] == "empty":
+            notices.append("No retrieved evidence fit within this turn's memory size limit.")
+        elif sum(budget["omitted"].values()):
+            notices.append(
+                f"Memory context kept {sum(budget['retained'].values())} of "
+                f"{sum(budget['received'].values())} retrieved records within its size limit; "
+                "omitted records were not supplied to the model."
+            )
+        else:
+            notices.append(
+                "Memory context omitted optional package fields to stay within its size limit."
+            )
     return {
         "configured": configured,
         "pending_ingestion": pending,
