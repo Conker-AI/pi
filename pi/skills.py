@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS skills (
 class Import(agents.StrictModel):
     markdown: str = Field(min_length=1, max_length=MAX_MARKDOWN)
     expected_revision: int = Field(ge=0)
+    expected_id: str | None = Field(default=None, max_length=64, pattern=f"^{SLUG}$")
 
 
 class State(agents.StrictModel):
@@ -131,6 +132,8 @@ def get(store, identity):
 def import_skill(store, body):
     body = Import.model_validate(body.model_dump())
     name, description = parse(body.markdown)
+    if body.expected_id is not None and name != body.expected_id:
+        _error("skill_identity_mismatch", "Keep the selected skill name when replacing its source.")
     digest = hashlib.sha256(body.markdown.encode()).hexdigest()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")

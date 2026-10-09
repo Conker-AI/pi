@@ -75,6 +75,23 @@ def test_standard_folded_frontmatter_and_inert_metadata(store):
     assert "allowed-tools" not in value
 
 
+def test_replacement_binds_selected_identity_even_when_revisions_match(store):
+    original = imported(store)
+    other = imported(store, "other")
+    with pytest.raises(agents.AgentError) as error:
+        skills.import_skill(
+            store,
+            skills.Import(
+                markdown=document("other", "Wrong replacement"),
+                expected_revision=1,
+                expected_id="review",
+            ),
+        )
+    assert error.value.detail["code"] == "skill_identity_mismatch"
+    assert skills.get(store, "review") == original
+    assert skills.get(store, "other") == other
+
+
 def test_registry_and_combined_limits(store):
     for number in range(100):
         imported(store, f"skill-{number}", "x" * (22000 if number < 3 else 1))
