@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS memory_contexts (
     package TEXT,
     recorded_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS memory_forget_operations (
+    request_id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    expected_revision INTEGER NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('pending','forgotten','rejected')),
+    cached_packages_cleared INTEGER NOT NULL DEFAULT 0,
+    receipt TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS memory_forget_one_pending
+ON memory_forget_operations(state) WHERE state='pending';
 DROP TRIGGER IF EXISTS messages_queue_memory;
 CREATE TRIGGER messages_queue_memory AFTER INSERT ON messages
 BEGIN
@@ -52,6 +64,12 @@ WHERE m.role='user' AND (f.session_id IS NOT NULL OR EXISTS(
 
 
 def migrate(db):
+    forget_columns = {row[1] for row in db.execute("PRAGMA table_info(memory_forget_operations)")}
+    if "destination" not in forget_columns:
+        # Never guess the destination of an already-attempted old request.
+        db.execute(
+            "ALTER TABLE memory_forget_operations ADD COLUMN destination TEXT NOT NULL DEFAULT ''"
+        )
     columns = {row[1] for row in db.execute("PRAGMA table_info(memory_outbox)")}
     if "destination_agent_id" not in columns:
         db.execute("BEGIN IMMEDIATE")
@@ -99,13 +117,36 @@ def pin_destination(store, message_id, agent_id):
 
 def pending_deletions(store):
     with store._connect() as db:
-        return db.execute(
+        return pending_deletions_in(db)
+
+
+def pending_deletions_in(db):
+    return (
+        db.execute(
             "SELECT COUNT(*) FROM memory_outbox WHERE operation='delete' AND state!='sent'"
         ).fetchone()[0]
+        + db.execute(
+            "SELECT COUNT(*) FROM memory_forget_operations WHERE state='pending'"
+        ).fetchone()[0]
+    )
+
+
+def invalidate_recall(db):
+    """Historical briefings lack IDs; invalidate derived recall, never conversation text."""
+    from . import turn_context
+
+    changed = db.execute(
+        "UPDATE memory_contexts SET package=NULL,status='redacted' WHERE package IS NOT NULL"
+    ).rowcount
+    turn_context.redact_recall(db)
+    return changed
 
 
 def save_context(store, turn_id, status, package=None):
     with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if package is not None and pending_deletions_in(db):
+            status, package = "unavailable", None
         db.execute(
             "INSERT INTO memory_contexts VALUES (?,?,?,?)",
             (
@@ -115,13 +156,17 @@ def save_context(store, turn_id, status, package=None):
                 time.time(),
             ),
         )
+        db.commit()
 
 
 def context(store, turn_id):
     with store._connect() as db:
         row = db.execute("SELECT * FROM memory_contexts WHERE turn_id=?", (turn_id,)).fetchone()
+        held = pending_deletions_in(db)
     if not row:
         return {"status": "not_recorded", "package": None}
+    if held and row["package"]:
+        return {**dict(row), "status": "unavailable", "package": None}
     return {**dict(row), "package": json.loads(row["package"]) if row["package"] else None}
 
 
@@ -285,9 +330,7 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
 def redact(db, session_ids):
     # Context packages can quote a forgotten message in any session. Clearing
     # all cached packages avoids relying on incomplete third-party lineage.
-    db.execute(
-        "UPDATE memory_contexts SET package=NULL,status='redacted' WHERE package IS NOT NULL"
-    )
+    invalidate_recall(db)
     for sid in session_ids:
         db.execute(
             "UPDATE memory_outbox SET operation='delete',state='pending',attempts=0,"

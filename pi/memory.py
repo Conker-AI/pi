@@ -265,7 +265,13 @@ class Memory:
                 ):
                     original = package
                     try:
-                        package = _budget_context(self.ranker.rank_memories(query, original))
+                        rank_for_turn = getattr(self.ranker, "rank_for_turn", None)
+                        ranked = (
+                            rank_for_turn(query, original, selected)
+                            if callable(rank_for_turn)
+                            else self.ranker.rank_memories(query, original)
+                        )
+                        package = _budget_context(ranked)
                     except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
                         package = _budget_context(
                             {

@@ -10,6 +10,7 @@ RUNTIME_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/thinking",
         r"/sessions/[A-Za-z0-9_-]+/submissions",
         r"/turns/unreplied",
+        r"/turns/[A-Za-z0-9_-]{1,128}/usage",
         r"/turn-submissions/[A-Za-z0-9_-]+",
         r"/turn-submissions/[A-Za-z0-9_-]+/stream",
         r"/approvals",
@@ -118,6 +119,7 @@ OWNER_ROUTES = {
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
+        r"/memory/forget-pending",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",

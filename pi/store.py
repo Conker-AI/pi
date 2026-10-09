@@ -331,6 +331,7 @@ class Store:
                 db.executescript(response_retries.SCHEMA)
                 db.executescript(turn_steering.SCHEMA)
                 db.executescript(research_usage.SCHEMA)
+                research_usage.migrate(db)
                 db.executescript(universal_search.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
@@ -388,6 +389,14 @@ class Store:
                 db.execute(f"ALTER TABLE turns ADD COLUMN {column} TEXT")
         if "acted" not in have:
             db.execute("ALTER TABLE turns ADD COLUMN acted INTEGER NOT NULL DEFAULT 0")
+        if "usage_version" not in have:
+            # Existing turns remain NULL: their unrecorded earlier calls cannot
+            # be reconstructed from a final completion's counters.
+            db.execute("ALTER TABLE turns ADD COLUMN usage_version INTEGER")
+        db.execute(
+            "CREATE TRIGGER IF NOT EXISTS new_turn_usage_version AFTER INSERT ON turns "
+            "BEGIN UPDATE turns SET usage_version=1 WHERE id=NEW.id; END"
+        )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:

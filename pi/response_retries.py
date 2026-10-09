@@ -111,6 +111,7 @@ def run(loop, sid, mid, body):
             created = False
         else:
             tasks._source(db, sid, open_required=True)
+            turn_context.require_snapshot(db, prepared["source"])
             if (
                 submissions._busy(db, sid)
                 or db.execute(

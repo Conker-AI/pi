@@ -2,7 +2,7 @@
 
 import json
 
-from . import model_roles
+from . import model_roles, research_usage
 from .providers import Message, ProviderUnavailable
 
 
@@ -11,6 +11,14 @@ class ConfiguredMemoryRanker:
         self.store, self.providers = store, providers
 
     def rank_memories(self, query, package):
+        return self._rank(query, package)
+
+    def rank_for_turn(self, query, package, execution):
+        return self._rank(
+            query, package, observe_call=research_usage.observer(self.store, execution, "memory-ranking")
+        )
+
+    def _rank(self, query, package, observe_call=None):
         configuration = model_roles.load(self.store)["configuration"]
         if (
             not configuration
@@ -42,6 +50,7 @@ class ConfiguredMemoryRanker:
                         ),
                     ],
                     self.providers,
+                    observe_call=observe_call,
                 )
                 order = json.loads(result["completion"].text)["order"]
                 if (

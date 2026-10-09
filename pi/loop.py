@@ -182,10 +182,6 @@ class Loop:
             adapters = team_execution.metered_providers(self.store, execution, adapters)
             from . import research_usage
 
-            adapters = {
-                key: research_usage.wrap(self.store, execution, provider, role)
-                for key, provider in adapters.items()
-            }
             result = model_roles.dispatch(
                 configuration,
                 role,
@@ -194,6 +190,7 @@ class Loop:
                 harness_disabled=execution["privacy"]["harnessDisabled"],
                 override=override if role == "answer" else None,
                 guard=guard,
+                observe_call=research_usage.observer(self.store, execution, role),
             )
             completion = result["completion"]
             evidence = {

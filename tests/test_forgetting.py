@@ -372,7 +372,7 @@ def test_citation_http_distinguishes_forgotten_from_missing_and_cannot_delete(
             assert client.post(f"/turns/{turn['id']}/resume", headers=headers).status_code == 409
 
 
-def test_model_request_to_forget_is_only_conversation(conversation):
+def test_unsupported_model_request_to_forget_is_refused_without_deletion(conversation):
     path, root, *_ = conversation
 
     class Provider:
@@ -391,7 +391,10 @@ def test_model_request_to_forget_is_only_conversation(conversation):
         # a fresh conversation rather than bypassing the unresolved-turn guard.
         chat = store.create_session()
         store.append_message(chat, "user", SECRET)
-        loop.run_turn(chat, "Forget everything I said")
+        with pytest.raises(TurnFailed, match="unavailable tool") as failure:
+            loop.run_turn(chat, "Forget everything I said")
+        assert store.get_turn(failure.value.turn_id)["status"] == "failed"
+        assert not any(message["role"] == "assistant" for message in store.messages(chat))
         assert store.messages(chat)[0]["content"] == SECRET
         assert store.messages(root)[0]["content"] == SECRET
         assert store.get_session(root)["status"] == "open"

@@ -780,6 +780,21 @@ def thinking_status(session_id: str):
     }
 
 
+@app.get("/turns/{turn_id}/usage", dependencies=[Depends(require_key)])
+def turn_usage(turn_id: str, request: Request):
+    from . import research_usage
+
+    if request.url.query or not 1 <= len(turn_id) <= 128 or not all(
+        character.isascii() and (character.isalnum() or character in "_-")
+        for character in turn_id
+    ):
+        raise HTTPException(422, "Invalid turn usage request.")
+    try:
+        return research_usage.receipt(app.state.store, turn_id)
+    except ValueError:
+        raise HTTPException(404, "Turn usage unavailable.") from None
+
+
 @app.post("/sessions/{session_id}/thinking/{turn_id}/cancel", dependencies=[Depends(require_key)])
 def cancel_thinking(session_id: str, turn_id: str):
     try:
@@ -843,6 +858,11 @@ def run_turn(session_id: str, body: TurnRequest):
                 "request_id": body.request_id,
             },
         ) from exc
+
+
+@app.get("/memory/forget-pending", dependencies=[Depends(require_owner)])
+def pending_memory_forget():
+    return memory_forget.pending(app.state.store)
 
 
 @app.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])

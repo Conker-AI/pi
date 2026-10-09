@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from functools import partial
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -239,6 +240,7 @@ def dispatch(
     override=None,
     allowed_model_ids=None,
     guard=None,
+    observe_call=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
@@ -302,6 +304,7 @@ def dispatch(
                 providers,
                 allowed_model_ids=allowed_model_ids,
                 guard=guard,
+                observe_call=observe_call,
             )
             attempts.extend(decision["attempts"])
             choice = json.loads(decision["completion"].text)
@@ -347,9 +350,14 @@ def dispatch(
             guard()
         try:
             require_images(adapter, messages)
-            completion = adapter.complete_bounded(
-                messages, model=model.route, timeout=assignment.timeoutMs / 1000
+            invoke = partial(
+                adapter.complete_bounded, messages, model=model.route,
+                timeout=assignment.timeoutMs / 1000,
             )
+            completion = observe_call(
+                invoke, provider=getattr(adapter, "name", model.providerId), model=model.route,
+                role=role, provider_id=model.providerId, model_id=model.id,
+            ) if observe_call is not None else invoke()
         except ProviderUnavailable:
             if guard is not None:
                 guard()

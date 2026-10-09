@@ -1,23 +1,25 @@
 """Owner-reviewed forgetting of one memory, and of Pi's cached copies of it.
 
 MemoryGate removes the memory, its history and its audit text (see its
-`memory_forgetting`). Pi then clears every cached per-turn memory package that
-quoted it. The source conversation is not changed: forget the chat separately.
+`memory_forgetting`). A durable recall hold covers uncertain remote outcomes.
+Historical briefing copies lack IDs, so all derived recall caches are invalidated.
+The source conversation is not changed: forget the chat separately.
 """
 
 import json
+import threading
 
 import httpx
 from pydantic import Field
 
-from . import agents
+from . import agents, memory_store
 from .memory_corrections import CorrectionError
 
 
 class Forget(agents.StrictModel):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
-    expected_revision: int = Field(ge=1)
+    expected_revision: int = Field(ge=1, le=2147483646)
 
 
 class ForgetError(Exception):
@@ -26,24 +28,113 @@ class ForgetError(Exception):
         self.status, self.detail = status, {"code": code, "message": message}
 
 
-def _redact_cached(store, memory_id: str) -> int:
-    redacted = 0
+_active_lock = threading.Lock()
+_active = set()
+
+
+def _begin(store, client, body):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        rows = db.execute(
-            "SELECT turn_id, package FROM memory_contexts WHERE package LIKE ?",
-            ("%" + memory_id + "%",),
-        ).fetchall()
-        for row in rows:
-            package = json.loads(row["package"])
-            if any(item.get("id") == memory_id for item in package.get("memories", [])):
-                db.execute(
-                    "UPDATE memory_contexts SET package=NULL, status='redacted' WHERE turn_id=?",
-                    (row["turn_id"],),
-                )
-                redacted += 1
+        old = db.execute(
+            "SELECT * FROM memory_forget_operations WHERE request_id=?", (body.request_id,)
+        ).fetchone()
+        if old and (
+            old["memory_id"],
+            old["agent_id"],
+            old["destination"],
+            old["expected_revision"],
+        ) != (
+            body.memory_id,
+            client.agent_id,
+            client.destination,
+            body.expected_revision,
+        ):
+            raise ForgetError("request_conflict", "Forget request identity was already used.", 409)
+        if old and old["state"] == "forgotten":
+            return json.loads(old["receipt"]), False
+        if db.execute(
+            "SELECT 1 FROM memory_forget_operations WHERE state='pending' AND request_id!=?",
+            (body.request_id,),
+        ).fetchone():
+            raise ForgetError(
+                "forget_pending", "Resolve the earlier forget request first. Recall is paused.", 409
+            )
+        fresh = old is None or old["state"] != "pending"
+        if fresh and (
+            db.execute("SELECT 1 FROM turns WHERE status='running' LIMIT 1").fetchone()
+            or db.execute(
+                "SELECT 1 FROM turn_submissions WHERE state='preparing' LIMIT 1"
+            ).fetchone()
+        ):
+            raise ForgetError(
+                "work_active",
+                "Finish or stop current work, then retry forgetting. Nothing was changed.",
+                409,
+            )
+        if old is None:
+            db.execute(
+                "INSERT INTO memory_forget_operations"
+                "(request_id,memory_id,agent_id,destination,expected_revision,state) VALUES(?,?,?,?,?,'pending')",
+                (
+                    body.request_id,
+                    body.memory_id,
+                    client.agent_id,
+                    client.destination,
+                    body.expected_revision,
+                ),
+            )
+        else:
+            db.execute(
+                "UPDATE memory_forget_operations SET state='pending' WHERE request_id=?",
+                (body.request_id,),
+            )
+        cleared = memory_store.invalidate_recall(db)
+        db.execute(
+            "UPDATE memory_forget_operations SET cached_packages_cleared="
+            "cached_packages_cleared+? WHERE request_id=?",
+            (cleared, body.request_id),
+        )
         db.commit()
-    return redacted
+    return None, fresh
+
+
+def _refused(store, body, fresh):
+    # A refusal of a recovery attempt cannot resolve a previous uncertain outcome.
+    if fresh:
+        with store._connect() as db:
+            db.execute(
+                "UPDATE memory_forget_operations SET state='rejected' "
+                "WHERE request_id=? AND state='pending'",
+                (body.request_id,),
+            )
+
+
+def _unknown():
+    return ForgetError(
+        "outcome_unknown",
+        "The forget outcome is unknown. Recall is paused; ordinary conversation may continue. "
+        "Repeat this exact request to check; it cannot apply twice.",
+        503,
+    )
+
+
+def pending(store):
+    """Content-free recovery identity, available even after the remote record is gone."""
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT request_id,memory_id,expected_revision FROM memory_forget_operations "
+            "WHERE state='pending' ORDER BY request_id LIMIT 1"
+        ).fetchone()
+    return {
+        "schemaVersion": 1,
+        "pending": {
+            "requestId": row["request_id"],
+            "memoryId": row["memory_id"],
+            "revision": row["expected_revision"],
+        }
+        if row
+        else None,
+    }
 
 
 def preview(client, memory_id: str) -> dict:
@@ -66,38 +157,79 @@ def preview(client, memory_id: str) -> dict:
 
 
 def forget(store, client, body: Forget) -> dict:
+    body = Forget.model_validate(body.model_dump())
     if client is None:
         raise ForgetError(
             "not_configured",
             "Forgetting needs the memory correction capability (PI_MEMORY_CORRECTION_*).",
             503,
         )
-    try:
-        receipt = client.forget(body.request_id, body.memory_id, body.expected_revision)
-    except CorrectionError as exc:
-        if exc.status == 404:
-            raise ForgetError("not_found", "Memory not found.", 404) from None
-        if exc.status == 409:
+    with _active_lock:
+        if store.path in _active:
             raise ForgetError(
-                "revision_conflict", "The memory changed; review it again before forgetting.", 409
-            ) from None
-        raise ForgetError(
-            "unavailable", "Memory service refused or is unavailable. Nothing was confirmed.", 503
-        ) from None
-    except (httpx.HTTPError, ValueError):
-        # A lost reply is not proof either way; the same request id is safe to repeat.
-        raise ForgetError(
-            "outcome_unknown",
-            "The outcome is unknown. Repeat the same request to check; it cannot apply twice.",
-            503,
-        ) from None
-    if receipt.get("memory_id") != body.memory_id or receipt.get("status") != "forgotten":
-        raise ForgetError("invalid_receipt", "Memory service returned an unexpected receipt.", 502)
-    return {
-        "requestId": body.request_id,
-        "memoryId": body.memory_id,
-        "status": "forgotten",
-        "indexRemoval": receipt.get("index_removal"),
-        "cachedPackagesCleared": _redact_cached(store, body.memory_id),
-        "sourceConversationKept": True,
-    }
+                "forget_in_progress",
+                "A forget request is in progress; retry after it finishes.",
+                409,
+            )
+        _active.add(store.path)
+    try:
+        prior, fresh = _begin(store, client, body)
+        if prior is not None:
+            return prior
+        try:
+            receipt = client.forget(body.request_id, body.memory_id, body.expected_revision)
+        except CorrectionError as exc:
+            if exc.status not in {400, 401, 403, 404, 409, 422} or not fresh:
+                raise _unknown() from None
+            _refused(store, body, fresh)
+            if exc.status == 404:
+                raise ForgetError("not_found", "Memory not found.", 404) from None
+            if exc.status == 409:
+                raise ForgetError(
+                    "revision_conflict",
+                    "The memory changed; review it again before forgetting.",
+                    409,
+                ) from None
+            raise ForgetError("unavailable", "Memory service refused the request.", 503) from None
+        except (httpx.HTTPError, ValueError, TypeError):
+            raise _unknown() from None
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("request_id") != body.request_id
+            or receipt.get("agent_id") != client.agent_id
+            or receipt.get("memory_id") != body.memory_id
+            or type(receipt.get("revision")) is not int
+            or receipt["revision"] != body.expected_revision
+            or receipt.get("status") != "forgotten"
+            or receipt.get("index_removal") not in {"removed", "degraded", "pending"}
+        ):
+            raise ForgetError(
+                "invalid_receipt",
+                "Forget receipt could not be verified. Recall remains paused.",
+                502,
+            )
+        with store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            cleared = memory_store.invalidate_recall(db)
+            old = db.execute(
+                "SELECT cached_packages_cleared FROM memory_forget_operations WHERE request_id=?",
+                (body.request_id,),
+            ).fetchone()
+            result = {
+                "requestId": body.request_id,
+                "memoryId": body.memory_id,
+                "status": "forgotten",
+                "indexRemoval": receipt["index_removal"],
+                "cachedPackagesCleared": old[0] + cleared,
+                "sourceConversationKept": True,
+            }
+            db.execute(
+                "UPDATE memory_forget_operations SET state='forgotten',cached_packages_cleared=?,"
+                "receipt=? WHERE request_id=?",
+                (result["cachedPackagesCleared"], json.dumps(result), body.request_id),
+            )
+            db.commit()
+        return result
+    finally:
+        with _active_lock:
+            _active.discard(store.path)
