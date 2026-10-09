@@ -867,6 +867,45 @@ def create_app(
             request.scope["query_string"],
         )
 
+    @app.get("/api/owner/mcp/tools")
+    @app.get("/api/owner/mcp/tools/{identity}/access")
+    @app.post("/api/owner/mcp/discover")
+    @app.post("/api/owner/mcp/import")
+    @app.post("/api/owner/mcp/tools/{identity}/state")
+    @app.post("/api/owner/mcp/tools/{identity}/access")
+    async def mcp_control(request: Request, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from .mcp_control import TOOL_ID, validate_body
+
+        session(request)
+        if request.scope["query_string"] or (
+            identity is not None and not re.fullmatch(TOOL_ID, identity)
+        ):
+            raise AuthError("Select a saved MCP tool without query parameters.", 422)
+        operation = request.url.path.rsplit("/", 1)[-1]
+        extra = None
+        if operation == "access":
+            key = app.state.config.toolgate_execution_key
+            if not key:
+                raise AuthError("The scoped chat execution credential is not configured.", 503)
+            extra = {"X-ToolGate-Execution-Key": key}
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            validate_body(operation, body)
+            admit_write(request, body)
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/")
+            + request.url.path.replace("/api/owner/mcp/", "/v2/owner/mcp/", 1),
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            b"",
+            extra,
+        )
+
     @app.get("/api/owner/editor-capabilities")
     def editor_capabilities(request: Request):
         session(request)

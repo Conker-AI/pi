@@ -7,6 +7,7 @@ import re
 
 from pi.browser_contract import owner_allowed, runtime_allowed
 
+from .mcp_control import TOOL_ID
 from .store import AuthError
 
 
@@ -67,6 +68,8 @@ def fingerprint(method: str, path: str, body: dict) -> str:
                 and owner_allowed(method, path[len("/api/control/pi") :])
             )
             or re.fullmatch(r"/api/owner/requests/[A-Za-z0-9_-]+/decision", path)
+            or path in {"/api/owner/mcp/discover", "/api/owner/mcp/import"}
+            or re.fullmatch(rf"/api/owner/mcp/tools/{TOOL_ID}/(?:state|access)", path)
             or re.fullmatch(
                 r"/api/owner/editor-drafts/[A-Za-z][A-Za-z0-9_-]{0,63}(?:/(?:publish|access|runs))?",
                 path,
