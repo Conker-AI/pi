@@ -49,7 +49,12 @@ def request(transport, method, body=None):
                 if (
                     url.scheme != "https"
                     or url.hostname
-                    not in {"claude.ai", "console.anthropic.com", "platform.claude.com"}
+                    not in {
+                        "claude.ai",
+                        "claude.com",
+                        "console.anthropic.com",
+                        "platform.claude.com",
+                    }
                     or url.username
                     or url.password
                 ):

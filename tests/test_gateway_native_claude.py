@@ -71,3 +71,18 @@ def test_native_auth_requires_exact_owner_verification(tmp_path, monkeypatch):
         )
         assert client.get(path + "?secret=x").status_code == 422
         assert len(seen) == 2
+
+
+def test_current_native_claude_authorization_domain_is_preserved():
+    from gateway.native_claude import request
+
+    value = dict(
+        available=True,
+        connected=False,
+        loginState="pending",
+        authorizationUrl="https://claude.com/cai/oauth/authorize?state=synthetic",
+        credentialsIncluded=False,
+        runtime="Claude Code",
+        models=[],
+    )
+    assert request(httpx.MockTransport(lambda _: httpx.Response(200, json=value)), "GET") == value
