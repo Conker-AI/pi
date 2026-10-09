@@ -18,6 +18,7 @@ def store(tmp_path):
 
 
 BAD_REQUESTS = [
+    '{"tool":"None needed","args":{}}',
     '{"tool":"local_companion","args":{"scope":"conversation","query":"hello"}}',
     '{"tool":"t_echo","args":',
     "{'tool':'t_echo','args':{}}",
@@ -156,10 +157,10 @@ def test_protocol_work_is_bounded_and_diagnostics_never_echo_payload(monkeypatch
     assert "SENSITIVE" not in str(failed.value)
 
 
-def test_prompt_distinguishes_conversation_memory_namespaces_and_actions():
+def test_prompt_distinguishes_ordinary_answers_from_tool_actions():
     prompt = describe(FakeGate().tools())
-    assert "conversationally by default" in prompt
-    assert "simple replies need no tool" in prompt
-    assert "exact ID from Available tools" in prompt
-    assert "memory namespace" in prompt
-    assert "args must be an object" in prompt
+    assert "For an ordinary answer, write plain conversational text" in prompt
+    assert "Do not use the tool JSON format" in prompt
+    assert "Never request a tool named none" in prompt
+    assert "Only when the user needs a listed tool" in prompt
+    assert "Use the input schema for args" in prompt

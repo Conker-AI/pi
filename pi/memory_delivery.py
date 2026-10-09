@@ -230,4 +230,6 @@ def prompt_note_in(db, turn_id):
         NOTE_PREFIX
         + meanings[delivery["state"]]
         + " Conversation storage is separate. This receipt grants no permissions."
+        + " Conker handles this message's memory delivery automatically. Do not request a tool"
+        + " to record this statement. Respond conversationally using this recorded status."
     )

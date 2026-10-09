@@ -4,7 +4,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import httpx
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .provider_control import ProviderControlError, Strict
 
@@ -12,16 +12,36 @@ from .provider_control import ProviderControlError, Strict
 class Operation(Strict):
     operation: Literal["login", "cancel", "logout"]
     billing: Literal["subscription", "api"] | None = None
+    loginId: str | None = Field(default=None, pattern=r"^login_[0-9a-f]{32}$")
+
+    @model_validator(mode="after")
+    def exact_operation(self):
+        if self.operation == "cancel":
+            if self.model_fields_set != {"operation", "loginId"} or self.loginId is None:
+                raise ValueError("Cancellation requires the exact sign-in identity.")
+        elif self.operation == "login":
+            if not self.model_fields_set <= {"operation", "billing"}:
+                raise ValueError("Invalid native authentication operation.")
+        elif self.model_fields_set != {"operation"}:
+            raise ValueError("Invalid native authentication operation.")
+        return self
 
 
 class Status(Strict):
     available: bool
     connected: bool
     loginState: Literal["idle", "pending", "complete", "failed", "expired", "canceled"]
+    loginId: str | None = Field(pattern=r"^login_[0-9a-f]{32}$")
     authorizationUrl: str | None = Field(max_length=4096)
     credentialsIncluded: Literal[False]
     runtime: Literal["Claude Code"]
     models: list[str] = Field(max_length=100)
+
+    @model_validator(mode="after")
+    def pending_identity(self):
+        if (self.loginState == "pending") != (self.loginId is not None):
+            raise ValueError("Native sign-in status has no matching identity.")
+        return self
 
 
 def request(transport, method, body=None):
@@ -30,6 +50,7 @@ def request(transport, method, body=None):
             available=False,
             connected=False,
             loginState="idle",
+            loginId=None,
             authorizationUrl=None,
             credentialsIncluded=False,
             runtime="Claude Code",
