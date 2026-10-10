@@ -8,12 +8,24 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi import model_roles
+from pi import inference_control, model_roles, research_usage
 from pi.direct_providers import AnthropicProvider, OpenAIProvider, configured
 from pi.loop import Loop, TurnFailed
 from pi.providers import Message, ProviderUnavailable
 from pi.routing import Router
 from pi.store import Store
+
+
+@pytest.fixture(autouse=True)
+def reject_unmocked_network(monkeypatch):
+    def reject(*_args, **_kwargs):
+        pytest.fail("Direct-provider tests must use a synthetic HTTP transport")
+
+    async def reject_async(*_args, **_kwargs):
+        reject()
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", reject)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", reject_async)
 
 
 def response_for(name):
@@ -51,6 +63,73 @@ def capture(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", post)
     return requests
+
+
+@pytest.fixture
+def stream_capture(monkeypatch):
+    observed = {"requests": [], "clients": [], "streams": []}
+    real_client = httpx.Client
+
+    class SSE(httpx.SyncByteStream):
+        def __init__(self, body):
+            self.body, self.delivered, self.closed = body, False, False
+
+        def __iter__(self):
+            yield self.body[:17]
+            self.delivered = True
+            yield self.body[17:]
+
+        def close(self):
+            self.closed = True
+
+    def reply(request):
+        assert inference_control.current() is not None
+        assert request.method == "POST"
+        assert str(request.url) in {OpenAIProvider.url, AnthropicProvider.url}
+        observed["requests"].append(request)
+        name = "openai" if str(request.url) == OpenAIProvider.url else "anthropic"
+        result = response_for(name)
+        if name == "openai":
+            events = [
+                {"model": "actual", "choices": [{"delta": {"content": "Answer"}}]},
+                {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+                {"choices": [], "usage": result["usage"]},
+            ]
+        else:
+            events = [
+                {"type": "message_start", "message": {"model": "actual", "usage": result["usage"]}},
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": "Answer"},
+                },
+                {
+                    "type": "message_delta",
+                    "delta": {"stop_reason": "end_turn"},
+                    "usage": {"output_tokens": 3},
+                },
+                {"type": "message_stop"},
+            ]
+        body = "".join("data: " + json.dumps(event) + "\n\n" for event in events)
+        if name == "openai":
+            body += "data: [DONE]\n\n"
+        stream = SSE(body.encode())
+        observed["streams"].append(stream)
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, stream=stream)
+
+    def client(**kwargs):
+        assert kwargs["follow_redirects"] is False and kwargs["trust_env"] is False
+        result = real_client(**kwargs, transport=httpx.MockTransport(reply))
+        observed["clients"].append(result)
+        return result
+
+    monkeypatch.setattr(httpx, "Client", client)
+    return observed
 
 
 @pytest.mark.parametrize("cls", [OpenAIProvider, AnthropicProvider])
@@ -183,7 +262,7 @@ def test_timeout_is_sanitized_and_not_retried(cls, monkeypatch):
 
 
 @pytest.mark.parametrize("provider_id", ["openai", "anthropic"])
-def test_registered_direct_adapter_runs_frozen_manual_role(tmp_path, capture, provider_id):
+def test_registered_direct_adapter_runs_frozen_manual_role(tmp_path, stream_capture, provider_id):
     with closing(Store(tmp_path / "test.db")) as store:
         sid = store.create_session()
         disabled = {
@@ -223,11 +302,34 @@ def test_registered_direct_adapter_runs_frozen_manual_role(tmp_path, capture, pr
         loop = Loop(store, Router(providers=adapters))
         result = loop.run_turn(sid, "Question")
         assert result["message"]["content"] == "Answer"
-        assert len(capture) == 1 and capture[0][0] == adapters[provider_id].url
-        assert capture[0][1]["timeout"] == 1.25
+        requests = stream_capture["requests"]
+        assert len(requests) == 1 and str(requests[0].url) == adapters[provider_id].url
+        assert requests[0].extensions["timeout"] == dict(
+            connect=1.25, read=1.25, write=1.25, pool=1.25
+        )
+        payload = json.loads(requests[0].content)
+        assert payload["model"] == "requested" and payload["stream"] is True
+        assert payload["messages"][-1] == {"role": "user", "content": "Question"}
+        if provider_id == "openai":
+            assert requests[0].headers["authorization"] == "Bearer synthetic"
+            assert payload["stream_options"] == {"include_usage": True}
+        else:
+            assert requests[0].headers["x-api-key"] == "synthetic"
+        assert len(stream_capture["clients"]) == len(stream_capture["streams"]) == 1
+        assert stream_capture["clients"][0].is_closed
+        assert stream_capture["streams"][0].delivered and stream_capture["streams"][0].closed
         evidence = json.loads(store.get_turn(result["turn_id"])["detail"])
         assert evidence["attempts"][-1]["actualModel"] == "actual"
+        usage = research_usage.receipt(store, result["turn_id"])
+        assert usage["foreground"]["attempt_count"] == 1
+        assert {
+            key: usage["foreground"]["totals"][key]
+            for key in ("input_tokens", "output_tokens", "cached_tokens")
+        } == dict(input_tokens=12, output_tokens=3, cached_tokens=5)
+        assert usage["foreground"]["totals"]["cost_usd"] is None
+        assert usage["attempts"][0]["actual_provider"] == provider_id
+        assert usage["attempts"][0]["actual_model"] == "actual"
         adapters[provider_id].allow_paid = False
         with pytest.raises(TurnFailed, match="unapproved substitute"):
             loop.run_turn(sid, "Second question")
-        assert len(capture) == 1
+        assert len(requests) == len(stream_capture["clients"]) == 1
