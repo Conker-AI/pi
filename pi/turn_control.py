@@ -65,8 +65,9 @@ def cancel(store, turn_id):
         db.execute("BEGIN IMMEDIATE")
         result = _cancel_db(db, turn_id)
         db.commit()
-    from . import background_thinking
+    from . import background_thinking, foreground_inference
 
+    foreground_inference.cancel(store, turn_id=turn_id, requested_at=result["requested_at"])
     background_thinking.cancel_for_turn(store, turn_id)
     return result
 
@@ -74,13 +75,14 @@ def cancel(store, turn_id):
 def cancel_submission(store, request_id):
     from . import attachment_turns, submissions
 
+    requested_at = None
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         row = submissions._row(db, request_id)
         if row["state"] == "forgotten":
             raise tasks.TaskError("not_found", "Submission not found.", 404)
         if row["turn_id"]:
-            _cancel_db(db, row["turn_id"])
+            requested_at = _cancel_db(db, row["turn_id"])["requested_at"]
         elif row["state"] == "preparing":
             db.execute(
                 "UPDATE turn_submissions SET state='preparation_failed',"
@@ -97,6 +99,11 @@ def cancel_submission(store, request_id):
             raise tasks.TaskError("not_preparing", "This submission has already finished.", 409)
         result = submissions._view(db, submissions._row(db, request_id))
         db.commit()
+    from . import foreground_inference
+
+    foreground_inference.cancel(
+        store, turn_id=row["turn_id"], request_id=request_id, requested_at=requested_at
+    )
     if row["turn_id"]:
         from . import background_thinking
 

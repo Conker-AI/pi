@@ -135,6 +135,12 @@ class Loop:
             return []
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
+        from . import foreground_inference
+
+        with foreground_inference.scope(self.store, execution):
+            return self._call_controlled(messages, ctx, execution, role)
+
+    def _call_controlled(self, messages, ctx, execution, role):
         from . import inference_control
 
         inference_control.check()
@@ -399,7 +405,11 @@ class Loop:
         context_controls.check_budget(policy, messages)
         if turn_id:
             turn_context.capture(
-                self.store, turn_id, selected_history, prefix_messages, reply_to,
+                self.store,
+                turn_id,
+                selected_history,
+                prefix_messages,
+                reply_to,
                 acknowledgement_generation=acknowledgement_generation,
             )
             turn_steering.consume(
