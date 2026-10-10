@@ -680,6 +680,14 @@ def health():
     if cached and now - _health_cache["at"] < HEALTH_CACHE_SECONDS:
         return {**cached, "age_seconds": round(now - _health_cache["at"], 1)}
 
+    hosted_health = (
+        app.state.hosted.health()
+        if app.state.hosted
+        else {"status": "not_configured", "reason": "no API key"}
+    )
+    if hosted_health["status"] == "unverified":
+        # Provider readiness has a separate vocabulary from module health.
+        hosted_health = {"status": "unknown", "reason": "Configured; inference not verified"}
     checks = {
         "store": app.state.store.health(),
         "memory": app.state.loop.memory.health(),
@@ -687,11 +695,7 @@ def health():
         # not_configured, not unavailable: no hosted provider is a valid install,
         # not a broken one, and collapsing the two is how a dashboard starts
         # lying about what is wrong.
-        "hosted_provider": (
-            app.state.hosted.health()
-            if app.state.hosted
-            else {"status": "not_configured", "reason": "no API key"}
-        ),
+        "hosted_provider": hosted_health,
         "provider_credentials": {
             "status": "ok" if app.state.provider_credentials else "not_configured",
             "configured": app.state.provider_credentials,
@@ -1135,14 +1139,25 @@ def models():
         return {
             "local": local,
             "direct": direct,
-            "hosted": {"status": "unavailable", "reason": type(exc).__name__},
+            "hosted": {
+                "status": "unavailable",
+                "provider": app.state.hosted.name,
+                "allow_paid": app.state.hosted.allow_paid,
+                "reason": type(exc).__name__,
+            },
         }
-    free = [m.id for m in app.state.hosted.free_models()]
+    free = [
+        model.id
+        for model in sorted(
+            (model for model in catalogue.values() if model.is_free),
+            key=lambda model: -model.context_length,
+        )
+    ]
     return {
         "local": local,
         "direct": direct,
         "hosted": {
-            "status": "ok",
+            "status": "unverified",
             "provider": app.state.hosted.name,
             "allow_paid": app.state.hosted.allow_paid,
             "free_models": free,

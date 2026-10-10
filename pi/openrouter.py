@@ -298,9 +298,9 @@ class OpenRouterProvider:
         if not self.api_key:
             return {"status": "not_configured", "reason": "no API key"}
         try:
-            free = self.free_models()
+            self.catalogue()
         except ProviderUnavailable as exc:
             return {"status": "unavailable", "reason": exc.reason}
-        if not free:
-            return {"status": "degraded", "reason": "no free text models available"}
-        return {"status": "ok"}
+        # Catalogue availability (possibly cached) is not an authentication,
+        # entitlement, or successful-inference receipt.
+        return {"status": "unverified"}
