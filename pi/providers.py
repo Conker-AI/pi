@@ -181,12 +181,14 @@ class OllamaProvider:
         if not isinstance(text, str):
             raise ProviderUnavailable("provider returned no message content")
 
+        cached = body.get("prompt_eval_cached_count")
         return Completion(
             text=text,
             model=body.get("model", model),
             provider=self.name,
             input_tokens=body.get("prompt_eval_count"),
             output_tokens=body.get("eval_count"),
+            cached_tokens=cached if type(cached) is int and 0 <= cached <= 2**31 - 1 else None,
             # Local inference has no per-token price. None, not 0.0: the second
             # would be a claim about money that this adapter cannot make, and
             # `unknown` is the honest rendering.
