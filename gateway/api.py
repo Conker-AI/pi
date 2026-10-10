@@ -664,6 +664,33 @@ def create_app(
     async def native_session_stop(identity: str, request: Request):
         return await native_session_request(request, "stop", identity)
 
+    async def codex_session_request(request: Request, action: str, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import codex_sessions
+        from .native_sessions import NativeSessionsError
+
+        session(request)
+        try:
+            result = await run_in_threadpool(
+                codex_sessions.request,
+                app.state.provider_transport,
+                action,
+                identity,
+                request.scope["query_string"],
+            )
+        except NativeSessionsError as exc:
+            raise AuthError(str(exc), exc.status, code=exc.code) from None
+        return JSONResponse(result)
+
+    @app.get("/api/host/codex/sessions")
+    async def codex_session_list(request: Request):
+        return await codex_session_request(request, "list")
+
+    @app.get("/api/host/codex/sessions/{identity}")
+    async def codex_session_status(identity: str, request: Request):
+        return await codex_session_request(request, "status", identity)
+
     def terminal_access(request):
         owner = session(request)
         if app.state.terminals is None:

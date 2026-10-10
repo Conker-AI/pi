@@ -24,12 +24,27 @@ class PrivateTransport(httpx.BaseTransport):
         self.transport = transport or httpx.HTTPTransport()
 
     def handle_request(self, request):
-        if request.url.host not in {"conker-host", "conker-chatgpt"} or request.url.query:
+        if request.url.host not in {"conker-host", "conker-chatgpt"}:
             raise ValueError("Unsupported private provider destination.")
+        query = b""
+        if request.url.query:
+            from .native_codex_query import canonical_query
+
+            if (
+                request.method != "GET"
+                or request.url.scheme != "http"
+                or request.url.host != "conker-host"
+                or request.url.userinfo
+                or request.url.fragment
+                or self.prefix
+                or request.url.raw_path.split(b"?", 1)[0] != b"/codex/sessions"
+            ):
+                raise ValueError("Unsupported private provider destination.")
+            query = canonical_query(request.url.query)
         headers = dict(request.headers)
         headers.pop("host", None)
         headers["authorization"] = "Bearer " + self.key
-        target = self.url.copy_with(path=self.prefix + request.url.path)
+        target = self.url.copy_with(path=self.prefix + request.url.path, query=query or None)
         headers["host"] = target.netloc.decode("ascii")
         return self.transport.handle_request(
             httpx.Request(
