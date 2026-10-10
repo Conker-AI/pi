@@ -124,6 +124,9 @@ OWNER_ROUTES = {
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
         r"/memory/forget-pending",
+        r"/memory/corrections/pending",
+        r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
+        r"/memory/corrections/[A-Za-z0-9_-]{16,128}",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
@@ -161,6 +164,8 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/proposals/passes",
         r"/memory/forget",
+        r"/memory/corrections",
+        r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
     ),
 }
 

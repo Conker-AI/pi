@@ -41,6 +41,7 @@ from . import (
     drafts,
     filesystem_reads,
     jobs,
+    memory_edits,
     memory_proposals,
     memory_store,
     message_forks,
@@ -324,6 +325,7 @@ class Store:
                 setup_protection.initialize(db)
                 setup_rehearsal.initialize(db)
                 db.executescript(memory_store.SCHEMA)
+                db.executescript(memory_edits.SCHEMA)
                 db.executescript(memory_proposals.SCHEMA)
                 db.executescript(proposals.SCHEMA)
                 memory_store.migrate(db)

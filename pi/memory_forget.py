@@ -53,6 +53,12 @@ def _begin(store, client, body):
         if old and old["state"] == "forgotten":
             return json.loads(old["receipt"]), False
         if db.execute(
+            "SELECT 1 FROM memory_edit_operations WHERE state IN ('applying','unknown')"
+        ).fetchone():
+            raise ForgetError(
+                "forget_pending", "Resolve the pending memory correction before forgetting.", 409
+            )
+        if db.execute(
             "SELECT 1 FROM memory_forget_operations WHERE state='pending' AND request_id!=?",
             (body.request_id,),
         ).fetchone():
@@ -210,6 +216,9 @@ def forget(store, client, body: Forget) -> dict:
             )
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            from . import memory_edits
+
+            memory_edits.redact_memory(db, client.agent_id, client.destination, body.memory_id)
             cleared = memory_store.invalidate_recall(db)
             old = db.execute(
                 "SELECT cached_packages_cleared FROM memory_forget_operations WHERE request_id=?",

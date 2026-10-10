@@ -909,6 +909,8 @@ def create_app(
         target = "/" + path
         if not owner_allowed(request.method, target):
             raise AuthError("This owner operation is not available through the gateway.", 403)
+        if target.startswith("/memory/corrections") and request.scope["query_string"]:
+            raise AuthError("Memory corrections do not accept query parameters.", 422)
         if not app.state.config.pi_owner_key:
             raise AuthError("Pi owner-control connection is not configured.", 503)
         body = (
@@ -916,6 +918,7 @@ def create_app(
                 request,
                 max_bytes=66 * 1024 * 1024
                 if target.startswith("/characters/companion/")
+                else 128000 if target.startswith("/memory/corrections")
                 else 65536,
             )
             if request.method == "POST"

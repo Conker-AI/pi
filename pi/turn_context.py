@@ -49,9 +49,9 @@ def capture(store, turn_id, sources, prefix, reply_to=None, *, acknowledgement_g
         db.execute("BEGIN IMMEDIATE")
         from . import memory_store
 
-        if _has_recall(prefix) and memory_store.pending_deletions_in(db):
+        if _has_recall(prefix) and memory_store.recall_held_in(db):
             raise context_controls.ContextError(
-                "memory_forgetting", "Recalled context is unavailable while forgetting is pending."
+                "memory_forgetting", "Recalled context is unavailable while a memory change is pending."
             )
         # Normal outbox progress cannot invalidate a preparation-time note. A
         # forget journal change can: recheck its generation under the writer lock.

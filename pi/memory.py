@@ -233,7 +233,7 @@ class Memory:
             if selected["agentId"] == "companion"
             else self.read_clients.get(selected["agentId"])
         )
-        if memory_store.pending_deletions(self.store):
+        if memory_store.recall_held(self.store):
             state = "unavailable"
         elif client:
             try:
@@ -330,8 +330,9 @@ class Memory:
             delivery["pending_ingestion"]
             or delivery["pending_deletion"]
             or delivery["blocked_delivery"]
+            or memory_store.recall_held(self.store)
         ):
-            return {"status": "degraded", "reason": "Memory delivery or deletion is pending"}
+            return {"status": "degraded", "reason": "Memory delivery or a reviewed change is pending"}
         return state
 
     def drain_once(self, limit=20):

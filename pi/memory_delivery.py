@@ -186,6 +186,11 @@ def forget_generation(db):
             "SELECT COUNT(*),COUNT(CASE WHEN state='forgotten' THEN 1 END),"
             "COUNT(CASE WHEN state='rejected' THEN 1 END) FROM memory_forget_operations"
         ).fetchone()
+    ) + tuple(
+        db.execute(
+            "SELECT COUNT(*),COUNT(CASE WHEN state='applied' THEN 1 END),"
+            "COUNT(CASE WHEN state='rejected' THEN 1 END) FROM memory_edit_operations"
+        ).fetchone()
     )
 
 
@@ -213,7 +218,7 @@ def prompt_note_in(db, turn_id):
         return None
     from . import memory_store
 
-    if memory_store.pending_deletions_in(db):
+    if memory_store.recall_held_in(db):
         # Fixed guidance contains no stale acknowledgement and remains safe
         # when an exact narration retry repeats it after a forget operation.
         return "No memory save acknowledgement is supplied. Do not claim this request was saved to long-term memory; the conversation is separate."

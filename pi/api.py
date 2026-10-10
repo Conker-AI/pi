@@ -43,6 +43,8 @@ from . import (
     filesystem_reads,
     jobs_api,
     memory_corrections,
+    memory_edits,
+    memory_edits_api,
     memory_forget,
     memory_proposals,
     memory_proposals_api,
@@ -146,6 +148,7 @@ async def lifespan(app: FastAPI):
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
+    memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)
     calls.recover(store)
     system_inventory.recover(store)
@@ -445,6 +448,14 @@ app.include_router(
 )
 app.include_router(
     collaboration_api.create_router(lambda: app.state.store, require_admin, require_owner)
+)
+app.include_router(
+    memory_edits_api.router(
+        lambda: app.state.store,
+        lambda: getattr(app.state, "memory_corrections", None),
+        lambda: getattr(getattr(app.state, "memory", None), "client", None),
+        require_owner,
+    )
 )
 app.include_router(
     memory_proposals_api.router(

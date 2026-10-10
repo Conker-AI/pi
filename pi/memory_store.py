@@ -147,6 +147,17 @@ def pending_deletions_in(db):
     )
 
 
+def recall_held_in(db):
+    return pending_deletions_in(db) + db.execute(
+        "SELECT COUNT(*) FROM memory_edit_operations WHERE state IN ('applying','unknown')"
+    ).fetchone()[0]
+
+
+def recall_held(store):
+    with store._connect() as db:
+        return recall_held_in(db)
+
+
 def invalidate_recall(db):
     """Historical briefings lack IDs; invalidate derived recall, never conversation text."""
     from . import turn_context
@@ -161,7 +172,7 @@ def invalidate_recall(db):
 def save_context(store, turn_id, status, package=None):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if package is not None and pending_deletions_in(db):
+        if package is not None and recall_held_in(db):
             status, package = "unavailable", None
         db.execute(
             "INSERT INTO memory_contexts VALUES (?,?,?,?)",
@@ -178,7 +189,7 @@ def save_context(store, turn_id, status, package=None):
 def context(store, turn_id):
     with store._connect() as db:
         row = db.execute("SELECT * FROM memory_contexts WHERE turn_id=?", (turn_id,)).fetchone()
-        held = pending_deletions_in(db)
+        held = recall_held_in(db)
     if not row:
         return {"status": "not_recorded", "package": None}
     if held and row["package"]:
@@ -364,6 +375,9 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
 
 
 def redact(db, session_ids):
+    from . import memory_edits
+
+    memory_edits.redact_sources(db, session_ids)
     # Context packages can quote a forgotten message in any session. Clearing
     # all cached packages avoids relying on incomplete third-party lineage.
     invalidate_recall(db)
