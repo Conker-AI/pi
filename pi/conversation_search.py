@@ -5,16 +5,14 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from . import session_settings
+from .search_excerpt import excerpt
 
 
 def search(store, query, limit=30, cursor=None):
     query = query.strip()
     if not 1 <= len(query) <= 500 or type(limit) is not int or not 1 <= limit <= 50:
         raise ValueError("Use 1-500 search characters and a limit of 1-50.")
-    pattern = (
-        "%" + query.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-    )
-    params = [query, pattern]
+    params = [query.casefold()]
     after = ""
     with store._connect() as db:
         db.execute("BEGIN")
@@ -27,6 +25,12 @@ def search(store, query, limit=30, cursor=None):
             return privacy is not None and not any(privacy.values())
 
         db.create_function("search_session_eligible", 1, eligible, deterministic=True)
+        db.create_function(
+            "search_excerpt",
+            1,
+            lambda text: excerpt(text, query, width=500, leading=100),
+            deterministic=True,
+        )
         db.create_function(
             "search_casefold",
             1,
@@ -45,13 +49,12 @@ def search(store, query, limit=30, cursor=None):
         rows = db.execute(
             r"""
             SELECT m.id,m.session_id,m.seq,m.role,m.created_at,s.title,
-                   substr(json_extract(m.content,'$'),
-                       max(1,instr(search_casefold(json_extract(m.content,'$')),search_casefold(?))-100),500) AS excerpt
+                   search_excerpt(json_extract(m.content,'$')) AS excerpt
             FROM messages m JOIN sessions s ON s.id=m.session_id
             WHERE s.status!='forgotten' AND m.role IN ('user','assistant')
               AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=s.id)
               AND json_valid(m.content) AND json_type(m.content)='text'
-              AND search_casefold(json_extract(m.content,'$')) LIKE ? ESCAPE '\'
+              AND instr(search_casefold(json_extract(m.content,'$')),?)>0
               AND search_session_eligible(s.id)
         """
             + after

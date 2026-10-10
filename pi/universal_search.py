@@ -18,6 +18,7 @@ from . import (
     tasks,
 )
 from .providers import Message, ProviderUnavailable
+from .search_excerpt import excerpt
 
 SOURCES = (
     "conversations",
@@ -86,11 +87,6 @@ def save_settings(store, body, *, semantic_available, ranking_available):
         )
         db.commit()
     return {"revision": revision + 1, "configuration": cfg.model_dump()}
-
-
-def excerpt(text, query):
-    position = text.casefold().find(query.casefold())
-    return text[max(0, position - 80) : max(0, position - 80) + 400]
 
 
 def public_session(store, identity):
@@ -172,13 +168,20 @@ def lexical(store, memory, toolgate, query, settings, stage):
                     for _ in range(SCAN_LIMIT // 50):
                         page = conversation_search.search(store, query, limit=50, cursor=cursor)
                         for row in page["results"]:
-                            add(
-                                source,
-                                row["id"],
-                                row["title"],
-                                row["excerpt"],
-                                f"/chat?session={quote(row['session_id'])}&message={quote(row['id'])}",
-                                row["role"],
+                            # The source matched full retained text after privacy
+                            # checks. A bounded preview may contain only part of
+                            # a long match; it must not veto that verified result.
+                            results.append(
+                                {
+                                    "id": f"{source}:{row['id']}:{stage}",
+                                    "source": source,
+                                    "recordId": row["id"],
+                                    "title": row["title"][:500],
+                                    "excerpt": excerpt(row["excerpt"], query),
+                                    "href": f"/chat?session={quote(row['session_id'])}&message={quote(row['id'])}",
+                                    "matchType": stage,
+                                    "role": row["role"],
+                                }
                             )
                         cursor = page["next_cursor"]
                         if cursor is None:
