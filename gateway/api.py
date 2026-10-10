@@ -619,6 +619,51 @@ def create_app(
         except ProviderControlError as exc:
             raise AuthError(str(exc), 503) from None
 
+    async def native_session_request(request: Request, action: str, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import native_sessions
+
+        session(request)
+        if request.scope["query_string"] or (
+            identity is not None and not re.fullmatch(native_sessions.SESSION_ID, identity)
+        ):
+            raise AuthError("Invalid native session request.", 422, code="invalid_native_session_request")
+        body = None
+        if action == "stop":
+            try:
+                body = native_sessions.Stop.model_validate(
+                    await json_body(request, max_bytes=1024)
+                ).model_dump()
+            except ValueError:
+                raise AuthError(
+                    "Invalid native session stop operation.", 422, code="invalid_native_session_request"
+                ) from None
+            admit_write(request, body)
+        try:
+            result = await run_in_threadpool(
+                native_sessions.request, app.state.provider_transport, action, identity, body
+            )
+        except native_sessions.NativeSessionsError as exc:
+            raise AuthError(str(exc), exc.status, code=exc.code) from None
+        return JSONResponse(result)
+
+    @app.get("/api/host/claude/sessions")
+    async def native_session_list(request: Request):
+        return await native_session_request(request, "list")
+
+    @app.get("/api/host/claude/sessions/{identity}")
+    async def native_session_status(identity: str, request: Request):
+        return await native_session_request(request, "status", identity)
+
+    @app.get("/api/host/claude/sessions/{identity}/output")
+    async def native_session_output(identity: str, request: Request):
+        return await native_session_request(request, "output", identity)
+
+    @app.post("/api/host/claude/sessions/{identity}/stop")
+    async def native_session_stop(identity: str, request: Request):
+        return await native_session_request(request, "stop", identity)
+
     def terminal_access(request):
         owner = session(request)
         if app.state.terminals is None:

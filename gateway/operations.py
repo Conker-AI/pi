@@ -8,6 +8,7 @@ import re
 from pi.browser_contract import owner_allowed, runtime_allowed
 
 from .mcp_control import TOOL_ID
+from .native_sessions import SESSION_ID, Stop
 from .store import AuthError
 
 
@@ -57,6 +58,14 @@ def parse_object(raw: bytes | bytearray) -> dict:
 
 
 def fingerprint(method: str, path: str, body: dict) -> str:
+    native_stop = isinstance(path, str) and re.fullmatch(
+        rf"/api/host/claude/sessions/{SESSION_ID}/stop", path
+    )
+    if native_stop:
+        try:
+            Stop.model_validate(body)
+        except ValueError:
+            raise AuthError("Invalid native session stop operation.", 422) from None
     allowed = (
         method == "POST"
         and isinstance(path, str)
@@ -78,6 +87,7 @@ def fingerprint(method: str, path: str, body: dict) -> str:
             or path == "/api/host/providers"
             or path == "/api/host/chatgpt"
             or path == "/api/host/claude"
+            or native_stop
             or path == "/auth/revoke-all"
             or re.fullmatch(r"/auth/sessions/[A-Za-z0-9_-]{16,128}/revoke", path)
         )
