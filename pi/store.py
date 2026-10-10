@@ -53,6 +53,7 @@ from . import (
     research_usage,
     response_retries,
     response_versions,
+    session_observation,
     session_settings,
     setup_choices,
     setup_model_probes,
@@ -362,6 +363,7 @@ class Store:
                 system_inventory.initialize(db)
                 db.executescript(filesystem_reads.SCHEMA)
                 db.executescript(system_actions.SCHEMA)
+                session_observation.initialize(db)
         except BaseException:
             self.close()
             raise

@@ -799,6 +799,26 @@ def message_memory_delivery_status(session_id: str, message_id: str, request: Re
     return _memory_delivery_status(session_id, request, message_id)
 
 
+@app.get("/sessions/{session_id}/observation", dependencies=[Depends(require_key)])
+def observe_session(session_id: str, request: Request):
+    from . import session_observation
+
+    if request.url.query or not 1 <= len(session_id) <= 128 or not all(
+        character.isascii() and (character.isalnum() or character in "_-")
+        for character in session_id
+    ):
+        raise HTTPException(422, "Invalid conversation observation request.")
+    try:
+        return JSONResponse(
+            session_observation.read(app.state.store, session_id),
+            headers={"Cache-Control": "no-store"},
+        )
+    except ValueError:
+        raise HTTPException(404, "Conversation not found.") from None
+    except OverflowError:
+        raise HTTPException(503, "Conversation observation unavailable.") from None
+
+
 @app.get("/sessions/{session_id}/thinking", dependencies=[Depends(require_key)])
 def thinking_status(session_id: str):
     session = app.state.store.get_session(session_id)
