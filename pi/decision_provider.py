@@ -4,16 +4,59 @@ from __future__ import annotations
 
 import json
 import math
+import socket
+from contextlib import contextmanager, suppress
 from typing import ClassVar
 from urllib.parse import urlsplit
 
 import httpx
 
+from . import inference_control
 from .loopback_http import verification
 from .providers import Completion, ProviderUnavailable
 
 FOLLOW_UP_CHARACTERS = 400
 CONTEXT_CHARACTERS = 200
+
+
+@contextmanager
+def _request_control(client):
+    """Interrupt this decision's connection, including waiting for response headers.
+
+    HTTPX exposes the connected stream through its request trace extension. Keep
+    only that handle, never trace content or other clients' pooled connections.
+    DNS/connect before a handle exists still use the configured phase timeout.
+    Disconnecting does not claim that the decision service stopped its compute.
+    """
+    token = inference_control.current()
+    if token is None:
+        yield {}
+        return
+    connected = []
+
+    def interrupt():
+        if connected:
+            stream = connected[-1]
+            with suppress(AttributeError, OSError, ValueError):
+                connection = stream.get_extra_info("socket")
+                if connection is not None:
+                    connection.shutdown(socket.SHUT_RDWR)
+            with suppress(Exception):
+                stream.close()
+        client.close()
+
+    def trace(event, info):
+        if event in {"connection.connect_tcp.complete", "connection.start_tls.complete"}:
+            connected[:] = [info["return_value"]]
+            # A connection can finish after Stop captured an empty handle list.
+            # Close it here before the request is allowed to proceed.
+            if token.stopped.is_set():
+                interrupt()
+            token.check()
+
+    with token.register(interrupt):
+        yield {"trace": trace}
+        token.check()
 
 
 def _excerpt(text: str) -> dict:
@@ -110,6 +153,7 @@ class DecisionProvider:
         return {"status": "unavailable", "reason": "Decision service is not ready."}
 
     def choose(self, state, instructions, choices, *, timeout=2.0):
+        inference_control.check()
         try:
             if not isinstance(state, str) or len(state) > 12000:
                 raise ValueError()
@@ -120,11 +164,13 @@ class DecisionProvider:
                 timeout=min(max(timeout, 0.1), 30),
                 follow_redirects=False,
             ) as client:
-                response = client.post(
-                    self.url + "/v1/choose",
-                    headers={"X-Decision-Key": self.key},
-                    json={"state": state, "instructions": instructions, "choices": choices},
-                )
+                with _request_control(client) as extensions:
+                    response = client.post(
+                        self.url + "/v1/choose",
+                        headers={"X-Decision-Key": self.key},
+                        json={"state": state, "instructions": instructions, "choices": choices},
+                        extensions=extensions,
+                    )
                 response.raise_for_status()
                 if len(response.content) > 16384:
                     raise ValueError()
@@ -148,8 +194,10 @@ class DecisionProvider:
                 raise ValueError()
             if data["confidence"] < self.minimum_confidence:
                 raise ProviderUnavailable("Decision confidence below configured threshold.")
+            inference_control.check()
             return data
         except (ValueError, TypeError, KeyError, httpx.HTTPError):
+            inference_control.check()
             raise ProviderUnavailable(
                 "Typed decision service unavailable or input unsupported."
             ) from None
