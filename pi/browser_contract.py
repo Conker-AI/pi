@@ -6,6 +6,7 @@ RUNTIME_ROUTES = {
     "GET": (
         r"/health",
         r"/sessions",
+        r"/sessions/history",
         r"/sessions/[A-Za-z0-9_-]+",
         r"/sessions/[A-Za-z0-9_-]+/thinking",
         r"/sessions/[A-Za-z0-9_-]{1,128}/observation",

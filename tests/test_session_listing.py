@@ -66,6 +66,7 @@ def test_existing_database_migration_retains_data_and_tied_time_order(tmp_path, 
     with sqlite3.connect(path) as db:
         db.row_factory = sqlite3.Row
         db.execute("DROP INDEX sessions_by_created_at")
+        db.execute("DROP INDEX sessions_history_order")
         old_query = "SELECT * FROM sessions ORDER BY created_at DESC LIMIT 200"
         expected = [dict(row) for row in db.execute(old_query)]
         old_plan = [row[3] for row in db.execute("EXPLAIN QUERY PLAN " + old_query)]

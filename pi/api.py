@@ -747,6 +747,16 @@ def list_sessions(limit: int = 50):
     return {"results": app.state.store.list_sessions(limit=min(max(limit, 1), 200))}
 
 
+@app.get("/sessions/history", dependencies=[Depends(require_key)])
+def session_history_page(request: Request):
+    from . import session_history
+
+    return JSONResponse(
+        session_history.page(app.state.store, **session_history.request_arguments(request.query_params)),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
 def get_session(session_id: str):
     session = app.state.store.get_session(session_id)

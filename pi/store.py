@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS turns (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_by_created_at ON sessions(created_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_history_order ON sessions(created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS messages_by_session ON messages(session_id, seq);
 CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, started_at);
 
