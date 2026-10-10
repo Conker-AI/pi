@@ -467,6 +467,8 @@ class Store:
             " VALUES (?,?,?,'open',?,?)",
             (session_id, parent_id, title, time.time(), summary),
         )
+        if parent_id is not None:
+            session_settings.copy_parent_settings(db, parent_id, session_id)
         if initial_settings is not None:
             db.execute(
                 "INSERT INTO session_settings VALUES (?,?,?)",

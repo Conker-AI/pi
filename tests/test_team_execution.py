@@ -385,15 +385,29 @@ def test_real_tools_remain_per_role_and_every_reply_is_metered(store):
         handoffId="review",
         conditionReviewed=True,
     )
-    second = teams.execute(store, runtime, run["id"], second_body)
+    with pytest.raises(TurnFailed, match="model requested an unavailable tool"):
+        teams.execute(store, runtime, run["id"], second_body)
+    second = teams.get(store, run["id"])
+    assert second["state"] == "blocked" and second["steps"][-1]["state"] == "blocked"
+    refused = store.turns(second["steps"][-1]["session_id"])
+    assert len(refused) == 1 and refused[0]["status"] == "failed"
+    assert refused[0]["acted"] == 0
+    assert (
+        refused[0]["detail"]
+        == "The model requested an unavailable tool. This request was not executed."
+    )
     assert gate.invoked == ["read"] and len(second["modelCalls"]) == 3
     assert all("TOOL OBSERVATION MUST NOT TRANSFER" not in m.content for m in provider.calls[2][1])
     teams.execute(store, runtime, run["id"], first_body)
     assert len(gate.invoked) == 1 and len(provider.calls) == 3
+    with pytest.raises(agents.AgentError, match="Blocked work cannot be marked completed"):
+        teams.finish(
+            store, run["id"], teams.Finish(expected_revision=second["revision"], state="completed")
+        )
     finished = teams.finish(
-        store, run["id"], teams.Finish(expected_revision=second["revision"], state="completed")
+        store, run["id"], teams.Finish(expected_revision=second["revision"], state="cancelled")
     )
-    assert teams.reconcile(store, run["id"])["state"] == "completed"
+    assert teams.reconcile(store, run["id"])["state"] == "cancelled"
     with pytest.raises(agents.AgentError, match="Resolve"):
         execute(store, provider, finished, request_id="after_finish_request_001")
 

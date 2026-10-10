@@ -289,6 +289,8 @@ def cancelled_input_ids(store, rows):
 
 
 def reviewed_fork(store, identity, body: ReviewedFork):
+    from . import session_settings
+
     body = ReviewedFork.model_validate(body.model_dump())
     digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
     with store._connect() as db:
@@ -338,14 +340,19 @@ def reviewed_fork(store, identity, body: ReviewedFork):
         if "retrieve" in policy.messagePolicies.values():
             raise ContextError("retrieval_pending", "Resolve retrieval before approving a summary.")
         pin_chars = 0
+        privacy = {"memoryDisabled": False, "harnessDisabled": False}
         for message_id in pins:
             row = db.execute(
-                "SELECT m.content FROM messages m LEFT JOIN forgotten_sessions f "
-                "ON f.session_id=m.session_id WHERE m.id=? AND f.session_id IS NULL",
+                "SELECT m.content,p.memory_disabled,p.harness_disabled FROM messages m "
+                "JOIN sessions s ON s.id=m.session_id LEFT JOIN message_privacy p ON p.message_id=m.id "
+                "LEFT JOIN forgotten_sessions f ON f.session_id=m.session_id "
+                "WHERE m.id=? AND f.session_id IS NULL AND s.status!='forgotten'",
                 (message_id,),
             ).fetchone()
-            if row is None:
-                raise ContextError("unavailable_pin", "Exact source unavailable.")
+            if row is None or row[1] is None or row[2] is None:
+                raise ContextError("unavailable_pin", "Exact source or its privacy is unavailable.")
+            privacy["memoryDisabled"] |= bool(row[1])
+            privacy["harnessDisabled"] |= bool(row[2])
             pin_chars += estimate(str(json.loads(row[0])))
         cost = pin_chars + estimate(policy.sessionInstructions) + estimate(body.summary)
         if (
@@ -361,6 +368,7 @@ def reviewed_fork(store, identity, body: ReviewedFork):
             "VALUES (?,?,?,'open',?,?)",
             (child, identity, parent["title"], now, body.summary),
         )
+        session_settings.copy_parent_settings(db, identity, child, privacy)
         carried = policy.model_copy(update={"messagePolicies": {key: "keep-exact" for key in pins}})
         db.execute(
             "INSERT INTO context_policies VALUES (?,1,?)", (child, carried.model_dump_json())

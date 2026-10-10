@@ -145,6 +145,7 @@ def create(store, sid, message_id, body):
             "VALUES(?,?,?,'open',?,?)",
             (child, sid, parent["title"], time.time(), body.reviewed_summary),
         )
+        session_settings.inherited_privacy(db, child)
         carried_settings = {**settings["settings"], "privacy": privacy}
         db.execute(
             "INSERT INTO session_settings VALUES(?,1,?) ON CONFLICT(session_id) "

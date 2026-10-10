@@ -486,6 +486,7 @@ def bind(store, request_id, *, fork_summary=None):
                 "VALUES(?,?,?,'open',?,?)",
                 (child, session_id, parent["title"], now, fork_summary),
             )
+            session_settings.copy_parent_settings(db, session_id, child)
             session_id = child
         turn_id = "trn_" + uuid.uuid4().hex[:16]
         db.execute(

@@ -87,6 +87,8 @@ def migrate(db):
 
 
 def pin_destination(store, message_id, agent_id):
+    from . import agents, session_settings
+
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         eligibility = db.execute(
@@ -97,6 +99,20 @@ def pin_destination(store, message_id, agent_id):
         ).fetchone()
         if operation and operation[0] == "ingest" and (not eligibility or not eligibility[0]):
             raise ValueError("This message is excluded from memory ingestion.")
+        if operation and operation[0] == "ingest":
+            origin = db.execute(
+                "SELECT session_id FROM messages WHERE id=?", (message_id,)
+            ).fetchone()
+            try:
+                floor = session_settings.inherited_privacy(db, origin[0]) if origin else None
+            except agents.AgentError:
+                raise ValueError(
+                    "Inherited source privacy is unavailable; memory ingestion is excluded."
+                ) from None
+            if floor is None or floor["memoryDisabled"]:
+                raise ValueError(
+                    "Inherited messages exclude this conversation from memory ingestion."
+                )
         row = db.execute(
             "SELECT destination_agent_id,delivery_started FROM memory_outbox WHERE message_id=?",
             (message_id,),
