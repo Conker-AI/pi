@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from functools import partial
@@ -237,6 +238,40 @@ def save_in(db, body: Update):
     return {"revision": current + 1, "configuration": body.configuration.model_dump()}
 
 
+def _routing_key(memo, config, revision, providers, messages):
+    if memo is None:
+        return None
+    from .decision_provider import DecisionProvider, routing_request
+
+    assignment = config.roleSettings.roles["routing"]
+    model = next((item for item in config.models if item.id == assignment.modelId), None)
+    adapter = providers.get(model.providerId) if model is not None else None
+    # Team/accounting wrappers deliberately opt out; never unwrap a boundary.
+    if (
+        model is None
+        or model.providerId != "decisions"
+        or model.route != "model-routing"
+        or not isinstance(adapter, DecisionProvider)
+    ):
+        return None
+    try:
+        body, _ = routing_request(messages, model.route)
+        # Keep choice insertion order: it is part of the classifier's input.
+        encoded = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return (
+            adapter,
+            adapter.url,
+            hashlib.sha256(adapter.key.encode("utf-8")).digest(),
+            adapter.minimum_confidence,
+            revision,
+            hashlib.sha256(config.model_dump_json().encode("utf-8")).digest(),
+            hashlib.sha256(encoded).digest(),
+        )
+    except (ValueError, TypeError, KeyError):
+        # Unsupported input still goes through its normal observed invocation.
+        return None
+
+
 def dispatch(
     configuration,
     role,
@@ -248,6 +283,8 @@ def dispatch(
     allowed_model_ids=None,
     guard=None,
     observe_call=None,
+    routing_memo=None,
+    configuration_revision=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
@@ -304,24 +341,56 @@ def dispatch(
             ),
         ]
         try:
-            decision = dispatch(
-                config.model_dump(),
-                "routing",
-                route_messages,
-                providers,
-                allowed_model_ids=allowed_model_ids,
-                guard=guard,
-                observe_call=observe_call,
+            if guard is not None:
+                guard()
+            key = _routing_key(
+                routing_memo, config, configuration_revision, providers, route_messages
             )
-            attempts.extend(decision["attempts"])
-            choice = json.loads(decision["completion"].text)
-            if (
-                not isinstance(choice, dict)
-                or set(choice) != {"modelId"}
-                or choice["modelId"] not in eligible
+            reused = routing_memo.get(key) if key is not None else None
+            # Role restrictions can change independently of the typed choices.
+            primary = config.roleSettings.roles["routing"].modelId
+            if reused is not None and (
+                reused[0] not in eligible
+                or (allowed_model_ids is not None and primary not in allowed_model_ids)
             ):
-                raise ValueError()
-            selected = choice["modelId"]
+                reused = None
+            if reused is not None:
+                from . import inference_control
+
+                inference_control.check()
+                if guard is not None:
+                    guard()
+                selected, attempt = reused
+                attempt.update(status="reused", selectionReason="same_routing_input")
+                if "decision" in attempt:
+                    attempt["decision"].pop("elapsed_ms", None)
+                attempts.append(attempt)
+            else:
+                decision = dispatch(
+                    config.model_dump(),
+                    "routing",
+                    route_messages,
+                    providers,
+                    allowed_model_ids=allowed_model_ids,
+                    guard=guard,
+                    observe_call=observe_call,
+                )
+                attempts.extend(decision["attempts"])
+                choice = json.loads(decision["completion"].text)
+                if (
+                    not isinstance(choice, dict)
+                    or set(choice) != {"modelId"}
+                    or choice["modelId"] not in eligible
+                ):
+                    raise ValueError()
+                selected = choice["modelId"]
+                if (
+                    key is not None
+                    and decision["modelId"] == primary
+                    and len(decision["attempts"]) == 1
+                    and decision["attempts"][0]["status"] == "completed"
+                ):
+                    routing_memo.put(key, selected, decision["attempts"][0])
         except (ValueError, TypeError, SelectionError):
             if guard is not None:
                 guard()

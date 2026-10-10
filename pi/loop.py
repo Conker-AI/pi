@@ -186,7 +186,7 @@ class Loop:
             from . import team_execution
 
             adapters = team_execution.metered_providers(self.store, execution, adapters)
-            from . import research_usage
+            from . import research_usage, routing_memo
 
             result = model_roles.dispatch(
                 configuration,
@@ -197,6 +197,11 @@ class Loop:
                 override=override if role == "answer" else None,
                 guard=guard,
                 observe_call=research_usage.observer(self.store, execution, role),
+                routing_memo=(
+                    routing_memo.current(self.store.path, execution.get("turnExecutionId"))
+                    if role == "answer" else None
+                ),
+                configuration_revision=execution["modelConfigurationRevision"],
             )
             completion = result["completion"]
             evidence = {
@@ -952,14 +957,17 @@ class Loop:
         return result
 
     def _run_bound(self, session_id, user_text, turn_id, context, forked_from, continued=False):
+        from . import routing_memo
+
         turn_steering.active(self.store, turn_id, True)
         started = time.monotonic()
         try:
             while True:
                 try:
-                    return self._run_bound_attempt(
-                        session_id, user_text, turn_id, context, forked_from, continued, started
-                    )
+                    with routing_memo.scope(self.store.path, turn_id):
+                        return self._run_bound_attempt(
+                            session_id, user_text, turn_id, context, forked_from, continued, started
+                        )
                 except turn_steering.Pending:
                     continued = True
         finally:

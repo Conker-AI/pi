@@ -107,6 +107,30 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     return [*earlier, current], "recent-exchange"
 
 
+def routing_request(messages, model):
+    """The exact typed request, shared by execution and same-input reuse."""
+    if model != "model-routing" or len(messages) != 2 or messages[-1].role != "user":
+        raise ValueError()
+    envelope = json.loads(messages[-1].content)
+    allowed = envelope["allowedModelIds"]
+    descriptions = envelope["modelDescriptions"]
+    if (
+        not isinstance(allowed, list)
+        or not 2 <= len(allowed) <= 8
+        or len(set(allowed)) != len(allowed)
+        or not isinstance(descriptions, dict)
+        or set(descriptions) != set(allowed)
+        or not isinstance(envelope["task"], list)
+    ):
+        raise ValueError()
+    projection, scope = routing_projection(envelope["task"])
+    return {
+        "state": json.dumps(projection, ensure_ascii=False),
+        "instructions": "Choose the model best suited to this task using the capability descriptions.",
+        "choices": descriptions,
+    }, {"inputScope": scope, "inputCharacters": sum(len(item["content"]) for item in projection)}
+
+
 class DecisionProvider:
     name = "decisions"
     supports_images = False
@@ -228,32 +252,13 @@ class DecisionProvider:
         if model != "model-routing" or len(messages) != 2 or messages[-1].role != "user":
             raise ProviderUnavailable("Decision adapter supports typed model routing only.")
         try:
-            envelope = json.loads(messages[-1].content)
-            allowed = envelope["allowedModelIds"]
-            descriptions = envelope["modelDescriptions"]
-            if (
-                not isinstance(allowed, list)
-                or not 2 <= len(allowed) <= 8
-                or len(set(allowed)) != len(allowed)
-                or set(descriptions) != set(allowed)
-            ):
-                raise ValueError()
             # A small classifier routes the current request, not the answer's
             # entire system prompt, retrieved memory and conversation history.
             # The projection marks excerpts and retains complexity evidence.
             # A short follow-up ("and in Python?") is ambiguous alone,
             # so it carries the previous exchange as marked, bounded excerpts.
-            task = envelope["task"]
-            if not isinstance(task, list):
-                raise ValueError()
-            projection, scope = routing_projection(task)
-            state = json.dumps(projection, ensure_ascii=False)
-            data = self.choose(
-                state,
-                "Choose the model best suited to this task using the capability descriptions.",
-                descriptions,
-                timeout=timeout,
-            )
+            body, evidence = routing_request(messages, model)
+            data = self.choose(**body, timeout=timeout)
             return Completion(
                 text=json.dumps({"modelId": data["choice"]}),
                 model=data["model"],
@@ -264,8 +269,7 @@ class DecisionProvider:
                             key: data.get(key)
                             for key in ("choice", "confidence", "elapsed_ms", "provider", "model")
                         },
-                        "inputScope": scope,
-                        "inputCharacters": sum(len(item["content"]) for item in projection),
+                        **evidence,
                     }
                 },
             )
