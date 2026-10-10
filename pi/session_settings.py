@@ -337,6 +337,10 @@ def execution(store, identity, turn_id=None, request_id=None):
 
 
 def source_privacy(db, identity):
+    # The durable forgetting ledger is authoritative even if legacy metadata
+    # still has an available status or an old settings projection.
+    if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (identity,)).fetchone():
+        return None
     try:
         privacy = _load(db, identity)["settings"]["privacy"].copy()
     except agents.AgentError:
