@@ -311,8 +311,12 @@ class Thinking:
                         # Provider read timeouts reset as data arrives. This
                         # separate wall deadline also stops never-ending streams.
                         with control.token.deadline(timeout):
-                            _, completion, evidence = self.loop._call(
+                            route, completion, skipped = self.loop._call(
                                 messages, context, execution, role="thinking"
+                            )
+                            # Preserve the historical list of serialized receipts.
+                            evidence = (
+                                [route.detail(skipped)] if route.selection is not None else skipped
                             )
                         inference_control.check()
                     break

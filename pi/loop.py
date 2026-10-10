@@ -206,9 +206,19 @@ class Loop:
                 "attempts": result["attempts"],
             }
             return (
-                Route(Tier.CONFIGURED, Reason.CONFIGURED, result["providerId"], completion.model),
+                Route(
+                    Tier.CONFIGURED,
+                    Reason.CONFIGURED,
+                    result["providerId"],
+                    completion.model,
+                    selection=evidence,
+                ),
                 completion,
-                [json.dumps(evidence)],
+                [
+                    f"{attempt['role']}: {attempt['modelId']} unavailable"
+                    for attempt in result["attempts"]
+                    if attempt["status"] == "unavailable"
+                ],
             )
         if override:
             raise ProviderUnavailable(
@@ -711,7 +721,7 @@ class Loop:
             latency_ms=int((time.monotonic() - started) * 1000),
             route_tier=route.tier.value,
             route_reason=route.reason.value,
-            detail="; ".join(_skipped) or None,
+            detail=route.detail(_skipped),
         )
         return {
             "session_id": session_id,
@@ -1151,21 +1161,14 @@ class Loop:
             acted=int(acted),
             # Which candidates refused, so a model that always refuses is
             # visible in the record rather than only as latency.
-            detail="; ".join(skipped) or None,
+            detail=route.detail(skipped),
         )
         return {
             "session_id": session_id,
             "forked_from": forked_from,
             "turn_id": turn_id,
             "acted": acted,
-            "route": {
-                "tier": route.tier.value,
-                "reason": route.reason.value,
-                "provider": route.provider,
-                "model": route.model,
-                "escalated": route.escalated,
-                "skipped": skipped,
-            },
+            "route": route.receipt(skipped),
             "message": message,
             "memory": self.memory.status(session_id, turn_id),
         }

@@ -158,12 +158,18 @@ def test_a_paid_model_is_refused_by_default():
         provider.complete([Message("user", "hi")], model="expensive")
 
 
-def test_a_paid_model_runs_only_when_opted_into():
+def test_a_paid_model_runs_only_when_opted_into(monkeypatch):
     provider = Catalogued([paid("expensive")], allow_paid=True)
-    # It gets past the guard; the network call is what fails, not the policy.
-    with pytest.raises(Exception) as exc:
-        provider.complete([Message("user", "hi")], model="expensive")
-    assert not isinstance(exc.value, PaidModelRefused)
+    posted = []
+
+    def reply(payload, model, timeout):
+        posted.append((payload, model))
+        return {"choices": [{"message": {"content": "Synthetic answer"}}]}
+
+    monkeypatch.setattr(provider, "_posted", reply)
+    result = provider.complete([Message("user", "hi")], model="expensive")
+    assert result.text == "Synthetic answer"
+    assert len(posted) == 1 and posted[0][0]["model"] == posted[0][1] == "expensive"
 
 
 def test_an_unknown_model_is_refused_rather_than_called_blind():

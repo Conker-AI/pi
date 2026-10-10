@@ -1,3 +1,4 @@
+import json
 import threading
 from contextlib import closing
 
@@ -62,6 +63,9 @@ def test_talking_completes_while_thinking_is_blocked(tmp_path):
         wait_workers(loop, provider)
         row = background_thinking.list_for_session(store, session)[0]
         assert row["status"] == "completed" and row["result"] == "Useful findings"
+        evidence = json.loads(json.loads(row["detail"])[0])
+        assert evidence["role"] == "thinking"
+        assert evidence["attempts"][-1]["actualModel"] == "think"
         assert len(store.messages(session)) == 2
 
 
