@@ -255,7 +255,7 @@ class OllamaProvider:
             raise ValueError("stream ended before completion")
         return {**final, "message": {"role": "assistant", "content": "".join(text)}}
 
-    def health(self) -> dict:
+    def _inventory(self):
         try:
             response = httpx.get(
                 f"{self.base_url}/api/tags",
@@ -273,12 +273,31 @@ class OllamaProvider:
                 or not entry["name"]
                 for entry in entries
             ):
-                return {"status": "unavailable", "reason": "invalid_model_inventory"}
+                return [], {"status": "unavailable", "reason": "invalid_model_inventory"}
             models = [entry["name"] for entry in entries]
         except Exception as exc:
-            return {"status": "unavailable", "reason": type(exc).__name__}
+            return [], {"status": "unavailable", "reason": type(exc).__name__}
         if not models:
-            return {"status": "not_configured", "reason": "no models pulled"}
+            return [], {"status": "not_configured", "reason": "no models pulled"}
+        return models, None
+
+    def health_models(self, requested: list[str]) -> dict[str, dict]:
+        """One inventory observation; availability belongs to each requested route."""
+        models, failure = self._inventory()
+        return {
+            route: failure
+            or (
+                {"status": "ok"}
+                if _installed(route, models)
+                else {"status": "not_configured", "reason": "model is not pulled"}
+            )
+            for route in requested
+        }
+
+    def health(self) -> dict:
+        models, failure = self._inventory()
+        if failure:
+            return failure
         # Any model is not the model. An install where the embedding model
         # downloaded and the chat model did not would otherwise report `ok`
         # while being unable to answer a single turn - readiness claimed from a

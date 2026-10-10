@@ -217,16 +217,23 @@ def save(store, body: Update):
     body = Update.model_validate(body.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT revision FROM model_role_settings WHERE singleton=1").fetchone()
-        current = row[0] if row else 0
-        if current != body.expected_revision:
-            raise ValueError("Model settings changed; reload before saving.")
-        db.execute(
-            "INSERT INTO model_role_settings VALUES(1,?,?) ON CONFLICT(singleton) "
-            "DO UPDATE SET revision=excluded.revision,configuration=excluded.configuration",
-            (current + 1, body.configuration.model_dump_json()),
-        )
+        result = save_in(db, body)
         db.commit()
+    return result
+
+
+def save_in(db, body: Update):
+    """Caller holds the writer transaction when activation also records its receipt."""
+    body = Update.model_validate(body.model_dump())
+    row = db.execute("SELECT revision FROM model_role_settings WHERE singleton=1").fetchone()
+    current = row[0] if row else 0
+    if current != body.expected_revision:
+        raise ValueError("Model settings changed; reload before saving.")
+    db.execute(
+        "INSERT INTO model_role_settings VALUES(1,?,?) ON CONFLICT(singleton) "
+        "DO UPDATE SET revision=excluded.revision,configuration=excluded.configuration",
+        (current + 1, body.configuration.model_dump_json()),
+    )
     return {"revision": current + 1, "configuration": body.configuration.model_dump()}
 
 
