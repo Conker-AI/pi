@@ -42,8 +42,8 @@ from . import (
     filesystem_api,
     filesystem_reads,
     jobs_api,
+    memory_api,
     memory_corrections,
-    memory_forget,
     memory_proposals,
     memory_proposals_api,
     message_forks,
@@ -753,23 +753,7 @@ def run_turn(session_id: str, body: TurnRequest):
         ) from exc
 
 
-@app.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
-def preview_memory_forget(memory_id: str):
-    try:
-        return memory_forget.preview(getattr(app.state, "memory_corrections", None), memory_id)
-    except memory_forget.ForgetError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.post("/memory/forget", dependencies=[Depends(require_owner)])
-def forget_memory(body: memory_forget.Forget):
-    """Remove one memory everywhere it is stored. The source chat is kept."""
-    try:
-        return memory_forget.forget(
-            app.state.store, getattr(app.state, "memory_corrections", None), body
-        )
-    except memory_forget.ForgetError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
+app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))
 
 
 app.include_router(proposals_api.router(lambda: app.state, require_key, require_owner))
@@ -967,12 +951,6 @@ def get_message(message_id: str):
     if message is None:
         raise HTTPException(404, "no such message")
     return message
-
-
-@app.get("/memory", dependencies=[Depends(require_key)])
-def memory_status():
-    """Delivery progress is server state; a model cannot hide this notice."""
-    return app.state.loop.memory.status()
 
 
 app.include_router(tasks_api.router(lambda: app.state, require_key))
