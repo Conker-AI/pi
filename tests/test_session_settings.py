@@ -13,6 +13,7 @@ from pi import (
     api,
     context_controls,
     memory_store,
+    sessions_api,
     setup_choices,
     submissions,
 )
@@ -197,7 +198,15 @@ def test_new_conversation_selects_an_active_agent_atomically(tmp_path, monkeypat
         )
         agent = agents.create(store, config())
         monkeypatch.setattr(api.app.state, "store", store, raising=False)
-        selected = api.create_session(api.NewSession(title="Research", agent_id=agent["id"]))[
+        monkeypatch.setitem(api.app.dependency_overrides, api.require_key, lambda: "recovery")
+        client = TestClient(api.app)
+
+        def create_session(body: sessions_api.NewSession) -> dict:
+            response = client.post("/sessions", json=body.model_dump())
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        selected = create_session(sessions_api.NewSession(title="Research", agent_id=agent["id"]))[
             "session_id"
         ]
         saved = settings.load(store, selected)
@@ -210,8 +219,8 @@ def test_new_conversation_selects_an_active_agent_atomically(tmp_path, monkeypat
         store.append_message(selected, "assistant", "Attributed", turn_id=turn, purpose="final")
         assert store.messages(selected)[0]["agent_id"] == agent["id"]
 
-        restricted = api.create_session(
-            api.NewSession(
+        restricted = create_session(
+            sessions_api.NewSession(
                 title="Private",
                 agent_id="companion",
                 privacy={"memoryDisabled": False, "harnessDisabled": True},

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from test_loop import Recorder, loop_with
 
-from pi import api, drafts, research, session_settings, submissions, tasks
+from pi import api, drafts, research, session_settings, sessions_api, submissions, tasks
 from pi import turn_queue as q
 from pi.store import Store
 
@@ -106,7 +106,7 @@ def test_off_is_legacy_compatible_and_changes_no_permissions(tmp_path):
 @pytest.mark.parametrize("mode", ["auto", "", None, True, 1])
 def test_invalid_modes_fail_at_api_and_internal_boundary(mode):
     with pytest.raises(ValidationError):
-        api.TurnRequest(text="Find", research_mode=mode)
+        sessions_api.TurnRequest(text="Find", research_mode=mode)
     with pytest.raises(ValidationError):
         q.Enqueue(request_id="research_queue_001", text="Find", research_mode=mode)
     with pytest.raises(tasks.TaskError):

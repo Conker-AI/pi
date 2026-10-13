@@ -9,19 +9,16 @@ Tool calls arrive in #29 and go out through ToolGate, never from here.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field, model_validator
+from fastapi.responses import JSONResponse
 
 from . import (
     activity_api,
@@ -60,9 +57,9 @@ from . import (
     response_versions,
     session_settings,
     session_settings_api,
+    sessions_api,
     setup_status_api,
     speech,
-    submissions,
     system_actions,
     system_actions_api,
     system_inventory,
@@ -71,7 +68,6 @@ from . import (
     tasks_api,
     team_execution,
     team_execution_api,
-    turn_control,
     turn_queue,
     turn_steering,
 )
@@ -79,7 +75,7 @@ from .browser_contract import runtime_allowed
 from .direct_providers import configured as configured_direct_providers
 from .job_execution import PublishedJobs
 from .job_worker import JobWorker
-from .loop import ActedWithoutReply, Loop, TurnFailed
+from .loop import Loop
 from .memory import Memory, MemoryClient
 from .openrouter import OpenRouterProvider
 from .providers import OllamaProvider
@@ -503,48 +499,6 @@ async def agent_error(request: Request, exc: agents.AgentError):
 app.include_router(agents_api.router(lambda: app.state, require_owner))
 
 
-class NewSession(BaseModel):
-    title: str = ""
-    agent_id: str | None = Field(default=None, pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
-    privacy: dict[Literal["memoryDisabled", "harnessDisabled"], bool] | None = None
-
-
-class TurnRequest(BaseModel):
-    text: str = Field(
-        min_length=1,
-        max_length=16000,
-        description="Send at most 16000 characters per message; split longer text.",
-    )
-    # Routing hints the caller genuinely knows. The router is deliberately not
-    # a classifier that reads the message - that would be a model nobody
-    # evaluates deciding how much every turn costs.
-    needs_tools: bool = False
-    is_analysis: bool = False
-    owner_requested_strong: bool = False
-    request_id: str | None = Field(
-        default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
-    )
-    task_id: str | None = Field(default=None, min_length=1, max_length=128)
-    task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
-    draft_revision: int | None = Field(default=None, ge=1, strict=True)
-    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
-    model_id: str | None = Field(default=None, min_length=1, max_length=200)
-    reply_to: str | None = Field(default=None, min_length=1, max_length=200)
-    research_mode: Literal["off", "web", "deep"] = "off"
-
-    @model_validator(mode="after")
-    def task_submission(self):
-        if (self.task_id is None) != (self.task_expected_revision is None):
-            raise ValueError("Task identity and revision belong together.")
-        if self.task_id is not None and self.request_id is None:
-            raise ValueError("Task-bound submissions require a retained request identity.")
-        return self
-
-
-class ResumeRequest(BaseModel):
-    job_id: str | None = Field(default=None, min_length=1, max_length=100)
-
-
 def _seconds(name: str, default: float) -> float:
     """A timeout from the environment, or the default if it is not a number.
 
@@ -564,27 +518,6 @@ def _seconds(name: str, default: float) -> float:
         log.warning("%s must be positive (got %s); using %ss", name, value, default)
         return default
     return value
-
-
-def _acted_without_reply(exc: ActedWithoutReply) -> dict:
-    """The one answer that is true when a tool ran and the model then did not.
-
-    Not an error status, and not `complete` either. The action happened, it is
-    recorded, and the caller is told plainly that the reply is what is missing
-    and where to ask for it again.
-    """
-    return {
-        "turn_id": exc.turn_id,
-        "status": "acted_no_reply",
-        "acted": True,
-        "memory": app.state.loop.memory.status(
-            app.state.store.get_turn(exc.turn_id)["session_id"], exc.turn_id
-        ),
-        "message": None,
-        "detail": exc.cause,
-        "hint": f"the action ran and was recorded; POST /turns/{exc.turn_id}/resume "
-        "to ask for the reply again - it will not run the action a second time",
-    }
 
 
 @app.get("/health")
@@ -648,207 +581,13 @@ def health():
     return {**result, "age_seconds": 0.0}
 
 
-@app.post("/sessions", dependencies=[Depends(require_key)])
-def create_session(body: NewSession):
-    return {
-        "session_id": app.state.store.create_session(
-            title=body.title, agent_id=body.agent_id, privacy=body.privacy
-        )
-    }
-
-
-@app.get("/sessions", dependencies=[Depends(require_key)])
-def list_sessions(limit: int = 50):
-    return {"results": app.state.store.list_sessions(limit=min(max(limit, 1), 200))}
-
-
-@app.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
-def get_session(session_id: str):
-    session = app.state.store.get_session(session_id)
-    if session is None:
-        raise HTTPException(404, "no such session")
-    pending = submissions.list_pending(app.state.store, session_id, limit=100)
-    return {
-        **session,
-        "pending_submissions": pending["results"],
-        "pending_submissions_truncated": pending["next_cursor"] is not None,
-        "messages": app.state.store.messages(session_id),
-        "turns": [
-            {**turn, "memory": app.state.loop.memory.status(session_id, turn["id"])}
-            for turn in app.state.store.turns(session_id)
-        ],
-        "memory": app.state.loop.memory.status(session_id),
-    }
-
-
-@app.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
-def run_turn(session_id: str, body: TurnRequest):
-    try:
-        return app.state.loop.run_turn(
-            session_id,
-            body.text,
-            context={
-                "needs_tools": body.needs_tools,
-                "is_analysis": body.is_analysis,
-                "owner_requested_strong": body.owner_requested_strong,
-            },
-            request_id=body.request_id,
-            task_id=body.task_id,
-            task_expected_revision=body.task_expected_revision,
-            **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}),
-            **({"attachment_ids": body.attachment_ids} if body.attachment_ids else {}),
-            **({"model_id": body.model_id} if body.model_id is not None else {}),
-            **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
-            **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
-        )
-    except ActedWithoutReply as exc:
-        # Deliberately not an error status. A tool ran, so this request did the
-        # thing that actually matters, and the one detail missing is what the
-        # model would have said about it. An error code would invite a retry,
-        # and retrying this turn would run the action a second time.
-        result = _acted_without_reply(exc)
-        if body.request_id:
-            result["submission"] = submissions.get(app.state.store, body.request_id)
-        return result
-    except TurnFailed as exc:
-        turn = app.state.store.get_turn(exc.turn_id) if exc.turn_id else None
-        if turn and turn["status"] == "cancelled":
-            result = {
-                "turn_id": exc.turn_id,
-                "session_id": turn["session_id"],
-                "status": "cancelled",
-                "acted": bool(turn["acted"]),
-                "message": None,
-            }
-            if body.request_id:
-                result["submission"] = submissions.get(app.state.store, body.request_id)
-            return result
-        # 503, not 500: the provider did not answer, which is a state the caller
-        # can act on. The user's message is already stored either way.
-        raise HTTPException(
-            503,
-            {
-                "message": f"turn failed: {exc.reason}",
-                "turn_id": exc.turn_id,
-                "memory": app.state.loop.memory.status(session_id, exc.turn_id),
-                "request_id": body.request_id,
-            },
-        ) from exc
+app.include_router(sessions_api.router(lambda: app.state, require_key, require_admin))
 
 
 app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))
 
 
 app.include_router(proposals_api.router(lambda: app.state, require_key, require_owner))
-
-
-@app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
-def get_submission(request_id: str):
-    return submissions.get(app.state.store, request_id)
-
-
-@app.get("/turn-submissions/{request_id}/stream", dependencies=[Depends(require_key)])
-async def stream_submission(request_id: str, request: Request, after: int = Query(0, ge=0)):
-    """Server-sent preview of an answer being written; the saved message stays authoritative.
-
-    Events: `delta` (text to append), `reset` (discard the preview: a new model
-    attempt started), `done` (fetch the saved turn). Unknown or expired previews
-    end with `unavailable`, which is not an error: the saved turn is still there.
-    """
-    from . import live_stream
-
-    async def events():
-        import asyncio
-
-        seen, waited, idle = after, 0.0, 0.0
-        while True:
-            if await request.is_disconnected():
-                return
-            state = live_stream.read(request_id, seen)
-            if state is None:
-                if waited >= 15.0:
-                    yield "event: unavailable\ndata: {}\n\n"
-                    return
-                waited += 0.05
-            else:
-                batch, finished = state
-                for event in batch:
-                    seen = event["seq"]
-                    kind = event.pop("type")
-                    yield f"id: {seen}\nevent: {kind}\ndata: {json.dumps(event)}\n\n"
-                if batch:
-                    idle = 0.0
-                if finished and not batch:
-                    return
-            idle += 0.05
-            if idle >= 15.0:
-                idle = 0.0
-                yield ": keep-alive\n\n"
-            await asyncio.sleep(0.05)
-
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/turns/{turn_id}/research", dependencies=[Depends(require_key)])
-def get_research_receipt(turn_id: str):
-    from . import research
-
-    return research.receipt(app.state.store, turn_id)
-
-
-@app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_key)])
-def list_pending_submissions(
-    session_id: str,
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-):
-    return submissions.list_pending(app.state.store, session_id, limit, cursor)
-
-
-@app.get("/turns/unreplied", dependencies=[Depends(require_key)])
-def unreplied():
-    """Turns that acted but never reported back.
-
-    Resumable, and resuming asks only for the missing reply - the action is
-    never repeated. Separate from /approvals on purpose: these need a retry,
-    not a decision.
-    """
-    return {"results": app.state.store.acted_without_reply()}
-
-
-@app.get("/approvals", dependencies=[Depends(require_key)])
-def approvals():
-    """Every turn parked on the owner, across all sessions.
-
-    One queue rather than a per-session hunt: an approval the owner never sees
-    is an action that silently never happens.
-    """
-    return {"results": app.state.store.awaiting_approval()}
-
-
-@app.post("/turns/{turn_id}/resume", dependencies=[Depends(require_key)])
-def resume(turn_id: str, body: ResumeRequest | None = None):
-    """Continue a parked turn after the owner approved it in ToolGate.
-
-    Pi does not grant approvals and does not hold them. This replays the exact
-    stored action; ToolGate consumes the nonce, once, and refuses a replay.
-    """
-    try:
-        return app.state.loop.resume_turn(turn_id, job_id=body.job_id if body else None)
-    except ActedWithoutReply as exc:
-        return _acted_without_reply(exc)
-    except TurnFailed as exc:
-        raise HTTPException(
-            409,
-            {
-                "message": f"cannot resume: {exc.reason}",
-                "memory": app.state.loop.memory.status(turn_id=turn_id),
-            },
-        ) from exc
 
 
 @app.get("/tools", dependencies=[Depends(require_key)])
@@ -918,55 +657,10 @@ def models():
     }
 
 
-@app.post("/sessions/{session_id}/fork", dependencies=[Depends(require_key)])
-def fork_session(session_id: str):
-    if app.state.store.get_session(session_id) is None:
-        raise HTTPException(404, "no such session")
-    try:
-        return {"session_id": app.state.loop.fork(session_id), "parent_id": session_id}
-    except TurnFailed as exc:
-        raise HTTPException(409, exc.reason) from exc
-
-
-@app.get("/messages/{message_id}", dependencies=[Depends(require_key)])
-def get_message(message_id: str):
-    message = app.state.store.get_message(message_id)
-    if message is None:
-        raise HTTPException(404, "no such message")
-    return message
-
-
 app.include_router(tasks_api.router(lambda: app.state, require_key))
 
 
 app.include_router(activity_api.router(lambda: app.state, require_key))
-
-
-@app.post("/turns/{turn_id}/cancel", dependencies=[Depends(require_admin)])
-def cancel_turn(turn_id: str):
-    return turn_control.cancel(app.state.store, turn_id)
-
-
-@app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_key)])
-def cancel_submission(request_id: str):
-    """Stop is an owner safety action: record it durably, then end any live answer stream."""
-    from . import live_stream
-
-    result = turn_control.cancel_submission(app.state.store, request_id)
-    live_stream.stop(request_id)
-    return result
-
-
-class ReplyRecoveryRequest(BaseModel):
-    request_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-
-
-@app.post("/turns/{turn_id}/reply-only", dependencies=[Depends(require_admin)])
-def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
-    try:
-        return app.state.loop.recover_reply(turn_id, body.request_id)
-    except ActedWithoutReply as exc:
-        return {**_acted_without_reply(exc), "request_id": body.request_id}
 
 
 app.include_router(
