@@ -1,0 +1,13 @@
+# Files that were over the 600-line limit when scripts/check_file_sizes.py arrived.
+# Each may only shrink; delete its line once it is under the limit. Never add a line.
+gateway/api.py 1094
+gateway/mutation.py 721
+pi/artifacts.py 752
+pi/calls.py 1020
+pi/collaboration.py 657
+pi/jobs.py 651
+pi/loop.py 1130
+pi/setup_status.py 761
+pi/store.py 751
+pi/system_inventory.py 618
+tests/test_gateway_mutation.py 1467
