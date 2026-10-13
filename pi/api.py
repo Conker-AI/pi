@@ -54,6 +54,7 @@ from . import (
     project_sources,
     projects_api,
     proposals,
+    proposals_api,
     provider_secrets,
     response_retries,
     response_versions,
@@ -770,34 +771,7 @@ def forget_memory(body: memory_forget.Forget):
         raise HTTPException(exc.status, exc.detail) from exc
 
 
-@app.get("/proposals", dependencies=[Depends(require_key)])
-def list_proposals(state: str = Query("open"), limit: int = Query(50, ge=1, le=100)):
-    """Things Conker noticed and offers to take on. Listing grants no authority."""
-    try:
-        return proposals.list_proposals(app.state.store, state, limit)
-    except proposals.ProposalError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.post("/proposals/{proposal_id}/decision", dependencies=[Depends(require_key)])
-def decide_proposal(proposal_id: str, body: proposals.Decision):
-    """Accept, decline, or never show again. Accepting records a decision; nothing runs."""
-    try:
-        return proposals.decide(app.state.store, proposal_id, body)
-    except proposals.ProposalError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.get("/proposals/passes", dependencies=[Depends(require_key)])
-def list_proposal_passes(limit: int = Query(20, ge=1, le=100)):
-    return proposals.passes(app.state.store, limit)
-
-
-@app.post("/proposals/passes", dependencies=[Depends(require_owner)])
-def run_proposal_pass():
-    """Owner-requested pass. Budget, quiet hours and the role setting still apply."""
-    enabled, complete = proposals.model_call(app.state.store, app.state.router)
-    return proposals.run_pass(app.state.store, complete, role_enabled=enabled)
+app.include_router(proposals_api.router(lambda: app.state, require_key, require_owner))
 
 
 @app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
