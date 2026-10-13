@@ -161,7 +161,7 @@ CASES = [
     ),
     (
         "F8-api-unbounded",
-        "pi/api.py",
+        "pi/sessions_api.py",
         "min_length=1,\n        max_length=16000,",
         "min_length=1,",
         MEMORY,
