@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from . import (
-    activity,
+    activity_api,
     agents,
     agents_api,
     artifacts_api,
@@ -978,30 +978,7 @@ def memory_status():
 app.include_router(tasks_api.router(lambda: app.state, require_key))
 
 
-@app.get("/runs", dependencies=[Depends(require_key)])
-def list_runs(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-    task_id: str | None = Query(default=None, max_length=128),
-):
-    return activity.list_runs(app.state.store, limit, cursor, session_id, task_id)
-
-
-@app.get("/runs/{run_id}", dependencies=[Depends(require_key)])
-def get_run(run_id: str):
-    return activity.get_run(app.state.store, run_id)
-
-
-@app.get("/events", dependencies=[Depends(require_key)])
-def list_events(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-    task_id: str | None = Query(default=None, max_length=128),
-    run_id: str | None = Query(default=None, max_length=128),
-):
-    return activity.list_events(app.state.store, limit, cursor, session_id, task_id, run_id)
+app.include_router(activity_api.router(lambda: app.state, require_key))
 
 
 @app.post("/turns/{turn_id}/cancel", dependencies=[Depends(require_admin)])
