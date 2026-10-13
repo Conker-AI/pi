@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import (
     activity,
     agents,
+    agents_api,
     artifacts_api,
     attachments_api,
     calls,
@@ -514,57 +515,7 @@ async def agent_error(request: Request, exc: agents.AgentError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-@app.get("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentCollection)
-def list_agents():
-    return agents.list_agents(app.state.store)
-
-
-@app.post("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile)
-def create_agent(body: agents.AgentInput):
-    return agents.create(app.state.store, body)
-
-
-@app.get(
-    "/agents/{identity}", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile
-)
-def get_agent(identity: str):
-    return agents.get(app.state.store, identity)
-
-
-@app.get(
-    "/agents/{identity}/versions",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentCollection,
-)
-def agent_history(identity: str):
-    return agents.history(app.state.store, identity)
-
-
-@app.get(
-    "/agents/{identity}/versions/{revision}",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def agent_version(identity: str, revision: int):
-    return agents.get(app.state.store, identity, revision)
-
-
-@app.post(
-    "/agents/{identity}/update",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def update_agent(identity: str, body: agents.UpdateAgent):
-    return agents.update(app.state.store, identity, body)
-
-
-@app.post(
-    "/agents/{identity}/archive",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def archive_agent(identity: str, body: agents.ArchiveAgent):
-    return agents.archive(app.state.store, identity, body)
+app.include_router(agents_api.router(lambda: app.state, require_owner))
 
 
 class NewSession(BaseModel):
