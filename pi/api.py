@@ -50,7 +50,7 @@ from . import (
     model_evaluations,
     model_evaluations_api,
     model_roles_api,
-    owner_preferences,
+    owner_preferences_api,
     project_sources,
     projects_api,
     proposals,
@@ -492,24 +492,7 @@ async def context_error(request: Request, exc: context_controls.ContextError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-@app.get("/owner/preferences", dependencies=[Depends(require_admin)])
-def get_owner_preferences():
-    return owner_preferences.load(app.state.store)
-
-
-@app.post("/owner/preferences", dependencies=[Depends(require_admin)])
-def save_owner_preferences(body: owner_preferences.UpdatePreferences):
-    try:
-        return owner_preferences.save(app.state.store, body)
-    except owner_preferences.RevisionConflict as exc:
-        raise HTTPException(
-            409,
-            {
-                "code": "revision_conflict",
-                "message": str(exc),
-                "current_revision": exc.current_revision,
-            },
-        ) from exc
+app.include_router(owner_preferences_api.router(lambda: app.state, require_admin))
 
 
 @app.exception_handler(agents.AgentError)
