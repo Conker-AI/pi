@@ -70,6 +70,10 @@ jobs:
       - name: Pi audit mutation drill
         run: python scripts/audit_mutation_drill.py
 
+      - name: Memory delivery mutation drill
+        # Ran only by hand until 2026-10-13, when three of its anchors had gone stale.
+        run: python scripts/memory_mutation_drill.py
+
   contract:
     # The health contract is an HTTP contract, so it is asserted against a
     # running container rather than an in-process app object - the thing that
