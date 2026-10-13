@@ -94,9 +94,9 @@ class ChatGPTProvider:
                 )
                 token = inference_control.current()
                 if token is not None:
-                    stack.enter_context(token.register(
-                        lambda: inference_control.close_response(response)
-                    ))
+                    stack.enter_context(
+                        token.register(lambda: inference_control.close_response(response))
+                    )
                 inference_control.check()
                 response.raise_for_status()
                 if response.headers.get("content-type") != "application/x-ndjson":

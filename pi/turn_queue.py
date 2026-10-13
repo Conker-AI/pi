@@ -80,7 +80,9 @@ def _source(db, sid, *, open_required=True):
 def _files(db, sid, payload, snapshot):
     from . import background_thinking, research
 
-    background_thinking.validate_request(payload.get("think", False), json.loads(snapshot)["execution"])
+    background_thinking.validate_request(
+        payload.get("think", False), json.loads(snapshot)["execution"]
+    )
     research.validate(payload.get("research_mode", "off"), json.loads(snapshot)["execution"])
     session_settings.validate_answer_model(
         json.loads(snapshot)["execution"], payload.get("model_id")

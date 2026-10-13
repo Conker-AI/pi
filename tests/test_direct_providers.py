@@ -8,7 +8,7 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi import inference_control, model_roles, research_usage
+from pi import inference_control, model_roles, research_usage, startup
 from pi.direct_providers import AnthropicProvider, OpenAIProvider, configured
 from pi.loop import Loop, TurnFailed
 from pi.providers import Message, ProviderUnavailable
@@ -227,7 +227,7 @@ def test_startup_registers_adapters_without_network(tmp_path, monkeypatch):
     monkeypatch.setattr(httpx, "get", no_network)
 
     async def check():
-        async with api.lifespan(api.app):
+        async with startup.lifespan(api.app):
             assert set(api.app.state.router.adapters()) == {"ollama", "openai", "anthropic"}
             assert api.app.state.provider_credentials == ["anthropic", "openai"]
             monkeypatch.setattr(api.app.state.local, "health", lambda: {"status": "ok"})

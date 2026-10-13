@@ -199,7 +199,8 @@ class Loop:
                 observe_call=research_usage.observer(self.store, execution, role),
                 routing_memo=(
                     routing_memo.current(self.store.path, execution.get("turnExecutionId"))
-                    if role == "answer" else None
+                    if role == "answer"
+                    else None
                 ),
                 configuration_revision=execution["modelConfigurationRevision"],
             )

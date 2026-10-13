@@ -52,7 +52,9 @@ def test_reported_cache_tokens_survive_completion_and_usage_ledger(
         assert stream and method == "POST"
         calls.append(kwargs["json"])
         # Intermediate fields cannot replace missing/invalid final usage.
-        body = json.dumps({"message": {"content": "Ans"}, "done": False, "prompt_eval_cached_count": 77})
+        body = json.dumps(
+            {"message": {"content": "Ans"}, "done": False, "prompt_eval_cached_count": 77}
+        )
         body += "\n" + json.dumps({**final, "message": {"content": "wer"}}) + "\n"
         yield httpx.Response(200, content=body, request=httpx.Request(method, url))
 

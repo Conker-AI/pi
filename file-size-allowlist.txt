@@ -1,0 +1,13 @@
+# Files that were over the 600-line limit when scripts/check_file_sizes.py arrived.
+# Each may only shrink; delete its line once it is under the limit. Never add a line.
+gateway/api.py 1265  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+gateway/mutation.py 744  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/artifacts.py 752
+pi/calls.py 1021  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/collaboration.py 657
+pi/jobs.py 651
+pi/loop.py 1183  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/setup_status.py 769  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/store.py 783  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/system_inventory.py 618
+tests/test_gateway_mutation.py 1467

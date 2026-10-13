@@ -147,8 +147,8 @@ CASES = [
     ),
     (
         "F5-wrong-namespace-receipt-accepted",
-        "pi/memory.py",
-        'receipt.get("id") != expected_id',
+        "pi/memory_delivery.py",
+        'value.get("id") != receipt_id',
         "False",
         MEMORY,
     ),
@@ -161,7 +161,7 @@ CASES = [
     ),
     (
         "F8-api-unbounded",
-        "pi/api.py",
+        "pi/sessions_api.py",
         "min_length=1,\n        max_length=16000,",
         "min_length=1,",
         MEMORY,

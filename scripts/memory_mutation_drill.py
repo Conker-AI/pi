@@ -10,15 +10,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
-    ("message-without-outbox", "pi/memory_store.py", "WHEN NEW.role='user'", "WHEN 0"),
-    ("sequence-race", "pi/store.py", 'db.execute("BEGIN IMMEDIATE")', 'db.execute("SELECT 1")'),
+    ("message-without-outbox", "pi/memory_store.py", "AND NEW.role='user'", "AND 0"),
+    (
+        "sequence-race",
+        "pi/store.py",
+        'share the message commit.\n            db.execute("BEGIN IMMEDIATE")',
+        'share the message commit.\n            db.execute("SELECT 1")',
+    ),
     (
         "lost-ack-drops-evidence",
         "pi/memory.py",
         '"blocked" if permanent else "pending",',
         '"sent",',
     ),
-    ("context-not-used", "pi/loop.py", 'if saved["package"]:', "if False:"),
+    (
+        "context-not-used",
+        "pi/loop.py",
+        "if memory_prompt:",
+        "if False:",
+    ),
     (
         "forgetting-uploads-text",
         "pi/forgetting.py",
@@ -28,7 +38,7 @@ CASES = [
     (
         "stale-recall-during-deletion",
         "pi/memory.py",
-        "if memory_store.pending_deletions(self.store):",
+        "if memory_store.recall_held(self.store):",
         "if False:",
     ),
     ("hidden-memory-gap", "pi/memory_store.py", '"notices": notices,', '"notices": [],'),

@@ -20,13 +20,9 @@ def automatic(*, answer_fallback=False):
     value["models"].append(
         dict(id="choice", providerId="selector", name="Choice", route="choice", enabled=True)
     )
-    value["roleSettings"]["roles"]["routing"].update(
-        eligibleModelIds=["choice"], modelId="choice"
-    )
+    value["roleSettings"]["roles"]["routing"].update(eligibleModelIds=["choice"], modelId="choice")
     if answer_fallback:
-        value["roleSettings"]["roles"]["answer"].update(
-            failure="fallback", fallbackModelId="b"
-        )
+        value["roleSettings"]["roles"]["answer"].update(failure="fallback", fallbackModelId="b")
     return model_roles.Configuration.model_validate(value)
 
 
@@ -53,16 +49,25 @@ def test_automatic_selection_reports_only_real_unavailable_attempts(tmp_path, fa
         save(store, automatic(answer_fallback=failed is not None))
         selector = Adapter("selector", '{"modelId":"a"}', fail=failed == "routing")
         local, hosted = Adapter("local", fail=failed == "answer"), Adapter("hosted")
-        loop = Loop(store, Router(providers={
-            "local": local, "hosted": hosted, "selector": selector,
-        }))
+        loop = Loop(
+            store,
+            Router(
+                providers={
+                    "local": local,
+                    "hosted": hosted,
+                    "selector": selector,
+                }
+            ),
+        )
         result = loop.run_turn(store.create_session(), "Choose a model")
         receipt = result["route"]
         assert receipt["escalated"] is False
         assert receipt["fallback_used"] is (failed is not None)
-        expected = [] if failed is None else [
-            "answer: a unavailable" if failed == "answer" else "routing: choice unavailable"
-        ]
+        expected = (
+            []
+            if failed is None
+            else ["answer: a unavailable" if failed == "answer" else "routing: choice unavailable"]
+        )
         assert receipt["skipped"] == expected
         evidence = receipt["selection"]
         assert evidence == json.loads(store.get_turn(result["turn_id"])["detail"])
@@ -102,9 +107,15 @@ def test_selected_retry_keeps_the_historical_json_receipt(tmp_path):
         loop = Loop(store, Router(providers={"local": local, "hosted": hosted}))
         sid = store.create_session()
         first = loop.run_turn(sid, "Original")
-        result = response_retries.run(loop, sid, first["message"]["id"], response_retries.Retry(
-            request_id="route_retry_0001", model_id="b",
-        ))
+        result = response_retries.run(
+            loop,
+            sid,
+            first["message"]["id"],
+            response_retries.Retry(
+                request_id="route_retry_0001",
+                model_id="b",
+            ),
+        )
         evidence = json.loads(store.get_turn(result["turn_id"])["detail"])
         assert evidence["modelId"] == "b" and evidence["modelConfigurationRevision"] == 1
         assert evidence["attempts"][-1]["actualModel"] == "actual-b"

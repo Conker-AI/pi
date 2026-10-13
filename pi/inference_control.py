@@ -69,7 +69,9 @@ class Token:
             if self._deadline is not None:
                 raise RuntimeError("This inference already has a deadline.")
             self._deadline = deadline
-        timer = threading.Timer(seconds, self._cancel, args=("deadline",), kwargs={"deadline": deadline})
+        timer = threading.Timer(
+            seconds, self._cancel, args=("deadline",), kwargs={"deadline": deadline}
+        )
         timer.daemon = True
         try:
             self.check()

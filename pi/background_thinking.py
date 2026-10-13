@@ -58,18 +58,22 @@ def foreground_local_keys(loop, execution):
     config = execution.get("modelConfiguration") or {}
     roles = config.get("roleSettings", {})
     answer = roles.get("roles", {}).get("answer", {})
-    override = execution.get("answerModelId") or (execution.get("configuration") or {}).get("modelId")
+    override = execution.get("answerModelId") or (execution.get("configuration") or {}).get(
+        "modelId"
+    )
     choices = (
         {override or answer.get("modelId")}
         if override or roles.get("answerMode") == "manual"
         else set(answer.get("eligibleModelIds", []))
     )
     providers = {
-        model["providerId"] for model in config.get("models", [])
+        model["providerId"]
+        for model in config.get("models", [])
         if model["id"] in choices and model.get("enabled")
     }
     return [
-        key for identity, adapter in loop.router.adapters().items()
+        key
+        for identity, adapter in loop.router.adapters().items()
         if identity in providers and (key := getattr(adapter, "local_capacity_key", None))
     ]
 
@@ -167,7 +171,8 @@ def cancel_for_turn(store, turn_id):
     with store._connect() as db:
         db.execute(
             "UPDATE background_thinking SET status='canceled',ended_at=? "
-            "WHERE turn_id=? AND status IN ('queued','running')", (time.time(), turn_id)
+            "WHERE turn_id=? AND status IN ('queued','running')",
+            (time.time(), turn_id),
         )
     _signal(store, turn_id, "owner")
 
@@ -208,9 +213,11 @@ class Thinking:
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             previous = [
-                row[0] for row in db.execute(
+                row[0]
+                for row in db.execute(
                     "SELECT turn_id FROM background_thinking WHERE session_id=? "
-                    "AND turn_id<>? AND status IN ('queued','running')", (session_id, turn_id)
+                    "AND turn_id<>? AND status IN ('queued','running')",
+                    (session_id, turn_id),
                 )
             ]
             db.execute(
@@ -244,8 +251,9 @@ class Thinking:
                     session_id,
                     "queued" if queued else "skipped",
                     time.time(),
-                    "Waiting for background capacity; talking continues." if queued else
-                    "The background queue is full. Request thinking again after other work finishes.",
+                    "Waiting for background capacity; talking continues."
+                    if queued
+                    else "The background queue is full. Request thinking again after other work finishes.",
                     selected.get("route"),
                     selected.get("providerId"),
                 ),
@@ -304,9 +312,12 @@ class Thinking:
                             ).rowcount
                         if not changed:
                             return
-                        assignment = execution.get("modelConfiguration", {}).get(
-                            "roleSettings", {}
-                        ).get("roles", {}).get("thinking", {})
+                        assignment = (
+                            execution.get("modelConfiguration", {})
+                            .get("roleSettings", {})
+                            .get("roles", {})
+                            .get("thinking", {})
+                        )
                         timeout = min(120.0, assignment.get("timeoutMs", 120000) / 1000)
                         # Provider read timeouts reset as data arrives. This
                         # separate wall deadline also stops never-ending streams.
@@ -326,7 +337,11 @@ class Thinking:
                             db.execute(
                                 "UPDATE background_thinking SET status='failed',ended_at=?,detail=? "
                                 "WHERE turn_id=? AND status IN ('queued','running')",
-                                (time.time(), "Background analysis reached its time limit. It was not automatically restarted.", turn_id),
+                                (
+                                    time.time(),
+                                    "Background analysis reached its time limit. It was not automatically restarted.",
+                                    turn_id,
+                                ),
                             )
                         return
                     if control.token.reason != "preempted" or attempt or not control.renew():
@@ -334,7 +349,11 @@ class Thinking:
                             db.execute(
                                 "UPDATE background_thinking SET status='skipped',ended_at=?,detail=? "
                                 "WHERE turn_id=? AND status IN ('queued','running')",
-                                (time.time(), "Background inference yielded to foreground work. Request thinking again.", turn_id),
+                                (
+                                    time.time(),
+                                    "Background inference yielded to foreground work. Request thinking again.",
+                                    turn_id,
+                                ),
                             )
                         return
                     with store._connect() as db:

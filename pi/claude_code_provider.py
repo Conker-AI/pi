@@ -14,7 +14,10 @@ class ClaudeCodeProvider(ChatGPTProvider):
     def complete_bounded(self, messages, *, model, timeout):
         require_images(self, messages)
         try:
-            with self.cancelable_request() as cancellation, self.client(min(timeout, 180) + 5) as client:
+            with (
+                self.cancelable_request() as cancellation,
+                self.client(min(timeout, 180) + 5) as client,
+            ):
                 result = client.post(
                     "http://conker-chatgpt/responses",
                     json={

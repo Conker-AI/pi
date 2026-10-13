@@ -48,9 +48,12 @@ def test_requested_thinking_is_frozen_and_replay_cannot_toggle_it(store, monkeyp
     def update_before_execution(*args, **kwargs):
         saved = model_roles.load(store)
         saved["configuration"]["roleSettings"]["roles"]["thinking"]["enabled"] = False
-        model_roles.save(store, model_roles.Update(
-            expected_revision=saved["revision"], configuration=saved["configuration"]
-        ))
+        model_roles.save(
+            store,
+            model_roles.Update(
+                expected_revision=saved["revision"], configuration=saved["configuration"]
+            ),
+        )
         return bound(*args, **kwargs)
 
     monkeypatch.setattr(loop, "_run_bound", update_before_execution)
@@ -84,9 +87,12 @@ def test_disabled_and_no_harness_reject_opt_in(store):
     assert store.messages(sid) == []
     saved = model_roles.load(store)
     saved["configuration"]["roleSettings"]["roles"]["thinking"]["enabled"] = False
-    model_roles.save(store, model_roles.Update(
-        expected_revision=saved["revision"], configuration=saved["configuration"]
-    ))
+    model_roles.save(
+        store,
+        model_roles.Update(
+            expected_revision=saved["revision"], configuration=saved["configuration"]
+        ),
+    )
     sid = store.create_session()
     with pytest.raises(agents.AgentError, match="thinking model"):
         loop.run_turn(sid, "Analyze", think=True)
@@ -96,11 +102,13 @@ def test_disabled_and_no_harness_reject_opt_in(store):
 def test_legacy_receipt_defaults_false_and_false_keeps_legacy_fingerprint(store, monkeypatch):
     loop, _ = setup(store)
     sid = store.create_session()
+
     # Simulate the old admission writer, which stored no think member.
     def legacy_reserve(db, request_id, identity, *_):
-        db.execute("INSERT INTO submission_settings VALUES (?,?)", (
-            request_id, json.dumps(session_settings._snapshot(db, identity))
-        ))
+        db.execute(
+            "INSERT INTO submission_settings VALUES (?,?)",
+            (request_id, json.dumps(session_settings._snapshot(db, identity))),
+        )
 
     monkeypatch.setattr(session_settings, "reserve", legacy_reserve)
     first = loop.run_turn(sid, "Hello", request_id="legacy_thinking_request")
@@ -115,13 +123,24 @@ def test_thinking_status_is_authorized_and_does_not_read_transcript(store, monke
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "loop", loop, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "unused_admin", raising=False)
-    monkeypatch.setattr(api.app.state, "owner_key_hash", hashlib.sha256(b"owner").hexdigest(), raising=False)
-    monkeypatch.setattr(api.app.state, "gateway_key_hash", hashlib.sha256(b"runtime").hexdigest(), raising=False)
+    monkeypatch.setattr(
+        api.app.state, "owner_key_hash", hashlib.sha256(b"owner").hexdigest(), raising=False
+    )
+    monkeypatch.setattr(
+        api.app.state, "gateway_key_hash", hashlib.sha256(b"runtime").hexdigest(), raising=False
+    )
     client = TestClient(api.app)
     headers = {"X-Pi-Gateway-Key": "runtime"}
     assert client.get(f"/sessions/{sid}/thinking").status_code == 401
-    assert client.post(f"/sessions/{sid}/turns", headers=headers, json={"text": "Analyze", "think": "true"}).status_code == 422
-    result = client.post(f"/sessions/{sid}/turns", headers=headers, json={"text": "Analyze", "think": True})
+    assert (
+        client.post(
+            f"/sessions/{sid}/turns", headers=headers, json={"text": "Analyze", "think": "true"}
+        ).status_code
+        == 422
+    )
+    result = client.post(
+        f"/sessions/{sid}/turns", headers=headers, json={"text": "Analyze", "think": True}
+    )
     assert result.status_code == 200, result.text
     assert provider.started.wait(2)
     monkeypatch.setattr(store, "messages", lambda *_: pytest.fail("status read transcript"))
@@ -177,14 +196,26 @@ def test_cancel_closes_actual_inference_and_releases_slot_without_publishing(sto
 def test_queue_freezes_think_and_rejects_changed_admission(store):
     setup(store)
     sid = store.create_session()
-    item = turn_queue.enqueue(store, sid, turn_queue.Enqueue(
-        request_id="queued_thinking_request", text="Analyze", think=True
-    ))
+    item = turn_queue.enqueue(
+        store,
+        sid,
+        turn_queue.Enqueue(request_id="queued_thinking_request", text="Analyze", think=True),
+    )
     assert item["payload"]["think"] is True
     identity = turn_queue.submission_identity(item["id"], item["revision"])
     with pytest.raises(Exception, match="queued message"):
-        submissions.reserve(store, identity, sid, "Analyze", {}, queued_entry=(item["id"], item["revision"]), think=False)
-    receipt, created = submissions.reserve(store, identity, sid, "Analyze", {}, queued_entry=(item["id"], item["revision"]), think=True)
+        submissions.reserve(
+            store,
+            identity,
+            sid,
+            "Analyze",
+            {},
+            queued_entry=(item["id"], item["revision"]),
+            think=False,
+        )
+    receipt, created = submissions.reserve(
+        store, identity, sid, "Analyze", {}, queued_entry=(item["id"], item["revision"]), think=True
+    )
     assert created and receipt["think"] is True
 
 
@@ -208,8 +239,11 @@ def test_queued_cancel_and_restart_stop_owned_workers_without_replaying(store):
         assert not worker.is_alive()
     assert background_thinking.list_for_session(store, first)[0]["status"] == "interrupted"
     assert background_thinking.list_for_session(store, second)[0]["status"] == "canceled"
-    assert all(row["result"] is None for sid in (first, second)
-               for row in background_thinking.list_for_session(store, sid))
+    assert all(
+        row["result"] is None
+        for sid in (first, second)
+        for row in background_thinking.list_for_session(store, sid)
+    )
 
 
 def test_stopping_running_submission_also_stops_its_thinker(store):
@@ -272,9 +306,12 @@ def test_retrying_final_answer_does_not_restart_frozen_thinking_request(store):
     sid = store.create_session()
     result = loop.run_turn(sid, "Analyze", think=True)
     wait_workers(loop, provider)
-    repeated = response_retries.run(loop, sid, result["message"]["id"], response_retries.Retry(
-        request_id="thinking_reply_only_retry", model_id="a"
-    ))
+    repeated = response_retries.run(
+        loop,
+        sid,
+        result["message"]["id"],
+        response_retries.Retry(request_id="thinking_reply_only_retry", model_id="a"),
+    )
     assert repeated["status"] == "complete"
     rows = background_thinking.list_for_session(store, sid)
     assert len(rows) == 1 and rows[0]["turn_id"] == result["turn_id"]

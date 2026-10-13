@@ -15,7 +15,9 @@ class ConfiguredMemoryRanker:
 
     def rank_for_turn(self, query, package, execution):
         return self._rank(
-            query, package, observe_call=research_usage.observer(self.store, execution, "memory-ranking")
+            query,
+            package,
+            observe_call=research_usage.observer(self.store, execution, "memory-ranking"),
         )
 
     def _rank(self, query, package, observe_call=None):

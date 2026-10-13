@@ -9,328 +9,64 @@ Tool calls arrive in #29 and go out through ToolGate, never from here.
 from __future__ import annotations
 
 import hashlib
-import json
-import logging
-import os
 import secrets
 import time
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field, model_validator
+from fastapi.responses import JSONResponse
+
+from pi.startup import lifespan
 
 from . import (
-    activity,
+    activity_api,
     agents,
+    agents_api,
     artifacts_api,
     attachments_api,
-    background_thinking,
-    calls,
     calls_api,
     characters_api,
     collaboration_api,
     context_api,
     context_controls,
-    context_retrieval,
     continuity_api,
     conversation_search,
     drafts_api,
     filesystem_api,
-    filesystem_reads,
     jobs_api,
-    memory_corrections,
-    memory_edits,
+    memory_api,
     memory_edits_api,
-    memory_forget,
-    memory_proposals,
     memory_proposals_api,
     message_forks,
-    model_evaluations,
     model_evaluations_api,
     model_roles_api,
-    owner_preferences,
+    owner_preferences_api,
     project_sources,
     projects_api,
-    proposals,
-    provider_secrets,
+    proposals_api,
     response_retries,
     response_versions,
     session_settings,
     session_settings_api,
+    sessions_api,
     setup_status_api,
     skills_api,
-    speech,
-    submissions,
-    system_actions,
     system_actions_api,
-    system_inventory,
     system_inventory_api,
     tasks,
-    team_execution,
+    tasks_api,
     team_execution_api,
-    turn_control,
     turn_queue,
     turn_steering,
 )
 from .browser_contract import runtime_allowed
-from .direct_providers import configured as configured_direct_providers
-from .job_execution import PublishedJobs
-from .job_worker import JobWorker
-from .loop import ActedWithoutReply, Loop, TurnFailed
-from .memory import Memory, MemoryClient
-from .openrouter import OpenRouterProvider
-from .providers import OllamaProvider
-from .queue_worker import QueueWorker
-from .routing import Router
-from .store import Store
-from .toolgate import ToolGateClient
-
-log = logging.getLogger("pi")
 
 SERVICE_VERSION = "0.5.6"
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
 _health_cache: dict = {}
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    admin_key = os.environ.get("PI_ADMIN_KEY", "").strip()
-    runtime_hash = os.environ.get("PI_GATEWAY_KEY_SHA256", "").strip()
-    owner_hash = os.environ.get("PI_OWNER_KEY_SHA256", "").strip()
-    if owner_hash and (
-        len(owner_hash) != 64
-        or any(c not in "0123456789abcdef" for c in owner_hash)
-        or owner_hash in {runtime_hash, hashlib.sha256(admin_key.encode()).hexdigest()}
-    ):
-        raise RuntimeError("PI_OWNER_KEY_SHA256 must identify a distinct owner-control credential.")
-    if runtime_hash and (
-        len(runtime_hash) != 64 or any(c not in "0123456789abcdef" for c in runtime_hash)
-    ):
-        raise RuntimeError(
-            "Set PI_GATEWAY_KEY_SHA256 to the gateway credential's SHA-256 hex digest, "
-            "then restart Pi."
-        )
-    # Secure by default, or refuse to start. Never fall back to open - the rule
-    # has a scar behind it, see ADR-0005.
-    if len(admin_key) < 16:
-        raise RuntimeError(
-            "PI_ADMIN_KEY is required and must be at least 16 characters.\n\n"
-            "Fix, in the directory holding docker-compose.yml:\n\n"
-            '    echo "PI_ADMIN_KEY=$(openssl rand -base64 24)" >> .env\n'
-            "    docker compose up -d pi\n"
-        )
-    try:
-        provider_environment = provider_secrets.load(os.environ)
-    except ValueError as exc:
-        raise RuntimeError(str(exc)) from None
-    speech_client = speech.SpeechClient(
-        url=os.environ.get("PI_SPEECH_URL", "").strip(),
-        key=provider_environment.get("PI_SPEECH_KEY", "").strip(),
-        stt_model=os.environ.get("PI_STT_MODEL", "").strip(),
-        tts_model=os.environ.get("PI_TTS_MODEL", "").strip(),
-        voice=os.environ.get("PI_TTS_VOICE", "").strip(),
-        character_voice=os.environ.get("PI_SPEECH_CHARACTER_VOICE", "unsupported").strip(),
-        audio_decoder=os.environ.get("PI_AUDIO_DECODER_PATH", "").strip(),
-        timeout=_seconds("PI_SPEECH_TIMEOUT_S", 30.0),
-    )
-    store = Store(os.environ.get("PI_DB_PATH", "/data/pi.db"))
-    # A turn that was running when the process died did not finish. Saying
-    # nothing would leave the owner looking at a request that vanished.
-    interrupted = store.mark_interrupted_turns()
-    model_evaluations.recover_interrupted(store)
-    background_thinking.recover_interrupted(store)
-    context_retrieval.recover_interrupted(store)
-    team_execution.recover_interrupted(store)
-    memory_proposals.recover_interrupted(store)
-    memory_edits.recover_interrupted(store)
-    proposals.recover_interrupted(store)
-    calls.recover(store)
-    system_inventory.recover(store)
-    filesystem_reads.recover(store)
-    system_actions.recover(store)
-
-    # Local inference is slow on modest hardware and costs nothing to wait for,
-    # so the ceiling is generous. It exists to catch a hung server, not to give
-    # up on a model that is still thinking - a timeout that fires on a working
-    # model turns "slow" into "failed", which is a lie about what happened.
-    local = OllamaProvider(
-        os.environ.get("PI_OLLAMA_URL", "http://ollama:11434"),
-        timeout=_seconds("PI_LOCAL_TIMEOUT_S", 600.0),
-        model=os.environ.get("PI_MODEL", "qwen3:4b"),
-    )
-
-    # Free by default: a fresh install works with no payment and no key. The
-    # hosted provider only exists if one was supplied, and even then it refuses
-    # paid models unless PI_ALLOW_PAID_MODELS says otherwise - spending is a
-    # deliberate act, never a default or a typo.
-    openrouter_key = provider_environment.get("PI_OPENROUTER_KEY", "").strip()
-    hosted = None
-    if openrouter_key:
-        hosted = OpenRouterProvider(
-            openrouter_key,
-            allow_paid=os.environ.get("PI_ALLOW_PAID_MODELS", "").strip() in {"1", "true", "yes"},
-            timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0),
-        )
-
-    # The only way Pi acts on the world. Without a key it acts on nothing,
-    # which is a working install rather than a broken one - Conker still talks
-    # and still remembers.
-    toolgate_key = os.environ.get("PI_TOOLGATE_KEY", "").strip()
-    toolgate = (
-        ToolGateClient(
-            os.environ.get("PI_TOOLGATE_URL", "http://toolgate-api:8010"),
-            toolgate_key,
-            timeout=_seconds("PI_TOOLGATE_TIMEOUT_S", 120.0),
-        )
-        if toolgate_key
-        else None
-    )
-
-    memory_url = os.environ.get("PI_MEMORYGATE_URL", "").strip()
-    ingest_key = os.environ.get("PI_MEMORYGATE_INGEST_KEY", "").strip()
-    read_key = os.environ.get("PI_MEMORYGATE_READ_KEY", "").strip()
-    if any((memory_url, ingest_key, read_key)) and not all((memory_url, ingest_key, read_key)):
-        store.close()
-        raise RuntimeError(
-            "Set PI_MEMORYGATE_URL, PI_MEMORYGATE_INGEST_KEY and "
-            "PI_MEMORYGATE_READ_KEY together, then restart Pi."
-        )
-    memory = Memory(
-        store,
-        MemoryClient(
-            memory_url,
-            ingest_key,
-            read_key,
-            os.environ.get("PI_MEMORYGATE_AGENT_ID", "default"),
-            timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0),
-        )
-        if memory_url
-        else None,
-    )
-    from . import memory_authority
-
-    try:
-        bindings = os.environ.get("PI_MEMORY_AGENT_READ_BINDINGS", "").strip()
-        if bindings and not memory_url:
-            raise ValueError("Configure MemoryGate before specialist memory bindings.")
-        memory.read_clients = memory_authority.clients(
-            bindings,
-            os.environ,
-            lambda namespace, key: MemoryClient(
-                memory_url, "", key, namespace, timeout=_seconds("PI_MEMORYGATE_TIMEOUT_S", 5.0)
-            ),
-        )
-    except ValueError:
-        memory.close()
-        store.close()
-        raise
-    app.state.memory = memory
-    correction_values = [
-        os.environ.get(name, "").strip()
-        for name in (
-            "PI_MEMORY_CORRECTION_URL",
-            "PI_MEMORY_CORRECTION_KEY",
-            "PI_MEMORY_CORRECTION_AGENT_ID",
-        )
-    ]
-    try:
-        if any(correction_values) and not all(correction_values):
-            raise ValueError("Configure correction URL, key and namespace together.")
-        correction = (
-            memory_corrections.Client(*correction_values) if all(correction_values) else None
-        )
-    except ValueError:
-        memory.close()
-        store.close()
-        raise RuntimeError(
-            "Set valid PI_MEMORY_CORRECTION_URL, KEY and AGENT_ID together."
-        ) from None
-    app.state.memory_corrections = correction
-    app.state.speech = speech_client
-    app.state.speech_credential_configured = bool(
-        provider_environment.get("PI_SPEECH_KEY", "").strip()
-    )
-    memory.start()
-    app.state.admin_key = admin_key
-    app.state.gateway_key_hash = runtime_hash
-    app.state.owner_key_hash = owner_hash
-    app.state.store = store
-    app.state.local = local
-    app.state.hosted = hosted
-    app.state.provider_credentials = sorted(
-        name
-        for name, environment_name in (
-            ("openrouter", "PI_OPENROUTER_KEY"),
-            ("openai", "PI_OPENAI_KEY"),
-            ("anthropic", "PI_ANTHROPIC_KEY"),
-        )
-        if provider_environment.get(environment_name, "").strip()
-    )
-    app.state.toolgate = toolgate
-    app.state.job_executor = PublishedJobs({"companion": toolgate}) if toolgate else None
-    app.state.interrupted_at_startup = interrupted
-    app.state.router = Router(
-        local_provider=local,
-        hosted_provider=hosted,
-        providers=configured_direct_providers(
-            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
-        ),
-        local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
-    )
-    from .memory_ranking import ConfiguredMemoryRanker
-
-    memory.ranker = ConfiguredMemoryRanker(store, app.state.router.providers)
-    app.state.loop = Loop(
-        store,
-        app.state.router,
-        system_prompt=os.environ.get("PI_SYSTEM_PROMPT", ""),
-        toolgate=toolgate,
-        memory=memory,
-    )
-    scheduler = None
-    if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
-        if app.state.job_executor is None:
-            if correction:
-                correction.close()
-            memory.close()
-            store.close()
-            raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
-        scheduler = JobWorker(store, app.state.job_executor)
-        scheduler.start()
-    queue_worker = None
-    if os.environ.get("PI_QUEUE_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
-        queue_worker = QueueWorker(store, app.state.loop)
-        queue_worker.start()
-    proposal_worker = None
-    if os.environ.get("PI_PROPOSALS_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
-        from .proposal_worker import ProposalWorker
-
-        proposal_worker = ProposalWorker(
-            store,
-            app.state.router,
-            interval_hours=float(os.environ.get("PI_PROPOSALS_INTERVAL_HOURS", "24")),
-        )
-        proposal_worker.start()
-    try:
-        yield
-    finally:
-        app.state.loop.thinking.close()
-        if proposal_worker:
-            proposal_worker.close()
-        if queue_worker:
-            queue_worker.close()
-        if scheduler:
-            scheduler.close()
-        memory.close()
-        if correction:
-            correction.close()
-        store.close()
 
 
 app = FastAPI(title="Pi", version=SERVICE_VERSION, lifespan=lifespan)
@@ -519,24 +255,7 @@ async def context_error(request: Request, exc: context_controls.ContextError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-@app.get("/owner/preferences", dependencies=[Depends(require_admin)])
-def get_owner_preferences():
-    return owner_preferences.load(app.state.store)
-
-
-@app.post("/owner/preferences", dependencies=[Depends(require_admin)])
-def save_owner_preferences(body: owner_preferences.UpdatePreferences):
-    try:
-        return owner_preferences.save(app.state.store, body)
-    except owner_preferences.RevisionConflict as exc:
-        raise HTTPException(
-            409,
-            {
-                "code": "revision_conflict",
-                "message": str(exc),
-                "current_revision": exc.current_revision,
-            },
-        ) from exc
+app.include_router(owner_preferences_api.router(lambda: app.state, require_admin))
 
 
 @app.exception_handler(agents.AgentError)
@@ -544,143 +263,7 @@ async def agent_error(request: Request, exc: agents.AgentError):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
-@app.get("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentCollection)
-def list_agents():
-    return agents.list_agents(app.state.store)
-
-
-@app.post("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile)
-def create_agent(body: agents.AgentInput):
-    return agents.create(app.state.store, body)
-
-
-@app.get(
-    "/agents/{identity}", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile
-)
-def get_agent(identity: str):
-    return agents.get(app.state.store, identity)
-
-
-@app.get(
-    "/agents/{identity}/versions",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentCollection,
-)
-def agent_history(identity: str):
-    return agents.history(app.state.store, identity)
-
-
-@app.get(
-    "/agents/{identity}/versions/{revision}",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def agent_version(identity: str, revision: int):
-    return agents.get(app.state.store, identity, revision)
-
-
-@app.post(
-    "/agents/{identity}/update",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def update_agent(identity: str, body: agents.UpdateAgent):
-    return agents.update(app.state.store, identity, body)
-
-
-@app.post(
-    "/agents/{identity}/archive",
-    dependencies=[Depends(require_owner)],
-    response_model=agents.AgentProfile,
-)
-def archive_agent(identity: str, body: agents.ArchiveAgent):
-    return agents.archive(app.state.store, identity, body)
-
-
-class NewSession(BaseModel):
-    title: str = ""
-    agent_id: str | None = Field(default=None, pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
-    privacy: dict[Literal["memoryDisabled", "harnessDisabled"], bool] | None = None
-
-
-class TurnRequest(BaseModel):
-    text: str = Field(
-        min_length=1,
-        max_length=16000,
-        description="Send at most 16000 characters per message; split longer text.",
-    )
-    # Routing hints the caller genuinely knows. The router is deliberately not
-    # a classifier that reads the message - that would be a model nobody
-    # evaluates deciding how much every turn costs.
-    needs_tools: bool = False
-    is_analysis: bool = False
-    owner_requested_strong: bool = False
-    request_id: str | None = Field(
-        default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
-    )
-    task_id: str | None = Field(default=None, min_length=1, max_length=128)
-    task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
-    draft_revision: int | None = Field(default=None, ge=1, strict=True)
-    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
-    model_id: str | None = Field(default=None, min_length=1, max_length=200)
-    reply_to: str | None = Field(default=None, min_length=1, max_length=200)
-    research_mode: Literal["off", "web", "deep"] = "off"
-    skill_ids: list[str] = Field(default_factory=list, max_length=3)
-    think: bool = Field(default=False, strict=True)
-
-    @model_validator(mode="after")
-    def task_submission(self):
-        if (self.task_id is None) != (self.task_expected_revision is None):
-            raise ValueError("Task identity and revision belong together.")
-        if self.task_id is not None and self.request_id is None:
-            raise ValueError("Task-bound submissions require a retained request identity.")
-        return self
-
-
-class ResumeRequest(BaseModel):
-    job_id: str | None = Field(default=None, min_length=1, max_length=100)
-
-
-def _seconds(name: str, default: float) -> float:
-    """A timeout from the environment, or the default if it is not a number.
-
-    A malformed value falls back rather than stopping the service: the owner
-    typing "60s" should not take Conker offline, and the log line says what was
-    used instead of what was asked for.
-    """
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        log.warning("%s is not a number (%r); using %ss", name, raw, default)
-        return default
-    if value <= 0:
-        log.warning("%s must be positive (got %s); using %ss", name, value, default)
-        return default
-    return value
-
-
-def _acted_without_reply(exc: ActedWithoutReply) -> dict:
-    """The one answer that is true when a tool ran and the model then did not.
-
-    Not an error status, and not `complete` either. The action happened, it is
-    recorded, and the caller is told plainly that the reply is what is missing
-    and where to ask for it again.
-    """
-    return {
-        "turn_id": exc.turn_id,
-        "status": "acted_no_reply",
-        "acted": True,
-        "memory": app.state.loop.memory.status(
-            app.state.store.get_turn(exc.turn_id)["session_id"], exc.turn_id
-        ),
-        "message": None,
-        "detail": exc.cause,
-        "hint": f"the action ran and was recorded; POST /turns/{exc.turn_id}/resume "
-        "to ask for the reply again - it will not run the action a second time",
-    }
+app.include_router(agents_api.router(lambda: app.state, require_owner))
 
 
 @app.get("/health")
@@ -748,356 +331,13 @@ def health():
     return {**result, "age_seconds": 0.0}
 
 
-@app.post("/sessions", dependencies=[Depends(require_key)])
-def create_session(body: NewSession):
-    return {
-        "session_id": app.state.store.create_session(
-            title=body.title, agent_id=body.agent_id, privacy=body.privacy
-        )
-    }
+app.include_router(sessions_api.router(lambda: app.state, require_key, require_admin))
 
 
-@app.get("/sessions", dependencies=[Depends(require_key)])
-def list_sessions(limit: int = 50):
-    return {"results": app.state.store.list_sessions(limit=min(max(limit, 1), 200))}
+app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))
 
 
-@app.get("/sessions/history", dependencies=[Depends(require_key)])
-def session_history_page(request: Request):
-    from . import session_history
-
-    return JSONResponse(
-        session_history.page(app.state.store, **session_history.request_arguments(request.query_params)),
-        headers={"Cache-Control": "no-store"},
-    )
-
-
-@app.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
-def get_session(session_id: str):
-    session = app.state.store.get_session(session_id)
-    if session is None:
-        raise HTTPException(404, "no such session")
-    pending = submissions.list_pending(app.state.store, session_id, limit=100)
-    return {
-        **session,
-        "pending_submissions": pending["results"],
-        "pending_submissions_truncated": pending["next_cursor"] is not None,
-        "messages": app.state.store.messages(session_id),
-        "turns": [
-            {**turn, "memory": app.state.loop.memory.status(session_id, turn["id"])}
-            for turn in app.state.store.turns(session_id)
-        ],
-        "memory": app.state.loop.memory.status(session_id),
-        "thinking": background_thinking.list_for_session(app.state.store, session_id),
-    }
-
-
-def _memory_delivery_status(session_id, request, message_id=None):
-    from . import memory_delivery
-
-    if request.url.query or any(
-        not 1 <= len(value) <= 128
-        or not all(
-            character.isascii() and (character.isalnum() or character in "_-")
-            for character in value
-        )
-        for value in (session_id, message_id)
-        if value is not None
-    ):
-        raise HTTPException(422, "Invalid memory delivery request.")
-    try:
-        return memory_delivery.read(app.state.store, session_id, message_id)
-    except ValueError:
-        raise HTTPException(404, "Memory delivery unavailable.") from None
-
-
-@app.get("/sessions/{session_id}/memory-delivery", dependencies=[Depends(require_key)])
-def memory_delivery_status(session_id: str, request: Request):
-    return _memory_delivery_status(session_id, request)
-
-
-@app.get(
-    "/sessions/{session_id}/messages/{message_id}/memory-delivery",
-    dependencies=[Depends(require_key)],
-)
-def message_memory_delivery_status(session_id: str, message_id: str, request: Request):
-    return _memory_delivery_status(session_id, request, message_id)
-
-
-@app.get("/sessions/{session_id}/observation", dependencies=[Depends(require_key)])
-def observe_session(session_id: str, request: Request):
-    from . import session_observation
-
-    if request.url.query or not 1 <= len(session_id) <= 128 or not all(
-        character.isascii() and (character.isalnum() or character in "_-")
-        for character in session_id
-    ):
-        raise HTTPException(422, "Invalid conversation observation request.")
-    try:
-        return JSONResponse(
-            session_observation.read(app.state.store, session_id),
-            headers={"Cache-Control": "no-store"},
-        )
-    except ValueError:
-        raise HTTPException(404, "Conversation not found.") from None
-    except OverflowError:
-        raise HTTPException(503, "Conversation observation unavailable.") from None
-
-
-@app.get("/sessions/{session_id}/thinking", dependencies=[Depends(require_key)])
-def thinking_status(session_id: str):
-    session = app.state.store.get_session(session_id)
-    if session is None:
-        raise HTTPException(404, "no such session")
-    return {
-        "schemaVersion": 1,
-        "session_id": session_id,
-        "content_status": "forgotten" if session["status"] == "forgotten" else "available",
-        "results": background_thinking.list_for_session(app.state.store, session_id),
-    }
-
-
-@app.get("/turns/{turn_id}/usage", dependencies=[Depends(require_key)])
-def turn_usage(turn_id: str, request: Request):
-    from . import research_usage
-
-    if request.url.query or not 1 <= len(turn_id) <= 128 or not all(
-        character.isascii() and (character.isalnum() or character in "_-")
-        for character in turn_id
-    ):
-        raise HTTPException(422, "Invalid turn usage request.")
-    try:
-        return research_usage.receipt(app.state.store, turn_id)
-    except ValueError:
-        raise HTTPException(404, "Turn usage unavailable.") from None
-
-
-@app.post("/sessions/{session_id}/thinking/{turn_id}/cancel", dependencies=[Depends(require_key)])
-def cancel_thinking(session_id: str, turn_id: str):
-    try:
-        return background_thinking.cancel(app.state.store, session_id, turn_id)
-    except ValueError as exc:
-        raise HTTPException(404, str(exc)) from None
-
-
-@app.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
-def run_turn(session_id: str, body: TurnRequest):
-    try:
-        return app.state.loop.run_turn(
-            session_id,
-            body.text,
-            context={
-                "needs_tools": body.needs_tools,
-                "is_analysis": body.is_analysis,
-                "owner_requested_strong": body.owner_requested_strong,
-            },
-            request_id=body.request_id,
-            task_id=body.task_id,
-            task_expected_revision=body.task_expected_revision,
-            **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}),
-            **({"attachment_ids": body.attachment_ids} if body.attachment_ids else {}),
-            **({"model_id": body.model_id} if body.model_id is not None else {}),
-            **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
-            **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
-            **({"skill_ids": body.skill_ids} if body.skill_ids else {}),
-            **({"think": True} if body.think else {}),
-        )
-    except ActedWithoutReply as exc:
-        # Deliberately not an error status. A tool ran, so this request did the
-        # thing that actually matters, and the one detail missing is what the
-        # model would have said about it. An error code would invite a retry,
-        # and retrying this turn would run the action a second time.
-        result = _acted_without_reply(exc)
-        if body.request_id:
-            result["submission"] = submissions.get(app.state.store, body.request_id)
-        return result
-    except TurnFailed as exc:
-        turn = app.state.store.get_turn(exc.turn_id) if exc.turn_id else None
-        if turn and turn["status"] == "cancelled":
-            result = {
-                "turn_id": exc.turn_id,
-                "session_id": turn["session_id"],
-                "status": "cancelled",
-                "acted": bool(turn["acted"]),
-                "message": None,
-            }
-            if body.request_id:
-                result["submission"] = submissions.get(app.state.store, body.request_id)
-            return result
-        # 503, not 500: the provider did not answer, which is a state the caller
-        # can act on. The user's message is already stored either way.
-        raise HTTPException(
-            503,
-            {
-                "message": f"turn failed: {exc.reason}",
-                "turn_id": exc.turn_id,
-                "memory": app.state.loop.memory.status(session_id, exc.turn_id),
-                "request_id": body.request_id,
-            },
-        ) from exc
-
-
-@app.get("/memory/forget-pending", dependencies=[Depends(require_owner)])
-def pending_memory_forget():
-    return memory_forget.pending(app.state.store)
-
-
-@app.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
-def preview_memory_forget(memory_id: str):
-    try:
-        return memory_forget.preview(getattr(app.state, "memory_corrections", None), memory_id)
-    except memory_forget.ForgetError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.post("/memory/forget", dependencies=[Depends(require_owner)])
-def forget_memory(body: memory_forget.Forget):
-    """Remove one memory everywhere it is stored. The source chat is kept."""
-    try:
-        return memory_forget.forget(
-            app.state.store, getattr(app.state, "memory_corrections", None), body
-        )
-    except memory_forget.ForgetError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.get("/proposals", dependencies=[Depends(require_key)])
-def list_proposals(state: str = Query("open"), limit: int = Query(50, ge=1, le=100)):
-    """Things Conker noticed and offers to take on. Listing grants no authority."""
-    try:
-        return proposals.list_proposals(app.state.store, state, limit)
-    except proposals.ProposalError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.post("/proposals/{proposal_id}/decision", dependencies=[Depends(require_key)])
-def decide_proposal(proposal_id: str, body: proposals.Decision):
-    """Accept, decline, or never show again. Accepting records a decision; nothing runs."""
-    try:
-        return proposals.decide(app.state.store, proposal_id, body)
-    except proposals.ProposalError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-
-
-@app.get("/proposals/passes", dependencies=[Depends(require_key)])
-def list_proposal_passes(limit: int = Query(20, ge=1, le=100)):
-    return proposals.passes(app.state.store, limit)
-
-
-@app.post("/proposals/passes", dependencies=[Depends(require_owner)])
-def run_proposal_pass():
-    """Owner-requested pass. Budget, quiet hours and the role setting still apply."""
-    enabled, complete = proposals.model_call(app.state.store, app.state.router)
-    return proposals.run_pass(app.state.store, complete, role_enabled=enabled)
-
-
-@app.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
-def get_submission(request_id: str):
-    return submissions.get(app.state.store, request_id)
-
-
-@app.get("/turn-submissions/{request_id}/stream", dependencies=[Depends(require_key)])
-async def stream_submission(request_id: str, request: Request, after: int = Query(0, ge=0)):
-    """Server-sent preview of an answer being written; the saved message stays authoritative.
-
-    Events: `delta` (text to append), `reset` (discard the preview: a new model
-    attempt started), `done` (fetch the saved turn). Unknown or expired previews
-    end with `unavailable`, which is not an error: the saved turn is still there.
-    """
-    from . import live_stream
-
-    async def events():
-        import asyncio
-
-        seen, waited, idle = after, 0.0, 0.0
-        while True:
-            if await request.is_disconnected():
-                return
-            state = live_stream.read(request_id, seen)
-            if state is None:
-                if waited >= 15.0:
-                    yield "event: unavailable\ndata: {}\n\n"
-                    return
-                waited += 0.05
-            else:
-                batch, finished = state
-                for event in batch:
-                    seen = event["seq"]
-                    kind = event.pop("type")
-                    yield f"id: {seen}\nevent: {kind}\ndata: {json.dumps(event)}\n\n"
-                if batch:
-                    idle = 0.0
-                if finished and not batch:
-                    return
-            idle += 0.05
-            if idle >= 15.0:
-                idle = 0.0
-                yield ": keep-alive\n\n"
-            await asyncio.sleep(0.05)
-
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/turns/{turn_id}/research", dependencies=[Depends(require_key)])
-def get_research_receipt(turn_id: str):
-    from . import research
-
-    return research.receipt(app.state.store, turn_id)
-
-
-@app.get("/sessions/{session_id}/submissions", dependencies=[Depends(require_key)])
-def list_pending_submissions(
-    session_id: str,
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-):
-    return submissions.list_pending(app.state.store, session_id, limit, cursor)
-
-
-@app.get("/turns/unreplied", dependencies=[Depends(require_key)])
-def unreplied():
-    """Turns that acted but never reported back.
-
-    Resumable, and resuming asks only for the missing reply - the action is
-    never repeated. Separate from /approvals on purpose: these need a retry,
-    not a decision.
-    """
-    return {"results": app.state.store.acted_without_reply()}
-
-
-@app.get("/approvals", dependencies=[Depends(require_key)])
-def approvals():
-    """Every turn parked on the owner, across all sessions.
-
-    One queue rather than a per-session hunt: an approval the owner never sees
-    is an action that silently never happens.
-    """
-    return {"results": app.state.store.awaiting_approval()}
-
-
-@app.post("/turns/{turn_id}/resume", dependencies=[Depends(require_key)])
-def resume(turn_id: str, body: ResumeRequest | None = None):
-    """Continue a parked turn after the owner approved it in ToolGate.
-
-    Pi does not grant approvals and does not hold them. This replays the exact
-    stored action; ToolGate consumes the nonce, once, and refuses a replay.
-    """
-    try:
-        return app.state.loop.resume_turn(turn_id, job_id=body.job_id if body else None)
-    except ActedWithoutReply as exc:
-        return _acted_without_reply(exc)
-    except TurnFailed as exc:
-        raise HTTPException(
-            409,
-            {
-                "message": f"cannot resume: {exc.reason}",
-                "memory": app.state.loop.memory.status(turn_id=turn_id),
-            },
-        ) from exc
+app.include_router(proposals_api.router(lambda: app.state, require_key, require_owner))
 
 
 @app.get("/tools", dependencies=[Depends(require_key)])
@@ -1178,120 +418,10 @@ def models():
     }
 
 
-@app.post("/sessions/{session_id}/fork", dependencies=[Depends(require_key)])
-def fork_session(session_id: str):
-    if app.state.store.get_session(session_id) is None:
-        raise HTTPException(404, "no such session")
-    try:
-        return {"session_id": app.state.loop.fork(session_id), "parent_id": session_id}
-    except TurnFailed as exc:
-        raise HTTPException(409, exc.reason) from exc
+app.include_router(tasks_api.router(lambda: app.state, require_key))
 
 
-@app.get("/messages/{message_id}", dependencies=[Depends(require_key)])
-def get_message(message_id: str):
-    message = app.state.store.get_message(message_id)
-    if message is None:
-        raise HTTPException(404, "no such message")
-    return message
-
-
-@app.get("/memory", dependencies=[Depends(require_key)])
-def memory_status():
-    """Delivery progress is server state; a model cannot hide this notice."""
-    return app.state.loop.memory.status()
-
-
-@app.get("/tasks", dependencies=[Depends(require_key)])
-def list_tasks(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-):
-    return tasks.list_tasks(app.state.store, limit, cursor, session_id)
-
-
-@app.post("/tasks", dependencies=[Depends(require_key)])
-def create_task(body: tasks.CreateTask):
-    return tasks.create(app.state.store, body)
-
-
-@app.get("/tasks/requests/{request_id}", dependencies=[Depends(require_key)])
-def task_by_request(request_id: str):
-    return tasks.by_request(app.state.store, request_id)
-
-
-@app.get("/tasks/{task_id}", dependencies=[Depends(require_key)])
-def get_task(task_id: str):
-    return tasks.get(app.state.store, task_id)
-
-
-@app.post("/tasks/{task_id}/update", dependencies=[Depends(require_key)])
-def update_task(task_id: str, body: tasks.UpdateTask):
-    return tasks.update(app.state.store, task_id, body)
-
-
-@app.post("/tasks/{task_id}/transition", dependencies=[Depends(require_key)])
-def transition_task(task_id: str, body: tasks.TransitionTask):
-    return tasks.transition(app.state.store, task_id, body)
-
-
-@app.post("/tasks/{task_id}/archive", dependencies=[Depends(require_key)])
-def archive_task(task_id: str, body: tasks.ArchiveTask):
-    return tasks.archive(app.state.store, task_id, body)
-
-
-@app.get("/runs", dependencies=[Depends(require_key)])
-def list_runs(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-    task_id: str | None = Query(default=None, max_length=128),
-):
-    return activity.list_runs(app.state.store, limit, cursor, session_id, task_id)
-
-
-@app.get("/runs/{run_id}", dependencies=[Depends(require_key)])
-def get_run(run_id: str):
-    return activity.get_run(app.state.store, run_id)
-
-
-@app.get("/events", dependencies=[Depends(require_key)])
-def list_events(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-    task_id: str | None = Query(default=None, max_length=128),
-    run_id: str | None = Query(default=None, max_length=128),
-):
-    return activity.list_events(app.state.store, limit, cursor, session_id, task_id, run_id)
-
-
-@app.post("/turns/{turn_id}/cancel", dependencies=[Depends(require_admin)])
-def cancel_turn(turn_id: str):
-    return turn_control.cancel(app.state.store, turn_id)
-
-
-@app.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_key)])
-def cancel_submission(request_id: str):
-    """Stop is an owner safety action: record it durably, then end any live answer stream."""
-    from . import live_stream
-
-    result = turn_control.cancel_submission(app.state.store, request_id)
-    live_stream.stop(request_id)
-    return result
-
-
-class ReplyRecoveryRequest(BaseModel):
-    request_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-
-
-@app.post("/turns/{turn_id}/reply-only", dependencies=[Depends(require_admin)])
-def recover_turn_reply(turn_id: str, body: ReplyRecoveryRequest):
-    try:
-        return app.state.loop.recover_reply(turn_id, body.request_id)
-    except ActedWithoutReply as exc:
-        return {**_acted_without_reply(exc), "request_id": body.request_id}
+app.include_router(activity_api.router(lambda: app.state, require_key))
 
 
 app.include_router(

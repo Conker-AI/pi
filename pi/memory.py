@@ -116,13 +116,17 @@ class MemoryClient:
     def deliver(self, operation, message, *, agent_id):
         url = "/runtime/conversation/" + message["id"]
         headers = {**self.ingest_headers, "X-Agent-Id": agent_id}
-        arguments = {} if operation == "delete" else {
-            "json": {
-                "session_id": message["session_id"],
-                "content": message["content"],
-                "created_at": message["created_at"],
+        arguments = (
+            {}
+            if operation == "delete"
+            else {
+                "json": {
+                    "session_id": message["session_id"],
+                    "content": message["content"],
+                    "created_at": message["created_at"],
+                }
             }
-        }
+        )
         with self.http.stream(
             "DELETE" if operation == "delete" else "PUT", url, headers=headers, **arguments
         ) as response:
@@ -332,7 +336,10 @@ class Memory:
             or delivery["blocked_delivery"]
             or memory_store.recall_held(self.store)
         ):
-            return {"status": "degraded", "reason": "Memory delivery or a reviewed change is pending"}
+            return {
+                "status": "degraded",
+                "reason": "Memory delivery or a reviewed change is pending",
+            }
         return state
 
     def drain_once(self, limit=20):

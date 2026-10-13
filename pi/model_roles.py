@@ -168,9 +168,11 @@ class Update(Strict):
             for identity in (routing.modelId, routing.fallbackModelId)
             if identity is not None
         )
-        if config.roleSettings.answerMode == "router" and uses_laya and len(
-            config.roleSettings.roles["answer"].eligibleModelIds
-        ) > 8:
+        if (
+            config.roleSettings.answerMode == "router"
+            and uses_laya
+            and len(config.roleSettings.roles["answer"].eligibleModelIds) > 8
+        ):
             raise ValueError("Laya supports a shortlist of at most eight talking models.")
         return self
 
@@ -311,9 +313,7 @@ def dispatch(
     selected = override if role == "answer" and override is not None else assignment.modelId
     attempts = []
     if role == "answer" and not locked and harness_disabled:
-        raise SelectionError(
-            "No harness disables routing helpers; select a manual answer model."
-        )
+        raise SelectionError("No harness disables routing helpers; select a manual answer model.")
     single_candidate = role == "answer" and not locked and len(eligible) == 1
     if single_candidate:
         selected = next(iter(eligible))
@@ -427,13 +427,23 @@ def dispatch(
         try:
             require_images(adapter, messages)
             invoke = partial(
-                adapter.complete_bounded, messages, model=model.route,
+                adapter.complete_bounded,
+                messages,
+                model=model.route,
                 timeout=assignment.timeoutMs / 1000,
             )
-            completion = observe_call(
-                invoke, provider=getattr(adapter, "name", model.providerId), model=model.route,
-                role=role, provider_id=model.providerId, model_id=model.id,
-            ) if observe_call is not None else invoke()
+            completion = (
+                observe_call(
+                    invoke,
+                    provider=getattr(adapter, "name", model.providerId),
+                    model=model.route,
+                    role=role,
+                    provider_id=model.providerId,
+                    model_id=model.id,
+                )
+                if observe_call is not None
+                else invoke()
+            )
         except ProviderUnavailable:
             if guard is not None:
                 guard()

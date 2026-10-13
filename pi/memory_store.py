@@ -148,9 +148,12 @@ def pending_deletions_in(db):
 
 
 def recall_held_in(db):
-    return pending_deletions_in(db) + db.execute(
-        "SELECT COUNT(*) FROM memory_edit_operations WHERE state IN ('applying','unknown')"
-    ).fetchone()[0]
+    return (
+        pending_deletions_in(db)
+        + db.execute(
+            "SELECT COUNT(*) FROM memory_edit_operations WHERE state IN ('applying','unknown')"
+        ).fetchone()[0]
+    )
 
 
 def recall_held(store):

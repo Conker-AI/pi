@@ -628,7 +628,9 @@ def create_app(
         if request.scope["query_string"] or (
             identity is not None and not re.fullmatch(native_sessions.SESSION_ID, identity)
         ):
-            raise AuthError("Invalid native session request.", 422, code="invalid_native_session_request")
+            raise AuthError(
+                "Invalid native session request.", 422, code="invalid_native_session_request"
+            )
         body = None
         if action == "stop":
             try:
@@ -637,7 +639,9 @@ def create_app(
                 ).model_dump()
             except ValueError:
                 raise AuthError(
-                    "Invalid native session stop operation.", 422, code="invalid_native_session_request"
+                    "Invalid native session stop operation.",
+                    422,
+                    code="invalid_native_session_request",
                 ) from None
             admit_write(request, body)
         try:
@@ -918,7 +922,8 @@ def create_app(
                 request,
                 max_bytes=66 * 1024 * 1024
                 if target.startswith("/characters/companion/")
-                else 128000 if target.startswith("/memory/corrections")
+                else 128000
+                if target.startswith("/memory/corrections")
                 else 65536,
             )
             if request.method == "POST"

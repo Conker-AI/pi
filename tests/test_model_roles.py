@@ -212,8 +212,13 @@ def test_decision_classifier_cannot_be_saved_as_talking_model_but_old_data_is_re
 def test_laya_shortlist_rejects_nine_candidates_at_save():
     value = config()
     value["providers"].append(dict(id="decisions", name="Laya", enabled=True))
-    value["models"].append(dict(id="router", providerId="decisions", name="Laya", route="model-routing", enabled=True))
-    value["models"].extend(dict(id=f"m{i}", providerId="one", name=f"M{i}", route=f"model{i}", enabled=True) for i in range(7))
+    value["models"].append(
+        dict(id="router", providerId="decisions", name="Laya", route="model-routing", enabled=True)
+    )
+    value["models"].extend(
+        dict(id=f"m{i}", providerId="one", name=f"M{i}", route=f"model{i}", enabled=True)
+        for i in range(7)
+    )
     roles = value["roleSettings"]["roles"]
     roles["answer"]["eligibleModelIds"] += [f"m{i}" for i in range(7)]
     roles["routing"] = {**roles["answer"], "eligibleModelIds": ["router"], "modelId": "router"}
@@ -227,7 +232,15 @@ def test_laya_shortlist_rejects_nine_candidates_at_save():
 def test_decision_route_must_match_assigned_helper_role():
     value = config()
     value["providers"].append(dict(id="decisions", name="Laya", enabled=True))
-    value["models"].append(dict(id="ranker", providerId="decisions", name="Ranking", route="memory-ranking", enabled=True))
+    value["models"].append(
+        dict(
+            id="ranker",
+            providerId="decisions",
+            name="Ranking",
+            route="memory-ranking",
+            enabled=True,
+        )
+    )
     value["roleSettings"]["roles"]["summarization"].update(eligibleModelIds=["ranker"])
     with pytest.raises(ValidationError, match="summarization role"):
         r.Update(expected_revision=0, configuration=value)
