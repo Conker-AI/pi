@@ -10,16 +10,22 @@ from . import agents
 def router(app_state, require_owner):
     routes = APIRouter()
 
-    @routes.get("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentCollection)
+    @routes.get(
+        "/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentCollection
+    )
     def list_agents():
         return agents.list_agents(app_state().store)
 
-    @routes.post("/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile)
+    @routes.post(
+        "/agents", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile
+    )
     def create_agent(body: agents.AgentInput):
         return agents.create(app_state().store, body)
 
     @routes.get(
-        "/agents/{identity}", dependencies=[Depends(require_owner)], response_model=agents.AgentProfile
+        "/agents/{identity}",
+        dependencies=[Depends(require_owner)],
+        response_model=agents.AgentProfile,
     )
     def get_agent(identity: str):
         return agents.get(app_state().store, identity)

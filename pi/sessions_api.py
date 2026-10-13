@@ -126,7 +126,11 @@ def router(app_state, require_key, require_admin):
                 request_id=body.request_id,
                 task_id=body.task_id,
                 task_expected_revision=body.task_expected_revision,
-                **({"draft_revision": body.draft_revision} if body.draft_revision is not None else {}),
+                **(
+                    {"draft_revision": body.draft_revision}
+                    if body.draft_revision is not None
+                    else {}
+                ),
                 **({"attachment_ids": body.attachment_ids} if body.attachment_ids else {}),
                 **({"model_id": body.model_id} if body.model_id is not None else {}),
                 **({"reply_to": body.reply_to} if body.reply_to is not None else {}),

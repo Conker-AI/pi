@@ -13,7 +13,9 @@ def router(app_state, require_key, require_owner):
     @routes.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
     def preview_memory_forget(memory_id: str):
         try:
-            return memory_forget.preview(getattr(app_state(), "memory_corrections", None), memory_id)
+            return memory_forget.preview(
+                getattr(app_state(), "memory_corrections", None), memory_id
+            )
         except memory_forget.ForgetError as exc:
             raise HTTPException(exc.status, exc.detail) from exc
 
