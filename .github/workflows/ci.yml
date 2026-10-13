@@ -57,6 +57,10 @@ jobs:
           python -m ruff check .
           python -m ruff format --check .
 
+      - name: File sizes
+        # 600 lines per source file; files that were already larger may only shrink.
+        run: python scripts/check_file_sizes.py
+
       - name: Tests
         run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q
 
