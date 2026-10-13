@@ -68,6 +68,7 @@ from . import (
     system_inventory,
     system_inventory_api,
     tasks,
+    tasks_api,
     team_execution,
     team_execution_api,
     turn_control,
@@ -974,43 +975,7 @@ def memory_status():
     return app.state.loop.memory.status()
 
 
-@app.get("/tasks", dependencies=[Depends(require_key)])
-def list_tasks(
-    limit: int = Query(default=50, ge=1, le=200),
-    cursor: str | None = Query(default=None, max_length=128),
-    session_id: str | None = Query(default=None, max_length=128),
-):
-    return tasks.list_tasks(app.state.store, limit, cursor, session_id)
-
-
-@app.post("/tasks", dependencies=[Depends(require_key)])
-def create_task(body: tasks.CreateTask):
-    return tasks.create(app.state.store, body)
-
-
-@app.get("/tasks/requests/{request_id}", dependencies=[Depends(require_key)])
-def task_by_request(request_id: str):
-    return tasks.by_request(app.state.store, request_id)
-
-
-@app.get("/tasks/{task_id}", dependencies=[Depends(require_key)])
-def get_task(task_id: str):
-    return tasks.get(app.state.store, task_id)
-
-
-@app.post("/tasks/{task_id}/update", dependencies=[Depends(require_key)])
-def update_task(task_id: str, body: tasks.UpdateTask):
-    return tasks.update(app.state.store, task_id, body)
-
-
-@app.post("/tasks/{task_id}/transition", dependencies=[Depends(require_key)])
-def transition_task(task_id: str, body: tasks.TransitionTask):
-    return tasks.transition(app.state.store, task_id, body)
-
-
-@app.post("/tasks/{task_id}/archive", dependencies=[Depends(require_key)])
-def archive_task(task_id: str, body: tasks.ArchiveTask):
-    return tasks.archive(app.state.store, task_id, body)
+app.include_router(tasks_api.router(lambda: app.state, require_key))
 
 
 @app.get("/runs", dependencies=[Depends(require_key)])
