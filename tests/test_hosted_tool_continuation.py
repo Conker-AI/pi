@@ -19,6 +19,14 @@ from pi.toolgate import ApprovalRequired, Tool, ToolResult
 KINDS = ("openai", "anthropic", "openrouter")
 
 
+@pytest.fixture(autouse=True)
+def reject_unmocked_network(monkeypatch):
+    def reject(*_args, **_kwargs):
+        pytest.fail("Hosted-provider tests must use a synthetic HTTP transport")
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", reject)
+
+
 def provider_for(kind, paid=True):
     if kind == "openrouter":
         provider = OpenRouterProvider("synthetic", allow_paid=paid)
@@ -51,6 +59,42 @@ def provider_reply(kind, text):
         "choices": [{"message": {"content": text}, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 5, "completion_tokens": 3},
     }
+
+
+def provider_stream_body(kind, text):
+    """The same reply as provider_reply, as the server-sent events the adapters parse."""
+    if kind == "anthropic":
+        events = [
+            {
+                "type": "message_start",
+                "message": {"model": "requested", "usage": {"input_tokens": 5}},
+            },
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": text},
+            },
+            {"type": "content_block_stop", "index": 0},
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn"},
+                "usage": {"output_tokens": 3},
+            },
+            {"type": "message_stop"},
+        ]
+        return "".join("data: " + json.dumps(event) + "\n\n" for event in events).encode()
+    events = [
+        {"model": "requested", "choices": [{"delta": {"content": text}}]},
+        {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 3}},
+    ]
+    body = "".join("data: " + json.dumps(event) + "\n\n" for event in events)
+    return (body + "data: [DONE]\n\n").encode()
 
 
 class ApprovedGate:
@@ -102,7 +146,25 @@ def test_approved_action_narration_recovery_and_later_reply(
             200, json=provider_reply(kind, reply), request=httpx.Request("POST", url)
         )
 
+    def streamed(request):
+        # Turns hold a Stop token, so hosted adapters stream; answer with the same script.
+        payloads.append(json.loads(request.content))
+        reply = replies.pop(0)
+        if reply is None:
+            raise httpx.ReadTimeout("private provider error")
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=provider_stream_body(kind, reply),
+        )
+
+    real_client = httpx.Client
     monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(streamed)),
+    )
     provider, gate = provider_for(kind), ApprovedGate()
     with closing(Store(tmp_path / "pi.db")) as store:
         loop = Loop(store, Router(local_provider=provider, local_model="requested"), toolgate=gate)

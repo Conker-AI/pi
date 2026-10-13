@@ -298,6 +298,7 @@ def test_memory_no_harness_never_calls_ranker(monkeypatch):
     monkeypatch.setattr(session_settings, "execution", lambda *args: selected)
     monkeypatch.setattr(session_settings, "memory_allowed", lambda value: True)
     monkeypatch.setattr(memory_store, "pending_deletions", lambda store: False)
+    monkeypatch.setattr(memory_store, "recall_held", lambda *args: 0)
     saved = []
     monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args))
     package = {"memories": [], "retrieval": {"semantic": {"status": "ok"}}}

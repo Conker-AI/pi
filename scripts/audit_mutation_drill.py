@@ -150,7 +150,7 @@ CASES = [
         "pi/memory_delivery.py",
         'value.get("id") != receipt_id',
         "False",
-        MEMORY,
+        "tests/test_memory_delivery.py",
     ),
     (
         "F5-legacy-origin-guessed",
