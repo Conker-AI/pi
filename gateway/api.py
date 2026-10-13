@@ -567,6 +567,31 @@ def create_app(
             raise AuthError(str(error), 503) from None
         return JSONResponse(value)
 
+    @app.get("/api/host/provider-onboarding")
+    @app.post("/api/host/provider-onboarding")
+    async def host_provider_onboarding(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import provider_onboarding
+        from .provider_control import ProviderControlError
+
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Provider setup does not accept query parameters.", 422)
+        body = None
+        if request.method == "POST":
+            try:
+                body = provider_onboarding.validate_operation(await json_body(request, max_bytes=8192))
+            except ProviderControlError:
+                raise AuthError("Invalid provider setup operation.", 422) from None
+            admit_write(request, body)
+        try:
+            value = await run_in_threadpool(provider_onboarding.request,
+                app.state.config.provider_control_socket, request.method, body, transport=provider_transport)
+        except ProviderControlError as error:
+            raise AuthError(str(error), 503) from None
+        return JSONResponse(value)
+
     def terminal_access(request):
         owner = session(request)
         if app.state.terminals is None:
