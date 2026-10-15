@@ -9,7 +9,7 @@ import sqlite3
 
 import pytest
 
-from pi.store import Store
+from pi.conversation.store import Store
 
 
 @pytest.fixture()

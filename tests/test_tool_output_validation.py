@@ -6,9 +6,9 @@ from contextlib import closing
 import pytest
 from test_tool_turns import CALL, FakeGate, build
 
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.store import Store
-from pi.tools import InvalidToolOutput, describe, parse, validate_answer
+from pi.actions.tools import InvalidToolOutput, describe, parse, validate_answer
+from pi.conversation.store import Store
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ def test_strict_decoder_accepts_key_order_whitespace_and_exact_nested_args():
 
 
 def test_protocol_work_is_bounded_and_diagnostics_never_echo_payload(monkeypatch):
-    import pi.tools as tools
+    import pi.actions.tools as tools
 
     monkeypatch.setattr(tools, "MAX_TOOL_REQUEST_CHARS", 50)
     output = json.dumps({"tool": "t_echo", "args": {"text": "SENSITIVE" * 10}})

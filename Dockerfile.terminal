@@ -2,15 +2,16 @@ FROM python:3.12.14-slim-trixie@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f82
 
 WORKDIR /app
 
-RUN mkdir -p /app/pi /run/conker-terminal /workspace \
+RUN mkdir -p /app/pi/owner /run/conker-terminal /workspace \
     && chown 65532:65532 /run/conker-terminal /workspace \
-    && chmod 0555 /app/pi \
+    && chmod 0555 /app/pi /app/pi/owner \
     && chmod 0770 /run/conker-terminal \
     && chmod 0750 /workspace
 
 COPY --chmod=0444 pi/__init__.py /app/pi/__init__.py
-COPY --chmod=0444 pi/owner_terminal.py /app/pi/owner_terminal.py
-COPY --chmod=0444 pi/terminal_sidecar.py /app/pi/terminal_sidecar.py
+COPY --chmod=0444 pi/owner/__init__.py /app/pi/owner/__init__.py
+COPY --chmod=0444 pi/owner/terminal.py /app/pi/owner/terminal.py
+COPY --chmod=0444 pi/owner/terminal_sidecar.py /app/pi/owner/terminal_sidecar.py
 COPY --chmod=0555 scripts/conker-terminal /usr/local/bin/conker-terminal
 
 USER 65532:65532

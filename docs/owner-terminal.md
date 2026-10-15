@@ -20,7 +20,7 @@ integrate real AuthStore callbacks and exact password proofs.
 
 Gateway connects only when both `GATEWAY_TERMINAL_SOCKET` and
 `GATEWAY_TERMINAL_WORKSPACE_LABEL` are configured. Default is disabled and release
-manifests intentionally omit both. The separate `pi.terminal_sidecar` process owns
+manifests intentionally omit both. The separate `pi.owner.terminal_sidecar` process owns
 the allowlisted shell and fixed workspace. It admits one gateway connection after
 exact Linux `SO_PEERCRED` UID validation, unlinks the listener, never reconnects and
 closes every PTY when the channel is lost.

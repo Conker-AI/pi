@@ -5,8 +5,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from pi.memory import MemoryClient
-from pi.memory_explorer_api import router
+from pi.api.routes.memory_explorer import router
+from pi.memory.service import MemoryClient
 
 
 def test_owner_projection_uses_bound_namespace_and_read_credential():

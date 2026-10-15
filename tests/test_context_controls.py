@@ -2,12 +2,12 @@ from contextlib import closing
 
 import pytest
 
-from pi import context_controls as c
-from pi import forgetting
-from pi.loop import Loop, TurnFailed
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.context import controls as c
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop, TurnFailed
 
 
 class Provider:
@@ -151,7 +151,8 @@ def test_reviewed_fork_stale_boundary_and_active_turn_are_atomic(store):
 
 
 def test_reviewed_fork_after_stop_but_not_during_preparation(store):
-    from pi import submissions, turn_control
+    from pi.conversation import submissions
+    from pi.turns import control as turn_control
 
     sid = store.create_session()
     c.save(store, sid, c.Update(expected_revision=0, policy=policy()))

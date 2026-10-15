@@ -5,14 +5,16 @@ from contextlib import closing
 
 import pytest
 
-from pi import agents, memory_store, submissions, turn_context
-from pi import context_controls as context
-from pi import session_settings as settings
-from pi.loop import Loop
-from pi.memory import Memory
-from pi.providers import Message
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.context import controls as context
+from pi.conversation import settings, submissions
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.memory.service import Memory
+from pi.models.providers import Message
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 PUBLIC = {"memoryDisabled": False, "harnessDisabled": False}
 MODES = [

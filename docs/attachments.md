@@ -1,6 +1,6 @@
 # Durable conversation attachments
 
-`pi.attachments` stores bounded bytes in Pi's SQLite database, using the existing
+`pi.content.attachments` stores bounded bytes in Pi's SQLite database, using the existing
 Store transaction and maintenance lease. No caller provides a filesystem path;
 filenames are display metadata and cannot contain path separators or control
 characters. Uploads do not invoke a model, fetch URLs, open documents, or execute

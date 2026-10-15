@@ -6,10 +6,11 @@ from test_deep_research import FOLLOWUP, PLAN
 from test_tool_turns import build
 from test_web_research import SEARCH, SearchGate
 
-from pi import research, research_usage, session_settings
-from pi.loop import ActedWithoutReply
-from pi.providers import ProviderUnavailable
-from pi.store import Store
+from pi.context import research, research_usage
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.turns.loop import ActedWithoutReply
 
 
 def priced(provider, unknown=False):
@@ -102,8 +103,8 @@ def test_process_interruption_leaves_pending_attempt_not_zero_cost(tmp_path):
 def test_configured_model_dispatch_preserves_timeout_and_usage(tmp_path):
     from test_model_roles import config
 
-    from pi import model_roles
-    from pi.providers import Completion, Message
+    from pi.models import roles as model_roles
+    from pi.models.providers import Completion, Message
 
     class Bounded:
         name = "one"

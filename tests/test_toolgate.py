@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from pi.toolgate import (
+from pi.actions.toolgate import (
     ApprovalRequired,
     ToolGateClient,
     ToolGateUnavailable,

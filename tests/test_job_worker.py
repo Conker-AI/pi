@@ -4,9 +4,9 @@ from threading import Event
 
 from test_jobs import definition
 
-from pi import jobs
-from pi.job_worker import JobWorker
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.schedule import jobs
+from pi.schedule.job_worker import JobWorker
 
 
 def test_workers_share_durable_admission_and_restart_ready(tmp_path):

@@ -8,8 +8,9 @@ import pytest
 from test_continuity import event
 from test_jobs import definition
 
-from pi import continuity, jobs
-from pi.store import Store
+from pi.agents import continuity
+from pi.conversation.store import Store
+from pi.schedule import jobs
 
 
 def claim(store, request="continuity_job_001"):

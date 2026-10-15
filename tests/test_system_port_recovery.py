@@ -7,11 +7,11 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import system_actions as actions
-from pi import system_actions_api
-from pi import system_port_recovery as recovery
-from pi.store import Store
-from pi.toolgate import ToolGateClient, ToolPending
+from pi.actions.toolgate import ToolGateClient, ToolPending
+from pi.api.routes import system_actions as system_actions_api
+from pi.conversation.store import Store
+from pi.host import actions
+from pi.host import port_recovery as recovery
 from tests.test_system_ports import BODY, CID, NEW, Gate
 
 

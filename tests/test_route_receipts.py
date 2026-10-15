@@ -7,11 +7,12 @@ import pytest
 from test_model_role_execution import Adapter, config, save
 from test_tool_turns import CALL, FakeGate
 
-from pi import model_roles, response_retries
-from pi.loop import ActedWithoutReply, Loop
-from pi.providers import ProviderUnavailable
-from pi.routing import Reason, Router, Tier, TurnContext
-from pi.store import Store
+from pi.conversation import retries as response_retries
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import ProviderUnavailable
+from pi.models.routing import Reason, Router, Tier, TurnContext
+from pi.turns.loop import ActedWithoutReply, Loop
 
 
 def automatic(*, answer_fallback=False):

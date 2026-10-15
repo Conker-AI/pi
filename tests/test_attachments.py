@@ -10,10 +10,10 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import attachments as a
-from pi import session_settings
-from pi.attachments_api import router
-from pi.store import Store
+from pi.api.routes.attachments import router
+from pi.content import attachments as a
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 resolve = session_settings.source_privacy
 
@@ -279,7 +279,7 @@ def test_unbound_removal_reclaims_quota_with_immutable_receipt(store, monkeypatc
 
 
 def test_bound_or_reserved_upload_cannot_be_removed(store):
-    from pi import submissions
+    from pi.conversation import submissions
 
     session = store.create_session()
     bound, reserved = upload(store, session), upload(store, session)

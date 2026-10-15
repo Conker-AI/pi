@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pi import owner_preferences as prefs
-from pi import proactive_budget as budget
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.owner import preferences as prefs
+from pi.schedule import proactive_budget as budget
 
 DAY = datetime(2026, 9, 21, 10, tzinfo=UTC)
 

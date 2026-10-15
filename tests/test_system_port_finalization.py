@@ -6,10 +6,10 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import system_actions as actions
-from pi import system_actions_api
-from pi import system_port_finalization as recovery
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.api.routes import system_actions as system_actions_api
+from pi.host import actions
+from pi.host import port_finalization as recovery
 from tests.test_system_port_recovery import Stream, saved  # noqa: F401
 from tests.test_system_ports import BODY, observation
 

@@ -12,22 +12,18 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from test_memory_forget import BODY, client, forgotten
 
-from pi import (
-    actions,
-    browser_contract,
-    context_controls,
-    drafts,
-    forgetting,
-    memory_forget,
-    memory_store,
-    submissions,
-    turn_context,
-)
-from pi.loop import Loop
-from pi.memory import Memory
-from pi.providers import Message
-from pi.routing import Router
-from pi.store import Store
+from pi.actions import identities as actions
+from pi.api import browser_contract
+from pi.context import controls as context_controls
+from pi.conversation import drafts, forgetting, submissions
+from pi.conversation.store import Store
+from pi.memory import forget as memory_forget
+from pi.memory import store as memory_store
+from pi.memory.service import Memory
+from pi.models.providers import Message
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 SECRET = "SYNTHETIC_RECALLED_FACT"
 
@@ -305,7 +301,7 @@ def test_recovery_route_is_owner_only():
 def test_pending_http_read_is_content_free_owner_control_and_needs_no_remote_record(
     store, monkeypatch
 ):
-    from pi import api
+    from pi.api import server as api
 
     owner = "synthetic_owner_control_key"
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
@@ -354,7 +350,7 @@ def test_empty_recall_notice_has_no_forgotten_evidence_and_remains_exactly_repla
 @pytest.mark.parametrize("complete", [False, True])
 @pytest.mark.parametrize("url", ["https://another-memorygate", "http://memorygate/other-base"])
 def test_request_pins_destination_for_pending_and_completed_identity(store, complete, url):
-    from pi.memory_corrections import Client
+    from pi.memory.corrections import Client
 
     if complete:
         memory_forget.forget(store, client(forgotten), BODY)
@@ -374,7 +370,7 @@ def test_request_pins_destination_for_pending_and_completed_identity(store, comp
 
 
 def test_key_rotation_at_same_destination_can_reconcile(store):
-    from pi.memory_corrections import Client
+    from pi.memory.corrections import Client
 
     with pytest.raises(memory_forget.ForgetError):
         memory_forget.forget(store, client(lambda request: httpx.Response(500)), BODY)
@@ -403,7 +399,7 @@ def test_key_rotation_at_same_destination_can_reconcile(store):
 def test_forget_between_retry_read_and_admission_cannot_recreate_saved_prefix(store, monkeypatch):
     from test_response_retries import body, setup
 
-    from pi import response_retries
+    from pi.conversation import retries as response_retries
 
     loop, first, second = setup(store)
     sid, tid = recorded(store, recalled(), final="Original answer")

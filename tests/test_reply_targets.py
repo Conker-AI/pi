@@ -6,11 +6,13 @@ import pytest
 from test_context_controls import policy
 from test_loop import Recorder, loop_with
 
-from pi import agents, submissions, tasks
-from pi import context_controls as c
-from pi import turn_queue as q
-from pi.loop import TurnFailed
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.context import controls as c
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.turns import queue as q
+from pi.turns.loop import TurnFailed
 
 
 def test_reply_is_present_in_model_context_and_input_projection_after_reopen(tmp_path):

@@ -61,6 +61,10 @@ jobs:
         # 600 lines per source file; files that were already larger may only shrink.
         run: python scripts/check_file_sizes.py
 
+      - name: Package boundaries
+        # One package per type; cross-package imports are listed and may only be removed.
+        run: python scripts/check_package_boundaries.py
+
       - name: Tests
         run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q
 
@@ -152,8 +156,9 @@ jobs:
           files=$(docker run --rm --entrypoint /bin/sh terminal-candidate:ci -c \
             'find /app -type f -print | sort')
           expected='/app/pi/__init__.py
-          /app/pi/owner_terminal.py
-          /app/pi/terminal_sidecar.py'
+          /app/pi/owner/__init__.py
+          /app/pi/owner/terminal.py
+          /app/pi/owner/terminal_sidecar.py'
           test "$files" = "$expected"
           uid=$(docker run --rm --entrypoint /usr/bin/id terminal-candidate:ci -u)
           test "$uid" = 65532

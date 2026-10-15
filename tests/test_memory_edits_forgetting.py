@@ -2,8 +2,9 @@
 
 import pytest
 
-from pi import memory_edits as edits
-from pi import memory_forget, memory_store
+from pi.memory import edits
+from pi.memory import forget as memory_forget
+from pi.memory import store as memory_store
 from tests.test_memory_edits import (
     BODY,
     setup,  # noqa: F401 - pytest fixture used by name
@@ -50,7 +51,7 @@ def source_memory(setup):
 
 @pytest.mark.parametrize("legacy", [False, True])
 def test_source_forget_scrubs_pending_text_and_late_receipt_cannot_restore_it(setup, legacy):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     store, client, remote = setup
     sid, body = source_memory(setup)
@@ -83,7 +84,7 @@ def test_source_forget_scrubs_pending_text_and_late_receipt_cannot_restore_it(se
 
 
 def test_forget_between_snapshot_and_admission_cannot_restore_pending_text(setup):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     store, client, remote = setup
     sid, body = source_memory(setup)
@@ -103,7 +104,7 @@ def test_forget_between_snapshot_and_admission_cannot_restore_pending_text(setup
 
 
 def test_late_apply_receipt_after_source_forget_keeps_terminal_redaction(setup):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     store, client, _remote = setup
     sid, body = source_memory(setup)
@@ -123,7 +124,7 @@ def test_late_apply_receipt_after_source_forget_keeps_terminal_redaction(setup):
 
 
 def test_old_schema_source_forgetting_needs_no_new_runtime_start(setup):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     store, _client, _remote = setup
     sid = store.create_session()

@@ -6,21 +6,16 @@ import pytest
 from test_attachment_turns import upload
 from test_model_roles import Adapter, config
 
-from pi import (
-    context_controls,
-    forgetting,
-    model_roles,
-    tasks,
-    turn_control,
-    turn_queue,
-)
-from pi import (
-    response_retries as retries,
-)
-from pi.loop import Loop
-from pi.providers import ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.context import controls as context_controls
+from pi.conversation import forgetting, retries
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import ProviderUnavailable
+from pi.models.routing import Router
+from pi.schedule import tasks
+from pi.turns import control as turn_control
+from pi.turns import queue as turn_queue
+from pi.turns.loop import Loop
 
 
 class Recording(Adapter):
@@ -60,7 +55,7 @@ def test_retry_exact_boundary_selected_model_no_duplicate_input_or_later_context
         result = retries.run(loop, sid, original["message"]["id"], body())
         assert result["status"] == "complete"
         assert result["input_message_id"] == original["submission"]["input_message_id"]
-        from pi import turn_context
+        from pi.turns import context as turn_context
 
         assert turn_context.replay(store, result["turn_id"])["messages"] == second.messages[0]
         assert [m.content for m in second.messages[0]] == [
@@ -132,7 +127,7 @@ def test_concurrent_duplicate_and_stop_do_not_repeat_provider(tmp_path):
 def test_owner_api_restart_failed_receipt_and_forgetting(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from pi import api
+    from pi.api import server as api
 
     path = tmp_path / "pi.db"
     with closing(Store(path)) as store:
@@ -219,7 +214,8 @@ def test_new_policy_does_not_change_retry_and_pinned_original_is_not_replaced(tm
 
 
 def test_invalid_model_and_stricter_privacy_do_not_create_attempt(tmp_path):
-    from pi import agents, session_settings
+    from pi.agents import profiles as agents
+    from pi.conversation import settings as session_settings
 
     with closing(Store(tmp_path / "pi.db")) as store:
         loop, _, second = setup(store)

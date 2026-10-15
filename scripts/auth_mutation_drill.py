@@ -151,7 +151,7 @@ CASES = [
     ),
     (
         "worker-runtime-key-becomes-admin",
-        "pi/api.py",
+        "pi/api/server.py",
         "if not runtime_allowed(request.method, request.url.path):",
         "if False:",
         API + "test_pi_runtime_key_has_no_owner_authority_or_future_admin_access",

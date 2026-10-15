@@ -8,10 +8,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from test_loop import Recorder, loop_with
 
-from pi import foreground_inference, inference_control, session_settings, submissions, turn_control
-from pi.loop import TurnFailed
-from pi.providers import OllamaProvider, ProviderUnavailable
-from pi.store import Store
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.providers import OllamaProvider, ProviderUnavailable
+from pi.turns import control as turn_control
+from pi.turns import foreground_inference, inference_control
+from pi.turns.loop import TurnFailed
 
 
 @pytest.mark.parametrize("stop_by", ["turn", "submission"])
@@ -202,7 +205,7 @@ def test_existing_background_token_keeps_its_original_owner(tmp_path):
 def test_delayed_old_stop_cannot_cancel_a_newly_consented_reply(tmp_path, monkeypatch, new_stop):
     from test_reply_recovery import stopped
 
-    from pi.loop import ActedWithoutReply
+    from pi.turns.loop import ActedWithoutReply
 
     delayed = []
     deliver = foreground_inference.cancel

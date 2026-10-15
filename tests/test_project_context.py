@@ -3,17 +3,13 @@ from contextlib import closing
 import pytest
 from test_loop import Recorder, loop_with
 
-from pi import (
-    agents,
-    attachments,
-    forgetting,
-    project_sources,
-    projects,
-    session_settings,
-    submissions,
-    tasks,
-)
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.content import attachments
+from pi.context import project_sources, projects
+from pi.conversation import forgetting, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 
 def setup(store, text="Project evidence"):
@@ -185,7 +181,7 @@ def test_source_becoming_private_blocks_frozen_context_read(tmp_path):
                 ),
             ),
         )
-        from pi.context_controls import ContextError
+        from pi.context.controls import ContextError
 
         with pytest.raises(ContextError, match="Private sources"):
             loop_with(store, Recorder())._history(target, turn_id=turn)

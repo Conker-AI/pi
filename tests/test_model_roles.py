@@ -3,9 +3,9 @@ from contextlib import closing
 import pytest
 from pydantic import ValidationError
 
-from pi import model_roles as r
-from pi.providers import Completion, Message, ProviderUnavailable
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models import roles as r
+from pi.models.providers import Completion, Message, ProviderUnavailable
 
 
 class Adapter:

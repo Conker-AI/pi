@@ -56,7 +56,7 @@ def test_real_https_login_conversation_logout_and_host_recovery(tmp_path, monkey
         try:
             for args, env in (
                 (
-                    ["uvicorn", "pi.api:app", "--host", "127.0.0.1", "--port", str(pi_port)],
+                    ["uvicorn", "pi.api.server:app", "--host", "127.0.0.1", "--port", str(pi_port)],
                     worker_env,
                 ),
                 (["gateway", "serve", "--port", str(gateway_port)], gateway_env),

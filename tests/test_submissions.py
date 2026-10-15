@@ -12,11 +12,13 @@ from fastapi.testclient import TestClient
 from test_loop import Recorder, loop_with
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import activity, api, forgetting, submissions, tasks
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.providers import ProviderUnavailable
-from pi.store import Store
-from pi.toolgate import ToolPending
+from pi.actions.toolgate import ToolPending
+from pi.api import server as api
+from pi.conversation import activity, forgetting, submissions
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.schedule import tasks
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 REQUEST = "submission_request_001"
 

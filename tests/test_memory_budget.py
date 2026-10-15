@@ -8,11 +8,11 @@ import httpx
 import pytest
 from test_memory import Provider, client
 
-from pi import memory_store
-from pi.loop import Loop
-from pi.memory import BUDGET_RECEIPT, CONTEXT_LIMIT_BYTES, CONTEXT_RESPONSE_BYTES, Memory
-from pi.routing import Router
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.memory.service import BUDGET_RECEIPT, CONTEXT_LIMIT_BYTES, CONTEXT_RESPONSE_BYTES, Memory
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def package(text_size=4000, count=8, character="x"):

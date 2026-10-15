@@ -2,10 +2,13 @@ from contextlib import closing
 
 import pytest
 
-from pi import agents, projects, session_settings, submissions
-from pi.loop import Loop
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.context import projects
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def test_project_instructions_frozen_at_submission(tmp_path):

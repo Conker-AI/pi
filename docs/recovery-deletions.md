@@ -4,8 +4,8 @@ Stop both Pi instances. Preserve the current authoritative database separately
 from the restored copy. With matching current schemas, inspect the replay scope:
 
 ```sh
-python -m pi.recovery_deletions preview --source /current/pi.db --target /recovery/pi.db
-python -m pi.recovery_deletions replay --source /current/pi.db --target /recovery/pi.db --confirm HASH
+python -m pi.conversation.recovery_deletions preview --source /current/pi.db --target /recovery/pi.db
+python -m pi.conversation.recovery_deletions replay --source /current/pi.db --target /recovery/pi.db --confirm HASH
 ```
 
 The hash binds the restored session IDs and source tombstones. Replay verifies

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.api.browser_contract import owner_allowed, runtime_allowed
 
 ORIGIN = "https://localhost:8050"
 PASSWORD = "local integration testing phrase"
@@ -78,7 +78,7 @@ def test_separate_owner_transport_exact_proof_and_no_runtime_escalation(tmp_path
 
 
 def test_pi_owner_key_cannot_be_used_as_runtime_or_recovery(monkeypatch):
-    from pi.api import app
+    from pi.api.server import app
 
     owner_hash = hashlib.sha256(OWNER.encode()).hexdigest()
     monkeypatch.setattr(app.state, "admin_key", "admin-test-" + "a" * 32, raising=False)

@@ -4,10 +4,11 @@ import pytest
 from test_context_controls import policy
 from test_loop import Recorder, loop_with
 
-from pi import context_controls as context
-from pi import message_forks, tasks
-from pi import response_versions as versions
-from pi.store import Store
+from pi.context import controls as context
+from pi.conversation import forks as message_forks
+from pi.conversation import versions
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 
 def alternative(store, sid, original, text="Alternative answer"):
@@ -135,7 +136,8 @@ def test_cannot_join_foreign_answers_or_move_version_between_families(tmp_path):
 def test_owner_api_and_forgetting_preserve_only_unavailable_identifiers(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from pi import api, forgetting
+    from pi.api import server as api
+    from pi.conversation import forgetting
 
     path = tmp_path / "pi.db"
     with closing(Store(path)) as store:

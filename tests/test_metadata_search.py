@@ -6,9 +6,10 @@ from contextlib import closing, contextmanager
 import pytest
 from test_universal_search import client_for
 
-from pi import forgetting, session_settings
-from pi import universal_search as search
-from pi.store import Store
+from pi.context import universal_search as search
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 @pytest.fixture

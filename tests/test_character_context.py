@@ -7,11 +7,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_characters import profile, save
 
-from pi import calls, character_context, session_settings, session_settings_api
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import character_context
+from pi.api.routes import session_settings as session_settings_api
+from pi.calls import runtime as calls
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def snapshot():

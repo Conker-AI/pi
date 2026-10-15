@@ -6,8 +6,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pi import agents, continuity, project_sources, session_settings, tasks, universal_search
-from pi.store import Store
+from pi.agents import continuity
+from pi.agents import profiles as agents
+from pi.context import project_sources, universal_search
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 DAY = datetime(2026, 9, 21, 10, tzinfo=UTC)
 

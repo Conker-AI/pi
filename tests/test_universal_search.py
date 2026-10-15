@@ -4,13 +4,17 @@ from types import SimpleNamespace
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import browser_contract, session_settings
-from pi import universal_search as search
-from pi.store import Store
+from pi.api import browser_contract
+from pi.context import universal_search as search
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 def test_real_source_adapters(tmp_path):
-    from pi import agents, artifacts, projects, tasks
+    from pi.agents import profiles as agents
+    from pi.content import artifacts
+    from pi.context import projects
+    from pi.schedule import tasks
 
     with closing(Store(tmp_path / "adapters.db")) as store:
         sid = store.create_session(title="Planning")
@@ -118,7 +122,7 @@ def test_settings_revision_persistence_and_unsupported_stages(tmp_path):
 
 
 def test_exact_unicode_pagination_private_and_forgotten(tmp_path):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     path = tmp_path / "search.db"
     with closing(Store(path)) as store:
@@ -258,7 +262,7 @@ def test_semantic_fallback_is_labeled_literal_and_source_failure_is_reported(tmp
 
 
 def test_ranking_is_bounded_validated_and_keeps_literals_on_failure(tmp_path, monkeypatch):
-    from pi.providers import Completion, ProviderUnavailable
+    from pi.models.providers import Completion, ProviderUnavailable
 
     records = [
         search.record("tools", str(i), "Needle", f"needle {i}", "/tools", "needle", "text")

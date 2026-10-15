@@ -6,10 +6,10 @@ from test_deep_research import PLAN
 from test_tool_turns import build
 from test_web_research import SEARCH, SearchGate
 
-from pi import research
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.store import Store
-from pi.toolgate import Tool, ToolGateUnavailable, ToolResult
+from pi.actions.toolgate import Tool, ToolGateUnavailable, ToolResult
+from pi.context import research
+from pi.conversation.store import Store
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 HANDLE = "rr_current_turn_source_01"
 FETCH = json.dumps({"tool": "research.fetch", "args": {"result_id": HANDLE, "max_chars": 3000}})

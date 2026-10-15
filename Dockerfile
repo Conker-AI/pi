@@ -9,4 +9,4 @@ COPY pi ./pi
 COPY gateway ./gateway
 
 EXPOSE 8050
-CMD ["python", "-m", "uvicorn", "pi.api:app", "--host", "0.0.0.0", "--port", "8050"]
+CMD ["python", "-m", "uvicorn", "pi.api.server:app", "--host", "0.0.0.0", "--port", "8050"]

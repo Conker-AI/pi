@@ -4,10 +4,10 @@ import pytest
 from test_loop import Recorder, loop_with
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import tasks
-from pi import turn_steering as steering
-from pi.providers import Completion
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.schedule import tasks
+from pi.turns import steering
 
 
 def request(text="Use the new instructions", identity="steer_request_0001"):
@@ -107,8 +107,8 @@ def test_steering_race_at_final_commit_rebuilds_without_publishing_stale_text(
 def test_steering_after_action_preserves_acted_state_on_later_failure(tmp_path):
     from test_tool_turns import Scripted
 
-    from pi.loop import ActedWithoutReply
-    from pi.providers import ProviderUnavailable
+    from pi.models.providers import ProviderUnavailable
+    from pi.turns.loop import ActedWithoutReply
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()
@@ -157,7 +157,8 @@ def test_discarded_reported_cost_is_preserved_and_unknown_is_not_zero(tmp_path):
 def test_owner_route_pending_restart_and_forgetting(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from pi import api, forgetting
+    from pi.api import server as api
+    from pi.conversation import forgetting
 
     path = tmp_path / "pi.db"
     with closing(Store(path)) as store:
@@ -188,7 +189,7 @@ def test_owner_route_pending_restart_and_forgetting(tmp_path, monkeypatch):
 
 
 def test_late_steer_before_action_admission_does_not_leave_stale_proposal(tmp_path, monkeypatch):
-    from pi import actions
+    from pi.actions import identities as actions
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()
@@ -214,7 +215,7 @@ def test_late_steer_before_action_admission_does_not_leave_stale_proposal(tmp_pa
 def test_later_context_policy_edit_does_not_rewrite_the_running_turn(tmp_path):
     from test_context_controls import policy
 
-    from pi import context_controls
+    from pi.context import controls as context_controls
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()

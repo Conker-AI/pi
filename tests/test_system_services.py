@@ -3,10 +3,10 @@ from contextlib import closing
 import pytest
 from pydantic import ValidationError
 
-from pi import system_actions as actions
-from pi import system_targets
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolGateClient, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolGateClient, ToolResult
+from pi.conversation.store import Store
+from pi.host import actions
+from pi.host import targets as system_targets
 from tests.test_system_actions import Gate
 from tests.test_system_targets import transport
 

@@ -5,12 +5,15 @@ from threading import Event
 
 import pytest
 
-from pi import agents, context_controls, forgetting, session_settings
-from pi import calls as c
-from pi.loop import Loop
-from pi.providers import Completion, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.calls import runtime as c
+from pi.context import controls as context_controls
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import Completion, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 @pytest.fixture
@@ -328,7 +331,7 @@ def test_parent_forgetting_erases_call_transcript_and_hashes(store):
 def test_model_preference_changes_only_future_accepted_requests(store):
     from test_model_roles import config
 
-    from pi import model_roles
+    from pi.models import roles as model_roles
 
     model_roles.save(
         store,
@@ -368,7 +371,7 @@ def test_model_preference_changes_only_future_accepted_requests(store):
 def test_interruption_blocks_configured_model_fallback(store):
     from test_model_roles import config
 
-    from pi import model_roles
+    from pi.models import roles as model_roles
 
     configuration = config()
     configuration["roleSettings"]["answerMode"] = "router"
@@ -432,7 +435,7 @@ def test_owner_only_api_factory_capabilities_and_typed_request(store):
     from fastapi import FastAPI, Header, HTTPException
     from fastapi.testclient import TestClient
 
-    from pi.calls_api import router
+    from pi.api.routes.calls import router
 
     def owner(key: str | None = Header(default=None)):
         if key != "owner":

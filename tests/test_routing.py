@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from pi.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider, PaidModelRefused
-from pi.providers import Completion, Message
-from pi.routing import Reason, Router, Tier, TurnContext
+from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider, PaidModelRefused
+from pi.models.providers import Completion, Message
+from pi.models.routing import Reason, Router, Tier, TurnContext
 
 
 class FakeLocal:

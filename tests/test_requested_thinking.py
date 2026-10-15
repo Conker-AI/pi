@@ -9,19 +9,17 @@ import pytest
 from fastapi.testclient import TestClient
 from test_background_thinking import setup, wait_workers
 
-from pi import (
-    agents,
-    api,
-    background_thinking,
-    inference_control,
-    model_roles,
-    response_retries,
-    session_settings,
-    submissions,
-    turn_control,
-    turn_queue,
-)
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.conversation import retries as response_retries
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.turns import control as turn_control
+from pi.turns import inference_control
+from pi.turns import queue as turn_queue
+from pi.turns import thinking as background_thinking
 
 
 @pytest.fixture
@@ -160,7 +158,7 @@ class Stoppable:
         self.stopped = threading.Event()
 
     def complete_bounded(self, messages, *, model, timeout):
-        from pi.providers import Completion
+        from pi.models.providers import Completion
 
         if model == "think":
             token = inference_control.current()

@@ -25,16 +25,16 @@ version against a database with forgotten sessions.
 From the Pi repository, with its Python dependencies installed:
 
 ```bash
-python -m pi.forgetting --db /absolute/path/pi.db preview --session ses_example
-python -m pi.forgetting --db /absolute/path/pi.db forget --session ses_example --confirm CONFIRMATION_FROM_PREVIEW
+python -m pi.conversation.forgetting --db /absolute/path/pi.db preview --session ses_example
+python -m pi.conversation.forgetting --db /absolute/path/pi.db forget --session ses_example --confirm CONFIRMATION_FROM_PREVIEW
 ```
 
 For the standalone Pi Compose file, the equivalent commands use its data volume:
 
 ```bash
 docker compose stop pi
-docker compose run --rm --no-deps pi python -m pi.forgetting --db /data/pi.db preview --session ses_example
-docker compose run --rm --no-deps pi python -m pi.forgetting --db /data/pi.db forget --session ses_example --confirm CONFIRMATION_FROM_PREVIEW
+docker compose run --rm --no-deps pi python -m pi.conversation.forgetting --db /data/pi.db preview --session ses_example
+docker compose run --rm --no-deps pi python -m pi.conversation.forgetting --db /data/pi.db forget --session ses_example --confirm CONFIRMATION_FROM_PREVIEW
 docker compose up -d pi
 ```
 

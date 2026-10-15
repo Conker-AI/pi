@@ -8,8 +8,9 @@ from dataclasses import dataclass
 
 import httpx
 
-from pi import characters, memory_edits
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.agents import characters
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.memory import edits as memory_edits
 
 from .api import Config
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed

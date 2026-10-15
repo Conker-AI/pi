@@ -8,10 +8,12 @@ import pytest
 from test_loop import Recorder, loop_with
 from test_turn_queue import body
 
-from pi import session_settings, submissions, tasks
-from pi import turn_queue as q
-from pi.queue_worker import QueueWorker
-from pi.store import Store
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.turns import queue as q
+from pi.turns.queue_worker import QueueWorker
 
 
 def test_worker_drains_in_order_once_with_shared_history(tmp_path):

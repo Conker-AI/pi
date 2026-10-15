@@ -3,10 +3,15 @@ from contextlib import closing
 
 from fastapi.testclient import TestClient
 
-from pi import agents, api, model_roles, setup_choices, setup_model_probes, setup_status
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.providers import Completion
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion
+from pi.setup import choices as setup_choices
+from pi.setup import model_probes as setup_model_probes
+from pi.setup import status as setup_status
 
 OWNER = "setup-owner-key-" + "o" * 32
 

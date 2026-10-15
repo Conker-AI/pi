@@ -7,9 +7,14 @@ import pytest
 from fastapi.testclient import TestClient
 from test_loop import Recorder, loop_with
 
-from pi import agents, api, forgetting, session_settings, skills, submissions, turn_context
-from pi.store import Store
-from pi.toolgate import Tool
+from pi.actions.toolgate import Tool
+from pi.agents import profiles as agents
+from pi.agents import skills
+from pi.api import server as api
+from pi.conversation import forgetting, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.turns import context as turn_context
 
 
 def document(name="review", body="Report uncertainty and cite the available evidence."):

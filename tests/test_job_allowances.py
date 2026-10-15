@@ -2,8 +2,8 @@ import pytest
 from test_job_budgets import BUDGET, Adapter
 from test_jobs import definition, store  # noqa: F401
 
-from pi import jobs
-from pi.job_worker import JobWorker
+from pi.schedule import jobs
+from pi.schedule.job_worker import JobWorker
 
 ALLOWANCE = "allowance_" + "b" * 32
 
@@ -71,8 +71,8 @@ def test_allowance_requires_budget_and_failure_is_redacted(store):
 def test_executor_allocation_wire_contract(monkeypatch):
     import httpx
 
-    from pi.job_execution import PublishedJobs
-    from pi.toolgate import ToolGateClient
+    from pi.actions.toolgate import ToolGateClient
+    from pi.schedule.job_execution import PublishedJobs
 
     seen = []
 

@@ -7,8 +7,10 @@ import pytest
 from test_loop import Recorder, loop_with
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import context_controls, forgetting, turn_context
-from pi.store import Store
+from pi.context import controls as context_controls
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.turns import context as turn_context
 
 
 def test_context_boundary_survives_new_messages_and_read_inspection(tmp_path):
@@ -129,7 +131,7 @@ def test_replay_preserves_attachment_passages_and_refuses_forgotten_source(tmp_p
 
 @pytest.mark.parametrize("flag", ["memoryDisabled", "harnessDisabled"])
 def test_replay_cannot_bypass_new_stricter_privacy(tmp_path, flag):
-    from pi import session_settings
+    from pi.conversation import settings as session_settings
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()

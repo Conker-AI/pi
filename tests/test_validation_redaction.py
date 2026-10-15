@@ -2,7 +2,7 @@ import hashlib
 
 from fastapi.testclient import TestClient
 
-from pi import api
+from pi.api import server as api
 
 
 def test_validation_errors_never_reflect_submitted_secret(monkeypatch):

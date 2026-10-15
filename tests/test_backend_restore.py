@@ -7,9 +7,13 @@ import pytest
 from test_jobs import definition
 from test_loop import Recorder, loop_with
 
-from pi import attachments, context_retrieval, drafts, jobs, session_settings, submissions
-from pi.job_worker import JobWorker
-from pi.store import Store
+from pi.content import attachments
+from pi.context import retrieval as context_retrieval
+from pi.conversation import drafts, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import jobs
+from pi.schedule.job_worker import JobWorker
 
 
 def snapshot(source, destination):

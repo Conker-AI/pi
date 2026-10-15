@@ -7,11 +7,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import api, project_sources
-from pi import projects as p
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.projects_api import router
-from pi.store import Store
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.routes.projects import router
+from pi.context import project_sources
+from pi.context import projects as p
+from pi.conversation.store import Store
 
 FIELDS = dict(name="Build Conker", description="Deliver", instructions="Be critical")
 PUBLIC = dict(memoryDisabled=False, harnessDisabled=False)

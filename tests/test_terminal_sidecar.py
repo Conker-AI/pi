@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-import pi.terminal_sidecar as terminal_sidecar
+import pi.owner.terminal_sidecar as terminal_sidecar
 from gateway.terminal_client import RemoteTerminal, TerminalSidecar
-from pi.owner_terminal import TerminalError
-from pi.terminal_sidecar import TerminalSessions, health, serve
+from pi.owner.terminal import TerminalError
+from pi.owner.terminal_sidecar import TerminalSessions, health, serve
 
 
 class FakeTerminal:

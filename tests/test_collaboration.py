@@ -10,9 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, api
-from pi import collaboration as c
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.agents import teams as c
+from pi.api import server as api
+from pi.conversation.store import Store
 
 
 def config(**changes):

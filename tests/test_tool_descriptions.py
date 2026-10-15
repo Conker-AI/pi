@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from pi.toolgate import Tool
-from pi.tools import MAX_MCP_INPUT_DESCRIPTION_CHARS, InvalidToolOutput, describe, parse
+from pi.actions.toolgate import Tool
+from pi.actions.tools import MAX_MCP_INPUT_DESCRIPTION_CHARS, InvalidToolOutput, describe, parse
 
 
 def mcp_reference(schema):

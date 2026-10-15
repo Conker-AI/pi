@@ -3,9 +3,11 @@ from datetime import datetime
 
 import pytest
 
-from pi import agents, forgetting, session_settings
-from pi import continuity as c
-from pi.store import Store
+from pi.agents import continuity as c
+from pi.agents import profiles as agents
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 def event(store, title="Completed work", status="complete"):

@@ -3,8 +3,9 @@ from contextlib import closing
 
 import pytest
 
-from pi import drafts, forgetting, submissions, tasks
-from pi.store import Store
+from pi.conversation import drafts, forgetting, submissions
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 
 def test_concurrent_edits_and_clear_reject_stale_writer(tmp_path):

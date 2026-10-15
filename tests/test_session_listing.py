@@ -6,8 +6,8 @@ from contextlib import closing, contextmanager
 
 from fastapi.testclient import TestClient
 
-from pi import api
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation.store import Store
 
 
 def populate(store):

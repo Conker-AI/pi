@@ -14,8 +14,8 @@ from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.native_sessions import NativeSessionsError
 from gateway.store import AuthStore
-from pi.native_codex_query import canonical_query, parse_query
-from pi.private_transport import PrivateTransport
+from pi.models.private_transport import PrivateTransport
+from pi.owner.native_codex_query import canonical_query, parse_query
 
 ORIGIN = "https://localhost:8050"
 PREFIX = "/api/host/codex/sessions"

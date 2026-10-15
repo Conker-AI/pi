@@ -6,10 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 from test_tool_turns import build
 
-from pi import api, forgetting, memory_store
-from pi.memory import Memory, MemoryClient
-from pi.memory_recovery import repair
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.memory.recovery import repair
+from pi.memory.service import Memory, MemoryClient
 
 
 def client(agent, handler):

@@ -10,39 +10,39 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
-    ("message-without-outbox", "pi/memory_store.py", "AND NEW.role='user'", "AND 0"),
+    ("message-without-outbox", "pi/memory/store.py", "AND NEW.role='user'", "AND 0"),
     (
         "sequence-race",
-        "pi/store.py",
+        "pi/conversation/store.py",
         'share the message commit.\n            db.execute("BEGIN IMMEDIATE")',
         'share the message commit.\n            db.execute("SELECT 1")',
     ),
     (
         "lost-ack-drops-evidence",
-        "pi/memory.py",
+        "pi/memory/service.py",
         '"blocked" if permanent else "pending",',
         '"sent",',
     ),
     (
         "context-not-used",
-        "pi/loop.py",
+        "pi/turns/loop.py",
         "if memory_prompt:",
         "if False:",
     ),
     (
         "forgetting-uploads-text",
-        "pi/forgetting.py",
+        "pi/conversation/forgetting.py",
         'memory_store.redact(db, plan["session_ids"])',
         "pass",
     ),
     (
         "stale-recall-during-deletion",
-        "pi/memory.py",
+        "pi/memory/service.py",
         "if memory_store.recall_held(self.store):",
         "if False:",
     ),
-    ("hidden-memory-gap", "pi/memory_store.py", '"notices": notices,', '"notices": [],'),
-    ("shutdown-releases-inflight-upload", "pi/memory.py", "self.thread.join()", "pass"),
+    ("hidden-memory-gap", "pi/memory/store.py", '"notices": notices,', '"notices": [],'),
+    ("shutdown-releases-inflight-upload", "pi/memory/service.py", "self.thread.join()", "pass"),
 ]
 SOURCE = "pi"
 TEST = "tests/test_memory.py"

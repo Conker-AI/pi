@@ -5,8 +5,9 @@ from contextlib import closing
 import pytest
 from test_universal_search import client_for
 
-from pi import conversation_search, universal_search
-from pi.store import Store
+from pi.context import universal_search
+from pi.conversation import search as conversation_search
+from pi.conversation.store import Store
 
 
 @pytest.mark.parametrize(

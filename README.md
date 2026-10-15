@@ -120,11 +120,28 @@ ruff check . && ruff format --check .
 The owner-terminal tests need Linux; everything else runs anywhere.
 
 ```text
-pi/        Runtime: turn loop, store, routing, memory outbox, jobs, proposals
-gateway/   Browser-facing HTTPS gateway: login, sessions, allowlisted routes
-tests/     Unit, contract and live-gateway tests
-docs/      One document per feature
+pi/                Runtime, one package per type
+  api/             HTTP app and startup; one router per resource in api/routes
+  conversation/    Sessions and messages: store, forks, retries, versions, forgetting
+  turns/           Running a turn: loop, context, queue, steering, thinking
+  models/          Providers and routing: hosted and local adapters, roles, secrets
+  actions/         Tool calls through ToolGate
+  context/         What a turn sees: controls, retrieval, summaries, projects, search
+  content/         Attachments, artifacts, documents, images, audio
+  memory/          Long-term memory through MemoryGate
+  agents/          Profiles, characters, teams, continuity, skills
+  schedule/        Jobs, tasks, proposals and their workers
+  setup/           First-run setup
+  calls/           Live calls and speech
+  owner/           Owner preferences and terminal
+  host/            The machine through SystemGate
+gateway/           Browser-facing HTTPS gateway: login, sessions, allowlisted routes
+tests/             Unit, contract and live-gateway tests
+docs/              One document per feature
 ```
+
+Cross-package imports are listed in `package-boundaries.txt` and checked by
+`scripts/check_package_boundaries.py`; that list only gets shorter.
 
 ## Documentation
 

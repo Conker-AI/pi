@@ -1,7 +1,7 @@
 import pytest
 
 from gateway.terminals import Terminals
-from pi.owner_terminal import TerminalError
+from pi.owner.terminal import TerminalError
 
 
 class FakeTerminal:

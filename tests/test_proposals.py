@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pi import forgetting, proactive_budget, proposals
-from pi.providers import Completion
-from pi.store import Store
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.schedule import proactive_budget, proposals
 
 DAY = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)  # 15:00 in the default Asia/Jerusalem zone
 QUIET = datetime(2026, 9, 24, 21, 0, tzinfo=UTC)  # midnight there: inside quiet hours
@@ -51,7 +52,7 @@ def say(store, *texts, at=None):
     """Owner messages written at a chosen time; history itself stays append-only."""
     import types
 
-    from pi import submissions
+    from pi.conversation import submissions
 
     at = DAY.timestamp() - 3600 if at is None else at
     session, ids, clock = store.create_session(), [], [at]
@@ -107,7 +108,7 @@ def test_pass_records_cited_proposals_and_advances_the_watermark(store):
 
 
 def private(store, memory, harness):
-    from pi import session_settings
+    from pi.conversation import settings as session_settings
 
     session = store.create_session()
     session_settings.save(
@@ -125,7 +126,7 @@ def private(store, memory, harness):
 
 
 def test_incognito_harness_disabled_and_forgotten_messages_are_never_read(store):
-    from pi import submissions
+    from pi.conversation import submissions
 
     say(store, "visible one", "visible two", "visible three")
     real = submissions.time
@@ -262,7 +263,7 @@ def test_interrupted_pass_is_recorded_on_restart(store):
 def test_http_surface_lists_and_decides(store):
     from fastapi.testclient import TestClient
 
-    from pi import api
+    from pi.api import server as api
 
     say(store, "a", "b", "c")
     proposals.run_pass(store, Model(reply(proposal("Weekly summary", "e1"))), now=DAY)

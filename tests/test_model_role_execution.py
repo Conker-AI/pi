@@ -5,11 +5,14 @@ from contextlib import closing
 
 import pytest
 
-from pi import agents, model_roles, session_settings, submissions
-from pi.loop import Loop, TurnFailed
-from pi.providers import Completion, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import Loop, TurnFailed
 
 
 class Adapter:

@@ -1,6 +1,6 @@
 # Durable call runtime
 
-`pi.calls` implements owner-started English calls as durable children of existing
+`pi.calls.runtime` implements owner-started English calls as durable children of existing
 conversations. Typed input runs the actual Pi `Loop`; configured speech adapters
 may run WAV transcription, the same Loop turn, then WAV synthesis. Tests use real
 Loop orchestration with synthetic providers/audio. No hardware, cloud endpoint,

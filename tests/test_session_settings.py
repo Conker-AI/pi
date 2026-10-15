@@ -8,24 +8,19 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import (
-    agents,
-    api,
-    context_controls,
-    memory_store,
-    sessions_api,
-    setup_choices,
-    submissions,
-)
-from pi import (
-    session_settings as settings,
-)
-from pi.loop import Loop, TurnFailed
-from pi.memory import Memory, MemoryClient
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
-from pi.toolgate import Tool
+from pi.actions.toolgate import Tool
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.api.routes import sessions as sessions_api
+from pi.context import controls as context_controls
+from pi.conversation import settings, submissions
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.memory.service import Memory, MemoryClient
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.setup import choices as setup_choices
+from pi.turns.loop import Loop, TurnFailed
 
 
 class Provider:
@@ -467,7 +462,7 @@ def test_reviewed_fork_inherits_private_settings(tmp_path):
 
 
 def test_privacy_does_not_force_local_answer_provider(tmp_path):
-    from pi.routing import Reason, Route, Tier
+    from pi.models.routing import Reason, Route, Tier
 
     with closing(Store(tmp_path / "test.db")) as store:
         sid = store.create_session()

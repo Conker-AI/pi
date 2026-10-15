@@ -5,11 +5,12 @@ from contextlib import closing
 import pytest
 from test_tool_turns import FakeGate, build
 
-from pi import research, turn_control
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.providers import ProviderUnavailable
-from pi.store import Store
-from pi.toolgate import Tool, ToolGateUnavailable, ToolResult
+from pi.actions.toolgate import Tool, ToolGateUnavailable, ToolResult
+from pi.context import research
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.turns import control as turn_control
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 SEARCH = '{"tool":"research.web","args":{"query":"memory database design","max_results":5}}'
 

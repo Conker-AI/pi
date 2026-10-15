@@ -7,11 +7,12 @@ import httpx
 import pytest
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import actions, forgetting
-from pi.loop import TurnFailed
-from pi.providers import ProviderUnavailable
-from pi.store import Store
-from pi.toolgate import ToolGateClient, ToolPending
+from pi.actions import identities as actions
+from pi.actions.toolgate import ToolGateClient, ToolPending
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.turns.loop import TurnFailed
 
 
 def test_id_is_committed_before_dispatch_and_reused_with_owner_job(tmp_path, monkeypatch):

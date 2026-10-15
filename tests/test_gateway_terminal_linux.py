@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi.owner_terminal import Terminal
+from pi.owner.terminal import Terminal
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Requires Linux controlling PTY")
 

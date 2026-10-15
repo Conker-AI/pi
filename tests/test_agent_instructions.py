@@ -5,10 +5,13 @@ from contextlib import closing
 import pytest
 from test_loop import Recorder, loop_with
 
-from pi import agents, session_settings, submissions, turn_context
-from pi.loop import Loop
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 
 @pytest.mark.parametrize("kind", ["companion", "agent"])

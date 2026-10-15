@@ -6,10 +6,10 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import system_actions as actions
-from pi import system_actions_api
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.api.routes import system_actions as system_actions_api
+from pi.conversation.store import Store
+from pi.host import actions
 
 CID, RID, NEW = "a" * 64, "b" * 48, "c" * 64
 BODY = actions.PortRequest(request_id="port_replacement_01", container_id=CID, review_id=RID)

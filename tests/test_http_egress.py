@@ -10,9 +10,9 @@ from pathlib import Path
 
 import httpx
 
-from pi.memory import MemoryClient
-from pi.providers import OllamaProvider
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.memory.service import MemoryClient
+from pi.models.providers import OllamaProvider
 
 
 class _JsonHandler(BaseHTTPRequestHandler):

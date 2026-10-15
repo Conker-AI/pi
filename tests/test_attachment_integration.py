@@ -1,7 +1,10 @@
 from contextlib import closing
 
-from pi import attachments, forgetting, project_sources, projects, session_settings
-from pi.store import Store
+from pi.content import attachments
+from pi.context import project_sources, projects
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 def test_file_project_source_and_forgetting_use_real_hooks(tmp_path):

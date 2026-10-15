@@ -8,9 +8,14 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from test_loop import Recorder, loop_with
 
-from pi import api, drafts, research, session_settings, sessions_api, submissions, tasks
-from pi import turn_queue as q
-from pi.store import Store
+from pi.api import server as api
+from pi.api.routes import sessions as sessions_api
+from pi.context import research
+from pi.conversation import drafts, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.turns import queue as q
 
 
 @pytest.mark.parametrize("mode", ["web", "deep"])

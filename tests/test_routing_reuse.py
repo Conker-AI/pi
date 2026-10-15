@@ -12,20 +12,17 @@ from test_decision_provider import setup
 from test_model_roles import Adapter
 from test_tool_turns import CALL, FakeGate
 
-from pi import (
-    background_thinking,
-    inference_control,
-    model_roles,
-    research_usage,
-    routing_memo,
-    turn_control,
-    turn_steering,
-)
-from pi.decision_provider import DecisionProvider
-from pi.loop import ActedWithoutReply, Loop
-from pi.providers import Completion, Message, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.context import research_usage
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.decision import DecisionProvider
+from pi.models.providers import Completion, Message, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns import control as turn_control
+from pi.turns import inference_control, routing_memo
+from pi.turns import steering as turn_steering
+from pi.turns import thinking as background_thinking
+from pi.turns.loop import ActedWithoutReply, Loop
 
 
 class Answers:
@@ -168,7 +165,7 @@ def test_changed_routing_identity_requires_another_actual_call(change, monkeypat
         elif change == "confidence":
             decision.minimum_confidence = 0.8
         elif change == "instructions":
-            from pi import decision_provider
+            from pi.models import decision as decision_provider
 
             original = decision_provider.routing_request
 

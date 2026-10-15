@@ -14,7 +14,7 @@ from gateway.inspection import (
     resources,
 )
 from gateway.toolgate_contract import owner_editor_allowed, owner_request_allowed
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.api.browser_contract import owner_allowed, runtime_allowed
 
 
 def config() -> Config:

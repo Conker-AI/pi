@@ -11,8 +11,12 @@ from test_gateway_api import RUNTIME, gateway, sign_in  # noqa: F401
 from test_loop import Recorder, loop_with
 from test_response_versions import alternative, choose
 
-from pi import actions, api, browser_contract, forgetting, session_observation, submissions
-from pi.store import Store
+from pi.actions import identities as actions
+from pi.api import browser_contract
+from pi.api import server as api
+from pi.conversation import forgetting, submissions
+from pi.conversation import observation as session_observation
+from pi.conversation.store import Store
 
 
 @pytest.fixture

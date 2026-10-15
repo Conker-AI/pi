@@ -4,7 +4,7 @@ import os
 import tempfile
 import time
 
-from pi.owner_terminal import Terminal, TerminalError
+from pi.owner.terminal import Terminal, TerminalError
 
 
 def check():

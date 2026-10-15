@@ -28,7 +28,7 @@ Urgency accepts `meaningful`, `urgent_only`, or `off`. Integer daily ceilings ar
 reconcile before saving. SQLite serializes concurrent updates and retains the
 configuration across restart. Saving never dispatches a turn or changes grants.
 
-`pi.owner_preferences` provides pure `quiet_now`, `local_day`, and
+`pi.owner.preferences` provides pure `quiet_now`, `local_day`, and
 `admission_reasons` policy functions. Quiet windows include the start and exclude
 the end, support overnight windows, and follow local wall time across DST skips
 and repeats. An aware timestamp is required. Urgent exceptions bypass quiet hours

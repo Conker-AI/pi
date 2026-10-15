@@ -7,20 +7,22 @@ import httpx
 import pytest
 from PIL import Image
 
-from pi import (
-    attachment_turns,
-    attachments,
-    context_controls,
-    image_input,
-    session_settings,
-    turn_context,
+from pi.content import attachment_turns, attachments, image_input
+from pi.context import controls as context_controls
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.direct import AnthropicProvider, OpenAIProvider
+from pi.models.openrouter import OpenRouterProvider
+from pi.models.providers import (
+    Completion,
+    Message,
+    OllamaProvider,
+    ProviderUnavailable,
+    require_images,
 )
-from pi.direct_providers import AnthropicProvider, OpenAIProvider
-from pi.loop import Loop
-from pi.openrouter import OpenRouterProvider
-from pi.providers import Completion, Message, OllamaProvider, ProviderUnavailable, require_images
-from pi.routing import Router
-from pi.store import Store
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 
 def picture(format="PNG", size=(8, 8)):

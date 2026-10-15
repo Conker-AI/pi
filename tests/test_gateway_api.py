@@ -321,7 +321,7 @@ def test_upstream_failure_is_explicit_and_never_retried(tmp_path, failure):
 
 
 def test_pi_runtime_key_has_no_owner_authority_or_future_admin_access(monkeypatch, tmp_path):
-    from pi import api
+    from pi.api import server as api
 
     monkeypatch.setenv("PI_ADMIN_KEY", "recovery-only-key-" + "a" * 32)
     monkeypatch.setenv("PI_DB_PATH", str(tmp_path / "pi.db"))

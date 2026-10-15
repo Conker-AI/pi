@@ -14,9 +14,11 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, characters, characters_api
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.agents import characters
+from pi.agents import profiles as agents
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.routes import characters as characters_api
+from pi.conversation.store import Store
 
 
 def png(animated=False):

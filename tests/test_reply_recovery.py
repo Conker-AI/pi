@@ -6,10 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import api, submissions, tasks, turn_control
-from pi.loop import ActedWithoutReply
-from pi.providers import ProviderUnavailable
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.schedule import tasks
+from pi.turns import control as turn_control
+from pi.turns.loop import ActedWithoutReply
 
 
 def stopped(store):

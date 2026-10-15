@@ -7,10 +7,13 @@ from fastapi.testclient import TestClient
 from test_loop import Recorder, loop_with
 from test_tool_turns import CALL, FakeGate, build
 
-from pi import api, submissions, tasks, turn_control
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.providers import ProviderUnavailable
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
+from pi.schedule import tasks
+from pi.turns import control as turn_control
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 
 def test_stop_during_provider_discards_answer_and_replay_does_not_restart(tmp_path):
@@ -91,7 +94,7 @@ def test_cancel_route_requires_owner_credential(tmp_path, monkeypatch):
 
 
 def test_stop_does_not_prevent_unknown_effect_reconciliation(tmp_path):
-    from pi.toolgate import ToolGateUnavailable, ToolResult
+    from pi.actions.toolgate import ToolGateUnavailable, ToolResult
 
     with closing(Store(tmp_path / "pi.db")) as store:
         session = store.create_session()
@@ -144,7 +147,7 @@ def test_cancel_preparation_retains_input_prevents_fork_and_replays(tmp_path):
 
 
 def test_submission_stop_orders_before_and_after_binding(tmp_path):
-    from pi import session_settings
+    from pi.conversation import settings as session_settings
 
     with closing(Store(tmp_path / "pi.db")) as store:
         session = store.create_session()
@@ -177,7 +180,7 @@ def test_submission_cancel_route_requires_owner(tmp_path, monkeypatch):
 
 
 def test_stopped_turn_does_not_block_future_settings_or_work(tmp_path):
-    from pi import session_settings
+    from pi.conversation import settings as session_settings
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()
@@ -201,7 +204,7 @@ def test_stopped_turn_does_not_block_future_settings_or_work(tmp_path):
 
 
 def test_restart_preserves_stop_but_not_at_cost_of_unknown_effect(tmp_path):
-    from pi import actions
+    from pi.actions import identities as actions
 
     with closing(Store(tmp_path / "pi.db")) as store:
         stopped = store.start_turn(store.create_session())

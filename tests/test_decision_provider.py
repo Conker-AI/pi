@@ -4,9 +4,9 @@ import httpx
 import pytest
 from test_model_roles import Adapter, config
 
-from pi import model_roles
-from pi.decision_provider import DecisionProvider, configured
-from pi.providers import Message, ProviderUnavailable
+from pi.models import roles as model_roles
+from pi.models.decision import DecisionProvider, configured
+from pi.models.providers import Message, ProviderUnavailable
 
 
 def setup(transport):
@@ -113,7 +113,7 @@ def test_dispatch_preserves_known_routing_scope_without_prompt_content(follow_up
 
 @pytest.mark.parametrize("scope", ["all-private-files", [], {"scope": "recent-exchange"}])
 def test_decision_evidence_rejects_unknown_scope_and_arbitrary_fields(scope):
-    from pi.providers import Completion
+    from pi.models.providers import Completion
 
     completion = Completion(
         text="answer",
@@ -181,7 +181,7 @@ def test_routing_projection_excludes_system_memory_and_old_history_without_trunc
 
 
 def test_follow_up_context_is_bounded_and_marked():
-    from pi.decision_provider import CONTEXT_CHARACTERS, routing_projection
+    from pi.models.decision import CONTEXT_CHARACTERS, routing_projection
 
     long_answer = "A" * 150 + "middle" * 100 + "Z" * 60
     projection, scope = routing_projection(
@@ -287,7 +287,9 @@ def test_memory_ranking_preserves_records_and_falls_back_without_dropping_eviden
 def test_memory_no_harness_never_calls_ranker(monkeypatch):
     from types import SimpleNamespace
 
-    from pi import memory, memory_store, session_settings
+    from pi.conversation import settings as session_settings
+    from pi.memory import service as memory
+    from pi.memory import store as memory_store
 
     selected = {
         "kind": "companion",

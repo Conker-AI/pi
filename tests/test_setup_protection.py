@@ -7,9 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import api, setup_protection, setup_receipts, setup_status
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
+from pi.setup import protection as setup_protection
+from pi.setup import receipts as setup_receipts
+from pi.setup import status as setup_status
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 OWNER = "setup-protection-owner-" + "o" * 32

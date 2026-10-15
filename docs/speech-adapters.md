@@ -1,6 +1,6 @@
 # Bounded English speech adapters
 
-`pi.speech.SpeechClient` provides synchronous, OpenAI-compatible HTTP transcription
+`pi.calls.speech.SpeechClient` provides synchronous, OpenAI-compatible HTTP transcription
 and synthesis. It does not capture a microphone, play audio, persist audio, install
 models, launch servers or retry failed requests. Call lifecycle/idempotency and
 playback belong to the separate call runtime and client.
@@ -174,5 +174,5 @@ Tests use synthetic PCM and `httpx.MockTransport` only:
 
 ```sh
 python -m pytest tests/test_speech.py -q
-python -m ruff check pi/speech.py tests/test_speech.py
+python -m ruff check pi/calls/speech.py tests/test_speech.py
 ```

@@ -5,9 +5,10 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import system_actions_api, system_targets
-from pi.system_actions import ActionError
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.api.routes import system_actions as system_actions_api
+from pi.host import targets as system_targets
+from pi.host.actions import ActionError
 
 
 def configured():

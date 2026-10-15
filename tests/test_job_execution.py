@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from pi.job_execution import PublishedJobs
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.schedule.job_execution import PublishedJobs
 
 
 def target(kind="automation"):
@@ -213,7 +213,7 @@ def test_bounded_transport_never_replays(monkeypatch, reconcile, kind):
 
 
 def test_stream_deadline_is_unknown_and_closes(monkeypatch):
-    import pi.job_execution as module
+    import pi.schedule.job_execution as module
 
     clock = iter([0, 0, 1000])
     monkeypatch.setattr(module.time, "monotonic", lambda: next(clock))

@@ -1,7 +1,9 @@
 from contextlib import closing
 
-from pi import project_sources, projects, session_settings, tasks
-from pi.store import Store
+from pi.context import project_sources, projects
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 
 def test_project_links_follow_live_privacy_and_archival(tmp_path):
