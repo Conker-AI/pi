@@ -35,10 +35,8 @@ def imported_packages(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom):
             base = package[: len(package) - node.level + 1] if node.level else []
             module = ".".join([*base, *(node.module or "").split(".")]).strip(".")
-            if module == "pi":
-                modules = [f"pi.{alias.name}" for alias in node.names]
-            else:
-                modules = [module]
+            # `from pi import conversation` names the package in the alias.
+            modules = [f"pi.{a.name}" for a in node.names] if module == "pi" else [module]
         else:
             continue
         for module in modules:

@@ -156,8 +156,9 @@ jobs:
           files=$(docker run --rm --entrypoint /bin/sh terminal-candidate:ci -c \
             'find /app -type f -print | sort')
           expected='/app/pi/__init__.py
-          /app/pi/owner_terminal.py
-          /app/pi/terminal_sidecar.py'
+          /app/pi/owner/__init__.py
+          /app/pi/owner/terminal.py
+          /app/pi/owner/terminal_sidecar.py'
           test "$files" = "$expected"
           uid=$(docker run --rm --entrypoint /usr/bin/id terminal-candidate:ci -u)
           test "$uid" = 65532

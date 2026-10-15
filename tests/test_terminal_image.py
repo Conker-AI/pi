@@ -15,11 +15,9 @@ def test_terminal_image_is_dedicated_pinned_and_non_root():
     assert "COPY gateway" not in dockerfile
     assert "USER 65532:65532" in dockerfile
     assert 'ENTRYPOINT ["/usr/local/bin/conker-terminal"]' in dockerfile
-    assert "COPY --chmod=0444 pi/__init__.py /app/pi/__init__.py" in dockerfile
-    assert "COPY --chmod=0444 pi/owner/terminal.py /app/pi/owner_terminal.py" in dockerfile
-    assert (
-        "COPY --chmod=0444 pi/owner/terminal_sidecar.py /app/pi/terminal_sidecar.py" in dockerfile
-    )
+    for module in ("__init__", "owner/__init__", "owner/terminal", "owner/terminal_sidecar"):
+        assert f"COPY --chmod=0444 pi/{module}.py /app/pi/{module}.py" in dockerfile
+    assert "chmod 0555 /app/pi /app/pi/owner" in dockerfile
 
 
 def test_terminal_launcher_is_fixed_and_does_not_load_site_packages():
