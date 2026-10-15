@@ -5,7 +5,7 @@ import json
 import math
 import re
 
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.api.browser_contract import owner_allowed, runtime_allowed
 
 from .mcp_control import TOOL_ID
 from .native_sessions import SESSION_ID, Stop

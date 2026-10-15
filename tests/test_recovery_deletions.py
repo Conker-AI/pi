@@ -3,10 +3,10 @@ from contextlib import closing
 
 import pytest
 
-from pi import forgetting
-from pi import recovery_deletions as recovery
-from pi.access import MaintenanceRequired
-from pi.store import Store
+from pi.conversation import forgetting
+from pi.conversation import recovery_deletions as recovery
+from pi.conversation.access import MaintenanceRequired
+from pi.conversation.store import Store
 
 
 def fixture(tmp_path):

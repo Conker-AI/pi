@@ -9,9 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, api
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
 
 OWNER = "agent-owner-control-key-" + "o" * 32
 

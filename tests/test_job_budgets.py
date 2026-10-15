@@ -6,11 +6,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_jobs import definition, store  # noqa: F401
 
-from pi import jobs
-from pi.job_execution import PublishedJobs
-from pi.job_worker import JobWorker
-from pi.jobs_api import router
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.api.routes.jobs import router
+from pi.schedule import jobs
+from pi.schedule.job_execution import PublishedJobs
+from pi.schedule.job_worker import JobWorker
 
 BUDGET = "job_" + "a" * 32
 
@@ -51,7 +51,7 @@ def test_paid_runs_wait_bind_once_and_retain_budget_on_resume(request):
     assert jobs.runs(database, job["id"])[0]["spending_budget_id"] == BUDGET
     from contextlib import closing
 
-    from pi.store import Store
+    from pi.conversation.store import Store
 
     with closing(Store(database.path)) as reopened:
         assert jobs.runs(reopened, job["id"])[0]["spending_budget_id"] == BUDGET

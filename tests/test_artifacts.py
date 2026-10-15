@@ -10,11 +10,11 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import api
-from pi import artifacts as a
-from pi.artifacts_api import router
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.routes.artifacts import router
+from pi.content import artifacts as a
+from pi.conversation.store import Store
 
 OWNER = "artifact-owner-control-key-" + "o" * 32
 
@@ -308,7 +308,8 @@ def test_missing_source_and_resolver_failure_hide_every_version(store):
 
 
 def test_actual_forgetting_purges_artifact_bytes_and_reopen(tmp_path):
-    from pi import forgetting, session_settings
+    from pi.conversation import forgetting
+    from pi.conversation import settings as session_settings
 
     path = tmp_path / "forget-artifacts.db"
     secret = "artifact-private-8573-source"

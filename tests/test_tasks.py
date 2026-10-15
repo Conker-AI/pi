@@ -10,8 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import actions, activity, api, forgetting, tasks
-from pi.store import SCHEMA, Store
+from pi.actions import identities as actions
+from pi.api import server as api
+from pi.conversation import activity, forgetting
+from pi.conversation.store import SCHEMA, Store
+from pi.schedule import tasks
 
 
 @pytest.fixture()

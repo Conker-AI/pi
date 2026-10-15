@@ -9,7 +9,7 @@ import struct
 import threading
 from pathlib import Path
 
-from pi.owner_terminal import TerminalError
+from pi.owner.terminal import TerminalError
 
 MAX_REQUEST_BYTES = 16384
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024

@@ -16,8 +16,10 @@ def test_terminal_image_is_dedicated_pinned_and_non_root():
     assert "USER 65532:65532" in dockerfile
     assert 'ENTRYPOINT ["/usr/local/bin/conker-terminal"]' in dockerfile
     assert "COPY --chmod=0444 pi/__init__.py /app/pi/__init__.py" in dockerfile
-    assert "COPY --chmod=0444 pi/owner_terminal.py /app/pi/owner_terminal.py" in dockerfile
-    assert "COPY --chmod=0444 pi/terminal_sidecar.py /app/pi/terminal_sidecar.py" in dockerfile
+    assert "COPY --chmod=0444 pi/owner/terminal.py /app/pi/owner_terminal.py" in dockerfile
+    assert (
+        "COPY --chmod=0444 pi/owner/terminal_sidecar.py /app/pi/terminal_sidecar.py" in dockerfile
+    )
 
 
 def test_terminal_launcher_is_fixed_and_does_not_load_site_packages():
@@ -26,7 +28,7 @@ def test_terminal_launcher_is_fixed_and_does_not_load_site_packages():
     assert launcher == (
         "#!/bin/sh\nset -eu\n\n"
         'exec python -I -S -c \'import sys; sys.path.insert(0,"/app"); '
-        'from pi.terminal_sidecar import main; raise SystemExit(main())\' "$@"\n'
+        'from pi.owner.terminal_sidecar import main; raise SystemExit(main())\' "$@"\n'
     )
 
 

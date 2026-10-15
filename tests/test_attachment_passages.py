@@ -3,11 +3,12 @@ from contextlib import closing
 
 import pytest
 
-from pi import attachment_passages, attachments, session_settings
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.content import attachment_passages, attachments
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def test_passages_reconstruct_unicode_without_omission():

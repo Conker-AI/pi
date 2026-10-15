@@ -7,9 +7,11 @@ from test_forgetting import erase
 from test_tool_turns import build
 from test_web_research import SEARCH, SearchGate
 
-from pi import research, tasks, turn_control
-from pi.loop import ActedWithoutReply, TurnFailed
-from pi.store import Store
+from pi.context import research
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.turns import control as turn_control
+from pi.turns.loop import ActedWithoutReply, TurnFailed
 
 PLAN = '{"research_plan":["Find primary sources", "Resolve contradictory evidence"]}'
 FOLLOWUP = '{"tool":"research.web","args":{"query":"follow up from first source","max_results":3}}'

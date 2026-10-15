@@ -4,9 +4,9 @@ import time
 import httpx
 import pytest
 
-from pi import system_port_reviews as reviews
-from pi.system_actions import ActionError
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.host import port_reviews as reviews
+from pi.host.actions import ActionError
 
 CID, RID = "a" * 64, "b" * 48
 MAPPING = {"hostAddress": "127.0.0.1", "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}

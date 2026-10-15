@@ -4,7 +4,7 @@ import contextlib
 import re
 import threading
 
-from pi.owner_terminal import Terminal, TerminalError
+from pi.owner.terminal import Terminal, TerminalError
 
 
 class Terminals:

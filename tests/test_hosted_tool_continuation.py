@@ -7,14 +7,14 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi.direct_providers import AnthropicProvider, OpenAIProvider
-from pi.loop import ActedWithoutReply, Loop
-from pi.openrouter import ModelInfo, OpenRouterProvider, PaidModelRefused
-from pi.providers import ImageInput, Message, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
-from pi.tool_evidence import INSTRUCTIONS, project_tool_evidence
-from pi.toolgate import ApprovalRequired, Tool, ToolResult
+from pi.actions.evidence import INSTRUCTIONS, project_tool_evidence
+from pi.actions.toolgate import ApprovalRequired, Tool, ToolResult
+from pi.conversation.store import Store
+from pi.models.direct import AnthropicProvider, OpenAIProvider
+from pi.models.openrouter import ModelInfo, OpenRouterProvider, PaidModelRefused
+from pi.models.providers import ImageInput, Message, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import ActedWithoutReply, Loop
 
 KINDS = ("openai", "anthropic", "openrouter")
 

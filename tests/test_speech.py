@@ -8,7 +8,7 @@ import wave
 import httpx
 import pytest
 
-from pi import speech
+from pi.calls import speech
 
 
 def wav(seconds=1, rate=8000, channels=1, width=2):

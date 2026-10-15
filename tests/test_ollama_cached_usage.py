@@ -6,9 +6,11 @@ from contextlib import closing, contextmanager, nullcontext
 import httpx
 import pytest
 
-from pi import live_stream, research_usage, session_settings
-from pi.providers import Message, OllamaProvider
-from pi.store import Store
+from pi.context import research_usage
+from pi.conversation import live_stream
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import Message, OllamaProvider
 
 
 @pytest.mark.parametrize("stream", [False, True], ids=["json", "final-stream-chunk"])

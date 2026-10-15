@@ -7,9 +7,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_jobs import definition
 
-from pi import continuity, jobs
-from pi.jobs_api import router
-from pi.store import Store
+from pi.agents import continuity
+from pi.api.routes.jobs import router
+from pi.conversation.store import Store
+from pi.schedule import jobs
 
 
 @pytest.mark.parametrize("state", ["ready", "awaiting_budget", "awaiting_approval"])

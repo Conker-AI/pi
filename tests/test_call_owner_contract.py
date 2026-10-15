@@ -1,13 +1,13 @@
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import calls
-from pi.browser_contract import owner_allowed, runtime_allowed, session_only_write
-from pi.calls_api import router
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
+from pi.api.routes.calls import router
+from pi.calls import runtime as calls
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 class Provider:

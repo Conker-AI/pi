@@ -39,8 +39,8 @@ until the host operator supplies the original identity from deployment records.
 Stop all Pi processes first, then run, using the actual database path:
 
 ```sh
-python -m pi.memory_recovery --db /data/pi.db bind-origin --message-id msg_... --agent-id ORIGINAL
-python -m pi.memory_recovery --db /data/pi.db retry --message-id msg_...
+python -m pi.memory.recovery --db /data/pi.db bind-origin --message-id msg_... --agent-id ORIGINAL
+python -m pi.memory.recovery --db /data/pi.db retry --message-id msg_...
 ```
 
 `bind-origin` refuses to change an already recorded destination or contradict an

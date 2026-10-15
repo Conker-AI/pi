@@ -1,6 +1,6 @@
 # Durable artifact library
 
-`pi.artifacts` owns inert artifact records and immutable versions using Pi's existing
+`pi.content.artifacts` owns inert artifact records and immutable versions using Pi's existing
 SQLite connection/maintenance boundary. It does not execute code, interpret HTML,
 fetch media, write export files, invoke models, or send external requests.
 
@@ -75,7 +75,7 @@ forgotten, changed, incomplete, or privacy-unknown sources hide title and all ve
 bodies. Export and edit fail closed. Task references are resolved from real tasks,
 checked against active originating sessions at creation, and rechecked on reads.
 
-Supplied assistant citations use `pi.citations`: strict IDs/labels/optional
+Supplied assistant citations use `pi.conversation.citations`: strict IDs/labels/optional
 HTTP(S) hrefs/excerpts, up to 100 entries and 100,000 serialized characters. They
 are stored immutably beside exact final-message provenance, never inferred from
 retrieved memory. Artifacts copy this exact evidence; Markdown edits preserve it

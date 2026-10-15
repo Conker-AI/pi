@@ -2,10 +2,10 @@
 
 import pytest
 
-from pi import agents, submissions
-from pi import session_settings as settings
-from pi.loop import Loop
-from pi.routing import Router
+from pi.agents import profiles as agents
+from pi.conversation import settings, submissions
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 from tests.test_reviewed_fork_privacy import (
     MODES,
     PUBLIC,
@@ -88,7 +88,9 @@ def test_lineage_read_uses_one_snapshot_and_leaves_no_transaction_or_data_change
     "kind", ["store", "reviewed", "automatic", "message", "call", "team_start", "team_step"]
 )
 def test_creation_at_lineage_limit_refuses_atomically_even_with_inherited_raw_settings(store, kind):
-    from pi import calls, message_forks, team_execution
+    from pi.agents import team_execution
+    from pi.calls import runtime as calls
+    from pi.conversation import forks as message_forks
 
     parent = store.create_session(privacy=PUBLIC)
     with store._connect() as db:

@@ -5,10 +5,10 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import filesystem_api
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.routes import filesystem as filesystem_api
+from pi.conversation.store import Store
 
 
 def test_owner_routes_use_existing_gate_and_do_not_replay_listing(tmp_path, monkeypatch):

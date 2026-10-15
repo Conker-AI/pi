@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pi import agents, owner_preferences
-from pi import continuity as c
-from pi.store import Store
+from pi.agents import continuity as c
+from pi.agents import profiles as agents
+from pi.conversation.store import Store
+from pi.owner import preferences as owner_preferences
 from tests.test_continuity import event
 
 DAY = datetime(2026, 9, 21, 10, tzinfo=UTC)

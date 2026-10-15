@@ -1,0 +1,355 @@
+"""Direct text adapters. Credentials and spending authority come from server setup.
+
+Catalogue settings select an adapter; they never set its endpoint or credentials.
+No discovery, automatic paid fallback, SDK retries, or inferred dollar charges.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator, Mapping
+from contextlib import ExitStack, contextmanager
+
+import httpx
+
+from pi.actions.evidence import project_tool_evidence
+from pi.conversation import live_stream
+from pi.models.providers import Completion, Message, ProviderUnavailable, chat_content
+from pi.turns import inference_control
+
+
+def _count(value):
+    return value if type(value) is int and value >= 0 else None
+
+
+@contextmanager
+def provider_stream(method, url, *, timeout, **kwargs):
+    """Close only this inference's client/response when its owner stops it."""
+    if (
+        kwargs.pop("trust_env", False) is not False
+        or kwargs.pop("follow_redirects", False) is not False
+    ):
+        raise ValueError("Provider transport cannot use proxies or follow redirects.")
+    token = inference_control.current()
+    if token is None:
+        with httpx.stream(
+            method, url, timeout=timeout, trust_env=False, follow_redirects=False, **kwargs
+        ) as response:
+            yield response
+        return
+    with ExitStack() as stack:
+        client = stack.enter_context(
+            httpx.Client(
+                timeout=timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+        )
+        active = []
+        stack.enter_context(
+            token.register(
+                lambda: inference_control.close_response(active[0]) if active else client.close()
+            )
+        )
+        response = stack.enter_context(client.stream(method, url, **kwargs))
+        active.append(response)
+        token.check()
+        yield response
+        token.check()
+
+
+def sse_events(response: httpx.Response) -> Iterator[dict]:
+    """JSON payloads of a server-sent event stream; `[DONE]` ends it."""
+    for line in response.iter_lines():
+        inference_control.check()
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            return
+        if data:
+            event = json.loads(data)
+            if not isinstance(event, dict):
+                raise ValueError()
+            yield event
+
+
+class _DirectProvider:
+    supports_images = True
+
+    def __init__(self, api_key: str, *, allow_paid: bool = False, timeout: float = 180.0):
+        self.api_key = api_key.strip()
+        self.allow_paid = allow_paid
+        self.timeout = timeout
+
+    def health(self) -> dict:
+        if not self.api_key:
+            return {"status": "not_configured", "reason": "no API key"}
+        if not self.allow_paid:
+            return {"status": "not_configured", "reason": "paid models are disabled"}
+        return {"status": "unverified", "reason": "configured; no live request performed"}
+
+    def complete(self, messages: list[Message], *, model: str) -> Completion:
+        return self.complete_bounded(messages, model=model, timeout=self.timeout)
+
+    def complete_bounded(
+        self, messages: list[Message], *, model: str, timeout: float
+    ) -> Completion:
+        inference_control.check()
+        if not self.api_key or not self.allow_paid:
+            raise ProviderUnavailable("direct provider requires a key and paid-model opt-in")
+        if not model.strip():
+            raise ProviderUnavailable("unsupported direct text request")
+        messages = project_tool_evidence(messages)
+        payload = self._payload(messages, model)
+        try:
+            if live_stream.active() or inference_control.current() is not None:
+                live_stream.begin_attempt()
+                with provider_stream(
+                    "POST",
+                    self.url,
+                    headers=self._headers(),
+                    json={**payload, **self._stream_options()},
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as response:
+                    response.raise_for_status()
+                    body = self._collect(sse_events(response))
+            else:
+                response = httpx.post(
+                    self.url,
+                    headers=self._headers(),
+                    json=payload,
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+                response.raise_for_status()
+                body = response.json()
+            if not isinstance(body, dict):
+                raise ValueError()
+            inference_control.check()
+            return self._completion(body, model)
+        except inference_control.InferenceCancelled:
+            raise
+        except Exception as exc:
+            inference_control.check()
+            # Provider bodies, URLs, and exception text can contain credentials or
+            # prompts. Only the exception class crosses the adapter boundary.
+            raise ProviderUnavailable(type(exc).__name__) from None
+
+
+class OpenAIProvider(_DirectProvider):
+    name = "openai"
+    url = "https://api.openai.com/v1/chat/completions"
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+    def _payload(self, messages, model):
+        return {
+            "model": model,
+            "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
+            "store": False,
+        }
+
+    def _stream_options(self):
+        return {"stream": True, "stream_options": {"include_usage": True}}
+
+    def _collect(self, events):
+        return collect_chat_stream(events)
+
+    def _completion(self, body, model):
+        choice = body["choices"][0]
+        message = choice["message"]
+        text = message.get("content")
+        if not isinstance(text, str) or message.get("tool_calls"):
+            raise ValueError()
+        usage = body.get("usage") or {}
+        details = usage.get("prompt_tokens_details") or {}
+        actual = body.get("model", model)
+        if not isinstance(actual, str) or not actual:
+            raise ValueError()
+        return Completion(
+            text=text,
+            model=actual,
+            provider=self.name,
+            input_tokens=_count(usage.get("prompt_tokens")),
+            output_tokens=_count(usage.get("completion_tokens")),
+            cached_tokens=_count(details.get("cached_tokens")),
+            raw={"finish_reason": choice.get("finish_reason")},
+        )
+
+
+class AnthropicProvider(_DirectProvider):
+    name = "anthropic"
+    url = "https://api.anthropic.com/v1/messages"
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        allow_paid: bool = False,
+        timeout: float = 180.0,
+        max_tokens: int = 4096,
+    ):
+        super().__init__(api_key, allow_paid=allow_paid, timeout=timeout)
+        if type(max_tokens) is not int or not 1 <= max_tokens <= 65536:
+            raise ValueError("max_tokens must be between 1 and 65536")
+        self.max_tokens = max_tokens
+
+    def _headers(self):
+        return {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
+
+    def _payload(self, messages, model):
+        # Only leading system instructions can be lifted without changing order.
+        system, turns = [], []
+        for message in messages:
+            if message.images and message.role != "user":
+                raise ProviderUnavailable("Images require a user attachment message.")
+            if message.role == "system":
+                if turns:
+                    raise ProviderUnavailable("system instructions must precede conversation")
+                system.append({"type": "text", "text": message.content})
+            else:
+                content = (
+                    (
+                        [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image.media_type,
+                                    "data": image.data,
+                                },
+                            }
+                            for image in message.images
+                        ]
+                        + [{"type": "text", "text": message.content}]
+                    )
+                    if message.images
+                    else message.content
+                )
+                turns.append({"role": message.role, "content": content})
+        if not turns:
+            raise ProviderUnavailable("direct text request requires conversation messages")
+        payload = {"model": model, "messages": turns, "max_tokens": self.max_tokens}
+        if system:
+            payload["system"] = system
+        return payload
+
+    def _stream_options(self):
+        return {"stream": True}
+
+    def _collect(self, events):
+        """Rebuild a Messages API body from its event stream."""
+        body: dict = {"content": [], "usage": {}}
+        for event in events:
+            kind = event.get("type")
+            if kind == "message_start":
+                message = event["message"]
+                body["model"] = message.get("model")
+                body["usage"].update(message.get("usage") or {})
+            elif kind == "content_block_start":
+                body["content"].append(dict(event["content_block"]))
+            elif kind == "content_block_delta":
+                piece = event["delta"]
+                if piece.get("type") != "text_delta":
+                    raise ValueError()
+                body["content"][event["index"]]["text"] += piece["text"]
+                live_stream.delta(piece["text"])
+                live_stream.raise_if_stopped()
+            elif kind == "message_delta":
+                body["stop_reason"] = (event.get("delta") or {}).get("stop_reason")
+                body["usage"].update(event.get("usage") or {})
+            elif kind == "error":
+                raise ValueError()
+            elif kind == "message_stop":
+                return body
+        raise ValueError("stream ended before message_stop")
+
+    def _completion(self, body, model):
+        blocks = body["content"]
+        if (
+            not isinstance(blocks, list)
+            or not blocks
+            or any(
+                not isinstance(b, dict)
+                or b.get("type") != "text"
+                or not isinstance(b.get("text"), str)
+                for b in blocks
+            )
+        ):
+            raise ValueError()
+        usage = body.get("usage") or {}
+        tokens = _count(usage.get("input_tokens"))
+        # Anthropic reports uncached, cache creation and cache read separately.
+        extras = [
+            _count(usage.get(k, 0))
+            for k in ("cache_creation_input_tokens", "cache_read_input_tokens")
+        ]
+        total = tokens + sum(extras) if tokens is not None and None not in extras else None
+        actual = body.get("model", model)
+        if not isinstance(actual, str) or not actual:
+            raise ValueError()
+        return Completion(
+            text="".join(b["text"] for b in blocks),
+            model=actual,
+            provider=self.name,
+            input_tokens=total,
+            output_tokens=_count(usage.get("output_tokens")),
+            cached_tokens=_count(usage.get("cache_read_input_tokens")),
+            raw={"finish_reason": body.get("stop_reason")},
+        )
+
+
+def collect_chat_stream(events) -> dict:
+    """Rebuild a Chat Completions body from its stream (OpenAI and compatible APIs)."""
+    text, annotations = [], []
+    body: dict = {}
+    finish = None
+    for event in events:
+        if event.get("error"):
+            raise ValueError()
+        for key in ("model", "usage"):
+            if event.get(key):
+                body[key] = event[key]
+        for choice in event.get("choices") or []:
+            if choice.get("index", 0) != 0:
+                continue
+            piece = choice.get("delta") or {}
+            if piece.get("tool_calls"):
+                raise ValueError()
+            if piece.get("content"):
+                text.append(piece["content"])
+                live_stream.delta(piece["content"])
+                live_stream.raise_if_stopped()
+            annotations.extend(piece.get("annotations") or [])
+            finish = choice.get("finish_reason") or finish
+    message = {"role": "assistant", "content": "".join(text)}
+    if annotations:
+        message["annotations"] = annotations
+    return {**body, "choices": [{"message": message, "finish_reason": finish}]}
+
+
+def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dict:
+    """Pure factory: never loads .env, contacts providers, or reads UI key drafts."""
+    allowed = environment.get("PI_ALLOW_PAID_MODELS", "").strip() in {"1", "true", "yes"}
+    from pi.models.chatgpt import configured as chatgpt_providers
+    from pi.models.claude_code import configured as claude_code_providers
+    from pi.models.decision import configured as decision_providers
+
+    return {
+        **decision_providers(environment),
+        **chatgpt_providers(environment, timeout),
+        **claude_code_providers(environment, timeout),
+        **{
+            adapter.name: adapter(environment[key], allow_paid=allowed, timeout=timeout)
+            for key, adapter in (
+                ("PI_OPENAI_KEY", OpenAIProvider),
+                ("PI_ANTHROPIC_KEY", AnthropicProvider),
+            )
+            if environment.get(key, "").strip()
+        },
+    }

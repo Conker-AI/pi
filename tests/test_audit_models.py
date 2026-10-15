@@ -3,11 +3,11 @@ import pytest
 from test_routing import free
 from test_tool_turns import Scripted
 
-from pi.loop import Loop
-from pi.openrouter import OpenRouterProvider, PaidModelRefused
-from pi.providers import Message, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models.openrouter import OpenRouterProvider, PaidModelRefused
+from pi.models.providers import Message, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def catalogue(monkeypatch, pricing, *, paid=False):

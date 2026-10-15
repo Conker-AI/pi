@@ -5,9 +5,9 @@ import sqlite3
 import pytest
 from pydantic import ValidationError
 
-from pi import artifacts as a
-from pi import citations as c
-from pi.store import Store
+from pi.content import artifacts as a
+from pi.conversation import citations as c
+from pi.conversation.store import Store
 
 EVIDENCE = [
     {
@@ -159,9 +159,9 @@ def test_store_citation_validation_rolls_back_reply_and_completion(store):
 
 
 def test_loop_persists_only_explicit_provider_evidence(store):
-    from pi.loop import Loop, TurnFailed
-    from pi.providers import Completion
-    from pi.routing import Router
+    from pi.models.providers import Completion
+    from pi.models.routing import Router
+    from pi.turns.loop import Loop, TurnFailed
 
     class Provider:
         name = "test"
@@ -186,7 +186,7 @@ def test_loop_persists_only_explicit_provider_evidence(store):
 
 
 def test_actual_forgetting_erases_citation_metadata_and_artifact_copies(store):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     evidence = [
         {
@@ -226,7 +226,7 @@ def test_openrouter_maps_supplied_annotations_without_enabling_search(monkeypatc
     import httpx
     from test_audit_models import catalogue
 
-    from pi.providers import Message, ProviderUnavailable
+    from pi.models.providers import Message, ProviderUnavailable
 
     provider = catalogue(monkeypatch, {"prompt": "0", "completion": "0", "request": "0"})
     supplied = {

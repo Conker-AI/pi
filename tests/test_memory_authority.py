@@ -2,8 +2,10 @@ import json
 
 import pytest
 
-from pi import memory_authority, memory_store, session_settings
-from pi.memory import Memory
+from pi.conversation import settings as session_settings
+from pi.memory import authority as memory_authority
+from pi.memory import store as memory_store
+from pi.memory.service import Memory
 
 
 def test_explicit_namespace_and_environment_key_only():

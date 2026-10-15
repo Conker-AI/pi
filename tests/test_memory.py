@@ -8,12 +8,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import api, forgetting, memory_store
-from pi.loop import Loop
-from pi.memory import Memory, MemoryClient
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation import forgetting
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.memory.service import Memory, MemoryClient
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 class Provider:
@@ -279,7 +281,7 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
     ],
 )
 def test_saved_settings_do_not_hide_retrieval_degradation(tmp_path, retrieval, expected):
-    from pi import session_settings
+    from pi.conversation import settings as session_settings
 
     store = Store(tmp_path / "retrieval.db")
     sid = store.create_session()

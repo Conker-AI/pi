@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import pytest
 
-from pi import setup_choices
-from pi.loop import ActedWithoutReply, Loop, TurnFailed
-from pi.providers import Completion, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, Tool, ToolRefused, ToolResult
+from pi.actions.toolgate import ApprovalRequired, Tool, ToolRefused, ToolResult
+from pi.conversation.store import Store
+from pi.models.providers import Completion, ProviderUnavailable
+from pi.models.routing import Router
+from pi.setup import choices as setup_choices
+from pi.turns.loop import ActedWithoutReply, Loop, TurnFailed
 
 
 class Scripted:
@@ -52,7 +52,7 @@ class FakeGate:
 
     def tools(self):
         if self.unavailable:
-            from pi.toolgate import ToolGateUnavailable
+            from pi.actions.toolgate import ToolGateUnavailable
 
             raise ToolGateUnavailable("ConnectError")
         return [Tool("t_echo", "echo", "echoes things", [{"name": "text", "type": "string"}])]
@@ -458,7 +458,7 @@ def test_the_queue_shows_intent_for_every_parked_turn(store):
 
 
 def test_resumed_answer_receives_result_without_advertising_more_actions(store):
-    from pi import turn_context
+    from pi.turns import context as turn_context
 
     gate = FakeGate(needs_approval=True)
     loop, provider = build(store, [CALL, "the tool echoed hi"], gate)

@@ -7,11 +7,13 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from pi import attachments, forgetting, pdf_text, session_settings
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.content import attachments, pdf_text
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def document(pages=("First page", "Second page"), *, password=None, script=False):

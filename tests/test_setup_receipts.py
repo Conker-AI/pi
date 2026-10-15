@@ -15,18 +15,16 @@ from test_setup_status import (
     verify_model,
 )
 
-from pi import (
-    api,
-    model_roles,
-    setup_choices,
-    setup_protection,
-    setup_receipts,
-    setup_rehearsal,
-    setup_status,
-)
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolResult
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.setup import choices as setup_choices
+from pi.setup import protection as setup_protection
+from pi.setup import receipts as setup_receipts
+from pi.setup import rehearsal as setup_rehearsal
+from pi.setup import status as setup_status
 
 OWNER = "receipt-owner-key-" + "o" * 32
 NOW = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)

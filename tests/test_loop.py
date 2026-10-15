@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from pi.loop import Loop, TurnFailed
-from pi.openrouter import ModelUnusable
-from pi.providers import Completion, Message, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models.openrouter import ModelUnusable
+from pi.models.providers import Completion, Message, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import Loop, TurnFailed
 
 
 def loop_with(store, provider, **kwargs):
@@ -121,7 +121,7 @@ def test_cancelled_input_is_history_not_an_outstanding_request(store):
 
 
 def test_excluded_cancelled_input_does_not_leak_into_context_notice(store):
-    from pi import context_controls
+    from pi.context import controls as context_controls
 
     provider = Recorder()
     loop = loop_with(store, provider)

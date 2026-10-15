@@ -2,12 +2,12 @@ from contextlib import closing
 
 import pytest
 
-from pi import session_settings
-from pi import team_execution as teams
-from pi.loop import Loop
-from pi.memory import Memory
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import team_execution as teams
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.memory.service import Memory
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 from tests.test_team_execution import Recorder, setup, start
 
 

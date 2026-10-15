@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 import httpx
 from pydantic import Field, field_validator, model_validator
 
-from pi.native_codex_query import CURSOR, THREAD_ID, canonical_query, parse_query
+from pi.owner.native_codex_query import CURSOR, THREAD_ID, canonical_query, parse_query
 
 from .native_sessions import NativeSessionsError, _json
 from .provider_control import Strict

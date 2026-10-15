@@ -6,9 +6,10 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import api, jobs
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
+from pi.schedule import jobs
 
 OWNER = "jobs-owner-control-key-" + "o" * 32
 
@@ -244,7 +245,7 @@ def test_approval_resume_timeout_never_resubmits(store):
 def test_api_authorization_validation_and_receipts(store):
     from fastapi import FastAPI, HTTPException
 
-    from pi.jobs_api import router
+    from pi.api.routes.jobs import router
 
     allowed = False
 

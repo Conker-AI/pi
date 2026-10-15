@@ -6,13 +6,16 @@ from contextlib import closing
 
 import pytest
 
-from pi import attachments, forgetting, model_roles, session_settings, submissions
-from pi import context_controls as c
-from pi import context_retrieval as r
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.content import attachments
+from pi.context import controls as c
+from pi.context import retrieval as r
+from pi.conversation import forgetting, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 def config():
@@ -320,7 +323,7 @@ def test_offline_forgetting_purges_frozen_context_instructions(tmp_path):
 
 
 def test_owner_stop_discards_late_selection_and_never_dispatches_answer(store):
-    from pi import turn_control
+    from pi.turns import control as turn_control
 
     sid = store.create_session()
     candidate = store.append_message(sid, "user", "Candidate text")

@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from pi import filesystem_roots
-from pi.system_actions import ActionError
-from pi.toolgate import ToolGateClient
+from pi.actions.toolgate import ToolGateClient
+from pi.host import filesystem_roots
+from pi.host.actions import ActionError
 from tests.test_system_targets import transport
 
 

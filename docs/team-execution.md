@@ -73,5 +73,5 @@ Validation uses real Loop instances and injected recorder providers only:
 
 ```sh
 python -m pytest tests/test_team_execution.py tests/test_collaboration.py tests/test_loop.py -q
-python -m ruff check pi/team_execution.py pi/team_execution_api.py tests/test_team_execution.py
+python -m ruff check pi/agents/team_execution.py pi/api/routes/team_execution.py tests/test_team_execution.py
 ```

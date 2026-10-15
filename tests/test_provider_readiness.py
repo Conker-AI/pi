@@ -7,11 +7,15 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import api, model_roles, setup_model_probes, setup_models, setup_status
-from pi.openrouter import CATALOGUE_URL, CHAT_URL, OpenRouterProvider
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.openrouter import CATALOGUE_URL, CHAT_URL, OpenRouterProvider
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.setup import model_probes as setup_model_probes
+from pi.setup import models as setup_models
+from pi.setup import status as setup_status
 
 AVAILABLE = "synthetic/available:free"
 MISSING = "synthetic/not-in-catalogue"

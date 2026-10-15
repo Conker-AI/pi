@@ -4,11 +4,12 @@ from contextlib import closing
 
 from test_model_roles import config
 
-from pi import background_thinking, model_roles
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns import thinking as background_thinking
+from pi.turns.loop import Loop
 
 
 class ConcurrentProvider:

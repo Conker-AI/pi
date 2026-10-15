@@ -6,10 +6,14 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import api, setup_choices, setup_receipts, setup_rehearsal, setup_status
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
+from pi.setup import choices as setup_choices
+from pi.setup import receipts as setup_receipts
+from pi.setup import rehearsal as setup_rehearsal
+from pi.setup import status as setup_status
 
 NOW = datetime(2026, 9, 27, 8, 0, tzinfo=UTC)
 NOW_TS = NOW.timestamp()

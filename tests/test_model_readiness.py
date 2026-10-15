@@ -12,7 +12,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from pi.providers import OllamaProvider, _installed
+from pi.models.providers import OllamaProvider, _installed
 
 
 class Tags:

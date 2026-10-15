@@ -9,10 +9,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import httpx
 import pytest
 
-from pi import direct_providers, inference_control, openrouter
-from pi.direct_providers import AnthropicProvider, OpenAIProvider
-from pi.openrouter import ModelInfo, OpenRouterProvider, PaidModelRefused
-from pi.providers import Message, ProviderUnavailable
+from pi.models import direct as direct_providers
+from pi.models import openrouter
+from pi.models.direct import AnthropicProvider, OpenAIProvider
+from pi.models.openrouter import ModelInfo, OpenRouterProvider, PaidModelRefused
+from pi.models.providers import Message, ProviderUnavailable
+from pi.turns import inference_control
 
 KINDS = ("openai", "anthropic", "openrouter")
 

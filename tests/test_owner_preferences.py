@@ -10,9 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import api
-from pi import owner_preferences as prefs
-from pi.store import Store
+from pi.api import server as api
+from pi.conversation.store import Store
+from pi.owner import preferences as prefs
 
 
 def settings(**changes):

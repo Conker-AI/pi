@@ -10,9 +10,10 @@ import pytest
 from test_decision_provider import setup
 from test_model_roles import Adapter
 
-from pi import inference_control, model_roles
-from pi.decision_provider import DecisionProvider
-from pi.providers import Message
+from pi.models import roles as model_roles
+from pi.models.decision import DecisionProvider
+from pi.models.providers import Message
+from pi.turns import inference_control
 
 
 def decision():

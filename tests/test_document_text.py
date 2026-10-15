@@ -4,10 +4,11 @@ from contextlib import closing
 
 import pytest
 
-from pi import attachments, document_text, session_settings
-from pi.loop import Loop
-from pi.routing import Router
-from pi.store import Store
+from pi.content import attachments, document_text
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 from tests.test_attachment_turns import Provider
 
 

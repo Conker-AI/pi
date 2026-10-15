@@ -5,9 +5,9 @@ from threading import Event
 
 import pytest
 
-from pi import filesystem_reads as inventory
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolResult
+from pi.conversation.store import Store
+from pi.host import filesystem_reads as inventory
 
 
 def make_store(path):

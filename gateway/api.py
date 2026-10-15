@@ -16,8 +16,8 @@ from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from pi.browser_contract import owner_allowed, runtime_allowed, session_only_write
-from pi.owner_terminal import TerminalError
+from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
+from pi.owner.terminal import TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .diagnostics import collect_diagnostics
@@ -54,7 +54,7 @@ class Config:
 
     def validate(self) -> None:
         if self.provider_control_url:
-            from pi.private_transport import PrivateTransport
+            from pi.models.private_transport import PrivateTransport
 
             PrivateTransport(self.provider_control_url, self.provider_control_key).close()
             if self.provider_control_socket:
@@ -165,7 +165,7 @@ def create_app(
         app.state.config = settings
         app.state.provider_transport = provider_transport
         if settings.provider_control_url:
-            from pi.private_transport import PrivateTransport
+            from pi.models.private_transport import PrivateTransport
 
             app.state.provider_transport = PrivateTransport(
                 settings.provider_control_url, settings.provider_control_key

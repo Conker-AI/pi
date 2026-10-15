@@ -6,10 +6,16 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import system_actions as actions
-from pi import system_actions_api
-from pi.store import Store
-from pi.toolgate import ApprovalRequired, ToolGateClient, ToolPending, ToolRefused, ToolResult
+from pi.actions.toolgate import (
+    ApprovalRequired,
+    ToolGateClient,
+    ToolPending,
+    ToolRefused,
+    ToolResult,
+)
+from pi.api.routes import system_actions as system_actions_api
+from pi.conversation.store import Store
+from pi.host import actions
 
 ID = "a" * 64
 BODY = actions.Request(request_id="container_action_01", container_id=ID, action="restart")

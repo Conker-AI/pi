@@ -15,19 +15,15 @@ from test_loop import Recorder, loop_with
 from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi import (
-    agents,
-    api,
-    drafts,
-    forgetting,
-    session_settings,
-    setup_choices,
-    skills,
-    submissions,
-    tasks,
-)
-from pi.loop import TurnFailed
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.agents import skills
+from pi.api import server as api
+from pi.conversation import drafts, forgetting, submissions
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.setup import choices as setup_choices
+from pi.turns.loop import TurnFailed
 
 
 @pytest.fixture

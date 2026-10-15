@@ -8,12 +8,14 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
-from pi import api, system_inventory_api, system_targets
-from pi import system_inventory as inventory
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
-from pi.system_actions import ActionError
-from pi.toolgate import ApprovalRequired, ToolGateClient, ToolPending, ToolResult
+from pi.actions.toolgate import ApprovalRequired, ToolGateClient, ToolPending, ToolResult
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.routes import system_inventory as system_inventory_api
+from pi.conversation.store import Store
+from pi.host import inventory
+from pi.host import targets as system_targets
+from pi.host.actions import ActionError
 
 OWNER = "inventory-owner-control-key-" + "o" * 32
 

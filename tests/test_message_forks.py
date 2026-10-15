@@ -6,9 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 from test_loop import Recorder, loop_with
 
-from pi import agents, api, context_controls, session_settings, tasks
-from pi import message_forks as forks
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.context import controls as context_controls
+from pi.conversation import forks
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
 
 
 def request(**kwargs):

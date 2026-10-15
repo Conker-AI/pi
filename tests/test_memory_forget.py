@@ -6,9 +6,10 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi import memory_forget, memory_store
-from pi.memory_corrections import Client
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.memory import forget as memory_forget
+from pi.memory import store as memory_store
+from pi.memory.corrections import Client
 
 KEY = "synthetic-correction-key-for-tests-12345"
 BODY = memory_forget.Forget(

@@ -2,11 +2,13 @@ from contextlib import closing
 
 import pytest
 
-from pi import attachments, session_settings, submissions
-from pi.loop import Loop
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
+from pi.content import attachments
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 class Provider:
@@ -105,7 +107,7 @@ def test_private_upload_cannot_be_sent_after_lowering_privacy(tmp_path):
 
 
 def test_owner_stop_releases_reserved_upload_for_new_submission(tmp_path):
-    from pi import turn_control
+    from pi.turns import control as turn_control
 
     with closing(Store(tmp_path / "a.db")) as store:
         sid = store.create_session()

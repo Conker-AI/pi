@@ -9,11 +9,14 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from pi import context_controls, memory_delivery, memory_store, turn_context
-from pi import memory_edits as edits
-from pi.memory_corrections import Client
-from pi.providers import Message
-from pi.store import Store
+from pi.context import controls as context_controls
+from pi.conversation.store import Store
+from pi.memory import delivery as memory_delivery
+from pi.memory import edits
+from pi.memory import store as memory_store
+from pi.memory.corrections import Client
+from pi.models.providers import Message
+from pi.turns import context as turn_context
 
 KEY = "synthetic-correction-capability-" + "k" * 32
 BODY = edits.Apply(

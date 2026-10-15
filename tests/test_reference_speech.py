@@ -8,7 +8,7 @@ from test_character_speech import client, presentation, store  # noqa: F401
 from test_characters import save
 from test_speech import wav
 
-from pi.speech import SpeechError
+from pi.calls.speech import SpeechError
 
 
 def reference(seconds=0.5):

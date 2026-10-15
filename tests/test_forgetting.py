@@ -12,14 +12,14 @@ from contextlib import closing
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import forgetting
-from pi.access import MaintenanceRequired, acquire
-from pi.api import app
-from pi.forgetting import ForgettingError, forget, preview
-from pi.loop import Loop, TurnFailed
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import SCHEMA, Store
+from pi.api.server import app
+from pi.conversation import forgetting
+from pi.conversation.access import MaintenanceRequired, acquire
+from pi.conversation.forgetting import ForgettingError, forget, preview
+from pi.conversation.store import SCHEMA, Store
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.turns.loop import Loop, TurnFailed
 
 SECRET = "private-7f9919-никому-не-говори"
 
@@ -207,7 +207,7 @@ def test_offline_lease_blocks_new_runtime_and_works_across_processes(conversatio
             [
                 sys.executable,
                 "-m",
-                "pi.forgetting",
+                "pi.conversation.forgetting",
                 "--db",
                 str(path),
                 "forget",
@@ -273,7 +273,7 @@ def test_process_death_leaves_a_durable_cleanup_barrier(conversation):
     path, root, *_ = conversation
     confirmation = preview(path, root)["confirmation"]
     program = (
-        "import os, sys; from pi import forgetting; "
+        "import os, sys; from pi.conversation import forgetting; "
         "forgetting._scrub = lambda db: os._exit(23); "
         "forgetting.forget(sys.argv[1], sys.argv[2], sys.argv[3])"
     )
@@ -442,7 +442,7 @@ def test_wal_resident_payload_is_scrubbed(tmp_path):
 
 def test_cli_success_is_a_content_free_receipt_and_missing_database_fails(conversation):
     path, root, *_ = conversation
-    command = [sys.executable, "-m", "pi.forgetting", "--db", str(path)]
+    command = [sys.executable, "-m", "pi.conversation.forgetting", "--db", str(path)]
     result = subprocess.run(
         [*command, "preview", "--session", root], capture_output=True, text=True, timeout=15
     )
@@ -461,7 +461,7 @@ def test_cli_success_is_a_content_free_receipt_and_missing_database_fails(conver
         [
             sys.executable,
             "-m",
-            "pi.forgetting",
+            "pi.conversation.forgetting",
             "--db",
             str(path.parent / "missing.db"),
             "preview",

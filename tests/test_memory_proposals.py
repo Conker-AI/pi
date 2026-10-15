@@ -5,10 +5,12 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi import agents, forgetting, session_settings
-from pi import memory_proposals as p
-from pi.memory_corrections import Client
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.memory import proposals as p
+from pi.memory.corrections import Client
 
 
 class Remote:
@@ -217,7 +219,7 @@ def test_wrong_namespace_and_oversize_response_rejected():
 def test_owner_routes_require_authorization_and_return_review(setup, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from pi import api
+    from pi.api import server as api
 
     store, client, remote, body = setup
     monkeypatch.setattr(api.app.state, "store", store, raising=False)

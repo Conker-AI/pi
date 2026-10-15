@@ -8,12 +8,15 @@ from contextlib import closing
 import httpx
 import pytest
 
-from pi import inference_control, model_roles, research_usage, startup
-from pi.direct_providers import AnthropicProvider, OpenAIProvider, configured
-from pi.loop import Loop, TurnFailed
-from pi.providers import Message, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.api import startup
+from pi.context import research_usage
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.direct import AnthropicProvider, OpenAIProvider, configured
+from pi.models.providers import Message, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns import inference_control
+from pi.turns.loop import Loop, TurnFailed
 
 
 @pytest.fixture(autouse=True)
@@ -209,7 +212,7 @@ def test_factory_is_explicit_and_health_does_not_call(capture):
 
 
 def test_startup_registers_adapters_without_network(tmp_path, monkeypatch):
-    from pi import api
+    from pi.api import server as api
 
     for name in list(os.environ):
         if name.startswith("PI_"):

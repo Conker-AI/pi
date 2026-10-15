@@ -17,23 +17,19 @@ from pydantic import (
     model_validator,
 )
 
-from pi import (
-    agents,
-    artifacts,
-    calls,
-    characters,
-    collaboration,
-    filesystem_reads,
-    jobs,
-    memory_edits,
-    memory_forget,
-    projects,
-    proposals,
-    session_settings,
-    system_inventory,
-    tasks,
-)
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.agents import characters
+from pi.agents import profiles as agents
+from pi.agents import teams as collaboration
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.calls import runtime as calls
+from pi.content import artifacts
+from pi.context import projects
+from pi.conversation import settings as session_settings
+from pi.host import filesystem_reads
+from pi.host import inventory as system_inventory
+from pi.memory import edits as memory_edits
+from pi.memory import forget as memory_forget
+from pi.schedule import jobs, proposals, tasks
 
 from .api import Config
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed

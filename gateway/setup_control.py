@@ -11,13 +11,13 @@ from typing import BinaryIO
 import httpx
 from pydantic import ValidationError
 
-from pi.browser_contract import owner_allowed
-from pi.setup_choices import Choice, ChoiceInput
-from pi.setup_model_probes import ProbeInput, ProbeReceipt
-from pi.setup_models import Options, Selection
-from pi.setup_protection import Policy, PolicyInput
-from pi.setup_receipts import Receipt, ReceiptInput
-from pi.setup_rehearsal import Status as RehearsalStatus
+from pi.api.browser_contract import owner_allowed
+from pi.setup.choices import Choice, ChoiceInput
+from pi.setup.model_probes import ProbeInput, ProbeReceipt
+from pi.setup.models import Options, Selection
+from pi.setup.protection import Policy, PolicyInput
+from pi.setup.receipts import Receipt, ReceiptInput
+from pi.setup.rehearsal import Status as RehearsalStatus
 
 from .api import Config
 

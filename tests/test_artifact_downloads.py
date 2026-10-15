@@ -8,9 +8,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
-from pi import artifacts as a
-from pi.artifacts_api import router
-from pi.store import Store
+from pi.api.routes.artifacts import router
+from pi.content import artifacts as a
+from pi.conversation.store import Store
 
 
 @pytest.fixture

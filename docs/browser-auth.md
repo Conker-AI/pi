@@ -45,7 +45,7 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | `GET /auth/sessions` | Lists session IDs and timestamps, never bearer tokens. |
 | `POST /auth/sessions/{id}/revoke` | Empty JSON object and exact one-use password proof; revokes one session. |
 | `POST /auth/revoke-all` | Empty JSON object and exact one-use password proof; revokes every session, including the caller's. |
-| `/api/pi/{path}` | Only methods and paths in `pi/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
+| `/api/pi/{path}` | Only methods and paths in `pi/api/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
 | `GET /api/owner/requests` | Reads the approval list through the dedicated ToolGate owner channel. |
 | `GET /api/owner/requests/{id}` | Reads the canonical owner-request projection for review or lost-decision reconciliation. |
 | `POST /api/owner/requests/{id}/decision` | JSON `status` (`approved`, `rejected`, `dismissed`) and optional `note`; uses only the owner channel. |

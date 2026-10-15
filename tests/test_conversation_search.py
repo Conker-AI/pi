@@ -1,8 +1,8 @@
 from contextlib import closing
 
-from pi import conversation_search as search
-from pi import session_settings
-from pi.store import Store
+from pi.conversation import search
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 def test_literal_search_paginates_exact_message_links(tmp_path):
@@ -48,7 +48,7 @@ def test_unicode_and_nontext_or_tool_data(tmp_path):
 
 
 def test_excerpt_centers_match_and_forgetting_removes_result(tmp_path):
-    from pi import forgetting
+    from pi.conversation import forgetting
 
     path = tmp_path / "search.db"
     with closing(Store(path)) as store:

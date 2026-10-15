@@ -6,13 +6,13 @@ from contextlib import closing, contextmanager
 import httpx
 import pytest
 
-from pi import live_stream
-from pi.direct_providers import AnthropicProvider, OpenAIProvider
-from pi.loop import Loop
-from pi.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider
-from pi.providers import Completion, Message, OllamaProvider, ProviderUnavailable
-from pi.routing import Router
-from pi.store import Store
+from pi.conversation import live_stream
+from pi.conversation.store import Store
+from pi.models.direct import AnthropicProvider, OpenAIProvider
+from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider
+from pi.models.providers import Completion, Message, OllamaProvider, ProviderUnavailable
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 
 
 @pytest.fixture(autouse=True)
@@ -316,7 +316,7 @@ def test_turn_without_request_id_still_works(tmp_path):
 def test_stream_endpoint_replays_events_and_ends():
     from fastapi.testclient import TestClient
 
-    from pi import api
+    from pi.api import server as api
 
     with live_stream.open_reply("http_request"), live_stream.answering():
         live_stream.delta("Hi")
@@ -338,8 +338,8 @@ def test_stream_endpoint_replays_events_and_ends():
 def test_stop_ends_the_answer_mid_stream_and_cancels_the_turn(tmp_path):
     import threading
 
-    from pi import turn_control
-    from pi.loop import TurnFailed
+    from pi.turns import control as turn_control
+    from pi.turns.loop import TurnFailed
 
     produced = []
     first_piece = threading.Event()

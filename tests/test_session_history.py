@@ -9,9 +9,13 @@ import pytest
 from fastapi.testclient import TestClient
 from test_gateway_api import RUNTIME, gateway, sign_in  # noqa: F401
 
-from pi import api, browser_contract, forgetting, session_history, session_observation
-from pi.store import Store
-from pi.tasks import TaskError
+from pi.api import browser_contract
+from pi.api import server as api
+from pi.conversation import forgetting
+from pi.conversation import history as session_history
+from pi.conversation import observation as session_observation
+from pi.conversation.store import Store
+from pi.schedule.tasks import TaskError
 
 
 @pytest.fixture
@@ -221,7 +225,7 @@ def test_maximum_page_payload_stays_bounded_with_escaped_legacy_text(store):
 
 
 def test_private_chat_owner_access_is_preserved_without_widening_global_search(store):
-    from pi import universal_search
+    from pi.context import universal_search
 
     sid = store.create_session(
         title="Private Needle",

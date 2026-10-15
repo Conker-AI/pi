@@ -9,7 +9,7 @@ import pytest
 from gateway.api import Config
 from gateway.mutation import MAX_REQUEST_BYTES, MutationError, apply_resource, resources
 from gateway.toolgate_contract import owner_editor_allowed, owner_request_allowed
-from pi.browser_contract import owner_allowed, runtime_allowed
+from pi.api.browser_contract import owner_allowed, runtime_allowed
 from tests.test_characters import profile as character_profile
 
 

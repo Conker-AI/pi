@@ -6,11 +6,17 @@ import pytest
 from fastapi.testclient import TestClient
 from test_model_roles import Adapter, config
 
-from pi import agents, api, context_retrieval, model_roles, session_settings, submissions, tasks
-from pi import turn_queue as q
-from pi.loop import Loop, TurnFailed
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import server as api
+from pi.context import retrieval as context_retrieval
+from pi.conversation import settings as session_settings
+from pi.conversation import submissions
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.routing import Router
+from pi.schedule import tasks
+from pi.turns import queue as q
+from pi.turns.loop import Loop, TurnFailed
 
 
 def setup(store, second_fail=False):

@@ -9,11 +9,12 @@ import httpx
 import pytest
 from test_background_thinking import setup
 
-from pi import background_thinking, inference_control
-from pi.chatgpt_provider import ChatGPTProvider
-from pi.claude_code_provider import ClaudeCodeProvider
-from pi.providers import Completion, Message, OllamaProvider
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models.chatgpt import ChatGPTProvider
+from pi.models.claude_code import ClaudeCodeProvider
+from pi.models.providers import Completion, Message, OllamaProvider
+from pi.turns import inference_control
+from pi.turns import thinking as background_thinking
 
 
 def join(thread):

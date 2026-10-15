@@ -6,9 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 from test_attachment_turns import upload
 
-from pi import api, attachments, forgetting, session_settings, tasks
-from pi import turn_queue as q
-from pi.store import Store
+from pi.api import server as api
+from pi.content import attachments
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.schedule import tasks
+from pi.turns import queue as q
 
 
 def body(number=0, text="Next question", attachment_ids=None):

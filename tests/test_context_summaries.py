@@ -2,9 +2,10 @@ from contextlib import closing
 
 import pytest
 
-from pi import context_controls, forgetting, submissions
-from pi import context_summaries as summaries
-from pi.store import Store
+from pi.context import controls as context_controls
+from pi.context import summaries
+from pi.conversation import forgetting, submissions
+from pi.conversation.store import Store
 
 
 def test_edit_restore_preserves_parent_and_messages(tmp_path):

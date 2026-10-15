@@ -2,9 +2,11 @@ from contextlib import closing
 
 import pytest
 
-from pi import model_roles, setup_model_probes, setup_models
-from pi.providers import Completion, ProviderUnavailable
-from pi.store import Store
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion, ProviderUnavailable
+from pi.setup import model_probes as setup_model_probes
+from pi.setup import models as setup_models
 
 
 class Adapter:

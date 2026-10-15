@@ -7,11 +7,13 @@ from contextlib import closing
 import pytest
 from test_tool_turns import FakeGate
 
-from pi import memory_store, session_settings, turn_context
-from pi.loop import Loop
-from pi.routing import Router
-from pi.store import Store
-from pi.tools import describe
+from pi.actions.tools import describe
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.memory import store as memory_store
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 
 def empty_package(scope="all"):

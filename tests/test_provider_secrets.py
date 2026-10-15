@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pi.provider_secrets import load
+from pi.models.secrets import load
 
 
 def secret(tmp_path: Path, name: str, value: bytes) -> Path:

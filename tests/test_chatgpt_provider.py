@@ -3,9 +3,9 @@ import json
 import httpx
 import pytest
 
-from pi import live_stream
-from pi.chatgpt_provider import ChatGPTProvider, configured
-from pi.providers import Message, ProviderUnavailable
+from pi.conversation import live_stream
+from pi.models.chatgpt import ChatGPTProvider, configured
+from pi.models.providers import Message, ProviderUnavailable
 
 
 def events(*rows):

@@ -4,7 +4,7 @@ import httpx
 import pytest
 from test_speech import client, wav
 
-from pi.speech import SpeechError
+from pi.calls.speech import SpeechError
 
 
 def test_word_timing_preserves_provider_values_and_requests_both_granularities():

@@ -10,10 +10,12 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import agents, model_evaluations_api, model_roles
-from pi import model_evaluations as e
-from pi.providers import Completion, ProviderUnavailable
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api.routes import model_evaluations as model_evaluations_api
+from pi.conversation.store import Store
+from pi.models import evaluations as e
+from pi.models import roles as model_roles
+from pi.models.providers import Completion, ProviderUnavailable
 
 
 class Adapter:

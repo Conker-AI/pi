@@ -11,8 +11,9 @@ from test_memory_edits import BODY, setup  # noqa: F401 -- shared isolated fixtu
 from gateway import mutation
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi import api, browser_contract
-from pi import memory_edits as edits
+from pi.api import browser_contract
+from pi.api import server as api
+from pi.memory import edits
 
 OWNER = "synthetic-owner-key-" + "o" * 32
 PREFIX = "/memory/corrections"

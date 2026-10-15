@@ -1,0 +1,307 @@
+"""OpenRouter adapter, with free-model discovery.
+
+Conker ships free by default: a fresh install works with no payment and no key
+beyond what free tiers need, and paid models are the owner's own, added
+deliberately. That is a decision about someone else's money, so it is enforced
+in code rather than left to configuration.
+
+`allow_paid` defaults to False and every call checks the resolved model against
+the discovered free set. Asking for a paid model without opting in raises rather
+than quietly spending; there is no path where a typo in a model name becomes a
+bill.
+
+Models are discovered, not hardcoded. A hardcoded list is stale within weeks -
+OpenRouter carried 431 models and 22 free ones the day this was written, and
+both numbers move.
+"""
+
+from __future__ import annotations
+
+import math
+import time
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+
+import httpx
+
+from pi.actions.evidence import project_tool_evidence
+from pi.conversation import citations, live_stream
+from pi.models.direct import collect_chat_stream, provider_stream, sse_events
+from pi.models.providers import Completion, Message, ProviderUnavailable, chat_content
+from pi.turns import inference_control
+
+CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
+CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+CATALOGUE_TTL_SECONDS = 900.0
+
+
+@dataclass(frozen=True)
+class ModelInfo:
+    id: str
+    context_length: int
+    prompt_usd_per_token: float | None
+    completion_usd_per_token: float | None
+    supports_tools: bool
+    pricing: dict | None = None
+    supports_images: bool = False
+
+    @property
+    def is_free(self) -> bool:
+        pricing = self.pricing
+        required = {"prompt", "completion", "request"}
+        if not isinstance(pricing, dict) or not required <= pricing.keys():
+            return False
+        try:
+            # Decimal prevents a tiny positive fee underflowing to float zero.
+            return all(
+                Decimal(str(value)).is_finite() and Decimal(str(value)) == 0
+                for value in pricing.values()
+            )
+        except (InvalidOperation, ValueError):
+            return False
+
+
+def _price(pricing: dict, key: str) -> float | None:
+    try:
+        value = pricing.get(key)
+        if isinstance(value, bool):
+            return None
+        price = float(value)
+        return price if math.isfinite(price) and price >= 0 else None
+    except (TypeError, ValueError, OverflowError):
+        # An unparseable price is not free. Treating it as zero is exactly the
+        # assumption that turns into a bill.
+        return None
+
+
+class PaidModelRefused(RuntimeError):
+    """Asked for a model that costs money without allow_paid."""
+
+
+class ModelUnusable(ProviderUnavailable):
+    """This model will not serve us, but another might.
+
+    Being listed and priced at zero does not mean callable: some free models are
+    gated to particular clients and answer 403 with an explanation. That is a
+    fact about one model, not about the provider or the key, so the caller
+    should try the next candidate rather than fail the turn.
+    """
+
+
+class OpenRouterProvider:
+    name = "openrouter"
+    supports_images = True
+
+    def __init__(self, api_key: str, *, allow_paid: bool = False, timeout: float = 120.0) -> None:
+        self.api_key = api_key
+        self.allow_paid = allow_paid
+        self.timeout = timeout
+        self._catalogue: dict[str, ModelInfo] = {}
+        self._fetched_at = 0.0
+
+    # --- discovery --------------------------------------------------------
+
+    def catalogue(self, *, force: bool = False) -> dict[str, ModelInfo]:
+        inference_control.check()
+        now = time.monotonic()
+        if self._catalogue and not force and now - self._fetched_at < CATALOGUE_TTL_SECONDS:
+            return self._catalogue
+        try:
+            if inference_control.current() is not None:
+                with provider_stream(
+                    "GET",
+                    CATALOGUE_URL,
+                    headers=self._headers(),
+                    timeout=30.0,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as response:
+                    response.raise_for_status()
+                    response.read()
+                    data = response.json()["data"]
+            else:
+                response = httpx.get(
+                    CATALOGUE_URL,
+                    headers=self._headers(),
+                    timeout=30.0,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+                response.raise_for_status()
+                data = response.json()["data"]
+        except inference_control.InferenceCancelled:
+            raise
+        except Exception as exc:
+            inference_control.check()
+            raise ProviderUnavailable(f"catalogue unavailable: {type(exc).__name__}") from exc
+
+        catalogue: dict[str, ModelInfo] = {}
+        for entry in data:
+            arch = entry.get("architecture") or {}
+            inputs = arch.get("input_modalities") or []
+            outputs = arch.get("output_modalities") or []
+            # Text in, text *only* out. Some zero-priced entries are audio or
+            # image generators - Google's Lyria outputs ["text", "audio"] - and
+            # routing a conversation into one would be a strange failure to
+            # diagnose from the answer alone.
+            if "text" not in inputs or outputs != ["text"]:
+                continue
+            pricing = entry.get("pricing") or {}
+            catalogue[entry["id"]] = ModelInfo(
+                id=entry["id"],
+                context_length=int(entry.get("context_length") or 0),
+                prompt_usd_per_token=_price(pricing, "prompt"),
+                completion_usd_per_token=_price(pricing, "completion"),
+                supports_tools="tools" in (entry.get("supported_parameters") or []),
+                pricing=pricing,
+                supports_images="image" in inputs,
+            )
+        self._catalogue = catalogue
+        self._fetched_at = now
+        return catalogue
+
+    def free_models(self, *, needs_tools: bool = False) -> list[ModelInfo]:
+        """Free chat models, widest context first."""
+        models = [m for m in self.catalogue().values() if m.is_free]
+        if needs_tools:
+            models = [m for m in models if m.supports_tools]
+        return sorted(models, key=lambda m: -m.context_length)
+
+    # --- completion -------------------------------------------------------
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            # OpenRouter attributes traffic by these; they are not credentials.
+            "HTTP-Referer": "https://github.com/alexeybe1kin/conker",
+            "X-Title": "Conker",
+        }
+
+    def _guard_cost(self, model: str) -> ModelInfo:
+        info = self.catalogue().get(model)
+        if info is None:
+            raise PaidModelRefused(
+                f"{model!r} is not in the catalogue of text models; refusing to call it blind"
+            )
+        if not info.is_free and not self.allow_paid:
+            raise PaidModelRefused(
+                f"{model!r} is not free and allow_paid is off. "
+                "Set PI_ALLOW_PAID_MODELS=1 to spend deliberately."
+            )
+        return info
+
+    def complete(self, messages: list[Message], *, model: str) -> Completion:
+        return self.complete_bounded(messages, model=model, timeout=self.timeout)
+
+    def complete_bounded(
+        self, messages: list[Message], *, model: str, timeout: float
+    ) -> Completion:
+        inference_control.check()
+        info = self._guard_cost(model)
+        inference_control.check()
+        messages = project_tool_evidence(messages)
+        if any(message.images for message in messages) and not info.supports_images:
+            raise ModelUnusable("Selected model does not advertise image input.")
+        payload = {
+            "model": model,
+            "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
+        }
+        if live_stream.active() or inference_control.current() is not None:
+            body = self._streamed(payload, model, timeout)
+        else:
+            body = self._posted(payload, model, timeout)
+
+        choices = body.get("choices") or []
+        if not choices:
+            raise ProviderUnavailable("provider returned no choices")
+        text = (choices[0].get("message") or {}).get("content")
+        if not isinstance(text, str):
+            raise ProviderUnavailable("provider returned no message content")
+
+        try:
+            evidence = citations.from_openrouter_annotations(
+                (choices[0].get("message") or {}).get("annotations")
+            )
+        except ValueError as exc:
+            raise ProviderUnavailable("provider returned invalid citation metadata") from exc
+        usage = body.get("usage") or {}
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        # Reported charges include request fees and provider-side accounting.
+        # A token-price estimate cannot truthfully replace a missing receipt.
+        cost = _price(usage, "cost")
+
+        return Completion(
+            text=text,
+            model=body.get("model", model),
+            provider=self.name,
+            input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
+            cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+            cost_usd=cost,
+            raw={"finish_reason": choices[0].get("finish_reason")},
+            citations=evidence,
+        )
+
+    def _posted(self, payload: dict, model: str, timeout: float) -> dict:
+        try:
+            response = httpx.post(
+                CHAT_URL,
+                json=payload,
+                headers=self._headers(),
+                timeout=timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+        except Exception as exc:
+            raise ProviderUnavailable(type(exc).__name__) from exc
+        self._check_model_status(response, model)
+        try:
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            raise ProviderUnavailable(type(exc).__name__) from exc
+
+    def _streamed(self, payload: dict, model: str, timeout: float) -> dict:
+        live_stream.begin_attempt()
+        try:
+            with provider_stream(
+                "POST",
+                CHAT_URL,
+                json={**payload, "stream": True},
+                headers=self._headers(),
+                timeout=timeout,
+                follow_redirects=False,
+                trust_env=False,
+            ) as response:
+                self._check_model_status(response, model)
+                response.raise_for_status()
+                return collect_chat_stream(sse_events(response))
+        except inference_control.InferenceCancelled:
+            raise
+        except (ModelUnusable, ProviderUnavailable):
+            inference_control.check()
+            raise
+        except Exception as exc:
+            inference_control.check()
+            raise ProviderUnavailable(type(exc).__name__) from exc
+
+    @staticmethod
+    def _check_model_status(response, model: str) -> None:
+        if response.status_code in (403, 404, 400):
+            # About this model, not about us. 401 and 429 are deliberately not
+            # here: a bad key or an exhausted quota will fail identically on
+            # every candidate, and walking the whole catalogue to rediscover
+            # that would be slow and would look like the models were at fault.
+            raise ModelUnusable(f"{model}: HTTP {response.status_code}")
+
+    def health(self) -> dict:
+        if not self.api_key:
+            return {"status": "not_configured", "reason": "no API key"}
+        try:
+            self.catalogue()
+        except ProviderUnavailable as exc:
+            return {"status": "unavailable", "reason": exc.reason}
+        # Catalogue availability (possibly cached) is not an authentication,
+        # entitlement, or successful-inference receipt.
+        return {"status": "unverified"}

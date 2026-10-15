@@ -9,21 +9,19 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from pi import (
-    agents,
-    collaboration,
-    forgetting,
-    model_roles,
-    session_settings,
-    tasks,
-    team_execution_api,
-)
-from pi import team_execution as teams
-from pi.loop import Loop, TurnFailed
-from pi.providers import Completion
-from pi.routing import Router
-from pi.store import Store
-from pi.toolgate import Tool, ToolResult
+from pi.actions.toolgate import Tool, ToolResult
+from pi.agents import profiles as agents
+from pi.agents import team_execution as teams
+from pi.agents import teams as collaboration
+from pi.api.routes import team_execution as team_execution_api
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.models import roles as model_roles
+from pi.models.providers import Completion
+from pi.models.routing import Router
+from pi.schedule import tasks
+from pi.turns.loop import Loop, TurnFailed
 
 
 class Recorder:

@@ -9,24 +9,22 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import (
-    agents,
-    api,
-    browser_contract,
-    context_controls,
-    forgetting,
-    memory_delivery,
-    memory_forget,
-    memory_store,
-    session_settings,
-    turn_context,
-)
-from pi.loop import Loop
-from pi.memory import Memory, MemoryClient
-from pi.memory_corrections import Client as CorrectionClient
-from pi.providers import Message
-from pi.routing import Router
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.api import browser_contract
+from pi.api import server as api
+from pi.context import controls as context_controls
+from pi.conversation import forgetting
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
+from pi.memory import delivery as memory_delivery
+from pi.memory import forget as memory_forget
+from pi.memory import store as memory_store
+from pi.memory.corrections import Client as CorrectionClient
+from pi.memory.service import Memory, MemoryClient
+from pi.models.providers import Message
+from pi.models.routing import Router
+from pi.turns import context as turn_context
+from pi.turns.loop import Loop
 
 DESTINATION = memory_delivery.destination_digest(httpx.URL("http://memory.test"))
 

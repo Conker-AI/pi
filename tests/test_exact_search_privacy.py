@@ -8,8 +8,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_universal_search import client_for
 
-from pi import conversation_search, session_settings, universal_search
-from pi.store import Store
+from pi.context import universal_search
+from pi.conversation import search as conversation_search
+from pi.conversation import settings as session_settings
+from pi.conversation.store import Store
 
 
 @pytest.fixture

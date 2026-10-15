@@ -8,10 +8,11 @@ from contextlib import closing
 import pytest
 from fastapi.testclient import TestClient
 
-from pi import agents, api
-from pi import collaboration as c
-from pi.browser_contract import owner_allowed, runtime_allowed
-from pi.store import Store
+from pi.agents import profiles as agents
+from pi.agents import teams as c
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.conversation.store import Store
 from tests.test_collaboration import config, team
 
 OWNER = "team-owner-control-" + "o" * 32
