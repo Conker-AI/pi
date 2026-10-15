@@ -27,6 +27,8 @@ from typing import Any
 
 import httpx
 
+from .loopback_http import verification
+
 _WORKFLOW = re.compile(r"^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$")
 
 
@@ -118,6 +120,7 @@ class ToolGateClient:
         try:
             response = httpx.get(
                 f"{self.base_url}/v2/agent/tools",
+                verify=verification(self.base_url),
                 headers=self._headers(),
                 timeout=self.timeout,
                 follow_redirects=False,
@@ -127,6 +130,7 @@ class ToolGateClient:
             rows = response.json()
             workflows = httpx.get(
                 f"{self.base_url}/v2/agent/published-workflows",
+                verify=verification(self.base_url),
                 headers=self._headers(),
                 timeout=self.timeout,
                 follow_redirects=False,
@@ -159,6 +163,7 @@ class ToolGateClient:
         try:
             response = httpx.get(
                 f"{self.base_url}/v2/agent/policy-summary",
+                verify=verification(self.base_url),
                 headers=self._headers(),
                 timeout=self.timeout,
                 follow_redirects=False,
@@ -220,6 +225,7 @@ class ToolGateClient:
         try:
             response = httpx.post(
                 f"{self.base_url}{path}",
+                verify=verification(self.base_url),
                 json=payload,
                 headers=self._headers(),
                 timeout=self.timeout,
@@ -247,6 +253,7 @@ class ToolGateClient:
         try:
             response = httpx.get(
                 f"{self.base_url}/v2/agent/actions/{action_id}",
+                verify=verification(self.base_url),
                 headers=self._headers(),
                 timeout=self.timeout,
                 follow_redirects=False,
@@ -324,6 +331,7 @@ class ToolGateClient:
         try:
             response = httpx.get(
                 f"{self.base_url}/v2/agent/status",
+                verify=verification(self.base_url),
                 headers=self._headers(),
                 timeout=5.0,
                 follow_redirects=False,

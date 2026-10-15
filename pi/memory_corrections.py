@@ -1,5 +1,7 @@
 """Dedicated MemoryGate correction capability; never uses an admin/read/ingest key."""
 
+import hashlib
+import json
 from urllib.parse import quote
 
 import httpx
@@ -24,6 +26,19 @@ class Client:
             headers={"X-MemoryGate-Correction-Key": key, "X-Agent-Id": agent_id},
             transport=transport,
         )
+        base = self.http.base_url
+        # Bind recovery to the same destination without retaining URL credentials.
+        self.destination = hashlib.sha256(
+            json.dumps(
+                {
+                    "scheme": base.scheme,
+                    "host": base.raw_host.decode("ascii"),
+                    "port": base.port,
+                    "path": base.raw_path.split(b"?", 1)[0].rstrip(b"/").decode("ascii"),
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
 
     def _request(self, method, path, **kwargs):
         with self.http.stream(method, "/runtime/corrections/" + path, **kwargs) as response:

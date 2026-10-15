@@ -147,10 +147,10 @@ CASES = [
     ),
     (
         "F5-wrong-namespace-receipt-accepted",
-        "pi/memory.py",
-        'receipt.get("id") != expected_id',
+        "pi/memory_delivery.py",
+        'value.get("id") != receipt_id',
         "False",
-        MEMORY,
+        "tests/test_memory_delivery.py",
     ),
     (
         "F5-legacy-origin-guessed",

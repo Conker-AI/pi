@@ -14,6 +14,7 @@ needs the record this produces.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -44,10 +45,31 @@ class Route:
     provider: str
     model: str
     unavailable_reason: str | None = None
+    selection: dict | None = None
 
     @property
     def escalated(self) -> bool:
-        return self.reason is not Reason.DEFAULT
+        # Configured models have no ordered price or capability tier. Choosing
+        # one (including an approved fallback) does not prove an escalation.
+        return self.tier is Tier.STRONG
+
+    def detail(self, skipped: list[str]) -> str | None:
+        """Keep the historical selection receipt readable independently of failures."""
+        if self.selection is not None:
+            return json.dumps(self.selection)
+        return "; ".join(skipped) or None
+
+    def receipt(self, skipped: list[str]) -> dict:
+        return {
+            "tier": self.tier.value,
+            "reason": self.reason.value,
+            "provider": self.provider,
+            "model": self.model,
+            "escalated": self.escalated,
+            "fallback_used": bool(skipped),
+            "skipped": skipped,
+            **({"selection": self.selection} if self.selection is not None else {}),
+        }
 
 
 @dataclass(frozen=True)

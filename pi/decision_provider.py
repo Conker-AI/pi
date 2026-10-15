@@ -4,15 +4,59 @@ from __future__ import annotations
 
 import json
 import math
+import socket
+from contextlib import contextmanager, suppress
 from typing import ClassVar
 from urllib.parse import urlsplit
 
 import httpx
 
+from . import inference_control
+from .loopback_http import verification
 from .providers import Completion, ProviderUnavailable
 
 FOLLOW_UP_CHARACTERS = 400
 CONTEXT_CHARACTERS = 200
+
+
+@contextmanager
+def _request_control(client):
+    """Interrupt this decision's connection, including waiting for response headers.
+
+    HTTPX exposes the connected stream through its request trace extension. Keep
+    only that handle, never trace content or other clients' pooled connections.
+    DNS/connect before a handle exists still use the configured phase timeout.
+    Disconnecting does not claim that the decision service stopped its compute.
+    """
+    token = inference_control.current()
+    if token is None:
+        yield {}
+        return
+    connected = []
+
+    def interrupt():
+        if connected:
+            stream = connected[-1]
+            with suppress(AttributeError, OSError, ValueError):
+                connection = stream.get_extra_info("socket")
+                if connection is not None:
+                    connection.shutdown(socket.SHUT_RDWR)
+            with suppress(Exception):
+                stream.close()
+        client.close()
+
+    def trace(event, info):
+        if event in {"connection.connect_tcp.complete", "connection.start_tls.complete"}:
+            connected[:] = [info["return_value"]]
+            # A connection can finish after Stop captured an empty handle list.
+            # Close it here before the request is allowed to proceed.
+            if token.stopped.is_set():
+                interrupt()
+            token.check()
+
+    with token.register(interrupt):
+        yield {"trace": trace}
+        token.check()
 
 
 def _excerpt(text: str) -> dict:
@@ -25,8 +69,8 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     """What the router sees: the latest request, plus the previous exchange for short follow-ups.
 
     Only conversation turns are eligible; system prompts, instructions and recalled
-    memory never reach the classifier. The latest request is never cut: over 1600
-    characters it is refused, and the caller's configured fallback answers instead.
+    memory never reach the classifier. Long requests use a marked head/tail
+    excerpt plus length evidence, keeping the classifier within its context window.
     """
     turns = [
         item
@@ -39,9 +83,18 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     if last is None:
         raise ValueError()
     latest = turns[last]["content"]
-    if not latest.strip() or len(latest) > 1600:
+    if not latest.strip():
         raise ValueError()
     current = {"role": "user", "content": latest}
+    if len(latest) > 800:
+        current.update(
+            content=latest[:500] + " … " + latest[-250:],
+            excerpt=True,
+            requestCharacters=len(latest),
+            conversationCharacters=sum(len(row["content"]) for row in turns),
+            conversationTurns=len(turns),
+        )
+        return [current], "complexity-excerpt"
     if len(latest) >= FOLLOW_UP_CHARACTERS:
         return [current], "latest-user-request"
     earlier = [
@@ -52,6 +105,30 @@ def routing_projection(task: list) -> tuple[list[dict], str]:
     if not earlier:
         return [current], "latest-user-request"
     return [*earlier, current], "recent-exchange"
+
+
+def routing_request(messages, model):
+    """The exact typed request, shared by execution and same-input reuse."""
+    if model != "model-routing" or len(messages) != 2 or messages[-1].role != "user":
+        raise ValueError()
+    envelope = json.loads(messages[-1].content)
+    allowed = envelope["allowedModelIds"]
+    descriptions = envelope["modelDescriptions"]
+    if (
+        not isinstance(allowed, list)
+        or not 2 <= len(allowed) <= 8
+        or len(set(allowed)) != len(allowed)
+        or not isinstance(descriptions, dict)
+        or set(descriptions) != set(allowed)
+        or not isinstance(envelope["task"], list)
+    ):
+        raise ValueError()
+    projection, scope = routing_projection(envelope["task"])
+    return {
+        "state": json.dumps(projection, ensure_ascii=False),
+        "instructions": "Choose the model best suited to this task using the capability descriptions.",
+        "choices": descriptions,
+    }, {"inputScope": scope, "inputCharacters": sum(len(item["content"]) for item in projection)}
 
 
 class DecisionProvider:
@@ -84,7 +161,11 @@ class DecisionProvider:
     def health(self):
         try:
             with httpx.Client(
-                transport=self.transport, trust_env=False, timeout=2, follow_redirects=False
+                transport=self.transport,
+                trust_env=False,
+                timeout=2,
+                follow_redirects=False,
+                verify=verification(self.url),
             ) as client:
                 response = client.get(self.url + "/health", headers={"X-Decision-Key": self.key})
                 response.raise_for_status()
@@ -96,20 +177,24 @@ class DecisionProvider:
         return {"status": "unavailable", "reason": "Decision service is not ready."}
 
     def choose(self, state, instructions, choices, *, timeout=2.0):
+        inference_control.check()
         try:
             if not isinstance(state, str) or len(state) > 12000:
                 raise ValueError()
             with httpx.Client(
                 transport=self.transport,
+                verify=verification(self.url),
                 trust_env=False,
                 timeout=min(max(timeout, 0.1), 30),
                 follow_redirects=False,
             ) as client:
-                response = client.post(
-                    self.url + "/v1/choose",
-                    headers={"X-Decision-Key": self.key},
-                    json={"state": state, "instructions": instructions, "choices": choices},
-                )
+                with _request_control(client) as extensions:
+                    response = client.post(
+                        self.url + "/v1/choose",
+                        headers={"X-Decision-Key": self.key},
+                        json={"state": state, "instructions": instructions, "choices": choices},
+                        extensions=extensions,
+                    )
                 response.raise_for_status()
                 if len(response.content) > 16384:
                     raise ValueError()
@@ -133,8 +218,10 @@ class DecisionProvider:
                 raise ValueError()
             if data["confidence"] < self.minimum_confidence:
                 raise ProviderUnavailable("Decision confidence below configured threshold.")
+            inference_control.check()
             return data
         except (ValueError, TypeError, KeyError, httpx.HTTPError):
+            inference_control.check()
             raise ProviderUnavailable(
                 "Typed decision service unavailable or input unsupported."
             ) from None
@@ -165,32 +252,13 @@ class DecisionProvider:
         if model != "model-routing" or len(messages) != 2 or messages[-1].role != "user":
             raise ProviderUnavailable("Decision adapter supports typed model routing only.")
         try:
-            envelope = json.loads(messages[-1].content)
-            allowed = envelope["allowedModelIds"]
-            descriptions = envelope["modelDescriptions"]
-            if (
-                not isinstance(allowed, list)
-                or not 2 <= len(allowed) <= 8
-                or len(set(allowed)) != len(allowed)
-                or set(descriptions) != set(allowed)
-            ):
-                raise ValueError()
             # A small classifier routes the current request, not the answer's
             # entire system prompt, retrieved memory and conversation history.
-            # Keep this projection explicit; never silently cut an oversized
-            # request. A short follow-up ("and in Python?") is ambiguous alone,
+            # The projection marks excerpts and retains complexity evidence.
+            # A short follow-up ("and in Python?") is ambiguous alone,
             # so it carries the previous exchange as marked, bounded excerpts.
-            task = envelope["task"]
-            if not isinstance(task, list):
-                raise ValueError()
-            projection, scope = routing_projection(task)
-            state = json.dumps(projection, ensure_ascii=False)
-            data = self.choose(
-                state,
-                "Choose the model best suited to this task using the capability descriptions.",
-                descriptions,
-                timeout=timeout,
-            )
+            body, evidence = routing_request(messages, model)
+            data = self.choose(**body, timeout=timeout)
             return Completion(
                 text=json.dumps({"modelId": data["choice"]}),
                 model=data["model"],
@@ -201,8 +269,7 @@ class DecisionProvider:
                             key: data.get(key)
                             for key in ("choice", "confidence", "elapsed_ms", "provider", "model")
                         },
-                        "inputScope": scope,
-                        "inputCharacters": sum(len(item["content"]) for item in projection),
+                        **evidence,
                     }
                 },
             )

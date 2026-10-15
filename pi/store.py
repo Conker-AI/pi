@@ -30,6 +30,7 @@ from . import (
     agents,
     artifacts,
     attachments,
+    background_thinking,
     calls,
     characters,
     collaboration,
@@ -40,6 +41,7 @@ from . import (
     drafts,
     filesystem_reads,
     jobs,
+    memory_edits,
     memory_proposals,
     memory_store,
     message_forks,
@@ -52,12 +54,14 @@ from . import (
     research_usage,
     response_retries,
     response_versions,
+    session_observation,
     session_settings,
     setup_choices,
     setup_model_probes,
     setup_protection,
     setup_receipts,
     setup_rehearsal,
+    skills,
     submissions,
     system_actions,
     system_inventory,
@@ -131,6 +135,8 @@ CREATE TABLE IF NOT EXISTS turns (
     detail       TEXT
 );
 
+CREATE INDEX IF NOT EXISTS sessions_by_created_at ON sessions(created_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_history_order ON sessions(created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS messages_by_session ON messages(session_id, seq);
 CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, started_at);
 
@@ -252,6 +258,10 @@ def _message(row: sqlite3.Row) -> dict:
 
 def _message_with_attachments(db, row):
     item = _message(row)
+    if item["role"] == "user":
+        from . import memory_delivery
+
+        item["memory_delivery"] = memory_delivery.for_message(db, item)
     if item.get("content_status") != "forgotten":
         version = db.execute(
             "SELECT v.root_message_id,v.retry_of,f.selected_message_id,f.revision "
@@ -308,12 +318,14 @@ class Store:
                 self._migrate(db)
                 db.executescript(FORGETTING_SCHEMA)
                 db.executescript(session_settings.SCHEMA)
+                db.executescript(skills.SCHEMA)
                 setup_receipts.initialize(db)
                 setup_choices.initialize(db)
                 setup_model_probes.initialize(db)
                 setup_protection.initialize(db)
                 setup_rehearsal.initialize(db)
                 db.executescript(memory_store.SCHEMA)
+                db.executescript(memory_edits.SCHEMA)
                 db.executescript(memory_proposals.SCHEMA)
                 db.executescript(proposals.SCHEMA)
                 memory_store.migrate(db)
@@ -328,6 +340,7 @@ class Store:
                 db.executescript(response_retries.SCHEMA)
                 db.executescript(turn_steering.SCHEMA)
                 db.executescript(research_usage.SCHEMA)
+                research_usage.migrate(db)
                 db.executescript(universal_search.SCHEMA)
                 db.executescript(message_citations.SCHEMA)
                 owner_preferences.initialize(db)
@@ -341,6 +354,7 @@ class Store:
                 db.executescript(team_execution.SCHEMA)
                 db.executescript(artifacts.SCHEMA)
                 db.executescript(model_roles.SCHEMA)
+                db.executescript(background_thinking.SCHEMA)
                 db.executescript(jobs.SCHEMA)
                 continuity.initialize(db)
                 db.executescript(drafts.SCHEMA)
@@ -353,6 +367,7 @@ class Store:
                 system_inventory.initialize(db)
                 db.executescript(filesystem_reads.SCHEMA)
                 db.executescript(system_actions.SCHEMA)
+                session_observation.initialize(db)
         except BaseException:
             self.close()
             raise
@@ -384,6 +399,14 @@ class Store:
                 db.execute(f"ALTER TABLE turns ADD COLUMN {column} TEXT")
         if "acted" not in have:
             db.execute("ALTER TABLE turns ADD COLUMN acted INTEGER NOT NULL DEFAULT 0")
+        if "usage_version" not in have:
+            # Existing turns remain NULL: their unrecorded earlier calls cannot
+            # be reconstructed from a final completion's counters.
+            db.execute("ALTER TABLE turns ADD COLUMN usage_version INTEGER")
+        db.execute(
+            "CREATE TRIGGER IF NOT EXISTS new_turn_usage_version AFTER INSERT ON turns "
+            "BEGIN UPDATE turns SET usage_version=1 WHERE id=NEW.id; END"
+        )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -407,43 +430,52 @@ class Store:
         agent_id: str | None = None,
         privacy: dict[str, bool] | None = None,
     ) -> str:
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            session_id = self._create_session(db, title, parent_id, summary, agent_id, privacy)
+            db.commit()
+            return session_id
+
+    def _create_session(
+        self, db, title="", parent_id=None, summary=None, agent_id=None, privacy=None
+    ) -> str:
+        """Insert a session inside the caller's transaction, without inference."""
         if privacy is not None and (
             not set(privacy) <= {"memoryDisabled", "harnessDisabled"}
             or any(type(value) is not bool for value in privacy.values())
         ):
             raise ValueError("Use only boolean memoryDisabled and harnessDisabled restrictions.")
         session_id = f"ses_{uuid.uuid4().hex[:16]}"
-        with self._connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            initial_settings = None
-            if parent_id is None:
-                initial_settings = json.loads(json.dumps(session_settings.DEFAULT))
-                choice = db.execute(
-                    "SELECT choice FROM setup_optional_choices WHERE step='memory' "
-                    "ORDER BY revision DESC LIMIT 1"
-                ).fetchone()
-                if choice is not None:
-                    initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
-                if privacy:
-                    initial_settings["privacy"].update(privacy)
-                if agent_id is not None:
-                    selected = agents._get(db, agent_id)
-                    if selected["archived_at"] is not None:
-                        raise agents.AgentError("agent_archived", "Select an active agent.")
-                    initial_settings["agentId"] = selected["id"]
-                elif choice is None and not privacy:
-                    initial_settings = None
+        initial_settings = None
+        if parent_id is None:
+            initial_settings = json.loads(json.dumps(session_settings.DEFAULT))
+            choice = db.execute(
+                "SELECT choice FROM setup_optional_choices WHERE step='memory' "
+                "ORDER BY revision DESC LIMIT 1"
+            ).fetchone()
+            if choice is not None:
+                initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
+            if privacy:
+                initial_settings["privacy"].update(privacy)
+            if agent_id is not None:
+                selected = agents._get(db, agent_id)
+                if selected["archived_at"] is not None:
+                    raise agents.AgentError("agent_archived", "Select an active agent.")
+                initial_settings["agentId"] = selected["id"]
+            elif choice is None and not privacy:
+                initial_settings = None
+        db.execute(
+            "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"
+            " VALUES (?,?,?,'open',?,?)",
+            (session_id, parent_id, title, time.time(), summary),
+        )
+        if parent_id is not None:
+            session_settings.copy_parent_settings(db, parent_id, session_id)
+        if initial_settings is not None:
             db.execute(
-                "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"
-                " VALUES (?,?,?,'open',?,?)",
-                (session_id, parent_id, title, time.time(), summary),
+                "INSERT INTO session_settings VALUES (?,?,?)",
+                (session_id, 1, json.dumps(initial_settings)),
             )
-            if initial_settings is not None:
-                db.execute(
-                    "INSERT INTO session_settings VALUES (?,?,?)",
-                    (session_id, 1, json.dumps(initial_settings)),
-                )
-            db.commit()
         return session_id
 
     def get_session(self, session_id: str) -> dict | None:

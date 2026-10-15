@@ -66,15 +66,54 @@ def test_an_unreachable_ollama_is_unavailable_not_misconfigured(monkeypatch):
         raise httpx.ConnectError("refused")
 
     monkeypatch.setattr(httpx, "get", boom)
+    assert OllamaProvider("http://ollama:11434", model="qwen3:4b").health() == {
+        "status": "unavailable",
+        "reason": "ConnectError",
+    }
 
-    """Unreachable and not-installed are different facts, and the owner
-    needs a different action for each."""
 
-
-def test_a_bare_name_matches_any_tag_but_an_explicit_tag_does_not():
-    """Ollama serves a bare `qwen3` from `qwen3:latest`, so a bare request is
-    satisfied by any tag. An explicit tag must match exactly - being lax there
-    would recreate the same bug in miniature."""
-    assert _installed("qwen3", ["qwen3:4b"])
+def test_a_bare_name_requires_latest_and_explicit_tags_match_exactly(tags):
+    """An installed size tag cannot satisfy a different default-tag request."""
+    assert _installed("qwen3", ["qwen3:latest"])
+    assert not _installed("qwen3", ["qwen3:4b"])
     assert not _installed("qwen3:4b", ["qwen3:8b"])
     assert not _installed("qwen3:4b", ["qwen3-embedding:0.6b"])
+    tags(["qwen3:4b"])
+    assert (
+        OllamaProvider("http://ollama:11434", model="qwen3").health()["status"] == "not_configured"
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        None,
+        [],
+        {},
+        {"models": None},
+        {"models": "model"},
+        {"models": [None]},
+        {"models": [{}]},
+        {"models": [{"name": ""}]},
+        {"models": [{"name": 3}]},
+    ],
+)
+def test_malformed_inventory_reports_unavailable_without_crashing(monkeypatch, body):
+    response = httpx.Response(
+        200, json=body, request=httpx.Request("GET", "http://ollama/api/tags")
+    )
+    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: response)
+    health = OllamaProvider("http://ollama:11434", model="qwen3:4b").health()
+    assert health["status"] == "unavailable"
+    assert set(health) == {"status", "reason"}
+
+
+def test_non_json_inventory_reports_unavailable(monkeypatch):
+    response = httpx.Response(
+        200, text="provider maintenance", request=httpx.Request("GET", "http://ollama/api/tags")
+    )
+    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: response)
+    assert OllamaProvider("http://ollama:11434").health() == {
+        "status": "unavailable",
+        "reason": "JSONDecodeError",
+    }

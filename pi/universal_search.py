@@ -18,6 +18,7 @@ from . import (
     tasks,
 )
 from .providers import Message, ProviderUnavailable
+from .search_excerpt import excerpt
 
 SOURCES = (
     "conversations",
@@ -88,11 +89,6 @@ def save_settings(store, body, *, semantic_available, ranking_available):
     return {"revision": revision + 1, "configuration": cfg.model_dump()}
 
 
-def excerpt(text, query):
-    position = text.casefold().find(query.casefold())
-    return text[max(0, position - 80) : max(0, position - 80) + 400]
-
-
 def public_session(store, identity):
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, identity)
@@ -115,6 +111,46 @@ def record(source, identity, title, text, href, query, stage="metadata", role=No
     }
 
 
+def conversation_metadata(store, query):
+    """Bound eligible matches, rather than the recent chats considered for search."""
+    results = []
+    folded = query.casefold()
+    with store._connect() as db:
+        db.execute("BEGIN")
+        db.create_function(
+            "search_metadata_match",
+            2,
+            lambda title, summary: folded in (title + "\n" + (summary or "")).casefold(),
+            deterministic=True,
+        )
+        rows = db.execute(
+            "SELECT id,title,summary FROM sessions WHERE status!='forgotten' "
+            "AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=sessions.id) "
+            "AND search_metadata_match(title,summary) "
+            "ORDER BY created_at DESC,id DESC"
+        )
+        # Stream matches on this same read snapshot. The shared privacy policy
+        # includes current settings, legacy defaults, and immutable private origin.
+        # Private candidates never consume the bounded public result allowance.
+        for row in rows:
+            privacy = session_settings.source_privacy(db, row["id"])
+            if privacy is None or any(privacy.values()):
+                continue
+            hit = record(
+                "conversations",
+                row["id"],
+                row["title"],
+                row["summary"] or "",
+                f"/chat?session={quote(row['id'])}",
+                query,
+            )
+            if hit:
+                results.append(hit)
+                if len(results) > SCAN_LIMIT:
+                    return results[:SCAN_LIMIT], True
+    return results, False
+
+
 def lexical(store, memory, toolgate, query, settings, stage):
     results, coverage = [], []
 
@@ -132,30 +168,28 @@ def lexical(store, memory, toolgate, query, settings, stage):
                     for _ in range(SCAN_LIMIT // 50):
                         page = conversation_search.search(store, query, limit=50, cursor=cursor)
                         for row in page["results"]:
-                            add(
-                                source,
-                                row["id"],
-                                row["title"],
-                                row["excerpt"],
-                                f"/chat?session={quote(row['session_id'])}&message={quote(row['id'])}",
-                                row["role"],
+                            # The source matched full retained text after privacy
+                            # checks. A bounded preview may contain only part of
+                            # a long match; it must not veto that verified result.
+                            results.append(
+                                {
+                                    "id": f"{source}:{row['id']}:{stage}",
+                                    "source": source,
+                                    "recordId": row["id"],
+                                    "title": row["title"][:500],
+                                    "excerpt": excerpt(row["excerpt"], query),
+                                    "href": f"/chat?session={quote(row['session_id'])}&message={quote(row['id'])}",
+                                    "matchType": stage,
+                                    "role": row["role"],
+                                }
                             )
                         cursor = page["next_cursor"]
                         if cursor is None:
                             break
                     partial = cursor is not None
                 else:
-                    rows = store.list_sessions(limit=SCAN_LIMIT + 1)
-                    partial = len(rows) > SCAN_LIMIT
-                    for row in rows[:SCAN_LIMIT]:
-                        if row["status"] != "forgotten" and public_session(store, row["id"]):
-                            add(
-                                source,
-                                row["id"],
-                                row["title"],
-                                row.get("summary") or "",
-                                f"/chat?session={quote(row['id'])}",
-                            )
+                    matches, partial = conversation_metadata(store, query)
+                    results.extend(matches)
             elif source == "projects":
                 rows = projects.list_projects(store, limit=SCAN_LIMIT + 1)
                 partial = len(rows) > SCAN_LIMIT

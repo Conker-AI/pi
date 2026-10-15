@@ -517,6 +517,7 @@ def start(store, body: Start):
             "INSERT INTO sessions(id,parent_id,title,status,created_at) VALUES(?,?,?,'open',?)",
             (child, body.conversationId, "Call", now),
         )
+        session_settings.inherited_privacy(db, child)
         db.execute(
             "INSERT INTO session_settings VALUES(?,1,?) ON CONFLICT(session_id) DO "
             "UPDATE SET revision=1,settings=excluded.settings",

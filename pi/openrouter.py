@@ -24,9 +24,10 @@ from decimal import Decimal, InvalidOperation
 
 import httpx
 
-from . import citations, live_stream
-from .direct_providers import collect_chat_stream, sse_events
+from . import citations, inference_control, live_stream
+from .direct_providers import collect_chat_stream, provider_stream, sse_events
 from .providers import Completion, Message, ProviderUnavailable, chat_content
+from .tool_evidence import project_tool_evidence
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -100,20 +101,37 @@ class OpenRouterProvider:
     # --- discovery --------------------------------------------------------
 
     def catalogue(self, *, force: bool = False) -> dict[str, ModelInfo]:
+        inference_control.check()
         now = time.monotonic()
         if self._catalogue and not force and now - self._fetched_at < CATALOGUE_TTL_SECONDS:
             return self._catalogue
         try:
-            response = httpx.get(
-                CATALOGUE_URL,
-                headers=self._headers(),
-                timeout=30.0,
-                follow_redirects=False,
-                trust_env=False,
-            )
-            response.raise_for_status()
-            data = response.json()["data"]
+            if inference_control.current() is not None:
+                with provider_stream(
+                    "GET",
+                    CATALOGUE_URL,
+                    headers=self._headers(),
+                    timeout=30.0,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as response:
+                    response.raise_for_status()
+                    response.read()
+                    data = response.json()["data"]
+            else:
+                response = httpx.get(
+                    CATALOGUE_URL,
+                    headers=self._headers(),
+                    timeout=30.0,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+                response.raise_for_status()
+                data = response.json()["data"]
+        except inference_control.InferenceCancelled:
+            raise
         except Exception as exc:
+            inference_control.check()
             raise ProviderUnavailable(f"catalogue unavailable: {type(exc).__name__}") from exc
 
         catalogue: dict[str, ModelInfo] = {}
@@ -177,14 +195,17 @@ class OpenRouterProvider:
     def complete_bounded(
         self, messages: list[Message], *, model: str, timeout: float
     ) -> Completion:
+        inference_control.check()
         info = self._guard_cost(model)
+        inference_control.check()
+        messages = project_tool_evidence(messages)
         if any(message.images for message in messages) and not info.supports_images:
             raise ModelUnusable("Selected model does not advertise image input.")
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
         }
-        if live_stream.active():
+        if live_stream.active() or inference_control.current() is not None:
             body = self._streamed(payload, model, timeout)
         else:
             body = self._posted(payload, model, timeout)
@@ -243,7 +264,7 @@ class OpenRouterProvider:
     def _streamed(self, payload: dict, model: str, timeout: float) -> dict:
         live_stream.begin_attempt()
         try:
-            with httpx.stream(
+            with provider_stream(
                 "POST",
                 CHAT_URL,
                 json={**payload, "stream": True},
@@ -255,9 +276,13 @@ class OpenRouterProvider:
                 self._check_model_status(response, model)
                 response.raise_for_status()
                 return collect_chat_stream(sse_events(response))
+        except inference_control.InferenceCancelled:
+            raise
         except (ModelUnusable, ProviderUnavailable):
+            inference_control.check()
             raise
         except Exception as exc:
+            inference_control.check()
             raise ProviderUnavailable(type(exc).__name__) from exc
 
     @staticmethod
@@ -273,9 +298,9 @@ class OpenRouterProvider:
         if not self.api_key:
             return {"status": "not_configured", "reason": "no API key"}
         try:
-            free = self.free_models()
+            self.catalogue()
         except ProviderUnavailable as exc:
             return {"status": "unavailable", "reason": exc.reason}
-        if not free:
-            return {"status": "degraded", "reason": "no free text models available"}
-        return {"status": "ok"}
+        # Catalogue availability (possibly cached) is not an authentication,
+        # entitlement, or successful-inference receipt.
+        return {"status": "unverified"}

@@ -111,6 +111,7 @@ def run(loop, sid, mid, body):
             created = False
         else:
             tasks._source(db, sid, open_required=True)
+            turn_context.require_snapshot(db, prepared["source"])
             if (
                 submissions._busy(db, sid)
                 or db.execute(
@@ -196,7 +197,7 @@ def run(loop, sid, mid, body):
             latency_ms=int((time.monotonic() - started) * 1000),
             route_tier=route.tier.value,
             route_reason=route.reason.value,
-            detail="; ".join(skipped) or None,
+            detail=route.detail(skipped),
         )
     except Exception:
         # Stable request identities inspect this failed/interrupted attempt; no

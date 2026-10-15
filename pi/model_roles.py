@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+from functools import partial
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,6 +14,7 @@ from .providers import Message, ProviderUnavailable, require_images
 
 ROLES = (
     "answer",
+    "thinking",
     "routing",
     "context-selection",
     "summarization",
@@ -22,7 +25,7 @@ ROLES = (
 # Roles added after configurations were first saved. Older saved settings gain them
 # disabled: a new background use of the owner's conversations is never switched on
 # by an upgrade.
-LATER_ROLES = ("memory-ranking", "proposals", "search-ranking")
+LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking")
 
 
 class Strict(BaseModel):
@@ -142,6 +145,37 @@ class Update(Strict):
     expected_revision: int = Field(ge=0)
     configuration: Configuration
 
+    @model_validator(mode="after")
+    def supported_assignments(self):
+        # Keep old catalogues readable so the owner can repair them. Validate
+        # new writes separately from loading historical execution snapshots.
+        config = self.configuration
+        models = {model.id: model for model in config.models}
+        if config.defaultModelId and models[config.defaultModelId].providerId == "decisions":
+            raise ValueError("A decision classifier cannot be the default talking model.")
+        for role, assignment in config.roleSettings.roles.items():
+            for identity in assignment.eligibleModelIds:
+                model = models[identity]
+                if model.providerId == "decisions" and model.route != {
+                    "routing": "model-routing",
+                    "memory-ranking": "memory-ranking",
+                    "search-ranking": "search-ranking",
+                }.get(role):
+                    raise ValueError(f"The decision adapter cannot perform the {role} role.")
+        routing = config.roleSettings.roles["routing"]
+        uses_laya = any(
+            models[identity].providerId == "decisions"
+            for identity in (routing.modelId, routing.fallbackModelId)
+            if identity is not None
+        )
+        if (
+            config.roleSettings.answerMode == "router"
+            and uses_laya
+            and len(config.roleSettings.roles["answer"].eligibleModelIds) > 8
+        ):
+            raise ValueError("Laya supports a shortlist of at most eight talking models.")
+        return self
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS model_role_settings (
@@ -164,7 +198,7 @@ def decision_evidence(completion):
         item = value.get(key)
         if type(item) in (int, float) and math.isfinite(item) and item >= 0:
             result[key] = item
-    if value.get("inputScope") in ("latest-user-request", "recent-exchange"):
+    if value.get("inputScope") in ("latest-user-request", "recent-exchange", "complexity-excerpt"):
         result["inputScope"] = value["inputScope"]
     return {"decision": result} if result else {}
 
@@ -186,17 +220,58 @@ def save(store, body: Update):
     body = Update.model_validate(body.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT revision FROM model_role_settings WHERE singleton=1").fetchone()
-        current = row[0] if row else 0
-        if current != body.expected_revision:
-            raise ValueError("Model settings changed; reload before saving.")
-        db.execute(
-            "INSERT INTO model_role_settings VALUES(1,?,?) ON CONFLICT(singleton) "
-            "DO UPDATE SET revision=excluded.revision,configuration=excluded.configuration",
-            (current + 1, body.configuration.model_dump_json()),
-        )
+        result = save_in(db, body)
         db.commit()
+    return result
+
+
+def save_in(db, body: Update):
+    """Caller holds the writer transaction when activation also records its receipt."""
+    body = Update.model_validate(body.model_dump())
+    row = db.execute("SELECT revision FROM model_role_settings WHERE singleton=1").fetchone()
+    current = row[0] if row else 0
+    if current != body.expected_revision:
+        raise ValueError("Model settings changed; reload before saving.")
+    db.execute(
+        "INSERT INTO model_role_settings VALUES(1,?,?) ON CONFLICT(singleton) "
+        "DO UPDATE SET revision=excluded.revision,configuration=excluded.configuration",
+        (current + 1, body.configuration.model_dump_json()),
+    )
     return {"revision": current + 1, "configuration": body.configuration.model_dump()}
+
+
+def _routing_key(memo, config, revision, providers, messages):
+    if memo is None:
+        return None
+    from .decision_provider import DecisionProvider, routing_request
+
+    assignment = config.roleSettings.roles["routing"]
+    model = next((item for item in config.models if item.id == assignment.modelId), None)
+    adapter = providers.get(model.providerId) if model is not None else None
+    # Team/accounting wrappers deliberately opt out; never unwrap a boundary.
+    if (
+        model is None
+        or model.providerId != "decisions"
+        or model.route != "model-routing"
+        or not isinstance(adapter, DecisionProvider)
+    ):
+        return None
+    try:
+        body, _ = routing_request(messages, model.route)
+        # Keep choice insertion order: it is part of the classifier's input.
+        encoded = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return (
+            adapter,
+            adapter.url,
+            hashlib.sha256(adapter.key.encode("utf-8")).digest(),
+            adapter.minimum_confidence,
+            revision,
+            hashlib.sha256(config.model_dump_json().encode("utf-8")).digest(),
+            hashlib.sha256(encoded).digest(),
+        )
+    except (ValueError, TypeError, KeyError):
+        # Unsupported input still goes through its normal observed invocation.
+        return None
 
 
 def dispatch(
@@ -209,6 +284,9 @@ def dispatch(
     override=None,
     allowed_model_ids=None,
     guard=None,
+    observe_call=None,
+    routing_memo=None,
+    configuration_revision=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
@@ -234,11 +312,12 @@ def dispatch(
     )
     selected = override if role == "answer" and override is not None else assignment.modelId
     attempts = []
-    if role == "answer" and not locked:
-        if harness_disabled:
-            raise SelectionError(
-                "No harness disables routing helpers; select a manual answer model."
-            )
+    if role == "answer" and not locked and harness_disabled:
+        raise SelectionError("No harness disables routing helpers; select a manual answer model.")
+    single_candidate = role == "answer" and not locked and len(eligible) == 1
+    if single_candidate:
+        selected = next(iter(eligible))
+    if role == "answer" and not locked and not single_candidate:
         route_messages = [
             Message(
                 "system",
@@ -261,28 +340,73 @@ def dispatch(
                 ),
             ),
         ]
-        decision = dispatch(
-            config.model_dump(),
-            "routing",
-            route_messages,
-            providers,
-            allowed_model_ids=allowed_model_ids,
-            guard=guard,
-        )
-        attempts.extend(decision["attempts"])
         try:
-            choice = json.loads(decision["completion"].text)
-            if (
-                not isinstance(choice, dict)
-                or set(choice) != {"modelId"}
-                or choice["modelId"] not in eligible
+            if guard is not None:
+                guard()
+            key = _routing_key(
+                routing_memo, config, configuration_revision, providers, route_messages
+            )
+            reused = routing_memo.get(key) if key is not None else None
+            # Role restrictions can change independently of the typed choices.
+            primary = config.roleSettings.roles["routing"].modelId
+            if reused is not None and (
+                reused[0] not in eligible
+                or (allowed_model_ids is not None and primary not in allowed_model_ids)
             ):
-                raise ValueError()
-            selected = choice["modelId"]
-        except (ValueError, TypeError):
-            raise SelectionError(
-                "Routing helper returned an invalid or ineligible model choice."
-            ) from None
+                reused = None
+            if reused is not None:
+                from . import inference_control
+
+                inference_control.check()
+                if guard is not None:
+                    guard()
+                selected, attempt = reused
+                attempt.update(status="reused", selectionReason="same_routing_input")
+                if "decision" in attempt:
+                    attempt["decision"].pop("elapsed_ms", None)
+                attempts.append(attempt)
+            else:
+                decision = dispatch(
+                    config.model_dump(),
+                    "routing",
+                    route_messages,
+                    providers,
+                    allowed_model_ids=allowed_model_ids,
+                    guard=guard,
+                    observe_call=observe_call,
+                )
+                attempts.extend(decision["attempts"])
+                choice = json.loads(decision["completion"].text)
+                if (
+                    not isinstance(choice, dict)
+                    or set(choice) != {"modelId"}
+                    or choice["modelId"] not in eligible
+                ):
+                    raise ValueError()
+                selected = choice["modelId"]
+                if (
+                    key is not None
+                    and decision["modelId"] == primary
+                    and len(decision["attempts"]) == 1
+                    and decision["attempts"][0]["status"] == "completed"
+                ):
+                    routing_memo.put(key, selected, decision["attempts"][0])
+        except (ValueError, TypeError, SelectionError):
+            if guard is not None:
+                guard()
+            if assignment.failure != "fallback":
+                raise SelectionError(
+                    "Routing helper unavailable or returned an ineligible choice."
+                ) from None
+            selected = assignment.fallbackModelId
+            attempts.append(
+                {
+                    "role": "routing",
+                    "modelId": config.roleSettings.roles["routing"].modelId,
+                    "status": "unavailable",
+                    "fallbackModelId": selected,
+                }
+            )
     candidates = [selected]
     if not locked and assignment.failure == "fallback":
         candidates.append(assignment.fallbackModelId)
@@ -302,8 +426,23 @@ def dispatch(
             guard()
         try:
             require_images(adapter, messages)
-            completion = adapter.complete_bounded(
-                messages, model=model.route, timeout=assignment.timeoutMs / 1000
+            invoke = partial(
+                adapter.complete_bounded,
+                messages,
+                model=model.route,
+                timeout=assignment.timeoutMs / 1000,
+            )
+            completion = (
+                observe_call(
+                    invoke,
+                    provider=getattr(adapter, "name", model.providerId),
+                    model=model.route,
+                    role=role,
+                    provider_id=model.providerId,
+                    model_id=model.id,
+                )
+                if observe_call is not None
+                else invoke()
             )
         except ProviderUnavailable:
             if guard is not None:
@@ -320,6 +459,7 @@ def dispatch(
                 "requestedModel": model.route,
                 "actualModel": completion.model,
                 "status": "completed",
+                **({"selectionReason": "single_eligible_model"} if single_candidate else {}),
                 **decision_evidence(completion),
             }
         )

@@ -48,10 +48,11 @@ def turn_with_package(store, memories):
     session = store.create_session()
     turn = store.start_turn(session)
     memory_store.save_context(store, turn, "delivered", {"memories": memories})
+    store.finish_turn(turn, "complete")
     return turn
 
 
-def test_forget_clears_only_packages_that_quoted_the_memory(store):
+def test_forget_invalidates_derived_packages_conservatively(store):
     quoted = turn_with_package(
         store, [{"id": "mem-1", "text": "secret address"}, {"id": "mem-2", "text": "tea"}]
     )
@@ -63,7 +64,7 @@ def test_forget_clears_only_packages_that_quoted_the_memory(store):
         "memoryId": "mem-1",
         "status": "forgotten",
         "indexRemoval": "removed",
-        "cachedPackagesCleared": 1,
+        "cachedPackagesCleared": 3,
         "sourceConversationKept": True,
     }
     assert memory_store.context(store, quoted) == {
@@ -71,8 +72,8 @@ def test_forget_clears_only_packages_that_quoted_the_memory(store):
         "status": "redacted",
         "package": None,
     }
-    assert memory_store.context(store, unrelated)["package"]["memories"][0]["id"] == "mem-2"
-    assert memory_store.context(store, lookalike)["package"] is not None
+    assert memory_store.context(store, unrelated)["package"] is None
+    assert memory_store.context(store, lookalike)["package"] is None
 
 
 @pytest.mark.parametrize(
@@ -81,10 +82,12 @@ def test_forget_clears_only_packages_that_quoted_the_memory(store):
         (404, "not_found", 404),
         (409, "revision_conflict", 409),
         (401, "unavailable", 503),
-        (500, "unavailable", 503),
+        (500, "outcome_unknown", 503),
     ],
 )
-def test_memorygate_refusals_are_mapped_and_clear_nothing(store, status, code, http_status):
+def test_memorygate_refusals_are_mapped_and_never_restore_stale_caches(
+    store, status, code, http_status
+):
     quoted = turn_with_package(store, [{"id": "mem-1", "text": "secret"}])
     with pytest.raises(memory_forget.ForgetError) as error:
         memory_forget.forget(
@@ -92,7 +95,8 @@ def test_memorygate_refusals_are_mapped_and_clear_nothing(store, status, code, h
         )
     assert (error.value.detail["code"], error.value.status) == (code, http_status)
     assert "private" not in str(error.value.detail)
-    assert memory_store.context(store, quoted)["package"] is not None
+    assert memory_store.context(store, quoted)["package"] is None
+    assert bool(memory_store.pending_deletions(store)) == (status == 500)
 
 
 def test_lost_reply_is_unknown_and_safe_to_repeat(store):

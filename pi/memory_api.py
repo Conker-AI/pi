@@ -10,6 +10,10 @@ from . import memory_forget
 def router(app_state, require_key, require_owner):
     routes = APIRouter()
 
+    @routes.get("/memory/forget-pending", dependencies=[Depends(require_owner)])
+    def pending_memory_forget():
+        return memory_forget.pending(app_state().store)
+
     @routes.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
     def preview_memory_forget(memory_id: str):
         try:

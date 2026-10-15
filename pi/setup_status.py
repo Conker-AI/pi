@@ -12,6 +12,7 @@ from . import (
     model_roles,
     setup_choices,
     setup_model_probes,
+    setup_models,
     setup_protection,
     setup_receipts,
     setup_rehearsal,
@@ -273,14 +274,21 @@ def _model(store, router):
         (model for model in configuration["models"] if model["id"] == answer["modelId"]), None
     )
     adapter = router.adapters().get(selected["providerId"]) if selected else None
-    if adapter is None:
-        live = {"status": "unavailable"}
-    else:
-        try:
-            live = adapter.health()
-        except Exception:
-            live = {"status": "unavailable"}
-    live_status = live.get("status")
+    enabled = (
+        selected
+        and selected["enabled"]
+        and answer["enabled"]
+        and any(
+            item["id"] == selected["providerId"] and item["enabled"]
+            for item in configuration["providers"]
+        )
+    )
+    readiness = (
+        setup_models.availability(adapter, [selected["route"]]).get(selected["route"])
+        if enabled
+        else "unavailable"
+    )
+    live_status = {"ready": "ok", "unverified": "unverified"}.get(readiness, "unavailable")
     if live_status not in {"ok", "unverified"}:
         return _step(
             "model",
@@ -296,7 +304,7 @@ def _model(store, router):
                 _evidence(
                     "model.provider",
                     "degraded",
-                    "Selected answer-model provider is unavailable.",
+                    "Selected answer model or its provider is unavailable.",
                 ),
             ],
             "model_provider_unavailable",

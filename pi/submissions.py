@@ -148,6 +148,10 @@ def _view(db, row):
     selection = db.execute(
         "SELECT snapshot FROM submission_settings WHERE request_id=?", (row["request_id"],)
     ).fetchone()
+    selected = json.loads(selection[0]) if available and selection else {}
+    draft = db.execute(
+        "SELECT revision FROM submitted_drafts WHERE request_id=?", (row["request_id"],)
+    ).fetchone()
     return {
         "request_id": row["request_id"],
         "requested_session_id": row["requested_session_id"],
@@ -178,6 +182,10 @@ def _view(db, row):
         "research_mode": (
             json.loads(selection[0]).get("researchMode", "off") if available and selection else None
         ),
+        "skill_ids": [skill["id"] for skill in selected.get("skills", [])],
+        "model_id": selected.get("answerModelId"),
+        "think": selected.get("think", False) if available else False,
+        "draft_revision": draft[0] if available and draft else None,
     }
 
 
@@ -278,6 +286,8 @@ def reserve(
     model_id=None,
     reply_to=None,
     research_mode="off",
+    skill_ids=None,
+    think=False,
 ):
     if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
         raise SubmissionError(
@@ -289,9 +299,11 @@ def reserve(
         raise SubmissionError("invalid_task", "Task identity and revision belong together.", 422)
     if task_revision is not None and (type(task_revision) is not int or task_revision < 1):
         raise SubmissionError("invalid_task", "Provide the current task revision.", 422)
-    from . import research
+    from . import background_thinking, research, skills
 
+    background_thinking.validate_request(think)
     research.validate(research_mode)
+    skills.validate_ids([] if skill_ids is None else skill_ids)
     payload = {
         "session_id": session_id,
         "text": text,
@@ -301,6 +313,10 @@ def reserve(
     }
     if research_mode != "off":
         payload["research_mode"] = research_mode
+    if skill_ids:
+        payload["skill_ids"] = skill_ids
+    if think:
+        payload["think"] = True
     if model_id is not None:
         payload["model_id"] = model_id
     if reply_to is not None:
@@ -354,6 +370,7 @@ def reserve(
                 model_id,
                 reply_to,
                 research_mode,
+                think,
             )
         head = db.execute(
             "SELECT COALESCE(MAX(seq),0) FROM messages WHERE session_id=?", (session_id,)
@@ -365,7 +382,9 @@ def reserve(
             "created_at,updated_at) VALUES(?,?,?,?,'preparing',?,?,?,?,?)",
             (request_id, session_id, task_id, task_revision, digest, text, head, now, now),
         )
-        session_settings.reserve(db, request_id, session_id, model_id, reply_to, research_mode)
+        session_settings.reserve(
+            db, request_id, session_id, model_id, reply_to, research_mode, skill_ids, think
+        )
         context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:
             from . import attachment_turns, attachments
@@ -381,7 +400,16 @@ def reserve(
 
             try:
                 drafts.reserve(
-                    db, request_id, session_id, task_id, draft_revision, text, research_mode
+                    db,
+                    request_id,
+                    session_id,
+                    task_id,
+                    draft_revision,
+                    text,
+                    research_mode,
+                    model_id,
+                    skill_ids,
+                    think,
                 )
             except drafts.DraftError as exc:
                 raise SubmissionError("draft_changed", str(exc)) from exc
@@ -458,6 +486,7 @@ def bind(store, request_id, *, fork_summary=None):
                 "VALUES(?,?,?,'open',?,?)",
                 (child, session_id, parent["title"], now, fork_summary),
             )
+            session_settings.copy_parent_settings(db, session_id, child)
             session_id = child
         turn_id = "trn_" + uuid.uuid4().hex[:16]
         db.execute(

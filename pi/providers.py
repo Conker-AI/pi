@@ -14,13 +14,15 @@ that only ever saw one provider would grow assumptions about it.
 from __future__ import annotations
 
 import json
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
 
 from . import citations as message_citations
-from . import live_stream
+from . import inference_control, live_stream
+from .loopback_http import verification
 
 
 @dataclass(frozen=True)
@@ -107,14 +109,14 @@ def _installed(wanted: str, models: list[str]) -> bool:
     """Whether the wanted model is among those Ollama has.
 
     Ollama reports `qwen3:4b`, and a request for `qwen3` is served by
-    `qwen3:latest` - so a bare name matches any tag of it, while an explicit
-    tag must match exactly. Being lax here would recreate the bug in miniature.
+    `qwen3:latest` - so a bare name requires that exact default tag. An installed
+    `qwen3:4b` does not make an unqualified `qwen3` request available.
     """
     if wanted in models:
         return True
     if ":" in wanted:
         return False
-    return any(name.split(":", 1)[0] == wanted for name in models)
+    return wanted + ":latest" in models
 
 
 class OllamaProvider:
@@ -131,6 +133,7 @@ class OllamaProvider:
 
     def __init__(self, base_url: str, timeout: float = 120.0, model: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self.local_capacity_key = "ollama:" + self.base_url
         self.timeout = timeout
         # Which model this provider is expected to serve, so health can ask
         # about *that* one rather than about the existence of any model at all.
@@ -152,21 +155,25 @@ class OllamaProvider:
                 }
                 for m in messages
             ],
-            "stream": live_stream.active(),
+            "stream": live_stream.active() or inference_control.current() is not None,
         }
         try:
-            if payload["stream"]:
-                body = self._streamed(payload, timeout)
-            else:
-                response = httpx.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload,
-                    timeout=timeout,
-                    follow_redirects=False,
-                    trust_env=False,
-                )
-                response.raise_for_status()
-                body = response.json()
+            with inference_control.local_capacity(self.local_capacity_key, timeout):
+                if payload["stream"]:
+                    body = self._streamed(payload, timeout)
+                else:
+                    response = httpx.post(
+                        f"{self.base_url}/api/chat",
+                        verify=verification(self.base_url),
+                        json=payload,
+                        timeout=timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+        except inference_control.InferenceCancelled:
+            raise
         except Exception as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}") from exc
 
@@ -174,12 +181,14 @@ class OllamaProvider:
         if not isinstance(text, str):
             raise ProviderUnavailable("provider returned no message content")
 
+        cached = body.get("prompt_eval_cached_count")
         return Completion(
             text=text,
             model=body.get("model", model),
             provider=self.name,
             input_tokens=body.get("prompt_eval_count"),
             output_tokens=body.get("eval_count"),
+            cached_tokens=cached if type(cached) is int and 0 <= cached <= 2**31 - 1 else None,
             # Local inference has no per-token price. None, not 0.0: the second
             # would be a claim about money that this adapter cannot make, and
             # `unknown` is the honest rendering.
@@ -192,16 +201,45 @@ class OllamaProvider:
         live_stream.begin_attempt()
         text = []
         final: dict = {}
-        with httpx.stream(
-            "POST",
-            f"{self.base_url}/api/chat",
-            json=payload,
-            timeout=timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as response:
+        with ExitStack() as stack:
+            token = inference_control.current()
+            if token is not None:
+                client = stack.enter_context(
+                    httpx.Client(
+                        timeout=timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                        verify=verification(self.base_url),
+                    )
+                )
+                active_response = []
+                stack.enter_context(
+                    token.register(
+                        lambda: (
+                            inference_control.close_response(active_response[0])
+                            if active_response
+                            else client.close()
+                        )
+                    )
+                )
+                stream = client.stream("POST", f"{self.base_url}/api/chat", json=payload)
+            else:
+                stream = httpx.stream(
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    verify=verification(self.base_url),
+                    json=payload,
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+            response = stack.enter_context(stream)
+            if token is not None:
+                active_response.append(response)
+                token.check()
             response.raise_for_status()
             for line in response.iter_lines():
+                inference_control.check()
                 if not line.strip():
                     continue
                 chunk = json.loads(line)
@@ -219,20 +257,49 @@ class OllamaProvider:
             raise ValueError("stream ended before completion")
         return {**final, "message": {"role": "assistant", "content": "".join(text)}}
 
-    def health(self) -> dict:
+    def _inventory(self):
         try:
             response = httpx.get(
                 f"{self.base_url}/api/tags",
+                verify=verification(self.base_url),
                 timeout=5.0,
                 follow_redirects=False,
                 trust_env=False,
             )
             response.raise_for_status()
+            body = response.json()
+            entries = body.get("models") if isinstance(body, dict) else None
+            if not isinstance(entries, list) or any(
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("name"), str)
+                or not entry["name"]
+                for entry in entries
+            ):
+                return [], {"status": "unavailable", "reason": "invalid_model_inventory"}
+            models = [entry["name"] for entry in entries]
         except Exception as exc:
-            return {"status": "unavailable", "reason": type(exc).__name__}
-        models = [m.get("name", "") for m in response.json().get("models", [])]
+            return [], {"status": "unavailable", "reason": type(exc).__name__}
         if not models:
-            return {"status": "not_configured", "reason": "no models pulled"}
+            return [], {"status": "not_configured", "reason": "no models pulled"}
+        return models, None
+
+    def health_models(self, requested: list[str]) -> dict[str, dict]:
+        """One inventory observation; availability belongs to each requested route."""
+        models, failure = self._inventory()
+        return {
+            route: failure
+            or (
+                {"status": "ok"}
+                if _installed(route, models)
+                else {"status": "not_configured", "reason": "model is not pulled"}
+            )
+            for route in requested
+        }
+
+    def health(self) -> dict:
+        models, failure = self._inventory()
+        if failure:
+            return failure
         # Any model is not the model. An install where the embedding model
         # downloaded and the chat model did not would otherwise report `ok`
         # while being unable to answer a single turn - readiness claimed from a

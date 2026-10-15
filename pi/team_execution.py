@@ -139,6 +139,7 @@ def _session(db, parent, privacy):
         "INSERT INTO sessions(id,parent_id,title,created_at) VALUES(?,?,?,?)",
         (identity, parent, "Team execution", time.time()),
     )
+    session_settings.inherited_privacy(db, identity)
     # Explicitly narrowed privacy prevents team copies entering Companion ingestion.
     settings = {"agentId": "companion", "privacy": {**privacy, "memoryDisabled": True}}
     db.execute(

@@ -64,6 +64,78 @@ for _table, _id in (
     SCHEMA += f"CREATE TRIGGER IF NOT EXISTS {_table}_no_replace BEFORE INSERT ON {_table} WHEN EXISTS(SELECT 1 FROM {_table} WHERE {_id}=NEW.{_id}) BEGIN SELECT RAISE(ABORT,'execution selection is immutable'); END;\n"
 
 
+MAX_PRIVACY_LINEAGE = 256
+
+
+def inherited_privacy(db, identity):
+    """Retain carried exclusions through summaries, never ancestors' own-history policy.
+
+    Dropping exact pins does not establish that a linked summary is independent
+    of them. A new, independent conversation has no inherited floor. Each level
+    reads only policy metadata, using one snapshot even for legacy read callers.
+    """
+    if db.in_transaction:
+        return _inherited_privacy(db, identity)
+    db.execute("SAVEPOINT inherited_privacy_read")
+    try:
+        return _inherited_privacy(db, identity)
+    finally:
+        db.execute("RELEASE inherited_privacy_read")
+
+
+def _inherited_privacy(db, identity):
+    floor = {"memoryDisabled": False, "harnessDisabled": False}
+    seen = set()
+    for _ in range(MAX_PRIVACY_LINEAGE):
+        if identity in seen:
+            break
+        seen.add(identity)
+        row = db.execute(
+            "SELECT ancestor.parent_id,ancestor.status,tombstone.session_id,"
+            "MAX(p.memory_disabled),MAX(p.harness_disabled),"
+            "MAX(i.message_id IS NOT NULL AND (m.id IS NULL OR p.message_id IS NULL "
+            "OR origin.id IS NULL OR origin.status='forgotten' OR f.session_id IS NOT NULL)) "
+            "FROM sessions ancestor LEFT JOIN forgotten_sessions tombstone "
+            "ON tombstone.session_id=ancestor.id LEFT JOIN context_inherited_messages i "
+            "ON i.session_id=ancestor.id LEFT JOIN messages m ON m.id=i.message_id "
+            "LEFT JOIN message_privacy p ON p.message_id=i.message_id "
+            "LEFT JOIN sessions origin ON origin.id=m.session_id "
+            "LEFT JOIN forgotten_sessions f ON f.session_id=m.session_id "
+            "WHERE ancestor.id=? GROUP BY ancestor.id",
+            (identity,),
+        ).fetchone()
+        if row is None or row[1] == "forgotten" or row[2] is not None or row[5]:
+            break
+        floor["memoryDisabled"] |= bool(row[3])
+        floor["harnessDisabled"] |= bool(row[4])
+        identity = row[0]
+        if identity is None:
+            return floor
+    raise agents.AgentError(
+        "inherited_source_unavailable",
+        "Inherited context is unavailable, its privacy is unknown, or its ancestry "
+        "cannot be safely resolved. Start a new conversation without that source.",
+    )
+
+
+def require_inherited_privacy(db, identity, snapshot):
+    """Reject unsafe frozen context; never rewrite its policy or recorded prefix."""
+    floor = inherited_privacy(db, identity)
+    policies = [snapshot.get("privacy")]
+    if isinstance(snapshot.get("settings"), dict):
+        policies.append(snapshot["settings"].get("privacy"))
+    if any(
+        required and (not isinstance(privacy, dict) or privacy.get(flag) is not True)
+        for privacy in policies
+        for flag, required in floor.items()
+    ):
+        raise agents.AgentError(
+            "inherited_privacy",
+            "This saved execution predates inherited privacy restrictions. "
+            "Start a new turn with the protected settings; the saved execution was not changed.",
+        )
+
+
 def _load(db, identity):
     row = db.execute("SELECT status FROM sessions WHERE id=?", (identity,)).fetchone()
     if row is None or row[0] == "forgotten":
@@ -77,14 +149,39 @@ def _load(db, identity):
         ).fetchone()
         if choice and choice[0] == "skip":
             default["privacy"]["memoryDisabled"] = True
-    return {
+    result = {
         "revision": stored["revision"] if stored else 0,
         "settings": json.loads(stored["settings"]) if stored else default,
     }
+    floor = inherited_privacy(db, identity)
+    for flag, required in floor.items():
+        result["settings"]["privacy"][flag] |= required
+    return result
+
+
+def copy_parent_settings(db, parent, child, floor=None):
+    """Persist effective inherited settings during child creation, in its transaction."""
+    selected = _load(db, parent)["settings"]
+    # The parent's final allowed level must not produce an unusable next level.
+    inherited_privacy(db, child)
+    for flag, required in (floor or {}).items():
+        selected["privacy"][flag] |= required
+    raw = db.execute(
+        "SELECT revision,settings FROM session_settings WHERE session_id=?", (child,)
+    ).fetchone()
+    current = json.loads(raw["settings"]) if raw else _load(db, child)["settings"]
+    if current == selected:
+        return
+    db.execute(
+        "INSERT INTO session_settings VALUES(?,?,?) ON CONFLICT(session_id) "
+        "DO UPDATE SET settings=excluded.settings",
+        (child, raw["revision"] if raw else 1, json.dumps(selected)),
+    )
 
 
 def load(store, identity):
     with store._connect() as db:
+        db.execute("BEGIN")
         return _load(db, identity)
 
 
@@ -93,6 +190,7 @@ def _snapshot(db, identity):
 
     frozen = team_execution.session_snapshot(db, identity)
     if frozen is not None:
+        require_inherited_privacy(db, identity, frozen)
         return frozen
     from . import calls, characters, project_context
 
@@ -121,7 +219,9 @@ def _snapshot(db, identity):
         "authority": "none",
         "projectContext": project_context.capture(db, identity, value["settings"]),
     }
-    return calls.execution_snapshot(db, identity, snapshot)
+    snapshot = calls.execution_snapshot(db, identity, snapshot)
+    require_inherited_privacy(db, identity, snapshot)
+    return snapshot
 
 
 def _project(db, identity):
@@ -173,14 +273,9 @@ def save(store, identity, body):
             raise agents.AgentError(
                 "session_busy", "Resolve current work before changing session settings."
             )
-        inherited = db.execute(
-            "SELECT MAX(p.memory_disabled),MAX(p.harness_disabled) "
-            "FROM context_inherited_messages i JOIN message_privacy p ON p.message_id=i.message_id "
-            "WHERE i.session_id=?",
-            (identity,),
-        ).fetchone()
-        if (inherited[0] and not body.settings.privacy.memoryDisabled) or (
-            inherited[1] and not body.settings.privacy.harnessDisabled
+        inherited = inherited_privacy(db, identity)
+        if (inherited["memoryDisabled"] and not body.settings.privacy.memoryDisabled) or (
+            inherited["harnessDisabled"] and not body.settings.privacy.harnessDisabled
         ):
             raise agents.AgentError(
                 "inherited_privacy", "Keep the inherited messages' privacy modes enabled."
@@ -249,13 +344,24 @@ def validate_reply(db, identity, reply_to):
         )
 
 
-def reserve(db, request_id, identity, model_id=None, reply_to=None, research_mode="off"):
-    from . import project_context
+def reserve(
+    db,
+    request_id,
+    identity,
+    model_id=None,
+    reply_to=None,
+    research_mode="off",
+    skill_ids=None,
+    think=False,
+):
+    from . import background_thinking, project_context, skills
 
     snapshot = _snapshot(db, identity)
     from . import research
 
     research.validate(research_mode, snapshot)
+    background_thinking.validate_request(think, snapshot)
+    snapshot["think"] = think
     if research_mode != "off":
         snapshot["researchMode"] = research_mode
     validate_answer_model(snapshot, model_id)
@@ -264,6 +370,8 @@ def reserve(db, request_id, identity, model_id=None, reply_to=None, research_mod
         snapshot["replyToMessageId"] = reply_to
     if model_id is not None:
         snapshot["answerModelId"] = model_id
+    if skill_ids:
+        snapshot["skills"] = skills.snapshot(db, skill_ids, snapshot)
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
 
@@ -279,12 +387,20 @@ def bind(db, turn_id, identity, request_id=None):
         else None
     )
     snapshot = json.loads(row[0]) if row else _snapshot(db, identity)
+    if row:
+        origin = db.execute(
+            "SELECT requested_session_id FROM turn_submissions WHERE request_id=?", (request_id,)
+        ).fetchone()
+        if origin:
+            require_inherited_privacy(db, origin[0], snapshot)
+    require_inherited_privacy(db, identity, snapshot)
     db.execute("INSERT INTO turn_settings VALUES (?,?)", (turn_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
 
 
 def execution(store, identity, turn_id=None, request_id=None):
     with store._connect() as db:
+        db.execute("BEGIN")
         _load(db, identity)
         if turn_id or request_id:
             if turn_id and request_id:
@@ -312,13 +428,14 @@ def execution(store, identity, turn_id=None, request_id=None):
             row = db.execute(f"SELECT snapshot FROM {table} WHERE {key}=?", (value,)).fetchone()
             if row:
                 snapshot = json.loads(row[0])
+                require_inherited_privacy(db, identity, snapshot)
                 if turn_id:
                     snapshot["turnExecutionId"] = turn_id
                 if request_id:
                     snapshot["submissionExecutionId"] = request_id
                 return snapshot
             # Legacy turns had only the Companion, without runtime privacy settings.
-            return {
+            snapshot = {
                 "agentId": "companion",
                 "kind": "companion",
                 "configuration": None,
@@ -326,10 +443,16 @@ def execution(store, identity, turn_id=None, request_id=None):
                 "legacy": True,
                 "turnExecutionId": turn_id,
             }
+            require_inherited_privacy(db, identity, snapshot)
+            return snapshot
         return _snapshot(db, identity)
 
 
 def source_privacy(db, identity):
+    # The durable forgetting ledger is authoritative even if legacy metadata
+    # still has an available status or an old settings projection.
+    if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (identity,)).fetchone():
+        return None
     try:
         privacy = _load(db, identity)["settings"]["privacy"].copy()
     except agents.AgentError:

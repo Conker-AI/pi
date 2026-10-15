@@ -10,10 +10,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from . import (
+    background_thinking,
     calls,
     context_retrieval,
     filesystem_reads,
     memory_corrections,
+    memory_edits,
     memory_proposals,
     model_evaluations,
     proposals,
@@ -84,9 +86,11 @@ async def lifespan(app: FastAPI):
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()
     model_evaluations.recover_interrupted(store)
+    background_thinking.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
+    memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)
     calls.recover(store)
     system_inventory.recover(store)
@@ -258,6 +262,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        app.state.loop.thinking.close()
         if proposal_worker:
             proposal_worker.close()
         if queue_worker:

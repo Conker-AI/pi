@@ -26,7 +26,7 @@ CASES = [
     (
         "context-not-used",
         "pi/loop.py",
-        'if saved["package"] and session_settings.memory_allowed(execution):',
+        "if memory_prompt:",
         "if False:",
     ),
     (
@@ -38,7 +38,7 @@ CASES = [
     (
         "stale-recall-during-deletion",
         "pi/memory.py",
-        "if memory_store.pending_deletions(self.store):",
+        "if memory_store.recall_held(self.store):",
         "if False:",
     ),
     ("hidden-memory-gap", "pi/memory_store.py", '"notices": notices,', '"notices": [],'),

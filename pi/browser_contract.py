@@ -6,13 +6,21 @@ RUNTIME_ROUTES = {
     "GET": (
         r"/health",
         r"/sessions",
+        r"/sessions/history",
         r"/sessions/[A-Za-z0-9_-]+",
+        r"/sessions/[A-Za-z0-9_-]+/thinking",
+        r"/sessions/[A-Za-z0-9_-]{1,128}/observation",
+        r"/sessions/[A-Za-z0-9_-]{1,128}/memory-delivery",
+        r"/sessions/[A-Za-z0-9_-]{1,128}/messages/[A-Za-z0-9_-]{1,128}/memory-delivery",
         r"/sessions/[A-Za-z0-9_-]+/submissions",
         r"/turns/unreplied",
+        r"/turns/[A-Za-z0-9_-]{1,128}/usage",
         r"/turn-submissions/[A-Za-z0-9_-]+",
         r"/turn-submissions/[A-Za-z0-9_-]+/stream",
         r"/approvals",
         r"/tools",
+        r"/skills",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}",
         r"/models",
         r"/messages/[A-Za-z0-9_-]+",
         r"/memory",
@@ -28,6 +36,7 @@ RUNTIME_ROUTES = {
     "POST": (
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+/turns",
+        r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
         r"/sessions/[A-Za-z0-9_-]+/fork",
         r"/turns/[A-Za-z0-9_-]+/resume",
         r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
@@ -46,6 +55,8 @@ def runtime_allowed(method: str, path: str) -> bool:
 # origin) but not a fresh password proof. Their real-world effects still pass
 # ToolGate approval. Every other browser write keeps operation-bound verification.
 SESSION_ONLY_WRITES = (
+    r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
+    r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
     r"/sessions",
     r"/sessions/[A-Za-z0-9_-]+/turns",
     r"/sessions/[A-Za-z0-9_-]+/fork",
@@ -68,6 +79,10 @@ def session_only_write(method: str, path: str) -> bool:
 # conversation runtime credential. Expand only alongside the corresponding UI.
 OWNER_ROUTES = {
     "GET": (
+        r"/drafts/new/start/[A-Za-z0-9_-]{16,128}",
+        r"/drafts/(?:new|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
+        r"/skills",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}",
         r"/search",
         r"/search/(?:settings|capabilities)",
         r"/artifacts",
@@ -108,8 +123,15 @@ OWNER_ROUTES = {
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
+        r"/memory/forget-pending",
+        r"/memory/corrections/pending",
+        r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
+        r"/memory/corrections/[A-Za-z0-9_-]{16,128}",
     ),
     "POST": (
+        r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
+        r"/skills/import",
+        r"/skills/[a-z0-9][a-z0-9-]{0,63}/state",
         r"/search/settings",
         r"/artifacts",
         r"/collaboration/teams",
@@ -142,6 +164,8 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/proposals/passes",
         r"/memory/forget",
+        r"/memory/corrections",
+        r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
     ),
 }
 

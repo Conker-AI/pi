@@ -45,12 +45,20 @@ class Config:
     toolgate_execution_key: str = ""
     cookie_namespace: str = ""
     provider_control_socket: str = ""
+    provider_control_url: str = ""
+    provider_control_key: str = ""
 
     @property
     def cookie_name(self) -> str:
         return f"{COOKIE}-{self.cookie_namespace}" if self.cookie_namespace else COOKIE
 
     def validate(self) -> None:
+        if self.provider_control_url:
+            from pi.private_transport import PrivateTransport
+
+            PrivateTransport(self.provider_control_url, self.provider_control_key).close()
+            if self.provider_control_socket:
+                raise ValueError("Choose one private provider transport.")
         if self.provider_control_socket and (
             not os.path.isabs(self.provider_control_socket)
             or any(c in self.provider_control_socket for c in "\x00\r\n")
@@ -136,6 +144,8 @@ class Config:
             os.environ.get("GATEWAY_TOOLGATE_EXECUTION_KEY", ""),
             os.environ.get("GATEWAY_COOKIE_NAMESPACE", ""),
             os.environ.get("GATEWAY_PROVIDER_CONTROL_SOCKET", ""),
+            os.environ.get("GATEWAY_PROVIDER_CONTROL_URL", ""),
+            os.environ.get("GATEWAY_PROVIDER_CONTROL_KEY", ""),
         )
 
 
@@ -153,6 +163,13 @@ def create_app(
         settings = config or Config.environment()
         settings.validate()
         app.state.config = settings
+        app.state.provider_transport = provider_transport
+        if settings.provider_control_url:
+            from pi.private_transport import PrivateTransport
+
+            app.state.provider_transport = PrivateTransport(
+                settings.provider_control_url, settings.provider_control_key
+            )
         app.state.dashboard = (
             DashboardAssets(settings.dashboard_dir) if settings.dashboard_dir else None
         )
@@ -187,6 +204,8 @@ def create_app(
             try:
                 yield
             finally:
+                if settings.provider_control_url:
+                    app.state.provider_transport.shutdown()
                 if app.state.terminals:
                     app.state.terminals.close()
                 if app.state.terminal_sidecar:
@@ -531,7 +550,9 @@ def create_app(
                 app.state.config.provider_control_socket,
                 request.method,
                 body,
-                transport=provider_transport,
+                transport=app.state.provider_transport
+                if app.state.config.provider_control_socket
+                else None,
             )
         except provider_control.ProviderControlError as error:
             raise AuthError(str(error), 503) from None
@@ -561,11 +582,118 @@ def create_app(
                 app.state.config.provider_control_socket,
                 request.method,
                 body,
-                transport=provider_transport,
+                transport=app.state.provider_transport,
             )
         except ProviderControlError as error:
             raise AuthError(str(error), 503) from None
         return JSONResponse(value)
+
+    @app.get("/api/host/claude")
+    @app.post("/api/host/claude")
+    async def host_claude(request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import native_claude
+        from .provider_control import ProviderControlError
+
+        session(request)
+        if request.scope["query_string"]:
+            raise AuthError("Native control does not accept query parameters.", 422)
+        body = None
+        if request.method == "POST":
+            try:
+                body = native_claude.Operation.model_validate(
+                    await json_body(request, max_bytes=1024)
+                ).model_dump(exclude_none=True)
+                if body["operation"] != "login" and "billing" in body:
+                    raise ValueError()
+            except ValueError:
+                raise AuthError("Invalid native authentication operation.", 422) from None
+            admit_write(request, body)
+        try:
+            return JSONResponse(
+                await run_in_threadpool(
+                    native_claude.request, app.state.provider_transport, request.method, body
+                )
+            )
+        except ProviderControlError as exc:
+            raise AuthError(str(exc), 503) from None
+
+    async def native_session_request(request: Request, action: str, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import native_sessions
+
+        session(request)
+        if request.scope["query_string"] or (
+            identity is not None and not re.fullmatch(native_sessions.SESSION_ID, identity)
+        ):
+            raise AuthError(
+                "Invalid native session request.", 422, code="invalid_native_session_request"
+            )
+        body = None
+        if action == "stop":
+            try:
+                body = native_sessions.Stop.model_validate(
+                    await json_body(request, max_bytes=1024)
+                ).model_dump()
+            except ValueError:
+                raise AuthError(
+                    "Invalid native session stop operation.",
+                    422,
+                    code="invalid_native_session_request",
+                ) from None
+            admit_write(request, body)
+        try:
+            result = await run_in_threadpool(
+                native_sessions.request, app.state.provider_transport, action, identity, body
+            )
+        except native_sessions.NativeSessionsError as exc:
+            raise AuthError(str(exc), exc.status, code=exc.code) from None
+        return JSONResponse(result)
+
+    @app.get("/api/host/claude/sessions")
+    async def native_session_list(request: Request):
+        return await native_session_request(request, "list")
+
+    @app.get("/api/host/claude/sessions/{identity}")
+    async def native_session_status(identity: str, request: Request):
+        return await native_session_request(request, "status", identity)
+
+    @app.get("/api/host/claude/sessions/{identity}/output")
+    async def native_session_output(identity: str, request: Request):
+        return await native_session_request(request, "output", identity)
+
+    @app.post("/api/host/claude/sessions/{identity}/stop")
+    async def native_session_stop(identity: str, request: Request):
+        return await native_session_request(request, "stop", identity)
+
+    async def codex_session_request(request: Request, action: str, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from . import codex_sessions
+        from .native_sessions import NativeSessionsError
+
+        session(request)
+        try:
+            result = await run_in_threadpool(
+                codex_sessions.request,
+                app.state.provider_transport,
+                action,
+                identity,
+                request.scope["query_string"],
+            )
+        except NativeSessionsError as exc:
+            raise AuthError(str(exc), exc.status, code=exc.code) from None
+        return JSONResponse(result)
+
+    @app.get("/api/host/codex/sessions")
+    async def codex_session_list(request: Request):
+        return await codex_session_request(request, "list")
+
+    @app.get("/api/host/codex/sessions/{identity}")
+    async def codex_session_status(identity: str, request: Request):
+        return await codex_session_request(request, "status", identity)
 
     def terminal_access(request):
         owner = session(request)
@@ -785,6 +913,8 @@ def create_app(
         target = "/" + path
         if not owner_allowed(request.method, target):
             raise AuthError("This owner operation is not available through the gateway.", 403)
+        if target.startswith("/memory/corrections") and request.scope["query_string"]:
+            raise AuthError("Memory corrections do not accept query parameters.", 422)
         if not app.state.config.pi_owner_key:
             raise AuthError("Pi owner-control connection is not configured.", 503)
         body = (
@@ -792,6 +922,8 @@ def create_app(
                 request,
                 max_bytes=66 * 1024 * 1024
                 if target.startswith("/characters/companion/")
+                else 128000
+                if target.startswith("/memory/corrections")
                 else 65536,
             )
             if request.method == "POST"
@@ -813,6 +945,45 @@ def create_app(
             app.state.config.pi_owner_key,
             body,
             request.scope["query_string"],
+        )
+
+    @app.get("/api/owner/mcp/tools")
+    @app.get("/api/owner/mcp/tools/{identity}/access")
+    @app.post("/api/owner/mcp/discover")
+    @app.post("/api/owner/mcp/import")
+    @app.post("/api/owner/mcp/tools/{identity}/state")
+    @app.post("/api/owner/mcp/tools/{identity}/access")
+    async def mcp_control(request: Request, identity: str | None = None):
+        from starlette.concurrency import run_in_threadpool
+
+        from .mcp_control import TOOL_ID, validate_body
+
+        session(request)
+        if request.scope["query_string"] or (
+            identity is not None and not re.fullmatch(TOOL_ID, identity)
+        ):
+            raise AuthError("Select a saved MCP tool without query parameters.", 422)
+        operation = request.url.path.rsplit("/", 1)[-1]
+        extra = None
+        if operation == "access":
+            key = app.state.config.toolgate_execution_key
+            if not key:
+                raise AuthError("The scoped chat execution credential is not configured.", 503)
+            extra = {"X-ToolGate-Execution-Key": key}
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            validate_body(operation, body)
+            admit_write(request, body)
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/")
+            + request.url.path.replace("/api/owner/mcp/", "/v2/owner/mcp/", 1),
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            b"",
+            extra,
         )
 
     @app.get("/api/owner/editor-capabilities")

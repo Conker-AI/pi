@@ -46,18 +46,25 @@ class Activated(StrictModel):
     probe: setup_model_probes.ProbeReceipt
 
 
-def _status(adapter) -> Literal["ready", "unverified", "unavailable"]:
+def availability(adapter, routes) -> dict[str, str]:
+    """One bounded provider observation per options read, with route-specific results."""
     if adapter is None:
-        return "unavailable"
+        return dict.fromkeys(routes, "unavailable")
     try:
-        value = adapter.health().get("status")
+        check = getattr(adapter, "health_models", None)
+        if callable(check):
+            observed = check(list(routes))
+        else:
+            health = adapter.health()
+            observed = dict.fromkeys(routes, health)
+        return {
+            route: {"ok": "ready", "unverified": "unverified"}.get(
+                observed.get(route, {}).get("status"), "unavailable"
+            )
+            for route in routes
+        }
     except Exception:
-        return "unavailable"
-    if value == "ok":
-        return "ready"
-    if value == "unverified":
-        return "unverified"
-    return "unavailable"
+        return dict.fromkeys(routes, "unavailable")
 
 
 def options(store, router) -> Options:
@@ -67,6 +74,18 @@ def options(store, router) -> Options:
     if configuration is not None:
         selected = configuration["roleSettings"]["roles"]["answer"]["modelId"]
     adapters = router.adapters()
+    local = getattr(router, "local", None)
+    route = getattr(router, "local_model", "")
+    requested = {}
+    for model in (configuration or {}).get("models", []):
+        if model["providerId"] != "decisions":
+            requested.setdefault(model["providerId"], set()).add(model["route"])
+    if local is not None and isinstance(route, str) and route.strip():
+        requested.setdefault(local.name, set()).add(route)
+    statuses = {
+        provider: availability(adapters.get(provider), routes)
+        for provider, routes in requested.items()
+    }
     values: list[Candidate] = []
     seen: set[str] = set()
 
@@ -74,7 +93,7 @@ def options(store, router) -> Options:
         providers = {item["id"]: item for item in configuration["providers"]}
         for model in configuration["models"]:
             provider = providers.get(model["providerId"])
-            if provider is None:
+            if provider is None or model["providerId"] == "decisions":
                 continue
             values.append(
                 Candidate(
@@ -83,29 +102,27 @@ def options(store, router) -> Options:
                     providerName=provider["name"],
                     name=model["name"],
                     route=model["route"],
-                    status=_status(adapters.get(model["providerId"])),
+                    status=statuses[model["providerId"]][model["route"]],
                     selected=model["id"] == selected,
                     execution=(
                         "local"
-                        if adapters.get(model["providerId"]) is getattr(router, "local", None)
+                        if local is not None and adapters.get(model["providerId"]) is local
                         else "hosted"
                     ),
                     dataNotice=(
                         "The setup test stays on this server."
-                        if adapters.get(model["providerId"]) is getattr(router, "local", None)
+                        if local is not None and adapters.get(model["providerId"]) is local
                         else f"The setup test is sent to {provider['name']}."
                     ),
                     costNotice=(
                         "No provider charge."
-                        if adapters.get(model["providerId"]) is getattr(router, "local", None)
+                        if local is not None and adapters.get(model["providerId"]) is local
                         else "Provider billing may apply."
                     ),
                 )
             )
             seen.add(model["id"])
 
-    local = getattr(router, "local", None)
-    route = getattr(router, "local_model", "")
     if local is not None and isinstance(route, str) and route.strip():
         matching = next(
             (item for item in values if item.providerId == local.name and item.route == route),
@@ -125,7 +142,7 @@ def options(store, router) -> Options:
                     providerName="Local model",
                     name=route,
                     route=route,
-                    status=_status(local),
+                    status=statuses[local.name][route],
                     selected=False,
                     execution="local",
                     dataNotice="The setup test stays on this server.",
@@ -147,7 +164,7 @@ def _disabled(role: str) -> dict:
     }
 
 
-def select(store, router, body: Selection) -> dict:
+def _selection(store, router, body: Selection) -> model_roles.Update:
     current = options(store, router)
     if current.revision != body.expectedRevision:
         raise ValueError("Model settings changed; reload before choosing an answer model.")
@@ -158,6 +175,8 @@ def select(store, router, body: Selection) -> dict:
         raise RuntimeError("The selected answer model is not ready because it is unavailable.")
 
     saved = model_roles.load(store)
+    if saved["revision"] != body.expectedRevision:
+        raise ValueError("Model settings changed; reload before choosing an answer model.")
     configuration = saved["configuration"]
     if configuration is None:
         roles = {role: _disabled(role) for role in model_roles.ROLES}
@@ -221,29 +240,29 @@ def select(store, router, body: Selection) -> dict:
         configuration["roleSettings"]["answerMode"] = "manual"
         configuration["defaultModelId"] = candidate.id
 
-    return model_roles.save(
-        store,
-        model_roles.Update(
-            expected_revision=body.expectedRevision,
-            configuration=model_roles.Configuration.model_validate(configuration),
-        ),
+    return model_roles.Update(
+        expected_revision=body.expectedRevision,
+        configuration=model_roles.Configuration.model_validate(configuration),
     )
+
+
+def select(store, router, body: Selection) -> dict:
+    return model_roles.save(store, _selection(store, router, body))
 
 
 def activate(store, router, body: Activation) -> Activated:
     """Select and prove one model as a single owner-control operation."""
-    saved = select(
+    replay = setup_model_probes.activation_replay(store, body)
+    if replay is not None:
+        return Activated(
+            revision=replay.configurationRevision, candidateId=body.candidateId, probe=replay
+        )
+    staged = _selection(
         store,
         router,
         Selection(candidateId=body.candidateId, expectedRevision=body.expectedRevision),
     )
-    receipt = setup_model_probes.probe(
-        store,
-        router,
-        setup_model_probes.ProbeInput(
-            requestId=body.requestId,
-            candidateId=body.candidateId,
-            expectedRevision=saved["revision"],
-        ),
+    receipt = setup_model_probes.activate(store, router, body, staged)
+    return Activated(
+        revision=receipt.configurationRevision, candidateId=body.candidateId, probe=receipt
     )
-    return Activated(revision=saved["revision"], candidateId=body.candidateId, probe=receipt)

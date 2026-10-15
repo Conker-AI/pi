@@ -74,6 +74,12 @@ def test_content_and_derived_copies_disappear_but_envelopes_and_receipt_survive(
                 "content_status": "forgotten",
                 "receipt_id": receipt["id"],
                 "forgotten_at": receipt["forgotten_at"],
+                "memory_delivery": {
+                    "state": "removed",
+                    "reason_code": "forgotten",
+                    "admission_method": None,
+                    "memory_id": None,
+                },
             }
             assert store.messages(original["session_id"]) == [row]
         for sid in (root, child):
@@ -88,7 +94,15 @@ def test_content_and_derived_copies_disappear_but_envelopes_and_receipt_survive(
                 assert turn[field] == original[field]
         assert store.awaiting_approval() == []
         assert store.acted_without_reply() == []
-        assert store.get_message(kept["id"]) == kept
+        assert store.get_message(kept["id"]) == {
+            **kept,
+            "memory_delivery": {
+                "state": "pending",
+                "reason_code": "queued",
+                "admission_method": None,
+                "memory_id": None,
+            },
+        }
         assert store.get_session(other)["title"] == "unrelated"
         store.append_message(other, "assistant", "still usable")
     # Scan the live database and its sidecars, not just SELECT output.
@@ -361,7 +375,15 @@ def test_citation_http_distinguishes_forgotten_from_missing_and_cannot_delete(
         assert response.json()["receipt_id"] == receipt["id"]
         assert response.json()["forgotten_at"] == receipt["forgotten_at"]
         assert client.get("/messages/unknown", headers=headers).status_code == 404
-        assert client.get(f"/messages/{kept['id']}", headers=headers).json() == kept
+        assert client.get(f"/messages/{kept['id']}", headers=headers).json() == {
+            **kept,
+            "memory_delivery": {
+                "state": "pending",
+                "reason_code": "queued",
+                "admission_method": None,
+                "memory_id": None,
+            },
+        }
         session = client.get(f"/sessions/{root}", headers=headers).json()
         assert session["messages"][0] == response.json()
         for method in (client.delete, client.patch, client.post):
@@ -372,7 +394,7 @@ def test_citation_http_distinguishes_forgotten_from_missing_and_cannot_delete(
             assert client.post(f"/turns/{turn['id']}/resume", headers=headers).status_code == 409
 
 
-def test_model_request_to_forget_is_only_conversation(conversation):
+def test_unsupported_model_request_to_forget_is_refused_without_deletion(conversation):
     path, root, *_ = conversation
 
     class Provider:
@@ -391,7 +413,10 @@ def test_model_request_to_forget_is_only_conversation(conversation):
         # a fresh conversation rather than bypassing the unresolved-turn guard.
         chat = store.create_session()
         store.append_message(chat, "user", SECRET)
-        loop.run_turn(chat, "Forget everything I said")
+        with pytest.raises(TurnFailed, match="unavailable tool") as failure:
+            loop.run_turn(chat, "Forget everything I said")
+        assert store.get_turn(failure.value.turn_id)["status"] == "failed"
+        assert not any(message["role"] == "assistant" for message in store.messages(chat))
         assert store.messages(chat)[0]["content"] == SECRET
         assert store.messages(root)[0]["content"] == SECRET
         assert store.get_session(root)["status"] == "open"

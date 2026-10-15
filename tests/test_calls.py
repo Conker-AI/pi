@@ -87,7 +87,17 @@ def test_real_typed_turn_replay_history_and_independent_conversation(store):
     assert result["call"]["requests"][0]["speechStatus"] == "unavailable"
     assert result["call"]["requests"][0]["textStatus"] == "complete"
     assert any(m.content == "earlier exact context" for m in provider.seen[0][0])
-    assert store.messages(source) == [original]
+    assert store.messages(source) == [
+        {
+            **original,
+            "memory_delivery": {
+                "state": "pending",
+                "reason_code": "queued",
+                "admission_method": None,
+                "memory_id": None,
+            },
+        }
+    ]
     assert [m["role"] for m in store.messages(call["sessionId"])] == ["user", "assistant"]
     assert all("source" in e for e in result["call"]["events"] if e["kind"] != "event")
     assert send(store, loop, call)["replayed"] is True and len(provider.seen) == 1

@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS setup_model_probe_requests (
     state                  TEXT NOT NULL CHECK(state IN ('started','passed','failed')),
     failure_code           TEXT,
     started_at             REAL NOT NULL,
-    completed_at           REAL
+    completed_at           REAL,
+    operation              TEXT NOT NULL DEFAULT 'probe'
 );
 CREATE TABLE IF NOT EXISTS setup_model_probe_receipts (
     request_id             TEXT PRIMARY KEY REFERENCES setup_model_probe_requests(request_id),
@@ -85,6 +86,11 @@ class ProbeReceipt(StrictModel):
 
 def initialize(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMA)
+    columns = {row[1] for row in db.execute("PRAGMA table_info(setup_model_probe_requests)")}
+    if "operation" not in columns:
+        db.execute(
+            "ALTER TABLE setup_model_probe_requests ADD COLUMN operation TEXT NOT NULL DEFAULT 'probe'"
+        )
 
 
 def _utc(value: float) -> datetime:
@@ -140,44 +146,57 @@ def _selected(saved: dict, candidate_id: str) -> tuple[dict, dict]:
     return model, provider
 
 
-def _claim(store, body: ProbeInput, now: datetime) -> ProbeReceipt | None:
+def _prior(db, body, operation):
+    prior = db.execute(
+        "SELECT * FROM setup_model_probe_requests WHERE request_id=?", (body.requestId,)
+    ).fetchone()
+    if prior is None:
+        return None
+    if (
+        prior["configuration_revision"] != body.expectedRevision
+        or prior["candidate_id"] != body.candidateId
+        or prior["operation"] != operation
+    ):
+        raise ProbeError(
+            "replay_conflict", "requestId was already used for another model probe.", 409
+        )
+    if prior["state"] == "passed":
+        receipt = db.execute(
+            "SELECT * FROM setup_model_probe_receipts WHERE request_id=?", (body.requestId,)
+        ).fetchone()
+        if receipt is None:
+            raise ProbeError(
+                "receipt_unavailable", "The saved model probe receipt is unavailable.", 503
+            )
+        return _project(receipt)
+    detail = (
+        "This model probe has an uncertain outcome; start a new explicit test."
+        if prior["state"] == "started"
+        else "This model probe already failed; start a new explicit test."
+    )
+    raise ProbeError("probe_not_replayable", detail, 409)
+
+
+def _claim(
+    store, body: ProbeInput, now: datetime, *, operation="probe", source_revision=None
+) -> ProbeReceipt | None:
     if not REQUEST_ID.fullmatch(body.requestId):
         raise ProbeError("invalid_request_id", "requestId must be a bounded machine identity.")
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        prior = db.execute(
-            "SELECT * FROM setup_model_probe_requests WHERE request_id=?", (body.requestId,)
-        ).fetchone()
-        if prior:
-            same = (
-                prior["configuration_revision"] == body.expectedRevision
-                and prior["candidate_id"] == body.candidateId
-            )
-            if not same:
-                db.execute("ROLLBACK")
+        prior = _prior(db, body, operation)
+        if prior is not None:
+            return prior
+        if source_revision is not None:
+            row = db.execute(
+                "SELECT revision FROM model_role_settings WHERE singleton=1"
+            ).fetchone()
+            if (row[0] if row else 0) != source_revision:
                 raise ProbeError(
-                    "replay_conflict", "requestId was already used for another model probe.", 409
+                    "revision_conflict", "Model settings changed; reload before testing.", 409
                 )
-            if prior["state"] == "passed":
-                receipt = db.execute(
-                    "SELECT * FROM setup_model_probe_receipts WHERE request_id=?",
-                    (body.requestId,),
-                ).fetchone()
-                db.execute("COMMIT")
-                if receipt is None:
-                    raise ProbeError(
-                        "receipt_unavailable", "The saved model probe receipt is unavailable.", 503
-                    )
-                return _project(receipt)
-            db.execute("ROLLBACK")
-            detail = (
-                "This model probe has an uncertain outcome; start a new explicit test."
-                if prior["state"] == "started"
-                else "This model probe already failed; start a new explicit test."
-            )
-            raise ProbeError("probe_not_replayable", detail, 409)
         db.execute(
-            "INSERT INTO setup_model_probe_requests VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO setup_model_probe_requests(request_id,configuration_revision,candidate_id,state,failure_code,started_at,completed_at,operation) VALUES (?,?,?,?,?,?,?,?)",
             (
                 body.requestId,
                 body.expectedRevision,
@@ -186,6 +205,7 @@ def _claim(store, body: ProbeInput, now: datetime) -> ProbeReceipt | None:
                 None,
                 now.timestamp(),
                 None,
+                operation,
             ),
         )
         db.execute("COMMIT")
@@ -219,6 +239,49 @@ def probe(store, router, body: ProbeInput, *, now: datetime | None = None) -> Pr
     if replay is not None:
         return replay
 
+    return _execute(store, router, body, model, adapter)
+
+
+def _activation_body(body):
+    return ProbeInput(
+        requestId=body.requestId,
+        candidateId=body.candidateId,
+        expectedRevision=body.expectedRevision + 1,
+    )
+
+
+def activation_replay(store, body):
+    proposed = _activation_body(body)
+    if not REQUEST_ID.fullmatch(proposed.requestId):
+        raise ProbeError("invalid_request_id", "requestId must be a bounded machine identity.")
+    with store._connect() as db:
+        return _prior(db, proposed, "activate")
+
+
+def activate(store, router, body, staged):
+    proposed = _activation_body(body)
+    model = next(
+        item.model_dump() for item in staged.configuration.models if item.id == body.candidateId
+    )
+    adapter = router.adapters().get(model["providerId"])
+    if adapter is None or not callable(getattr(adapter, "complete_bounded", None)):
+        raise ProbeError(
+            "provider_unavailable", "The selected answer-model provider cannot be tested.", 503
+        )
+    replay = _claim(
+        store,
+        proposed,
+        datetime.now(UTC),
+        operation="activate",
+        source_revision=body.expectedRevision,
+    )
+    if replay is not None:
+        return replay
+    return _execute(store, router, proposed, model, adapter, staged=staged)
+
+
+def _execute(store, router, body, model, adapter, *, staged=None):
+
     try:
         completion = adapter.complete_bounded(
             [Message("user", PROBE_PROMPT)],
@@ -236,8 +299,15 @@ def probe(store, router, body: ProbeInput, *, now: datetime | None = None) -> Pr
             "provider_error", "The selected answer model could not complete the setup test.", 503
         ) from None
 
-    text = completion.text.strip() if isinstance(completion.text, str) else ""
-    actual = completion.model.strip() if isinstance(completion.model, str) else ""
+    text = getattr(completion, "text", None)
+    actual = getattr(completion, "model", None)
+    text = text.strip() if isinstance(text, str) else ""
+    actual = actual.strip() if isinstance(actual, str) else ""
+    try:
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        actual.encode("utf-8")
+    except UnicodeEncodeError:
+        text = ""
     if not text or len(text) > MAX_RESPONSE_CHARACTERS or not actual or len(actual) > 300:
         _failed(store, body.requestId, "invalid_response", datetime.now(UTC))
         raise ProbeError(
@@ -245,31 +315,44 @@ def probe(store, router, body: ProbeInput, *, now: datetime | None = None) -> Pr
         )
     execution = "local" if adapter is getattr(router, "local", None) else "hosted"
     completed = datetime.now(UTC)
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    with store._connect() as db:
-        db.execute("BEGIN IMMEDIATE")
-        db.execute(
-            "INSERT INTO setup_model_probe_receipts VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (
-                body.requestId,
-                body.expectedRevision,
-                body.candidateId,
-                model["providerId"],
-                model["route"],
-                actual,
-                execution,
-                digest,
-                completed.timestamp(),
-                completed.timestamp(),
-            ),
-        )
-        db.execute(
-            "UPDATE setup_model_probe_requests SET state='passed',completed_at=? "
-            "WHERE request_id=? AND state='started'",
-            (completed.timestamp(), body.requestId),
-        )
-        row = db.execute(
-            "SELECT * FROM setup_model_probe_receipts WHERE request_id=?", (body.requestId,)
-        ).fetchone()
-        db.execute("COMMIT")
+    try:
+        with store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if staged is not None:
+                model_roles.save_in(db, staged)
+            return _record(db, body, model, actual, execution, digest, completed)
+    except ValueError:
+        _failed(store, body.requestId, "revision_conflict", datetime.now(UTC))
+        raise ProbeError(
+            "revision_conflict",
+            "Model settings changed during the test; previous selection was not replaced.",
+            409,
+        ) from None
+
+
+def _record(db, body, model, actual, execution, digest, completed):
+    db.execute(
+        "INSERT INTO setup_model_probe_receipts VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (
+            body.requestId,
+            body.expectedRevision,
+            body.candidateId,
+            model["providerId"],
+            model["route"],
+            actual,
+            execution,
+            digest,
+            completed.timestamp(),
+            completed.timestamp(),
+        ),
+    )
+    db.execute(
+        "UPDATE setup_model_probe_requests SET state='passed',completed_at=? "
+        "WHERE request_id=? AND state='started'",
+        (completed.timestamp(), body.requestId),
+    )
+    row = db.execute(
+        "SELECT * FROM setup_model_probe_receipts WHERE request_id=?", (body.requestId,)
+    ).fetchone()
+    db.execute("COMMIT")
     return _project(row)

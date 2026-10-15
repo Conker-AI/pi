@@ -25,6 +25,7 @@ from pi import (
     collaboration,
     filesystem_reads,
     jobs,
+    memory_edits,
     memory_forget,
     projects,
     proposals,
@@ -171,6 +172,20 @@ class MemoryForget(StrictModel):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
     expected_revision: int = Field(ge=1)
+
+
+class MemoryCorrect(memory_edits.Apply):
+    operation: Literal["correct"]
+
+
+class MemoryRetry(memory_edits.Retry):
+    operation: Literal["retry-correction"]
+    request_id: str = Field(pattern=rf"^{memory_edits.REQUEST_ID}$")
+
+
+MEMORY_MUTATION = TypeAdapter(
+    Annotated[MemoryForget | MemoryCorrect | MemoryRetry, Field(discriminator="operation")]
+)
 
 
 class ProposalDecision(StrictModel):
@@ -490,9 +505,17 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         return Mutation("POST", f"/jobs/{value.id}/run", {"request_id": value.request_id})
     if resource == "memory":
         try:
-            value = MemoryForget.model_validate(payload)
+            value = MEMORY_MUTATION.validate_python(payload)
         except ValidationError:
             raise MutationError("Memory apply request has an unsupported shape.") from None
+        if isinstance(value, MemoryCorrect):
+            return Mutation("POST", "/memory/corrections", value.model_dump(exclude={"operation"}))
+        if isinstance(value, MemoryRetry):
+            return Mutation(
+                "POST",
+                f"/memory/corrections/{value.request_id}/retry",
+                {"expected_payload_hash": value.expected_payload_hash},
+            )
         body = memory_forget.Forget(
             request_id=value.request_id,
             memory_id=value.memory_id,

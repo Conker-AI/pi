@@ -4,13 +4,98 @@ import json
 import logging
 import threading
 import time
-from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
-from . import memory_store, session_settings
+from . import memory_delivery, memory_store, session_settings
 
 log = logging.getLogger("pi.memory")
+
+CONTEXT_LIMIT_BYTES = 32768
+# Allows eight full Unicode conversation records and supporting context while
+# bounding transport and JSON parsing independently of the much smaller model budget.
+CONTEXT_RESPONSE_BYTES = 2 * 1024 * 1024
+CONTEXT_GROUPS = ("memories", "entities", "episodes", "evidence")
+BUDGET_RECEIPT = "pi_context_budget"
+
+
+def _context_size(package):
+    return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+
+
+def _budget_context(package):
+    """Select complete evidence records; never rewrite text or its provenance."""
+    if (
+        not isinstance(package, dict)
+        or not isinstance(package.get("memories"), list)
+        or not isinstance(package.get("retrieval"), dict)
+        or any(
+            key in package
+            and (
+                not isinstance(package[key], list)
+                or len(package[key]) > 100
+                or any(not isinstance(item, dict) for item in package[key])
+            )
+            for key in CONTEXT_GROUPS
+        )
+    ):
+        raise ValueError("Invalid context package")
+    if _context_size(package) <= CONTEXT_LIMIT_BYTES:
+        return package
+    previous = package["retrieval"].get(BUDGET_RECEIPT)
+    received = (
+        previous["received"]
+        if previous
+        else {key: len(package.get(key, [])) for key in CONTEXT_GROUPS}
+    )
+    retained = dict.fromkeys(CONTEXT_GROUPS, 0)
+    optional = [key for key in ("briefing", "query") if key in package]
+    omitted_fields = list(
+        dict.fromkeys([*(previous["omitted_fields"] if previous else []), *optional])
+    )
+    result = {
+        key: value for key, value in package.items() if key not in (*CONTEXT_GROUPS, *optional)
+    }
+    result.update({key: [] for key in CONTEXT_GROUPS if key in package})
+
+    def candidate(content, counts, omitted):
+        # Query is only an echo of the already-present user input, not recalled evidence.
+        status = "partial" if any(counts.values()) or content.get("briefing") else "empty"
+        return {
+            **content,
+            "retrieval": {
+                **package["retrieval"],
+                BUDGET_RECEIPT: {
+                    "status": status,
+                    "limit_bytes": CONTEXT_LIMIT_BYTES,
+                    "received": received,
+                    "retained": counts,
+                    "omitted": {key: received[key] - counts[key] for key in CONTEXT_GROUPS},
+                    "omitted_fields": omitted,
+                },
+            },
+        }
+
+    result = candidate(result, retained, omitted_fields)
+    if _context_size(result) > CONTEXT_LIMIT_BYTES:
+        raise ValueError("Memory context metadata exceeds the turn budget")
+    # Preserve retrieval order within each collection. A large early item must
+    # not prevent later complete items from fitting. Memories take precedence
+    # over supporting collections, a broad briefing, and the redundant query echo.
+    for key in CONTEXT_GROUPS:
+        for record in package.get(key, []):
+            counts = {**retained, key: retained[key] + 1}
+            trial = candidate(
+                {**result, key: [*result.get(key, []), record]}, counts, omitted_fields
+            )
+            if _context_size(trial) <= CONTEXT_LIMIT_BYTES:
+                result, retained = trial, counts
+    for key in optional:
+        fields = [field for field in omitted_fields if field != key]
+        trial = candidate({**result, key: package[key]}, retained, fields)
+        if _context_size(trial) <= CONTEXT_LIMIT_BYTES:
+            result, omitted_fields = trial, fields
+    return result
 
 
 class MemoryClient:
@@ -31,44 +116,58 @@ class MemoryClient:
     def deliver(self, operation, message, *, agent_id):
         url = "/runtime/conversation/" + message["id"]
         headers = {**self.ingest_headers, "X-Agent-Id": agent_id}
-        if operation == "delete":
-            response = self.http.delete(url, headers=headers)
-        else:
-            response = self.http.put(
-                url,
-                headers=headers,
-                json={
+        arguments = (
+            {}
+            if operation == "delete"
+            else {
+                "json": {
                     "session_id": message["session_id"],
                     "content": message["content"],
                     "created_at": message["created_at"],
-                },
-            )
-        response.raise_for_status()
-        receipt = response.json()
-        allowed = {"deleted"} if operation == "delete" else {"admitted", "filtered", "deleted"}
-        expected_id = str(uuid5(NAMESPACE_URL, f"pi:{agent_id}:{message['id']}"))
-        if (
-            receipt.get("id") != expected_id
-            or receipt.get("message_id") != message["id"]
-            or receipt.get("state") not in allowed
-        ):
-            raise ValueError("MemoryGate did not acknowledge the expected message")
+                }
+            }
+        )
+        with self.http.stream(
+            "DELETE" if operation == "delete" else "PUT", url, headers=headers, **arguments
+        ) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes():
+                if len(raw) + len(chunk) > memory_delivery.MAX_RECEIPT_BYTES:
+                    raise ValueError("MemoryGate acknowledgement exceeded its size limit.")
+                raw.extend(chunk)
+        try:
+            value = json.loads(raw)
+        except (ValueError, RecursionError) as exc:
+            raise ValueError("MemoryGate returned an invalid acknowledgement.") from exc
+        receipt = memory_delivery.validate_receipt(value, message["id"], agent_id)
+        if operation == "delete" and receipt["state"] != "deleted":
+            raise ValueError("MemoryGate did not acknowledge deletion.")
+        # This local stamp records the responding destination, never a credential
+        # or authority supplied in the remote payload. Legacy receipts have none.
         return {
-            key: receipt.get(key)
-            for key in ("id", "message_id", "state", "memory_id", "value_score")
+            **receipt,
+            "receipt_version": 1,
+            "destination": memory_delivery.destination_digest(self.http.base_url),
         }
 
     def retrieve(self, query, *, scope="all", session_id=None, memory_ids=None):
         payload = {"query": query[:16000], "max_items": 8, "include_evidence": False}
         if scope != "all":
             payload.update(scope=scope, memory_ids=memory_ids or [], session_id=session_id)
-        response = self.http.post(
+        with self.http.stream(
+            "POST",
             "/runtime/context",
             headers=self.read_headers,
             json=payload,
-        )
-        response.raise_for_status()
-        package = response.json()
+        ) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes():
+                if len(raw) + len(chunk) > CONTEXT_RESPONSE_BYTES:
+                    raise ValueError("Memory context exceeded response budget")
+                raw.extend(chunk)
+            package = json.loads(raw)
         if scope != "all" and (not isinstance(package, dict) or package.get("scope") != scope):
             raise ValueError("MemoryGate did not enforce the requested scope.")
         if (
@@ -77,11 +176,11 @@ class MemoryClient:
             or not isinstance(package.get("retrieval"), dict)
         ):
             raise ValueError("Invalid context package")
-        # Store exactly what is supplied to the model, bounded independently of
-        # the remote service. Oversize context is a visible gap, never truncation.
-        if len(json.dumps(package, ensure_ascii=False).encode()) > 32768:
-            raise ValueError("Memory context exceeds the turn budget")
-        return package
+        if BUDGET_RECEIPT in package["retrieval"]:
+            raise ValueError("MemoryGate supplied reserved local receipt metadata")
+        # Store exactly what reaches the model. Omitted complete records are
+        # counted in the local receipt; their text is never silently shortened.
+        return _budget_context(package)
 
     def close(self):
         self.http.close()
@@ -138,7 +237,7 @@ class Memory:
             if selected["agentId"] == "companion"
             else self.read_clients.get(selected["agentId"])
         )
-        if memory_store.pending_deletions(self.store):
+        if memory_store.recall_held(self.store):
             state = "unavailable"
         elif client:
             try:
@@ -171,7 +270,30 @@ class Memory:
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):
-                    package = self.ranker.rank_memories(query, package)
+                    original = package
+                    try:
+                        rank_for_turn = getattr(self.ranker, "rank_for_turn", None)
+                        ranked = (
+                            rank_for_turn(query, original, selected)
+                            if callable(rank_for_turn)
+                            else self.ranker.rank_memories(query, original)
+                        )
+                        package = _budget_context(ranked)
+                    except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+                        package = _budget_context(
+                            {
+                                **original,
+                                "retrieval": {
+                                    **original["retrieval"],
+                                    "reranking": {
+                                        "status": "fallback",
+                                        "reason": "Ranking metadata was unavailable or exceeded the context budget.",
+                                    },
+                                },
+                            }
+                        )
+                else:
+                    package = _budget_context(package)
                 state = (
                     "ok"
                     if (
@@ -184,8 +306,18 @@ class Memory:
                     and not package["retrieval"].get("pending_conversation_index")
                     else "degraded"
                 )
-            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-                state = "unavailable"
+                budget = package["retrieval"].get(BUDGET_RECEIPT)
+                if budget:
+                    state = "unavailable" if budget["status"] == "empty" else "degraded"
+            except (
+                httpx.HTTPError,
+                ValueError,
+                TypeError,
+                KeyError,
+                AttributeError,
+                RecursionError,
+            ):
+                state, package = "unavailable", None
         memory_store.save_context(self.store, turn_id, state, package)
 
     def status(self, session_id=None, turn_id=None):
@@ -202,8 +334,12 @@ class Memory:
             delivery["pending_ingestion"]
             or delivery["pending_deletion"]
             or delivery["blocked_delivery"]
+            or memory_store.recall_held(self.store)
         ):
-            return {"status": "degraded", "reason": "Memory delivery or deletion is pending"}
+            return {
+                "status": "degraded",
+                "reason": "Memory delivery or a reviewed change is pending",
+            }
         return state
 
     def drain_once(self, limit=20):

@@ -6,10 +6,10 @@ import json
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import submissions, turn_control
+from . import background_thinking, submissions, turn_control
 from .loop import ActedWithoutReply, TurnFailed
 
 
@@ -41,6 +41,8 @@ class TurnRequest(BaseModel):
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     research_mode: Literal["off", "web", "deep"] = "off"
+    skill_ids: list[str] = Field(default_factory=list, max_length=3)
+    think: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def task_submission(self):
@@ -94,6 +96,17 @@ def router(app_state, require_key, require_admin):
     def list_sessions(limit: int = 50):
         return {"results": app_state().store.list_sessions(limit=min(max(limit, 1), 200))}
 
+    @routes.get("/sessions/history", dependencies=[Depends(require_key)])
+    def session_history_page(request: Request):
+        from . import session_history
+
+        return JSONResponse(
+            session_history.page(
+                app_state().store, **session_history.request_arguments(request.query_params)
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     @routes.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
     def get_session(session_id: str):
         session = app_state().store.get_session(session_id)
@@ -110,7 +123,99 @@ def router(app_state, require_key, require_admin):
                 for turn in app_state().store.turns(session_id)
             ],
             "memory": app_state().loop.memory.status(session_id),
+            "thinking": background_thinking.list_for_session(app_state().store, session_id),
         }
+
+    def _memory_delivery_status(session_id, request, message_id=None):
+        from . import memory_delivery
+
+        if request.url.query or any(
+            not 1 <= len(value) <= 128
+            or not all(
+                character.isascii() and (character.isalnum() or character in "_-")
+                for character in value
+            )
+            for value in (session_id, message_id)
+            if value is not None
+        ):
+            raise HTTPException(422, "Invalid memory delivery request.")
+        try:
+            return memory_delivery.read(app_state().store, session_id, message_id)
+        except ValueError:
+            raise HTTPException(404, "Memory delivery unavailable.") from None
+
+    @routes.get("/sessions/{session_id}/memory-delivery", dependencies=[Depends(require_key)])
+    def memory_delivery_status(session_id: str, request: Request):
+        return _memory_delivery_status(session_id, request)
+
+    @routes.get(
+        "/sessions/{session_id}/messages/{message_id}/memory-delivery",
+        dependencies=[Depends(require_key)],
+    )
+    def message_memory_delivery_status(session_id: str, message_id: str, request: Request):
+        return _memory_delivery_status(session_id, request, message_id)
+
+    @routes.get("/sessions/{session_id}/observation", dependencies=[Depends(require_key)])
+    def observe_session(session_id: str, request: Request):
+        from . import session_observation
+
+        if (
+            request.url.query
+            or not 1 <= len(session_id) <= 128
+            or not all(
+                character.isascii() and (character.isalnum() or character in "_-")
+                for character in session_id
+            )
+        ):
+            raise HTTPException(422, "Invalid conversation observation request.")
+        try:
+            return JSONResponse(
+                session_observation.read(app_state().store, session_id),
+                headers={"Cache-Control": "no-store"},
+            )
+        except ValueError:
+            raise HTTPException(404, "Conversation not found.") from None
+        except OverflowError:
+            raise HTTPException(503, "Conversation observation unavailable.") from None
+
+    @routes.get("/sessions/{session_id}/thinking", dependencies=[Depends(require_key)])
+    def thinking_status(session_id: str):
+        session = app_state().store.get_session(session_id)
+        if session is None:
+            raise HTTPException(404, "no such session")
+        return {
+            "schemaVersion": 1,
+            "session_id": session_id,
+            "content_status": "forgotten" if session["status"] == "forgotten" else "available",
+            "results": background_thinking.list_for_session(app_state().store, session_id),
+        }
+
+    @routes.get("/turns/{turn_id}/usage", dependencies=[Depends(require_key)])
+    def turn_usage(turn_id: str, request: Request):
+        from . import research_usage
+
+        if (
+            request.url.query
+            or not 1 <= len(turn_id) <= 128
+            or not all(
+                character.isascii() and (character.isalnum() or character in "_-")
+                for character in turn_id
+            )
+        ):
+            raise HTTPException(422, "Invalid turn usage request.")
+        try:
+            return research_usage.receipt(app_state().store, turn_id)
+        except ValueError:
+            raise HTTPException(404, "Turn usage unavailable.") from None
+
+    @routes.post(
+        "/sessions/{session_id}/thinking/{turn_id}/cancel", dependencies=[Depends(require_key)]
+    )
+    def cancel_thinking(session_id: str, turn_id: str):
+        try:
+            return background_thinking.cancel(app_state().store, session_id, turn_id)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from None
 
     @routes.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
     def run_turn(session_id: str, body: TurnRequest):
@@ -135,6 +240,8 @@ def router(app_state, require_key, require_admin):
                 **({"model_id": body.model_id} if body.model_id is not None else {}),
                 **({"reply_to": body.reply_to} if body.reply_to is not None else {}),
                 **({"research_mode": body.research_mode} if body.research_mode != "off" else {}),
+                **({"skill_ids": body.skill_ids} if body.skill_ids else {}),
+                **({"think": True} if body.think else {}),
             )
         except ActedWithoutReply as exc:
             # Deliberately not an error status. A tool ran, so this request did the

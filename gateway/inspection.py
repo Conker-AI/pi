@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from pi import characters
+from pi import characters, memory_edits
 from pi.browser_contract import owner_allowed, runtime_allowed
 
 from .api import Config
@@ -42,6 +42,7 @@ INSPECTIONS = {
     "inventory-services": Inspection("owner", "/system/inventory/configured/services"),
     "jobs": Inspection("owner", "/jobs"),
     "memory": Inspection("owner", "/memory/objects"),
+    "memory-edit-pending": Inspection("owner", "/memory/corrections/pending"),
     "models": Inspection("owner", "/models/configuration"),
     "projects": Inspection("owner", "/projects"),
     "setup": Inspection("owner", "/setup/status"),
@@ -64,6 +65,8 @@ INSPECTIONS = {
     ),
 }
 SESSION_SETTINGS = re.compile(r"^session-settings:([A-Za-z0-9_-]{1,128})$")
+MEMORY_EDIT = re.compile(rf"memory-edit:({memory_edits.MEMORY_ID})")
+MEMORY_EDIT_STATUS = re.compile(rf"memory-edit-status:({memory_edits.REQUEST_ID})")
 APPROVAL = re.compile(r"^approval:([A-Za-z0-9_-]{1,128})$")
 SUBMISSION = re.compile(r"^submission:([A-Za-z0-9_-]{16,128})$")
 FILE_LISTING = re.compile(r"^file-listing:([A-Za-z0-9_-]{16,100})$")
@@ -85,6 +88,14 @@ def resources() -> tuple[str, ...]:
 
 def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dict:
     operation = INSPECTIONS.get(resource)
+    if operation is None:
+        selected = MEMORY_EDIT.fullmatch(resource)
+        if selected:
+            operation = Inspection("owner", f"/memory/corrections/memories/{selected.group(1)}")
+    if operation is None:
+        selected = MEMORY_EDIT_STATUS.fullmatch(resource)
+        if selected:
+            operation = Inspection("owner", f"/memory/corrections/{selected.group(1)}")
     if operation is None:
         selected = SESSION_SETTINGS.fullmatch(resource)
         if selected:
@@ -150,7 +161,7 @@ def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dic
         raise InspectionError(
             "Unknown inspection resource. Choose one of: "
             + ", ".join(resources())
-            + ", active-call:ID, approval:ID, call:ID, file-listing:ID, inventory:ID, session-settings:ID, submission:ID, tool-access:ID:VERSION:DIGEST, tool-draft:ID, tool-publications:ID, tool-runs:ID, tool-validation:ID"
+            + ", active-call:ID, approval:ID, call:ID, file-listing:ID, inventory:ID, memory-edit:ID, memory-edit-status:ID, session-settings:ID, submission:ID, tool-access:ID:VERSION:DIGEST, tool-draft:ID, tool-publications:ID, tool-runs:ID, tool-validation:ID"
         )
     if operation.authority == "owner":
         if not config.pi_owner_key or not owner_allowed("GET", operation.path):
@@ -195,9 +206,17 @@ def inspect_resource(config: Config, resource: str, client: httpx.Client) -> dic
     response_limit = (
         characters.MAX_REQUEST_BYTES
         if operation.path.startswith("/characters/companion")
+        else 128000
+        if operation.path.startswith("/memory/corrections")
         else MAX_RESPONSE_BYTES
     )
-    limit_label = "66 MiB" if response_limit == characters.MAX_REQUEST_BYTES else "8 MiB"
+    limit_label = (
+        "66 MiB"
+        if response_limit == characters.MAX_REQUEST_BYTES
+        else "128000 bytes"
+        if response_limit == 128000
+        else "8 MiB"
+    )
     try:
         with client.stream(
             "GET",
