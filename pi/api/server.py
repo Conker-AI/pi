@@ -54,6 +54,7 @@ from pi.api.startup import lifespan
 from pi.context import controls as context_controls
 from pi.context import project_sources
 from pi.conversation import forks as message_forks
+from pi.conversation import judgements
 from pi.conversation import retries as response_retries
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
@@ -443,4 +444,7 @@ app.include_router(
 app.include_router(message_forks.router(lambda: app.state.store, require_admin))
 app.include_router(response_versions.router(lambda: app.state.store, require_admin))
 app.include_router(response_retries.router(lambda: app.state.loop, require_admin))
+app.include_router(
+    judgements.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
+)
 app.include_router(turn_steering.router(lambda: app.state.store, require_admin))
