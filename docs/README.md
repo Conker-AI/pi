@@ -22,7 +22,7 @@ What works end to end in a real deployment is tracked in Conker's
 | | |
 |---|---|
 | [Turn controls](turn-control.md) · [Steering](turn-steering.md) · [Queue](turn-queue.md) | Stop, steer and queue turns |
-| [Response versions](response-versions.md) · [Retries](response-retries.md) · [Message forks](message-forks.md) · [Judgements](response-judgements.md) | Regenerate, branch and judge |
+| [Response versions](response-versions.md) · [Retries](response-retries.md) · [Message forks](message-forks.md) · [Judgements](response-judgements.md) · [Fact checks](fact-checks.md) | Regenerate, branch, judge and fact-check |
 | [Drafts](drafts.md) · [Search](conversation-search.md) | Unsent text and finding past chats |
 | [Attachments](attachments.md) · [In turns](attachment-turns.md) · [Document text](document-text.md) | Files in conversation |
 | [Session settings](session-settings.md) · [Output settings](output-settings.md) | Per-chat privacy, agent and output selections |
