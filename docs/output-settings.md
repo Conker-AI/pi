@@ -8,6 +8,6 @@ Output settings control how the model formats its answers in a chat. There are t
 
 **Language** specifies the output language using BCP 47 language tags like "en", "en-GB", or "ru". Use "auto" to let the model choose.
 
-These settings are saved per chat with a revision number to prevent conflicts. Admin users can manage them via GET/POST `/sessions/{id}/output` endpoints. When a chat is forked, the child session inherits the parent's output settings automatically.
+These settings are saved per chat with a revision number to prevent conflicts. GET/POST `/sessions/{id}/output` read and change them (admin key only for now). When a chat is forked, the child session inherits the parent's output settings automatically.
 
 Each turn freezes the current output settings in its execution snapshot, so the model's behavior remains consistent even if settings change later. The settings are sent to the model as system instructions, not strict guarantees—the model may still choose a different format or style if it better serves the request.

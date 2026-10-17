@@ -26,7 +26,6 @@ def system_messages(store, system_prompt, execution, policy, tools) -> list[Mess
     messages.extend(output_settings.messages(execution))
     messages.extend(skills.messages(execution))
 
-    # Local imports to avoid import cycles
     try:
         messages.extend(project_context.messages(store, execution))
     except (agents.AgentError, attachments.AttachmentError) as exc:

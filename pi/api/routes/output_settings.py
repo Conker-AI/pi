@@ -1,32 +1,23 @@
-"""Output settings API routes."""
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from pi.conversation import output_settings
 
 
 def router(store, authorize):
-    """Create output settings router."""
     routes = APIRouter(prefix="/sessions", dependencies=[Depends(authorize)])
 
-    @routes.get("/{session_id}/output")
-    async def get_output_settings(session_id: str):
-        """Get output settings for a session."""
+    def invoke(fn, *args):
         try:
-            return output_settings.load(store, session_id)
+            return fn(store(), *args)
         except output_settings.OutputError as exc:
-            raise HTTPException(
-                status_code=exc.status, detail={"code": exc.code, "message": exc.message}
-            ) from exc
+            raise HTTPException(exc.status, {"code": exc.code, "message": exc.message}) from None
+
+    @routes.get("/{session_id}/output")
+    def get(session_id: str):
+        return invoke(output_settings.load, session_id)
 
     @routes.post("/{session_id}/output")
-    async def update_output_settings(session_id: str, body: output_settings.Update):
-        """Update output settings for a session."""
-        try:
-            return output_settings.save(store, session_id, body)
-        except output_settings.OutputError as exc:
-            raise HTTPException(
-                status_code=exc.status, detail={"code": exc.code, "message": exc.message}
-            ) from exc
+    def save(session_id: str, body: output_settings.Update):
+        return invoke(output_settings.save, session_id, body)
 
     return routes

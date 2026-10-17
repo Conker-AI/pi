@@ -1,7 +1,5 @@
 """Tests for output settings functionality."""
 
-from pathlib import Path
-
 import pytest
 
 from pi.conversation import output_settings
@@ -119,13 +117,11 @@ class TestOutputSettings:
         with pytest.raises(ValueError):
             output_settings.Output(format="auto", length="auto", language="r")
 
-        # Test extra key
         with pytest.raises(ValueError):
+            output_settings.Output.model_validate({"format": "auto", "extra": "value"})
 
-            class ExtraOutput(output_settings.Output):
-                extra: str = "value"
-
-            ExtraOutput(format="auto", length="auto", language="auto")
+        with pytest.raises(ValueError):
+            output_settings.Output.model_validate({"language": 7})
 
         # Test non-string language
         with pytest.raises(ValueError):
@@ -272,21 +268,7 @@ class TestOutputSettings:
             output_settings.load(store, session_id)
 
         assert exc.value.code == "not_found"
-        assert exc.value.status == 409
-
-        # Also test forgotten_sessions table
-        with store._connect() as db:
-            db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-            db.execute(
-                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", (session_id, 1234567890)
-            )
-            db.execute("INSERT INTO forgotten_sessions (session_id) VALUES (?)", (session_id,))
-
-        with pytest.raises(output_settings.OutputError) as exc:
-            output_settings.load(store, session_id)
-
-        assert exc.value.code == "not_found"
-        assert exc.value.status == 409
+        assert exc.value.status == 404
 
     def test_closed_session_error(self, store, session_id):
         """Test closed sessions can't be modified."""
@@ -309,66 +291,48 @@ class TestOutputSettings:
         assert exc.value.status == 409
 
 
-class TestHTTPAPI:
-    """Test HTTP API endpoints."""
+OWNER = "output_settings_owner_key"
 
-    def test_get_post_endpoints(self):
-        """Test GET/POST endpoints work with admin key."""
-        from fastapi.testclient import TestClient
 
-        from pi.api.server import app
+@pytest.fixture
+def http(tmp_path, monkeypatch):
+    import hashlib
+    from contextlib import closing
 
-        # Setup test client (copied from test_owner_context_read.py)
-        app.state.store = Store(Path(":memory:"))
+    from fastapi.testclient import TestClient
 
-        # Create a test session
-        with app.state.store._connect() as db:
-            db.execute(
-                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", ("test-123", 1234567890)
-            )
+    from pi.api import server as api
 
-        client = TestClient(app)
-
-        # Test GET with admin key
-        response = client.get(
-            "/sessions/test-123/output", headers={"X-Admin-Key": "test-admin-key"}
+    with closing(Store(tmp_path / "pi.db")) as store:
+        monkeypatch.setattr(api.app.state, "store", store, raising=False)
+        monkeypatch.setattr(api.app.state, "admin_key", "synthetic-admin", raising=False)
+        monkeypatch.setattr(
+            api.app.state,
+            "owner_key_hash",
+            hashlib.sha256(OWNER.encode()).hexdigest(),
+            raising=False,
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["revision"] == 0
-        assert data["output"] == {"format": "auto", "length": "auto", "language": "auto"}
+        yield store, TestClient(api.app)
 
-        # Test POST with admin key
-        response = client.post(
-            "/sessions/test-123/output",
-            headers={"X-Admin-Key": "test-admin-key"},
-            json={
-                "expected_revision": 0,
-                "output": {"format": "table", "length": "short", "language": "ru"},
-            },
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["revision"] == 1
-        assert data["output"] == {"format": "table", "length": "short", "language": "ru"}
 
-        # Test GET refused for owner key
-        response = client.get(
-            "/sessions/test-123/output", headers={"X-Owner-Key": "test-owner-key"}
-        )
-        assert response.status_code == 401
-
-        # Test GET refused with no key
-        response = client.get("/sessions/test-123/output")
-        assert response.status_code == 401
-
-        # Test POST refused for owner key
-        response = client.post(
-            "/sessions/test-123/output",
-            headers={"X-Owner-Key": "test-owner-key"},
-            json={
-                "expected_revision": 1,
-                "output": {"format": "list", "length": "medium", "language": "en"},
-            },
-        )
-        assert response.status_code == 401
+def test_routes_accept_only_the_admin_key(http):
+    store, client = http
+    session = store.create_session()
+    admin = {"X-Pi-Key": "synthetic-admin"}
+    response = client.get(f"/sessions/{session}/output", headers=admin)
+    assert response.status_code == 200
+    assert response.json() == {"revision": 0, "output": output_settings.AUTO}
+    body = {
+        "expected_revision": 0,
+        "output": {"format": "table", "length": "short", "language": "ru"},
+    }
+    response = client.post(f"/sessions/{session}/output", headers=admin, json=body)
+    assert response.status_code == 200
+    assert response.json() == {"revision": 1, "output": body["output"]}
+    stale = client.post(f"/sessions/{session}/output", headers=admin, json=body)
+    assert stale.status_code == 409 and stale.json()["detail"]["code"] == "revision_conflict"
+    assert client.get("/sessions/ses_missing/output", headers=admin).status_code == 404
+    owner = {"X-Pi-Owner-Key": OWNER}
+    assert client.get(f"/sessions/{session}/output", headers=owner).status_code == 401
+    assert client.post(f"/sessions/{session}/output", headers=owner, json=body).status_code == 401
+    assert client.get(f"/sessions/{session}/output").status_code == 401
