@@ -5,6 +5,7 @@ from pi.agents import character_context, skills
 from pi.agents import profiles as agents
 from pi.content import attachments
 from pi.context import project_context
+from pi.conversation import output_settings
 from pi.models.providers import Message
 
 
@@ -22,6 +23,7 @@ def system_messages(store, system_prompt, execution, policy, tools) -> list[Mess
         messages.append(Message("system", project["instructions"]))
     if policy and policy["sessionInstructions"].strip():
         messages.append(Message("system", policy["sessionInstructions"]))
+    messages.extend(output_settings.messages(execution))
     messages.extend(skills.messages(execution))
 
     # Local imports to avoid import cycles

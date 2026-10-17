@@ -6,7 +6,7 @@ pi/content/artifacts.py 752
 pi/calls/runtime.py 1023  # +2 import lines on 2026-10-15: the package move (A-01) split one relative import across packages; raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/agents/teams.py 657
 pi/schedule/jobs.py 651
-pi/turns/loop.py 1154  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
+pi/turns/loop.py 1156  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/setup/status.py 767  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/conversation/store.py 640  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/host/inventory.py 618

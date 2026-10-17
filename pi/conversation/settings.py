@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 
 from pi.agents import profiles as agents
 from pi.context import projects
+from pi.conversation import output_settings
 
 
 class Privacy(agents.StrictModel):
@@ -217,6 +218,7 @@ def _snapshot(db, identity):
         "kind": agent["kind"],
         "character": characters.runtime_snapshot(db, agent["id"]),
         "presentationMode": value["settings"].get("presentationMode"),
+        "output": output_settings.snapshot(db, identity),
         "privacy": value["settings"]["privacy"],
         "project": project,
         "authority": "none",
