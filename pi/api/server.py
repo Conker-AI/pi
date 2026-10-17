@@ -23,6 +23,7 @@ from pi.api.routes import activity as activity_api
 from pi.api.routes import agents as agents_api
 from pi.api.routes import artifacts as artifacts_api
 from pi.api.routes import attachments as attachments_api
+from pi.api.routes import auto_settings as auto_settings_api
 from pi.api.routes import calls as calls_api
 from pi.api.routes import characters as characters_api
 from pi.api.routes import context as context_api
@@ -205,6 +206,11 @@ app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
+app.include_router(
+    auto_settings_api.router(
+        lambda: app.state.store, lambda: app.state.router.adapters(), require_key
+    )
+)
 app.include_router(
     setup_status_api.router(
         lambda: app.state.store,

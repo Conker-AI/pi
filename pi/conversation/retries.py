@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
 from pi.models.providers import Message, ProviderUnavailable
-from pi.models.routing import TurnContext
+from pi.models.routing import TurnContext, history_size
 from pi.schedule import tasks
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
@@ -185,7 +185,7 @@ def run(loop, sid, mid, body):
         context_controls.check_budget(prepared["context"]["policy"], history)
         route, completion, skipped = loop._call(
             history,
-            TurnContext(history_chars=loop._history_size(history), needs_tools=False),
+            TurnContext(history_chars=history_size(history), needs_tools=False),
             execution,
         )
         turn_control.guard(store, execution)
