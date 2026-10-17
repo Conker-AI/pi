@@ -197,11 +197,16 @@ def auto_name(store, providers, sid, body) -> dict:
 
 
 def after_turn(store, providers, sid) -> None:
-    """Automatic path: name only when there is no session_titles row and sessions.title is empty."""
+    """Automatic path: name only when there is no session_titles row and sessions.title is empty.
+
+    `providers` may be a zero-argument callable; it is resolved here, inside the guard, so a
+    missing provider never affects the turn that scheduled this.
+    """
     try:
         with store._connect() as db:
             if _session(db, sid) or _revision(db, sid):
                 return
-        auto_name(store, providers, sid, AutoName(expected_revision=0))
+        adapters = providers() if callable(providers) else providers
+        auto_name(store, adapters, sid, AutoName(expected_revision=0))
     except Exception:
         return

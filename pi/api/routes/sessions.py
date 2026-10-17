@@ -288,7 +288,7 @@ def router(app_state, require_key, require_admin):
             background.add_task(
                 naming.after_turn,
                 app_state().store,
-                app_state().router.adapters(),
+                lambda: app_state().router.adapters(),
                 result["session_id"],
             )
         return result
