@@ -7,7 +7,7 @@ from pi.agents import teams as collaboration
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachments
 from pi.context import controls as context_controls
-from pi.context import project_context, projects, research_usage, universal_search
+from pi.context import decisions, project_context, projects, research_usage, universal_search
 from pi.context import retrieval as context_retrieval
 from pi.context import summaries as context_summaries
 from pi.conversation import citations as message_citations
@@ -96,3 +96,4 @@ def install(db):
     session_observation.initialize(db)
     db.executescript(output_settings.SCHEMA)
     db.executescript(naming.SCHEMA)
+    db.executescript(decisions.SCHEMA)

@@ -4,7 +4,7 @@ from pi.actions import tools as tool_protocol
 from pi.agents import character_context, skills
 from pi.agents import profiles as agents
 from pi.content import attachments
-from pi.context import project_context
+from pi.context import decisions, project_context
 from pi.conversation import output_settings
 from pi.models.providers import Message
 
@@ -24,6 +24,7 @@ def system_messages(store, system_prompt, execution, policy, tools) -> list[Mess
     if policy and policy["sessionInstructions"].strip():
         messages.append(Message("system", policy["sessionInstructions"]))
     messages.extend(output_settings.messages(execution))
+    messages.extend(decisions.messages(execution))
     messages.extend(skills.messages(execution))
 
     try:
