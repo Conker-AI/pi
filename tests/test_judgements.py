@@ -400,3 +400,36 @@ def test_http_auth_requires_admin_key(tmp_path, monkeypatch):
             headers={"X-Pi-Key": "admin_key"},
         )
         assert response.status_code in [404, 422, 200]
+
+
+def test_judge_accepts_a_pinned_version(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        setup_models(store)
+        adapters = {"one": Recording(JUDGE_JSON), "two": Recording()}
+        from pi.models.routing import Router
+        from pi.turns.loop import Loop
+
+        loop = Loop(store, Router(providers=adapters))
+        sid = store.create_session()
+        root, version_b, _version_c = create_family(store, loop, sid)
+        versions.select(
+            store, sid, root, versions.Selection(message_id=version_b, expected_revision=1)
+        )
+        from test_context_controls import policy
+
+        from pi.context import controls as context
+
+        context.save(
+            store,
+            sid,
+            context.Update(expected_revision=0, policy=policy({version_b: "keep-exact"})),
+        )
+        result = judgements.judge(
+            store, adapters, sid, root, judgements.Judge(request_id="judge_request_pinned")
+        )
+        assert version_b in {score["message_id"] for score in result["scores"]}
+
+
+def test_vote_value_is_validated():
+    with pytest.raises(ValueError):
+        judgements.Vote(message_id="msg_1", vote="maybe")
