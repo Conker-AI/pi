@@ -151,7 +151,7 @@ def require_skill_read(
 
 
 app.include_router(skills_api.router(lambda: app.state.store, require_skill_read, require_owner))
-app.include_router(context_api.router(lambda: app.state.store, require_admin))
+app.include_router(context_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(

@@ -11,3 +11,11 @@ Offline forgetting clears both current instructions and per-turn policy payloads
 Validation: actual loop recorder observes excluded content absent and exact pins/instructions present; selectors/revisions/retrieval/overflow prevent invalid dispatch; policy snapshots survive later edits; raw temporary database inspection confirms forgotten instruction text is removed. Context, loop, submissions and forgetting suites: 54 passed.
 
 Reviewed-fork validation: 56 context/loop/forgetting/submission tests passed, including original pin identity, no duplicated memory delivery, atomic stale-boundary rejection and a real subsequent model turn.
+
+## Owner reads through the gateway (2026-10-17)
+
+The owner-control credential may read `GET /context/{session_id}` and `GET /context/{session_id}/summary`
+(browser path `/api/control/pi/context/...`), which feed the dashboard's Context view. Every context
+write (`POST /context/{id}`, `/fork`, `/summary`, `/summary/restore`) and the turn snapshot and
+selection reads stay with the recovery credential until their UI exists. Forgotten or unknown
+conversations return 404. Tests: `tests/test_owner_context_read.py`.
