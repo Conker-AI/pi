@@ -21,6 +21,6 @@ are separate work.
 
 POST `/context/{id}/summary/draft` with an optional body `{"focus": "..."}` returns a
 proposed summary from the summarization helper model for owner review. It never sends
-excluded text, pinned text, redacted or forgotten messages to the helper. The draft
-saves nothing and returns `summaryRevision` for the reviewed save operation. The
-route is refused when helpers are disabled or no summarization model is configured.
+excluded, pinned (kept exact) or retrieve-only messages, nor redacted or forgotten ones,
+to the helper. The draft saves nothing and returns `summaryRevision` for the reviewed
+save. The route is refused when helpers are off or no summarization model is configured.

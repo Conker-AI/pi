@@ -33,36 +33,20 @@ class DraftError(Exception):
 
 
 def eligible(policy, rows) -> list[dict]:
-    """Keep only rows that can be sent to the helper model."""
-    if not policy:
-        return [
-            row
-            for row in rows
-            if row["role"] in ("user", "assistant")
-            and not row.get("redacted")
-            and row.get("content_status") != "forgotten"
-        ]
-
-    policy_value = controls.Policy.model_validate(policy)
-    result = []
-    for row in rows:
-        # Only user and assistant messages
-        if row["role"] not in ("user", "assistant"):
-            continue
-        # Not redacted or forgotten
-        if row.get("redacted") or row.get("content_status") == "forgotten":
-            continue
-        # Check policy rule for this message
-        message_policy = policy_value.messagePolicies.get(row["id"])
-        if message_policy in ("exclude", "keep-exact", "retrieve"):
-            continue
-        result.append(row)
-    return result
+    """Messages the helper may read: never excluded, pinned (kept exact) or unretrieved ones."""
+    rules = controls.Policy.model_validate(policy).messagePolicies if policy else {}
+    return [
+        row
+        for row in rows
+        if row["role"] in ("user", "assistant")
+        and not row.get("redacted")
+        and row.get("content_status") != "forgotten"
+        and rules.get(row["id"]) not in ("exclude", "keep-exact", "retrieve")
+    ]
 
 
 def draft(store, providers, session_id: str, body: Request) -> dict:
     """Generate a summary draft for review."""
-    # 1. Check session and helpers
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, session_id)
     if privacy is None:
@@ -72,7 +56,6 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
             "helpers_off", "Summary drafts need helper models, which are off for this chat.", 409
         )
 
-    # 2. Check model configuration
     saved = model_roles.load(store)
     if saved["configuration"] is None:
         raise DraftError(
@@ -81,7 +64,6 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
             503,
         )
 
-    # 3. Load policy and history
     try:
         policy = controls.load(store, session_id)["policy"]
         rows = eligible(policy, controls.history(store, session_id))
@@ -91,10 +73,8 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
     if not rows:
         raise DraftError("empty", "There is nothing to summarize yet.", 409)
 
-    # 4. Apply transcript limit
     chosen = []
     total_chars = 0
-    # Take from newest backwards
     for row in reversed(rows):
         content_len = len(str(row["content"]))
         if total_chars + content_len <= TRANSCRIPT_LIMIT:
@@ -103,7 +83,6 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
         else:
             break
 
-    # If even the newest row is over limit, truncate it
     if not chosen and rows:
         newest = rows[-1]
         content_str = str(newest["content"])
@@ -114,14 +93,11 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
         else:
             chosen = [newest]
 
-    # Restore chronological order
     chosen.reverse()
     truncated = len(chosen) < len(rows)
 
-    # 5. Load current summary
     current = summaries.load(store, session_id)
 
-    # 6. Prepare messages
     messages = [
         Message("system", INSTRUCTIONS),
         Message(
@@ -140,7 +116,6 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
         ),
     ]
 
-    # 7. Call model
     try:
         decision = model_roles.dispatch(
             saved["configuration"], "summarization", messages, providers
@@ -157,7 +132,6 @@ def draft(store, providers, session_id: str, body: Request) -> dict:
             "unavailable", "The summary draft failed. Write the summary yourself or try again.", 503
         ) from None
 
-    # 8. Return result
     return {
         "summary": text,
         "messageIds": [row["id"] for row in chosen],
