@@ -124,6 +124,10 @@ OWNER_ROUTES = {
         r"/calls/browser/call_[a-f0-9]{32}",
         r"/models/configuration",
         r"/sessions/[A-Za-z0-9_-]+/settings",
+        # Read-only: the chat's context policy and summary for the Context view. Edits, forks,
+        # turn snapshots and selections stay with the recovery credential.
+        r"/context/[A-Za-z0-9_-]{1,128}",
+        r"/context/[A-Za-z0-9_-]{1,128}/summary",
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
