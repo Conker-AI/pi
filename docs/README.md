@@ -25,7 +25,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Response versions](response-versions.md) · [Retries](response-retries.md) · [Message forks](message-forks.md) | Regenerate and branch |
 | [Drafts](drafts.md) · [Search](conversation-search.md) | Unsent text and finding past chats |
 | [Attachments](attachments.md) · [In turns](attachment-turns.md) · [Document text](document-text.md) | Files in conversation |
-| [Session settings](session-settings.md) | Per-chat privacy and agent selections |
+| [Session settings](session-settings.md) · [Output settings](output-settings.md) | Per-chat privacy, agent and output selections |
 | [Prepared context](turn-context.md) · [Context controls](context-controls.md) · [Context selection](context-retrieval.md) · [Summaries](context-summaries.md) | What the model is given |
 
 ## Memory and forgetting

@@ -33,7 +33,6 @@ from pi.actions.toolgate import (
     ToolPending,
     ToolRefused,
 )
-from pi.agents import character_context, skills
 from pi.calls import runtime as calls
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
@@ -49,6 +48,7 @@ from pi.models.routing import Reason, Route, Router, Tier, TurnContext, history_
 from pi.schedule import tasks
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
+from pi.turns import prompt_prefix
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 
@@ -289,33 +289,9 @@ class Loop:
             selection["selectedIds"] if selection and selection["state"] == "complete" else None
         )
         execution = execution or session_settings.execution(self.store, session_id, turn_id)
-        messages: list[Message] = []
-        if self.system_prompt:
-            messages.append(Message("system", self.system_prompt))
-        configuration = execution.get("configuration")
-        if configuration is not None:
-            messages.append(Message("system", configuration["instructions"]))
-        messages.extend(character_context.messages(execution))
-        project = execution.get("project")
-        if project and project["instructions"].strip():
-            messages.append(Message("system", project["instructions"]))
-        if policy and policy["sessionInstructions"].strip():
-            messages.append(Message("system", policy["sessionInstructions"]))
-        messages.extend(skills.messages(execution))
-        from pi.agents import profiles as agents
-        from pi.content import attachments
-        from pi.context import project_context
-
-        try:
-            messages.extend(project_context.messages(self.store, execution))
-        except (agents.AgentError, attachments.AttachmentError) as exc:
-            raise context_controls.ContextError(
-                exc.detail["code"], exc.detail["message"], exc.status
-            ) from exc
-        # Tool definitions are stable across ordinary turns. Keep them ahead of
-        # changing recall so providers can reuse the static prompt prefix.
-        if tools:
-            messages.append(Message("system", tool_protocol.describe(tools)))
+        messages = prompt_prefix.system_messages(
+            self.store, self.system_prompt, execution, policy, tools
+        )
         acknowledgement_generation = None
         if turn_id:
             saved = memory_store.context(self.store, turn_id)
