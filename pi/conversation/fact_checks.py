@@ -42,7 +42,6 @@ def _parse_fact_check_result(text: str, source_ids: set) -> dict:
     except json.JSONDecodeError:
         raise ValueError("not json") from None
 
-    # Check top-level structure
     if not isinstance(data, dict) or set(data) != {"claims"}:
         raise ValueError("unexpected keys")
 
@@ -51,7 +50,6 @@ def _parse_fact_check_result(text: str, source_ids: set) -> dict:
     if not isinstance(claims, list) or not (0 <= len(claims) <= 12):
         raise ValueError("invalid claims")
 
-    # Validate each claim
     for claim in claims:
         if not isinstance(claim, dict) or set(claim) != {"claim", "mark", "sources", "note"}:
             raise ValueError("invalid claim structure")
@@ -161,11 +159,17 @@ def _collect_sources(db, turn_id, message_id):
             result_id = args.get("result_id")
             observation = json.loads(row[1])
             observation = json.loads(observation) if isinstance(observation, str) else observation
-
-            if not isinstance(result_id, str) or observation.get("blocked") is True:
+            result = observation.get("result") or {}
+            # ToolGate reports a blocked page inside the result; never send its content.
+            if (
+                not isinstance(result_id, str)
+                or observation.get("ok") is not True
+                or result.get("blocked") is True
+                or observation.get("blocked") is True
+            ):
                 continue
 
-            content = observation.get("result", {}).get("content", "")
+            content = result.get("content", "")
             if result_id in sources:
                 # Replace the web snippet with fetch content
                 sources[result_id]["text"] = content[:6000]
@@ -192,13 +196,11 @@ def _collect_sources(db, turn_id, message_id):
             }
             source_ids.add(cite_id)
 
-    # Apply text length limit
     total_text = 0
     sources_truncated = False
     final_sources = []
 
-    for source_id in source_ids:
-        source = sources[source_id]
+    for source in sources.values():
         if total_text + len(source["text"]) > 48000:
             sources_truncated = True
             # Truncate this source to fit
@@ -216,7 +218,6 @@ def _collect_sources(db, turn_id, message_id):
 def _prepare(store, sid, mid, body):
     """Everything the fact check needs, read before any model call."""
     with store._connect() as db:
-        # Check privacy settings
         privacy = session_settings.source_privacy(db, sid)
         if privacy is None:
             raise CheckError("not_found", "Conversation unavailable.", 404)
@@ -225,7 +226,6 @@ def _prepare(store, sid, mid, body):
                 "helpers_off", "Fact checks need helper models, which are off for this chat.", 409
             )
 
-        # Check model configuration
         configuration = model_roles.load(store)["configuration"]
         if configuration is None:
             raise CheckError("not_configured", "Fact checks need a model configuration.", 503)
@@ -242,7 +242,6 @@ def _prepare(store, sid, mid, body):
                 raise CheckError("unknown_model", "Unknown fact check model.", 422)
             role, models = "answer", {body.model_id}
 
-        # Check message exists and is a final assistant message
         message = store.get_message(mid)
         if message is None or message["session_id"] != sid:
             raise CheckError("not_found", "Message not found.", 404)
@@ -250,12 +249,10 @@ def _prepare(store, sid, mid, body):
         if message["role"] != "assistant":
             raise CheckError("not_found", "Message not found.", 404)
 
-        # Check it's a final message in a turn
         turn_id, _ = _final_turn(db, mid)
         if turn_id is None:
             raise CheckError("not_found", "Message not found.", 404)
 
-        # Check message is not excluded, redacted or forgotten
         policy = context_controls.load(store, sid)["policy"]
         rules = policy["messagePolicies"] if policy else {}
         if not _usable(message, rules):
@@ -263,7 +260,6 @@ def _prepare(store, sid, mid, body):
                 raise CheckError("unavailable", "Message excluded from fact checking.", 409)
             raise CheckError("unavailable", "Message unavailable for fact checking.", 409)
 
-        # Collect sources
         sources, sources_truncated = _collect_sources(db, turn_id, mid)
         if not sources:
             raise CheckError(
@@ -302,7 +298,6 @@ def check(store, providers, sid: str, mid: str, body: Check):
     )
 
     try:
-        # Prepare the prompt
         source_ids = {source["id"] for source in sources}
         prompt = [
             Message("system", INSTRUCTIONS),
@@ -332,7 +327,6 @@ def check(store, providers, sid: str, mid: str, body: Check):
     except (ValueError, TypeError, model_roles.SelectionError):
         raise CheckError("unavailable", FAILED, 503) from None
 
-    # Calculate counts
     counts = {"supported": 0, "contradicted": 0, "no-source": 0}
     for claim in parsed["claims"]:
         counts[claim["mark"]] += 1
@@ -372,7 +366,6 @@ def check(store, providers, sid: str, mid: str, body: Check):
 def history(store, sid: str, mid: str):
     """Get fact check history for a message."""
     with store._connect() as db:
-        # Verify message exists
         message = store.get_message(mid)
         if message is None or message["session_id"] != sid:
             raise CheckError("not_found", "Message not found.", 404)
