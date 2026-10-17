@@ -38,6 +38,7 @@ RUNTIME_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/turns",
         r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
         r"/sessions/[A-Za-z0-9_-]+/fork",
+        r"/models/auto-settings",
         r"/turns/[A-Za-z0-9_-]+/resume",
         r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
         r"/tasks",
@@ -61,6 +62,9 @@ SESSION_ONLY_WRITES = (
     r"/sessions/[A-Za-z0-9_-]+/turns",
     r"/sessions/[A-Za-z0-9_-]+/fork",
     r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
+    # An Auto settings proposal reads the typed draft and returns typed choices; it saves and
+    # grants nothing, and the owner sees every value before sending.
+    r"/models/auto-settings",
     # Deciding on a proposal records a preference; it grants and runs nothing.
     r"/proposals/[A-Za-z0-9_-]+/decision",
     # Browser calls use bounded transient audio or typed turns. Neither grants new

@@ -287,6 +287,7 @@ def dispatch(
     observe_call=None,
     routing_memo=None,
     configuration_revision=None,
+    hints=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
@@ -335,6 +336,8 @@ def dispatch(
                             for key, model in eligible.items()
                         },
                         "task": [{"role": m.role, "content": m.content} for m in messages],
+                        # Owner choices from the composer (for example complexity), not task text.
+                        **({"ownerHints": hints} if hints else {}),
                     },
                     ensure_ascii=False,
                 ),

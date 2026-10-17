@@ -45,7 +45,7 @@ from pi.memory.service import Memory
 from pi.models import roles as model_roles
 from pi.models.openrouter import ModelUnusable
 from pi.models.providers import Message, ProviderUnavailable
-from pi.models.routing import Reason, Route, Router, Tier, TurnContext
+from pi.models.routing import Reason, Route, Router, Tier, TurnContext, history_size
 from pi.schedule import tasks
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
@@ -200,6 +200,7 @@ class Loop:
                     else None
                 ),
                 configuration_revision=execution["modelConfigurationRevision"],
+                hints=ctx.owner_hints() if role == "answer" else None,
             )
             completion = result["completion"]
             evidence = {
@@ -434,9 +435,6 @@ class Loop:
                 {row["id"] for row in known_history},
             )
         return messages
-
-    def _history_size(self, messages: list[Message]) -> int:
-        return sum(len(m.content) + 16384 * len(m.images) for m in messages)
 
     # --- forking ----------------------------------------------------------
 
@@ -688,7 +686,7 @@ class Loop:
             # This path narrates an already recorded action. It never dispatches
             # another tool, so advertising tools here misleads the answer model.
             history = self._history(session_id, turn_id=turn_id, reply_only=True)
-            ctx = TurnContext(history_chars=self._history_size(history), needs_tools=False)
+            ctx = TurnContext(history_chars=history_size(history), needs_tools=False)
             route, completion, _skipped = self._call(history, ctx, execution)
             from pi.context import research
 
@@ -882,7 +880,7 @@ class Loop:
             adapters = self.router.adapters()
             context_retrieval.resolve(self.store, session_id, identity, adapters)
             history = self._history(session_id, execution=execution, request_id=identity)
-            outgrown = self._history_size(history) + len(user_text) > self.fork_threshold_chars
+            outgrown = history_size(history) + len(user_text) > self.fork_threshold_chars
             if outgrown and execution.get("replyToMessageId"):
                 raise TurnFailed(
                     "Review a fork before replying; the selected target cannot be silently summarized."
@@ -993,7 +991,7 @@ class Loop:
         context = dict(context or {})
         context.setdefault("needs_tools", bool(available))
         history = self._history(session_id, tools=available, turn_id=turn_id)
-        ctx = TurnContext(history_chars=self._history_size(history), **context)
+        ctx = TurnContext(history_chars=history_size(history), **context)
 
         try:
             from pi.turns import inference_control

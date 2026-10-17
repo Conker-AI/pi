@@ -86,6 +86,15 @@ class TurnContext:
     owner_requested_strong: bool = False
     previous_attempt_failed: bool = False
 
+    def owner_hints(self) -> dict | None:
+        """Owner choices a routing model may weigh: Hard complexity asks for a stronger model."""
+        return {"complexity": "hard"} if self.is_analysis else None
+
+
+def history_size(messages) -> int:
+    """Characters a history would send; each image counts as a large fixed block."""
+    return sum(len(m.content) + 16384 * len(m.images) for m in messages)
+
 
 class Router:
     def __init__(
