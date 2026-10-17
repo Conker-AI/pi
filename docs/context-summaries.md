@@ -16,3 +16,11 @@ Automatic summary changes from the existing fork pipeline also advance the versi
 and retain the previous text. They cite the summarized session; restores retain the
 selected version's source reference. Provider/helper evaluations and frontend wiring
 are separate work.
+
+## Drafts
+
+POST `/context/{id}/summary/draft` with an optional body `{"focus": "..."}` returns a
+proposed summary from the summarization helper model for owner review. It never sends
+excluded text, pinned text, redacted or forgotten messages to the helper. The draft
+saves nothing and returns `summaryRevision` for the reviewed save operation. The
+route is refused when helpers are disabled or no summarization model is configured.
