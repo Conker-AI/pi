@@ -63,67 +63,63 @@ def clean(title: str) -> str:
     return title
 
 
-def _refuse_missing(store, sid):
-    """Raise 404 if the session is missing or forgotten."""
-    with store._connect() as db:
-        row = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
-        if row is None or row[0] == "forgotten":
-            raise NamingError("not_found", "Conversation not found.", 404)
-        if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone():
-            raise NamingError("not_found", "Conversation not found.", 404)
+def _session(db, sid):
+    """Refuse a missing or forgotten chat; return its title."""
+    row = db.execute("SELECT status,title FROM sessions WHERE id=?", (sid,)).fetchone()
+    if (
+        row is None
+        or row["status"] == "forgotten"
+        or db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone()
+    ):
+        raise NamingError("not_found", "Conversation unavailable.", 404)
+    return row["title"]
 
 
-def load(store, sid) -> dict:
-    """Load the naming state for a session."""
-    with store._connect() as db:
-        row = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
-        if row is None or row[0] == "forgotten":
-            raise NamingError("not_found", "Conversation not found.", 404)
-        if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone():
-            raise NamingError("not_found", "Conversation not found.", 404)
-        session = db.execute("SELECT title FROM sessions WHERE id=?", (sid,)).fetchone()
-        title_row = db.execute(
-            "SELECT revision, source, model_id FROM session_titles WHERE session_id=?", (sid,)
-        ).fetchone()
-    return {
-        "revision": title_row[0] if title_row else 0,
-        "title": session["title"] if session else "",
-        "source": title_row[1] if title_row else None,
-        "modelId": title_row[2] if title_row else None,
-    }
+def _revision(db, sid):
+    row = db.execute("SELECT revision FROM session_titles WHERE session_id=?", (sid,)).fetchone()
+    return row[0] if row else 0
 
 
-def rename(store, sid, body) -> dict:
-    """The owner sets the name. An owner-typed name is never changed automatically."""
-    title = clean(body.title)
+def _save(store, sid, expected_revision, title, source, model_id):
+    """Compare-and-set: a name saved since the caller read the revision wins."""
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
-        if row is None or row[0] == "forgotten":
-            raise NamingError("not_found", "Conversation not found.", 404)
-        if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone():
-            raise NamingError("not_found", "Conversation not found.", 404)
-        title_row = db.execute(
-            "SELECT revision FROM session_titles WHERE session_id=?", (sid,)
-        ).fetchone()
-        revision = title_row[0] if title_row else 0
-        if revision != body.expected_revision:
+        _session(db, sid)
+        revision = _revision(db, sid)
+        if revision != expected_revision:
             raise NamingError("revision_conflict", "Chat name changed; reload before saving.", 409)
-        now = time.time()
         db.execute(
             "INSERT INTO session_titles VALUES (?,?,?,?,?) ON CONFLICT(session_id) "
             "DO UPDATE SET revision=excluded.revision,source=excluded.source,"
             "model_id=excluded.model_id,updated_at=excluded.updated_at",
-            (sid, revision + 1, "owner", None, now),
+            (sid, revision + 1, source, model_id, time.time()),
         )
         db.execute("UPDATE sessions SET title=? WHERE id=?", (title, sid))
         db.commit()
     return load(store, sid)
 
 
+def load(store, sid) -> dict:
+    with store._connect() as db:
+        title = _session(db, sid)
+        row = db.execute(
+            "SELECT revision,source,model_id FROM session_titles WHERE session_id=?", (sid,)
+        ).fetchone()
+    return {
+        "revision": row[0] if row else 0,
+        "title": title,
+        "source": row[1] if row else None,
+        "modelId": row[2] if row else None,
+    }
+
+
+def rename(store, sid, body) -> dict:
+    """The owner sets the name. An owner-typed name is never changed automatically."""
+    return _save(store, sid, body.expected_revision, clean(body.title), "owner", None)
+
+
 def auto_name(store, providers, sid, body) -> dict:
     """Explicit owner request: Jev names the chat (may replace any name because the owner asked)."""
-    # 1. Privacy check
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, sid)
     if privacy is None:
@@ -133,40 +129,28 @@ def auto_name(store, providers, sid, body) -> dict:
             "helpers_off", "Naming needs helper models, which are off for this chat.", 409
         )
 
-    # 2. Model roles
     saved = model_roles.load(store)
     if saved["configuration"] is None:
         raise NamingError(
             "not_configured", "Naming needs a routing model. Choose one in Models settings.", 503
         )
 
-    # 3. Source messages
     try:
         rows = controls.history(store, sid)
     except controls.ContextError as exc:
         raise NamingError(exc.detail["code"], exc.detail["message"], exc.status) from None
 
-    # Filter: user or assistant, not redacted, not forgotten, not excluded
-    policy_row = None
-    with store._connect() as db:
-        policy_row = db.execute(
-            "SELECT policy FROM context_policies WHERE session_id=?", (sid,)
-        ).fetchone()
-    policy = json.loads(policy_row[0]) if policy_row else None
+    policy = controls.load(store, sid)["policy"]
+    rules = policy["messagePolicies"] if policy else {}
+    filtered = [
+        row
+        for row in rows
+        if row["role"] in ("user", "assistant")
+        and not row.get("redacted")
+        and row.get("content_status") != "forgotten"
+        and rules.get(row["id"]) != "exclude"
+    ]
 
-    filtered = []
-    for row in rows:
-        if row.get("redacted"):
-            continue
-        if row.get("content_status") == "forgotten":
-            continue
-        if row["role"] not in ("user", "assistant"):
-            continue
-        if policy and policy.get("messagePolicies", {}).get(row["id"]) == "exclude":
-            continue
-        filtered.append(row)
-
-    # Take the first user message and the first assistant message after it
     source_messages = []
     first_user_idx = None
     for i, row in enumerate(filtered):
@@ -183,7 +167,6 @@ def auto_name(store, providers, sid, body) -> dict:
     if not source_messages:
         raise NamingError("empty", "No messages to name this chat from.", 409)
 
-    # 4. Helper messages
     helper_messages = []
     for row in source_messages:
         content = (
@@ -198,7 +181,6 @@ def auto_name(store, providers, sid, body) -> dict:
         Message("user", json.dumps({"messages": helper_messages}, ensure_ascii=False)),
     ]
 
-    # 5. Dispatch and parse
     try:
         decision = model_roles.dispatch(saved["configuration"], "routing", messages, providers)
         result = json.loads(decision["completion"].text)
@@ -210,48 +192,15 @@ def auto_name(store, providers, sid, body) -> dict:
             "unavailable", "Jev could not name this chat. Name it yourself or try again.", 503
         ) from None
 
-    # 6. Save with compare-and-set (revision check after model call)
-    with store._connect() as db:
-        db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
-        if row is None or row[0] == "forgotten":
-            raise NamingError("not_found", "Conversation not found.", 404)
-        if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone():
-            raise NamingError("not_found", "Conversation not found.", 404)
-        title_row = db.execute(
-            "SELECT revision FROM session_titles WHERE session_id=?", (sid,)
-        ).fetchone()
-        revision = title_row[0] if title_row else 0
-        if revision != body.expected_revision:
-            raise NamingError("revision_conflict", "Chat name changed; reload before saving.", 409)
-        now = time.time()
-        db.execute(
-            "INSERT INTO session_titles VALUES (?,?,?,?,?) ON CONFLICT(session_id) "
-            "DO UPDATE SET revision=excluded.revision,source=excluded.source,"
-            "model_id=excluded.model_id,updated_at=excluded.updated_at",
-            (sid, revision + 1, "auto", decision["modelId"], now),
-        )
-        db.execute("UPDATE sessions SET title=? WHERE id=?", (title, sid))
-        db.commit()
-    return load(store, sid)
+    # The revision is checked after the model call, so an owner rename meanwhile wins.
+    return _save(store, sid, body.expected_revision, title, "auto", decision["modelId"])
 
 
 def after_turn(store, providers, sid) -> None:
     """Automatic path: name only when there is no session_titles row and sessions.title is empty."""
     try:
         with store._connect() as db:
-            row = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
-            if row is None or row[0] == "forgotten":
-                return
-            if db.execute("SELECT 1 FROM forgotten_sessions WHERE session_id=?", (sid,)).fetchone():
-                return
-            title_row = db.execute(
-                "SELECT 1 FROM session_titles WHERE session_id=?", (sid,)
-            ).fetchone()
-            if title_row is not None:
-                return
-            session = db.execute("SELECT title FROM sessions WHERE id=?", (sid,)).fetchone()
-            if session["title"]:
+            if _session(db, sid) or _revision(db, sid):
                 return
         auto_name(store, providers, sid, AutoName(expected_revision=0))
     except Exception:
