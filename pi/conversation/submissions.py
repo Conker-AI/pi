@@ -123,6 +123,7 @@ def append(db, session_id, role, content, *, turn_id=None, purpose=None, action_
         "role": role,
         "content": content,
         "created_at": now,
+        **({"turn_id": turn_id} if turn_id else {}),
     }
 
 
