@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -220,9 +220,9 @@ def router(app_state, require_key, require_admin):
             raise HTTPException(404, str(exc)) from None
 
     @routes.post("/sessions/{session_id}/turns", dependencies=[Depends(require_key)])
-    def run_turn(session_id: str, body: TurnRequest):
+    def run_turn(session_id: str, body: TurnRequest, background: BackgroundTasks):
         try:
-            return app_state().loop.run_turn(
+            result = app_state().loop.run_turn(
                 session_id,
                 body.text,
                 context={
@@ -278,6 +278,20 @@ def router(app_state, require_key, require_admin):
                     "request_id": body.request_id,
                 },
             ) from exc
+        if (
+            isinstance(result, dict)
+            and result.get("message") is not None
+            and result.get("session_id")
+        ):
+            from pi.conversation import naming
+
+            background.add_task(
+                naming.after_turn,
+                app_state().store,
+                app_state().router.adapters(),
+                result["session_id"],
+            )
+        return result
 
     @routes.get("/turn-submissions/{request_id}", dependencies=[Depends(require_key)])
     def get_submission(request_id: str):

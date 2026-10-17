@@ -94,3 +94,6 @@ def install(db):
     db.executescript(system_actions.SCHEMA)
     session_observation.initialize(db)
     db.executescript(output_settings.SCHEMA)
+    from pi.conversation import naming
+
+    db.executescript(naming.SCHEMA)
