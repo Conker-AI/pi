@@ -49,11 +49,14 @@ def _message_with_attachments(db, row):
         if version:
             item["response_family"] = dict(version)
         binding = db.execute(
-            "SELECT tm.purpose,s.snapshot FROM turn_messages tm JOIN turn_settings s "
+            "SELECT tm.turn_id,tm.purpose,s.snapshot FROM turn_messages tm LEFT JOIN turn_settings s "
             "ON s.turn_id=tm.turn_id WHERE tm.message_id=?",
             (item["id"],),
         ).fetchone()
         if binding:
+            # The turn that consumed or produced this message: its model, time and cost.
+            item["turn_id"] = binding["turn_id"]
+        if binding and binding["snapshot"]:
             snapshot = json.loads(binding["snapshot"])
             if item["role"] == "assistant" and snapshot.get("agentId"):
                 item["agent_id"] = snapshot["agentId"]
