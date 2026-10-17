@@ -11,7 +11,7 @@ from pi.context import project_context, projects, research_usage, universal_sear
 from pi.context import retrieval as context_retrieval
 from pi.context import summaries as context_summaries
 from pi.conversation import citations as message_citations
-from pi.conversation import drafts, judgements, output_settings, submissions
+from pi.conversation import drafts, judgements, naming, output_settings, submissions
 from pi.conversation import forks as message_forks
 from pi.conversation import observation as session_observation
 from pi.conversation import retries as response_retries
@@ -94,3 +94,4 @@ def install(db):
     db.executescript(system_actions.SCHEMA)
     session_observation.initialize(db)
     db.executescript(output_settings.SCHEMA)
+    db.executescript(naming.SCHEMA)

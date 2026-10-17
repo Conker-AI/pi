@@ -26,6 +26,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Drafts](drafts.md) · [Search](conversation-search.md) | Unsent text and finding past chats |
 | [Attachments](attachments.md) · [In turns](attachment-turns.md) · [Document text](document-text.md) | Files in conversation |
 | [Session settings](session-settings.md) · [Output settings](output-settings.md) | Per-chat privacy, agent and output selections |
+| [Chat names](chat-names.md) | Owner rename and Jev's automatic name |
 | [Prepared context](turn-context.md) · [Context controls](context-controls.md) · [Context selection](context-retrieval.md) · [Summaries](context-summaries.md) | What the model is given |
 
 ## Memory and forgetting
