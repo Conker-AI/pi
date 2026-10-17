@@ -28,6 +28,7 @@ from pi.api.routes import calls as calls_api
 from pi.api.routes import characters as characters_api
 from pi.api.routes import context as context_api
 from pi.api.routes import continuity as continuity_api
+from pi.api.routes import decisions as decisions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import jobs as jobs_api
@@ -207,6 +208,7 @@ app.include_router(
 )
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(output_settings_api.router(lambda: app.state.store, require_admin))
+app.include_router(decisions_api.router(lambda: app.state.store, require_admin))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
 )

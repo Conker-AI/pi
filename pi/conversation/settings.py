@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from pi.agents import profiles as agents
-from pi.context import projects
+from pi.context import decisions, projects
 from pi.conversation import output_settings
 
 
@@ -219,6 +219,7 @@ def _snapshot(db, identity):
         "character": characters.runtime_snapshot(db, agent["id"]),
         "presentationMode": value["settings"].get("presentationMode"),
         "output": output_settings.snapshot(db, identity),
+        "contextItems": decisions.snapshot(db, identity),
         "privacy": value["settings"]["privacy"],
         "project": project,
         "authority": "none",
