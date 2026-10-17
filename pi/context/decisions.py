@@ -86,30 +86,22 @@ def _check_message_boundary(db, session_id, message_id):
     return inherited is not None
 
 
+FIELDS = ("id", "kind", "text", "author", "cites", "state", "replaces", "created_at", "updated_at")
+
+
+def _item(row):
+    return {**{key: row[key] for key in FIELDS}, "cites": json.loads(row["cites"])}
+
+
 def load(store, session_id) -> dict:
     with store._connect() as db:
         _session(db, session_id)
         revision = _revision(db, session_id)
         rows = db.execute(
-            "SELECT id,kind,text,author,cites,state,replaces,created_at,updated_at "
-            "FROM context_items WHERE session_id=? ORDER BY created_at",
+            f"SELECT {','.join(FIELDS)} FROM context_items WHERE session_id=? ORDER BY created_at",
             (session_id,),
         ).fetchall()
-        items = []
-        for row in rows:
-            items.append(
-                {
-                    "id": row["id"],
-                    "kind": row["kind"],
-                    "text": row["text"],
-                    "author": row["author"],
-                    "cites": json.loads(row["cites"]),
-                    "state": row["state"],
-                    "replaces": row["replaces"],
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
-                }
-            )
+        items = [_item(row) for row in rows]
         return {"revision": revision, "items": items}
 
 
@@ -126,22 +118,18 @@ def add(store, session_id, body: Add) -> dict:
                 "revision_conflict", "Context items changed; reload before saving.", 409
             )
 
-        # Check item count limit
         count = db.execute(
             "SELECT COUNT(*) FROM context_items WHERE session_id=?", (session_id,)
         ).fetchone()[0]
         if count >= 200:
             raise DecisionError("too_many", "Maximum 200 items per chat.", 409)
 
-        # Validate text
         text = body.text.strip()
         if len(text) < 1 or len(text) > 500:
             raise DecisionError("invalid_text", "Text must be 1-500 characters.", 422)
-        # Check for control characters (except newlines)
-        if any(ord(c) < 32 and c != "\n" and c != "\r" for c in text):
+        if any(ord(c) < 32 and c != "\n" for c in text):
             raise DecisionError("invalid_text", "Text contains invalid characters.", 422)
 
-        # Validate cites
         if len(set(body.cites)) != len(body.cites):
             raise DecisionError("outside_boundary", "Duplicate message citations.", 422)
         for cite in body.cites:
@@ -152,7 +140,6 @@ def add(store, session_id, body: Add) -> dict:
                     "outside_boundary", "Message does not belong to this conversation.", 422
                 )
 
-        # Validate replaces
         if body.replaces is not None:
             if body.kind != "decision":
                 raise DecisionError("invalid_replace", "Only decisions can replace others.", 422)
@@ -165,22 +152,18 @@ def add(store, session_id, body: Add) -> dict:
             if old["state"] != "active":
                 raise DecisionError("not_replaceable", "Cannot replace: decision not active.", 409)
 
-        # Generate ID
         prefix = "dec_" if body.kind == "decision" else "thr_"
         item_id = prefix + uuid.uuid4().hex[:16]
         now = time.time()
 
-        # Set initial state
         state = "active" if body.kind == "decision" else "open"
 
-        # If replacing, update old decision to superseded
         if body.replaces is not None:
             db.execute(
                 "UPDATE context_items SET state=?, updated_at=? WHERE id=?",
                 ("superseded", now, body.replaces),
             )
 
-        # Insert new item
         db.execute(
             "INSERT INTO context_items VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
@@ -197,7 +180,6 @@ def add(store, session_id, body: Add) -> dict:
             ),
         )
 
-        # Update revision
         db.execute(
             "INSERT INTO context_item_revisions VALUES (?,?) ON CONFLICT(session_id) "
             "DO UPDATE SET revision=excluded.revision",
@@ -206,27 +188,10 @@ def add(store, session_id, body: Add) -> dict:
 
         db.commit()
 
-        # Return the new item
         row = db.execute(
-            "SELECT id,kind,text,author,cites,state,replaces,created_at,updated_at "
-            "FROM context_items WHERE id=?",
-            (item_id,),
+            f"SELECT {','.join(FIELDS)} FROM context_items WHERE id=?", (item_id,)
         ).fetchone()
-
-        return {
-            "revision": current_revision + 1,
-            "item": {
-                "id": row["id"],
-                "kind": row["kind"],
-                "text": row["text"],
-                "author": row["author"],
-                "cites": json.loads(row["cites"]),
-                "state": row["state"],
-                "replaces": row["replaces"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            },
-        }
+        return {"revision": current_revision + 1, "item": _item(row)}
 
 
 def change_state(store, session_id, item_id: str, body: State) -> dict:
@@ -242,7 +207,6 @@ def change_state(store, session_id, item_id: str, body: State) -> dict:
                 "revision_conflict", "Context items changed; reload before saving.", 409
             )
 
-        # Get item
         item = db.execute(
             "SELECT kind,author,state FROM context_items WHERE id=? AND session_id=?",
             (item_id, session_id),
@@ -254,13 +218,11 @@ def change_state(store, session_id, item_id: str, body: State) -> dict:
         if item["author"] == "owner" and body.by == "ai":
             raise DecisionError("owner_item", "AI cannot change an owner item.", 403)
 
-        # Validate state transitions
         kind = item["kind"]
         current_state = item["state"]
         new_state = body.state
 
         if kind == "decision":
-            # Decisions: active <-> withdrawn only, superseded never changes
             if current_state == "superseded":
                 raise DecisionError("superseded", "Superseded decisions cannot change.", 409)
             if new_state not in ("active", "withdrawn"):
@@ -272,20 +234,17 @@ def change_state(store, session_id, item_id: str, body: State) -> dict:
                     "invalid_state", "Decisions can only be active or withdrawn.", 409
                 )
         else:  # thread
-            # Threads: open <-> resolved <-> withdrawn
             if new_state not in ("open", "resolved", "withdrawn"):
                 raise DecisionError(
                     "invalid_state", "Threads can only be open, resolved, or withdrawn.", 409
                 )
 
-        # Update item
         now = time.time()
         db.execute(
             "UPDATE context_items SET state=?, updated_at=? WHERE id=?",
             (new_state, now, item_id),
         )
 
-        # Update revision
         db.execute(
             "INSERT INTO context_item_revisions VALUES (?,?) ON CONFLICT(session_id) "
             "DO UPDATE SET revision=excluded.revision",
@@ -298,42 +257,22 @@ def change_state(store, session_id, item_id: str, body: State) -> dict:
 
 
 def snapshot(db, session_id) -> dict | None:
-    """The chat's saved context items for a turn snapshot; None when no active decisions and no open threads."""
+    """Active decisions and open threads for a turn snapshot; None when there are none."""
     rows = db.execute(
-        "SELECT id,text,author FROM context_items WHERE session_id=? AND "
+        "SELECT id,kind,text,author FROM context_items WHERE session_id=? AND "
         "(kind='decision' AND state='active' OR kind='thread' AND state='open') "
         "ORDER BY created_at",
         (session_id,),
     ).fetchall()
-
-    if not rows:
-        return None
-
-    decisions = []
-    threads = []
+    parts = {"decisions": [], "threads": []}
     for row in rows:
         item = {"id": row["id"], "text": row["text"]}
         if row["author"] == "ai":
             item["author"] = "ai"
-        # Determine kind by ID prefix since we don't select kind
-        if row["id"].startswith("dec_"):
-            decisions.append(item)
-        else:
-            threads.append(item)
-
-    # Keep at most 50 of each, newest when over
-    decisions = decisions[-50:] if len(decisions) > 50 else decisions
-    threads = threads[-50:] if len(threads) > 50 else threads
-
-    if not decisions and not threads:
-        return None
-
-    result = {}
-    if decisions:
-        result["decisions"] = decisions
-    if threads:
-        result["threads"] = threads
-    return result
+        parts["decisions" if row["kind"] == "decision" else "threads"].append(item)
+    # At most 50 of each; the newest are kept.
+    result = {key: values[-50:] for key, values in parts.items() if values}
+    return result or None
 
 
 def messages(execution) -> list[Message]:
