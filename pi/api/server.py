@@ -36,6 +36,7 @@ from pi.api.routes import memory as memory_api
 from pi.api.routes import memory_edits as memory_edits_api
 from pi.api.routes import memory_proposals as memory_proposals_api
 from pi.api.routes import model_evaluations as model_evaluations_api
+from pi.api.routes import model_profiles as model_profiles_api
 from pi.api.routes import model_roles as model_roles_api
 from pi.api.routes import naming as naming_api
 from pi.api.routes import output_settings as output_settings_api
@@ -216,6 +217,7 @@ app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
+app.include_router(model_profiles_api.router(lambda: app.state.store, require_admin))
 app.include_router(
     auto_settings_api.router(
         lambda: app.state.store, lambda: app.state.router.adapters(), require_key
