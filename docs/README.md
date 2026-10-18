@@ -50,7 +50,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Projects](projects.md) · [Sources](project-sources.md) · [Context](project-context.md) | Owner projects in turns |
 | [Artifacts](artifacts.md) | Durable outputs |
 | [Agents](agents.md) · [Collaboration](collaboration.md) · [Team execution](team-execution.md) · [Characters](characters.md) | Configurable agents and teams |
-| [Owner preferences](owner-preferences.md) · [Continuity](continuity.md) · [Notifications](continuity-notifications.md) | How Conker follows up |
+| [Owner preferences](owner-preferences.md) · [Continuity](continuity.md) · [Notifications](continuity-notifications.md) · [Inbox](inbox.md) | How Conker follows up and what needs the owner |
 | [Calls](calls.md) · [Speech adapters](speech-adapters.md) | Voice |
 
 ## The machine
