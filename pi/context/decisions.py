@@ -304,3 +304,13 @@ def messages(execution) -> list[Message]:
             lines.append(f"\n- {thread['text']}{suffix}")
 
     return [Message("system", "".join(lines))]
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's decisions, threads and their revision; the caller owns the transaction."""
+    for table in ("context_items", "context_item_revisions"):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            continue
+        db.executemany(
+            f"DELETE FROM {table} WHERE session_id=?", [(identity,) for identity in session_ids]
+        )

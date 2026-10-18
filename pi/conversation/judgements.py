@@ -367,3 +367,13 @@ def router(get_store, get_providers, authorize):
         return get_votes(get_store(), sid, root)
 
     return api
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's judgements and votes; the caller owns the transaction."""
+    for table in ("response_judgements", "response_votes"):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            continue
+        db.executemany(
+            f"DELETE FROM {table} WHERE session_id=?", [(identity,) for identity in session_ids]
+        )
