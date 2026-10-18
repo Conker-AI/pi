@@ -24,3 +24,11 @@ proposed summary from the summarization helper model for owner review. It never 
 excluded, pinned (kept exact) or retrieve-only messages, nor redacted or forgotten ones,
 to the helper. The draft saves nothing and returns `summaryRevision` for the reviewed
 save. The route is refused when helpers are off or no summarization model is configured.
+
+## Coverage
+
+Each summary version records coverage: the set of message IDs it represents. A message is
+covered when it appears in the current summary version's coverage (following restore chains).
+Covered messages with `allow-summary` rule are folded and excluded from model dispatch.
+GET `/context/{id}/compaction` returns the current coverage and folded messages. POST
+`/context/{id}/compact` creates a new summary version with updated coverage and rules.

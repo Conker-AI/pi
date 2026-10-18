@@ -6,6 +6,7 @@ from pi.agents import profiles as agents
 from pi.agents import teams as collaboration
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachments
+from pi.context import compaction as context_compaction
 from pi.context import controls as context_controls
 from pi.context import decisions, project_context, projects, research_usage, universal_search
 from pi.context import retrieval as context_retrieval
@@ -74,6 +75,7 @@ def install(db):
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)
     db.executescript(context_controls.SCHEMA)
+    db.executescript(context_compaction.SCHEMA)
     db.executescript(context_retrieval.SCHEMA)
     db.executescript(collaboration.SCHEMA)
     collaboration.initialize(db)

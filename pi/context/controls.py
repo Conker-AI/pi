@@ -204,6 +204,7 @@ def select_history(policy, rows, retrieved_ids=None):
         if not row.get("redacted")
         and row.get("content_status") != "forgotten"
         and value.messagePolicies.get(row["id"]) != "exclude"
+        and not (row.get("covered") and value.messagePolicies.get(row["id"]) == "allow-summary")
         and (
             value.messagePolicies.get(row["id"]) != "retrieve" or row["id"] in (retrieved_ids or [])
         )
@@ -265,7 +266,16 @@ def history(store, identity):
 
     own = store.messages(identity)
     with store._connect() as db:
-        return rows + response_versions.project(db, identity, own)
+        result = rows + response_versions.project(db, identity, own)
+        # Mark covered rows
+        from pi.context import compaction
+
+        covered_set = compaction.covered(db, identity)
+        for i, row in enumerate(result):
+            if row["id"] in covered_set:
+                result[i] = dict(row)  # Copy to avoid mutating shared objects
+                result[i]["covered"] = True
+        return result
 
 
 def cancelled_input_ids(store, rows):
