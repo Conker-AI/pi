@@ -1,4 +1,5 @@
-"""Forgetting a chat deletes its review data: judgements, votes, fact checks, decisions, names, output."""
+"""Forgetting a chat deletes its review data: judgements, votes, fact checks, decisions, names,
+output settings and summary coverage."""
 
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ TABLES = (
     "context_item_revisions",
     "session_titles",
     "session_output",
+    "summary_coverage",
 )
 
 
@@ -71,6 +73,7 @@ def seed(store, session_id, text):
             ),
         )
         db.execute("INSERT INTO context_item_revisions VALUES(?,1)", (session_id,))
+        db.execute("INSERT INTO summary_coverage VALUES(?,1,?)", (session_id, answer))
         db.execute("INSERT INTO session_titles VALUES(?,1,'auto','a',?)", (session_id, now))
         db.execute(
             "INSERT INTO session_output VALUES(?,1,?)",

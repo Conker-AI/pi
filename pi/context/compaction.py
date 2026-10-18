@@ -214,3 +214,12 @@ def view(store, sid):
             "covered": sorted(covered_set),
             "folded": sorted(folded_set),
         }
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's summary coverage; the caller owns the transaction."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='summary_coverage'").fetchone():
+        return
+    db.executemany(
+        "DELETE FROM summary_coverage WHERE session_id=?", [(identity,) for identity in session_ids]
+    )
