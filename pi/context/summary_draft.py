@@ -42,6 +42,7 @@ def eligible(policy, rows) -> list[dict]:
         and not row.get("redacted")
         and row.get("content_status") != "forgotten"
         and rules.get(row["id"]) not in ("exclude", "keep-exact", "retrieve")
+        and not (row.get("covered") and rules.get(row["id"]) == "allow-summary")
     ]
 
 

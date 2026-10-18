@@ -2,7 +2,11 @@
 
 Owner-only `/context/{session_id}` GET/POST saves strict, revisioned session instructions, per-message policies and an estimated budget. Initial expected revision is zero. Foreign-message selectors are rejected. `/context/{session_id}/turns/{turn_id}` reads the policy captured atomically when that turn was created; changes never replace an earlier turn's policy.
 
-The model loop now inserts session instructions separately from transcript history and omits explicitly excluded messages. Keep-exact and allow-summary both retain exact content in this increment. Retrieve blocks dispatch until an authorized retrieval selection is available. Token accounting uses UTF-8 bytes divided by four plus framing, not a provider tokenizer or upper bound; provider limits remain authoritative. Overflow never silently drops pins.
+The model loop now inserts session instructions separately from transcript history and omits explicitly excluded messages. Retrieve blocks dispatch until an authorized retrieval selection is available. Token accounting uses UTF-8 bytes divided by four plus framing, not a provider tokenizer or upper bound; provider limits remain authoritative. Overflow never silently drops pins.
+
+## Compaction
+
+Reviewed compaction folds selected messages into the summary. When the owner compacts, covered messages with `allow-summary` rule are no longer sent to the model; the summary stands for them. Compaction is reviewed, never silent. Pinned messages (`keep-exact`) are never folded. Folding is undone by pinning a message, clearing its rule, or restoring a summary version that did not cover it.
 
 Existing unconfigured conversations retain their prior behavior. Explicit policies block automatic summary forks. Owner-only POST `/context/{session_id}/fork` accepts a reviewed summary, exact context revision, last-message boundary and idempotency request ID. It closes the parent and creates the child atomically, preserving session instructions and keep-exact selectors as references to original messages. Pins are never copied into the transcript or memory outbox. Active turns and stale review boundaries reject the fork. Existing parent summaries remain untrusted summary context and are not yet individually editable here. Model-role summarization, retrieval selection, inherited agent/project layers and effective input snapshots remain open requirements.
 

@@ -26,6 +26,7 @@ from pi.api.routes import attachments as attachments_api
 from pi.api.routes import auto_settings as auto_settings_api
 from pi.api.routes import calls as calls_api
 from pi.api.routes import characters as characters_api
+from pi.api.routes import compaction as compaction_api
 from pi.api.routes import context as context_api
 from pi.api.routes import continuity as continuity_api
 from pi.api.routes import decisions as decisions_api
@@ -228,6 +229,7 @@ app.include_router(
         lambda: app.state.store, lambda: app.state.router.adapters(), require_admin
     )
 )
+app.include_router(compaction_api.router(lambda: app.state.store, require_admin))
 app.include_router(
     setup_status_api.router(
         lambda: app.state.store,
