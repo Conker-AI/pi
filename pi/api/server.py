@@ -32,6 +32,7 @@ from pi.api.routes import continuity as continuity_api
 from pi.api.routes import decisions as decisions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
+from pi.api.routes import inbox as inbox_api
 from pi.api.routes import jobs as jobs_api
 from pi.api.routes import memory as memory_api
 from pi.api.routes import memory_edits as memory_edits_api
@@ -160,6 +161,7 @@ def require_skill_read(
 app.include_router(skills_api.router(lambda: app.state.store, require_skill_read, require_owner))
 app.include_router(context_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
+app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     system_inventory_api.router(
