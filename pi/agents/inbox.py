@@ -1,7 +1,8 @@
 """Inbox: everything that happened and everything that needs the owner."""
 
+import json
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pi.agents import continuity
@@ -9,20 +10,18 @@ from pi.conversation import settings as session_settings
 from pi.owner import preferences as owner_preferences
 
 
-def _owner_day_start(store, now):
-    """Get the start of the owner's local day."""
+def _owner_zone(store):
+    """The owner's time zone and its name; UTC when no preferences are saved."""
     with store._connect() as db:
         row = db.execute("SELECT preferences FROM owner_preferences WHERE singleton=1").fetchone()
-        if not row:
-            # Fall back to UTC if no preferences are set
-            tz = UTC
-        else:
-            prefs = owner_preferences.OwnerPreferences.model_validate_json(row["preferences"])
-            tz = ZoneInfo(prefs.quietHours.timeZone)
+    if not row:
+        return UTC, "UTC"
+    name = owner_preferences.OwnerPreferences.model_validate_json(row["preferences"]).quietHours
+    return ZoneInfo(name.timeZone), name.timeZone
 
-    local_now = datetime.fromtimestamp(now, tz)
-    local_midnight = datetime.combine(local_now.date(), datetime.min.time(), tz)
-    return local_midnight.timestamp()
+
+def _local_midnight(day, zone):
+    return datetime.combine(day, datetime.min.time(), zone).timestamp()
 
 
 def _needs_approval_items(store, day_start):
@@ -30,11 +29,9 @@ def _needs_approval_items(store, day_start):
     items = []
     for turn in store.awaiting_approval():
         with store._connect() as db:
-            # Check if session is private
             privacy = session_settings.source_privacy(db, turn["session_id"])
             is_private = privacy is not None and any(privacy.values())
 
-            # Check if session is forgotten
             forgotten = db.execute(
                 "SELECT 1 FROM forgotten_sessions WHERE session_id=?", (turn["session_id"],)
             ).fetchone()
@@ -56,6 +53,7 @@ def _needs_approval_items(store, day_start):
                     "kind": "approval",
                     "id": turn["id"],
                     "title": title,
+                    "tool": turn["approval_tool_id"],
                     "since": turn["started_at"],
                     "source": {
                         "kind": "turn",
@@ -122,7 +120,6 @@ def _needs_attention_items(store):
     items = []
     briefing = continuity.briefing(store, limit=100)
 
-    # Track approval turn IDs to avoid duplicates
     approval_turn_ids = set()
     for turn in store.awaiting_approval():
         approval_turn_ids.add(turn["id"])
@@ -131,7 +128,6 @@ def _needs_attention_items(store):
         if not item["needsAttention"]:
             continue
 
-        # Skip if this is an approval we already have
         if item.get("runId") in approval_turn_ids:
             continue
 
@@ -153,7 +149,6 @@ def _handled_items(store, day_start):
     """Get completed work since the start of the owner's day."""
     items = []
     with store._connect() as db:
-        # Read continuity_order directly with eligibility rules
         rows = db.execute(
             """SELECT co.*, ae.session_id, ae.kind as event_kind, ae.task_id, ae.run_id
                FROM continuity_order co
@@ -165,13 +160,10 @@ def _handled_items(store, day_start):
 
         for row in rows:
             if row["scheduled_run_id"]:
-                # Job status
                 run = db.execute(
                     "SELECT * FROM scheduled_runs WHERE id=?", (row["scheduled_run_id"],)
                 ).fetchone()
                 if run:
-                    import json
-
                     definition = json.loads(run["definition"])
                     items.append(
                         {
@@ -186,7 +178,6 @@ def _handled_items(store, day_start):
                         }
                     )
             elif row["activity_event_id"] and row["event_kind"] in ("task_status", "run_status"):
-                # Check eligibility
                 event = db.execute(
                     "SELECT * FROM activity_events WHERE id=?", (row["activity_event_id"],)
                 ).fetchone()
@@ -229,7 +220,6 @@ def _upcoming_items(store, now):
     week_later = now + (7 * 24 * 60 * 60)
 
     with store._connect() as db:
-        # Scheduled jobs within next 7 days
         rows = db.execute(
             """SELECT * FROM scheduled_jobs
                WHERE next_at <= ? AND next_at > ?
@@ -238,8 +228,6 @@ def _upcoming_items(store, now):
         ).fetchall()
 
         for row in rows:
-            import json
-
             definition = json.loads(row["definition"])
             items.append(
                 {
@@ -263,7 +251,6 @@ def _upcoming_items(store, now):
         ).fetchall()
 
         for row in task_rows:
-            # Check privacy
             privacy = session_settings.source_privacy(db, row["session_id"])
             if privacy is not None and any(privacy.values()):
                 continue
@@ -286,7 +273,6 @@ def _impact_counts(store, day_start, week_start):
 
     def _count_period(start_time):
         with store._connect() as db:
-            # Answers (turns with status='complete')
             answers = db.execute(
                 """SELECT COUNT(*) FROM turns t
                    JOIN sessions s ON s.id=t.session_id
@@ -295,7 +281,6 @@ def _impact_counts(store, day_start, week_start):
                 (start_time,),
             ).fetchone()[0]
 
-            # Actions (completed tool actions)
             actions = db.execute(
                 """SELECT COUNT(*) FROM tool_actions ta
                    JOIN turns t ON t.id=ta.turn_id
@@ -305,7 +290,6 @@ def _impact_counts(store, day_start, week_start):
                 (start_time,),
             ).fetchone()[0]
 
-            # Tasks completed
             tasks_completed = db.execute(
                 """SELECT COUNT(*) FROM activity_events ae
                    JOIN sessions s ON s.id=ae.session_id
@@ -315,14 +299,12 @@ def _impact_counts(store, day_start, week_start):
                 (start_time,),
             ).fetchone()[0]
 
-            # Jobs completed
             jobs_completed = db.execute(
                 """SELECT COUNT(*) FROM scheduled_runs sr
                    WHERE sr.status='completed' AND sr.started_at >= ?""",
                 (start_time,),
             ).fetchone()[0]
 
-            # Cost USD
             cost_result = db.execute(
                 """SELECT COALESCE(SUM(cost_usd), 0) FROM turns t
                    JOIN sessions s ON s.id=t.session_id
@@ -349,41 +331,31 @@ def _impact_counts(store, day_start, week_start):
 def inbox(store, *, now=None):
     """Generate the inbox view of everything that happened and everything that needs the owner."""
     now = now or time.time()
-    day_start = _owner_day_start(store, now)
-    week_start = day_start - (6 * 24 * 60 * 60)  # 6 days before today start
+    zone, zone_name = _owner_zone(store)
+    today = datetime.fromtimestamp(now, zone).date()
+    day_start = _local_midnight(today, zone)
+    # The week is the last seven local days, today included (DST-safe: local dates, not seconds).
+    week_start = _local_midnight(today - timedelta(days=6), zone)
 
-    # Get owner time zone for display
-    with store._connect() as db:
-        row = db.execute("SELECT preferences FROM owner_preferences WHERE singleton=1").fetchone()
-        if not row:
-            tz_name = "UTC"
-        else:
-            prefs = owner_preferences.OwnerPreferences.model_validate_json(row["preferences"])
-            tz_name = prefs.quietHours.timeZone
-
-    # Collect needsYou items
     needs_you = []
     needs_you.extend(_needs_approval_items(store, day_start))
     needs_you.extend(_needs_suggestion_items(store))
     needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store))
 
-    # Sort: urgent first, then oldest first
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
     needs_you = needs_you[:50]  # Limit to 50
 
-    # Get other sections
     handled = _handled_items(store, day_start)[:50]  # Already sorted newest first
     upcoming = _upcoming_items(store, now)[:20]  # Already sorted soonest first
 
-    # Calculate impact
     impact = _impact_counts(store, day_start, week_start)
 
     return {
         "generatedAt": now,
         "day": {
-            "date": datetime.fromtimestamp(day_start).strftime("%Y-%m-%d"),
-            "timeZone": tz_name,
+            "date": today.isoformat(),
+            "timeZone": zone_name,
             "startsAt": day_start,
         },
         "needsYou": needs_you,

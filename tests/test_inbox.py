@@ -1,5 +1,8 @@
-from contextlib import closing
+"""Inbox: what happened and what needs the owner, from recorded state only."""
+
+import json
 import time
+from contextlib import closing
 
 from pi.agents import inbox
 from pi.conversation.store import Store
@@ -43,7 +46,9 @@ def test_approval_in_needs_you(tmp_path):
             db.execute(
                 """INSERT OR REPLACE INTO owner_preferences (singleton, revision, preferences)
                    VALUES (1, 1, ?)""",
-                ('{"quietHours":{"enabled":false,"start":"22:00","end":"08:00","timeZone":"America/New_York","urgentExceptions":false},"urgency":"meaningful","dailyBudget":{"suggestions":0,"researchMinutes":0,"costCents":0},"idleTimeoutMinutes":30}',),
+                (
+                    '{"quietHours":{"enabled":false,"start":"22:00","end":"08:00","timeZone":"America/New_York","urgentExceptions":false},"urgency":"meaningful","dailyBudget":{"suggestions":0,"researchMinutes":0,"costCents":0},"idleTimeoutMinutes":30}',
+                ),
             )
 
         # Create normal session with approval
@@ -55,9 +60,18 @@ def test_approval_in_needs_you(tmp_path):
         sid2 = store.create_session(title="Private chat")
         with store._connect() as db:
             import json
+
             db.execute(
                 "INSERT INTO session_settings (session_id, revision, settings) VALUES (?, 1, ?)",
-                (sid2, json.dumps({"agentId": "companion", "privacy": {"memoryDisabled": True, "harnessDisabled": True}})),
+                (
+                    sid2,
+                    json.dumps(
+                        {
+                            "agentId": "companion",
+                            "privacy": {"memoryDisabled": True, "harnessDisabled": True},
+                        }
+                    ),
+                ),
             )
         turn2 = store.start_turn(sid2)
         store.finish_turn(turn2, "awaiting_approval", approval_args='{"tool": "secret"}')
@@ -68,9 +82,14 @@ def test_approval_in_needs_you(tmp_path):
         store.finish_turn(turn3, "awaiting_approval", approval_args='{"tool": "old"}')
         with store._connect() as db:
             receipt_id = f"receipt_{sid3}"
-            db.execute("INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
-                      (receipt_id, sid3, time.time(), "test", 0, 0))
-            db.execute("INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)", (sid3, receipt_id))
+            db.execute(
+                "INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
+                (receipt_id, sid3, time.time(), "test", 0, 0),
+            )
+            db.execute(
+                "INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)",
+                (sid3, receipt_id),
+            )
 
         now = 1700000000.0
         result = inbox.inbox(store, now=now)
@@ -244,15 +263,13 @@ def test_handled_today_vs_yesterday(tmp_path):
             db.execute(
                 """INSERT OR REPLACE INTO owner_preferences (singleton, revision, preferences)
                    VALUES (1, 1, ?)""",
-                ('{"quietHours":{"enabled":false,"start":"22:00","end":"08:00","timeZone":"America/New_York","urgentExceptions":false},"urgency":"meaningful","dailyBudget":{"suggestions":0,"researchMinutes":0,"costCents":0},"idleTimeoutMinutes":30}',),
+                (
+                    '{"quietHours":{"enabled":false,"start":"22:00","end":"08:00","timeZone":"America/New_York","urgentExceptions":false},"urgency":"meaningful","dailyBudget":{"suggestions":0,"researchMinutes":0,"costCents":0},"idleTimeoutMinutes":30}',
+                ),
             )
 
         # Use simpler timestamps - now is sometime during the day
         now = 1700000000.0
-        today_start = result = None  # Will be set after we create inbox
-        with store._connect() as db:
-            # Set current time as now
-            pass
 
         # Create a task that completed now (should be in handled)
         sid1 = store.create_session(title="Today task")
@@ -299,39 +316,66 @@ def test_upcoming_jobs_and_tasks(tmp_path):
             db.execute(
                 """INSERT INTO scheduled_jobs (id, revision, definition, created_at, next_at)
                    VALUES (?, ?, ?, ?, ?)""",
-                ("job1", 1, '{"name":"Job in 2 days","timing":{"kind":"daily","time":"10:00"}}', now, now + (2 * 24 * 60 * 60)),
+                (
+                    "job1",
+                    1,
+                    '{"name":"Job in 2 days","timing":{"kind":"daily","time":"10:00"}}',
+                    now,
+                    now + (2 * 24 * 60 * 60),
+                ),
             )
 
             # Job due in 9 days (should not appear)
             db.execute(
                 """INSERT INTO scheduled_jobs (id, revision, definition, created_at, next_at)
                    VALUES (?, ?, ?, ?, ?)""",
-                ("job2", 1, '{"name":"Job in 9 days","timing":{"kind":"daily","time":"10:00"}}', now, now + (9 * 24 * 60 * 60)),
+                (
+                    "job2",
+                    1,
+                    '{"name":"Job in 9 days","timing":{"kind":"daily","time":"10:00"}}',
+                    now,
+                    now + (9 * 24 * 60 * 60),
+                ),
             )
 
             # Open task
             sid = store.create_session(title="Open task")
-            tasks.create(store, CreateTask(
-                session_id=sid,
-                outcome="Test task",
-                criteria=["done"],
-                request_id="req_open_123456789"
-            ))
+            tasks.create(
+                store,
+                CreateTask(
+                    session_id=sid,
+                    outcome="Test task",
+                    criteria=["done"],
+                    request_id="req_open_123456789",
+                ),
+            )
 
             # Private task should not appear
             sid2 = store.create_session(title="Private task")
             with store._connect() as db:
                 import json
+
                 db.execute(
                     "INSERT INTO session_settings (session_id, revision, settings) VALUES (?, 1, ?)",
-                    (sid2, json.dumps({"agentId": "companion", "privacy": {"memoryDisabled": True, "harnessDisabled": True}})),
+                    (
+                        sid2,
+                        json.dumps(
+                            {
+                                "agentId": "companion",
+                                "privacy": {"memoryDisabled": True, "harnessDisabled": True},
+                            }
+                        ),
+                    ),
                 )
-            tasks.create(store, CreateTask(
-                session_id=sid2,
-                outcome="Private task",
-                criteria=["done"],
-                request_id="req_private_123456"
-            ))
+            tasks.create(
+                store,
+                CreateTask(
+                    session_id=sid2,
+                    outcome="Private task",
+                    criteria=["done"],
+                    request_id="req_private_123456",
+                ),
+            )
 
         result = inbox.inbox(store, now=now)
 
@@ -367,9 +411,14 @@ def test_impact_counts_and_cost(tmp_path):
         with store._connect() as db:
             db.execute("UPDATE turns SET cost_usd=?, ended_at=? WHERE id=?", (0.654321, now, turn2))
             receipt_id = f"receipt_{sid2}"
-            db.execute("INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
-                      (receipt_id, sid2, time.time(), "test", 0, 0))
-            db.execute("INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)", (sid2, receipt_id))
+            db.execute(
+                "INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
+                (receipt_id, sid2, time.time(), "test", 0, 0),
+            )
+            db.execute(
+                "INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)",
+                (sid2, receipt_id),
+            )
 
         result = inbox.inbox(store, now=now)
 
@@ -426,3 +475,54 @@ def test_http_admin_only(tmp_path):
         response = client.get("/inbox", headers={"X-Pi-Key": "admin123"})
         assert response.status_code == 200
         assert "needsYou" in response.json()
+
+
+def _set_zone(store, zone):
+    preferences = {
+        "quietHours": {
+            "enabled": False,
+            "start": "22:00",
+            "end": "08:00",
+            "timeZone": zone,
+            "urgentExceptions": False,
+        },
+        "urgency": "meaningful",
+        "dailyBudget": {"suggestions": 0, "researchMinutes": 0, "costCents": 0},
+        "idleTimeoutMinutes": 30,
+    }
+    with store._connect() as db:
+        db.execute(
+            "INSERT OR REPLACE INTO owner_preferences (singleton, revision, preferences) "
+            "VALUES (1, 1, ?)",
+            (json.dumps(preferences),),
+        )
+        db.commit()
+
+
+def test_day_uses_the_owner_time_zone(tmp_path):
+    """23:30 UTC on 2023-11-14 is already 2023-11-15 in Kiritimati (UTC+14)."""
+    with closing(Store(tmp_path / "pi.db")) as store:
+        _set_zone(store, "Pacific/Kiritimati")
+        result = inbox.inbox(store, now=1700004600.0)
+    assert result["day"] == {
+        "date": "2023-11-15",
+        "timeZone": "Pacific/Kiritimati",
+        "startsAt": 1699956000.0,
+    }
+
+
+def test_an_approval_names_its_tool_but_never_its_arguments(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session(title="Trip planning")
+        turn = store.start_turn(sid)
+        store.finish_turn(
+            turn,
+            "awaiting_approval",
+            approval_tool_id="calendar.create",
+            approval_args='{"secret": "never shown"}',
+            approval_intent="never shown either",
+        )
+        result = inbox.inbox(store)
+    (item,) = [entry for entry in result["needsYou"] if entry["kind"] == "approval"]
+    assert item["tool"] == "calendar.create" and item["title"] == "Trip planning"
+    assert "never shown" not in json.dumps(result)
