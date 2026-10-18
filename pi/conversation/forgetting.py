@@ -20,7 +20,7 @@ from pathlib import Path
 
 from pi.agents import skills
 from pi.calls import runtime as calls
-from pi.content import artifacts, attachments
+from pi.content import artifacts, attachment_files, attachments
 from pi.context import compaction, decisions
 from pi.context import summaries as context_summaries
 from pi.conversation import (
@@ -279,6 +279,8 @@ def forget(path: Path | str, session_id: str, confirmation: str) -> dict:
             db.rollback()
             raise
         receipt = plan.get("already_forgotten") or _redact(db, plan)
+        # The purged rows are committed; now their files go. A rerun repeats this safely.
+        attachment_files.delete_purged_files(db, path.parent / "attachments")
         _scrub(db)
         db.execute("DELETE FROM forgetting_maintenance WHERE id=1")
         return receipt

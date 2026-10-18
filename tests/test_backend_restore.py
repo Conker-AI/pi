@@ -1,5 +1,6 @@
 """Offline recovery drill against copies of temporary Pi databases only."""
 
+import shutil
 import sqlite3
 from contextlib import closing
 
@@ -28,7 +29,10 @@ def snapshot(source, destination):
 
 
 def test_backup_recovers_transcript_draft_attachment_and_request_identity(tmp_path):
-    source, copy = tmp_path / "source.db", tmp_path / "restored.db"
+    # A backup is the whole data volume: the database plus the attachments folder beside it.
+    (tmp_path / "live").mkdir()
+    (tmp_path / "backup").mkdir()
+    source, copy = tmp_path / "live" / "pi.db", tmp_path / "backup" / "pi.db"
     request = "restored_completed_request"
     with closing(Store(source)) as store:
         sid = store.create_session()
@@ -44,18 +48,17 @@ def test_backup_recovers_transcript_draft_attachment_and_request_identity(tmp_pa
         )
         before = store.messages(sid)
         snapshot(source, copy)
+        shutil.copytree(tmp_path / "live" / "attachments", tmp_path / "backup" / "attachments")
 
     with closing(Store(copy)) as restored:
         assert restored.mark_interrupted_turns() == 0
         context_retrieval.recover_interrupted(restored)
         assert restored.messages(sid) == before
         assert drafts.load(restored, sid)["text"] == "Unsent next question"
-        with restored._connect() as db:
-            row = db.execute(
-                "SELECT content,sha256 FROM attachments WHERE id=?", (upload["id"],)
-            ).fetchone()
-            assert row["content"] == b"Original notes"
-            assert row["sha256"] == upload["sha256"]
+        view, raw = attachments.download(
+            restored, sid, upload["id"], resolve=session_settings.source_privacy
+        )
+        assert raw == b"Original notes" and view["sha256"] == upload["sha256"]
         offline_provider = Recorder(fail=True)
         replay = loop_with(restored, offline_provider).run_turn(sid, "Hello", request_id=request)
         assert replay["replayed"] and replay["turn_id"] == result["turn_id"]

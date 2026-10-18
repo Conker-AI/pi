@@ -3,9 +3,10 @@
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
-from pi.content import attachments
+from pi.content import attachment_files, attachments
 
 
 def router(store, authorize, resolve=None):
@@ -39,16 +40,24 @@ def router(store, authorize, resolve=None):
                 size = int(declared)
             except ValueError as exc:
                 raise HTTPException(400, "Invalid content length.") from exc
-            if size < 0 or size > attachments.MAX_BYTES:
-                raise HTTPException(413, "Attachment must be at most 10 MiB.")
-        raw = bytearray()
-        async for chunk in request.stream():
-            if len(raw) + len(chunk) > attachments.MAX_BYTES:
-                raise HTTPException(413, "Attachment must be at most 10 MiB.")
-            raw.extend(chunk)
-        if declared is not None and len(raw) != size:
-            raise HTTPException(400, "Attachment content length mismatch.")
-        return run(attachments.upload, session_id, metadata, bytes(raw))
+            if size < 0:
+                raise HTTPException(400, "Invalid content length.")
+
+        # Chunks go straight to disk, off the event loop; no size cap.
+        incoming = attachment_files.Incoming(store())
+        try:
+            async for chunk in request.stream():
+                await run_in_threadpool(incoming.write, chunk)
+            incoming_path, size, sha256 = await run_in_threadpool(incoming.close)
+            if declared is not None and size != int(declared):
+                incoming.discard()
+                raise HTTPException(400, "Attachment content length mismatch.")
+            return await run_in_threadpool(
+                run, attachments.upload_file, session_id, metadata, incoming_path, size, sha256
+            )
+        except Exception:
+            incoming.discard()
+            raise
 
     @routes.get("")
     def listing(session_id: str):
@@ -64,18 +73,17 @@ def router(store, authorize, resolve=None):
 
     @routes.get("/{identity}/download")
     def download(session_id: str, identity: str):
-        view, raw = run(attachments.download, session_id, identity)
-        return Response(
-            raw,
-            media_type="application/octet-stream",
-            headers={
-                "Content-Disposition": "attachment; filename=\"attachment.bin\"; filename*=UTF-8''"
-                + quote(view["name"], safe=""),
-                "X-Content-Type-Options": "nosniff",
-                "Cache-Control": "no-store",
-                "Content-Security-Policy": "sandbox; default-src 'none'",
-            },
-        )
+        view, content = run(attachments.download_file, session_id, identity)
+        headers = {
+            "Content-Disposition": "attachment; filename=\"attachment.bin\"; filename*=UTF-8''"
+            + quote(view["name"], safe=""),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": "sandbox; default-src 'none'",
+        }
+        if isinstance(content, bytes):
+            return Response(content, media_type="application/octet-stream", headers=headers)
+        return FileResponse(content, media_type="application/octet-stream", headers=headers)
 
     @routes.get("/{identity}/text")
     def extract(session_id: str, identity: str):

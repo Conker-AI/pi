@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from pi.content import attachment_passages, document_text, image_input, pdf_text
+from pi.content import attachment_files, attachment_passages, document_text, image_input, pdf_text
 
-MAX_FILES = 5
-MAX_BYTES = 10 * 1024 * 1024
-MAX_MESSAGE_BYTES = 25 * 1024 * 1024
-MAX_SESSION_BYTES = 100 * 1024 * 1024
 MAX_TEXT_CHARACTERS = 200_000
+EXTRACT_MAX_BYTES = 25 * 1024 * 1024
 
 
 class Metadata(BaseModel):
@@ -159,6 +159,30 @@ class AttachmentError(Exception):
         self.status, self.detail = status, {"code": code, "message": message}
 
 
+def initialize(db):
+    """Initialize the attachments schema and add storage column if missing."""
+    db.executescript(SCHEMA)
+
+    columns = [row[1] for row in db.execute("PRAGMA table_info(attachments)").fetchall()]
+    if "storage" not in columns:
+        db.execute("ALTER TABLE attachments ADD COLUMN storage TEXT NOT NULL DEFAULT 'database'")
+
+
+def _bytes(db, row):
+    """Return the bytes for an attachment row, from database or disk."""
+    if row["storage"] == "database":
+        return bytes(row["content"])
+    elif row["storage"] == "disk":
+        try:
+            return (attachment_files.db_blob_dir(db) / row["id"]).read_bytes()
+        except FileNotFoundError:
+            raise AttachmentError("integrity_failure", "Attachment file is missing.") from None
+    else:
+        raise AttachmentError(
+            "integrity_failure", f"Unknown storage type: {row['storage']}"
+        ) from None
+
+
 def _session(db, identity, resolve, *, active=False):
     row = db.execute("SELECT status FROM sessions WHERE id=?", (identity,)).fetchone()
     if (
@@ -219,6 +243,7 @@ def _view(db, row, resolve):
             "reason": row["reason"] if readable else availability,
         },
         "execution": "not-wired",
+        "storage": row["storage"],
     }
 
 
@@ -269,47 +294,77 @@ def _extract(raw, media_type):
     return text, "extracted", "UTF-8 plaintext; inert, untrusted source content."
 
 
-def upload(store, session_id, metadata: Metadata, raw: bytes, resolve=None):
+def upload_file(store, session_id, metadata: Metadata, incoming_path, size, sha256, resolve=None):
+    """Upload a file that has been written to disk."""
     metadata = Metadata.model_validate(metadata.model_dump())
-    if type(raw) is not bytes or len(raw) > MAX_BYTES:
-        raise AttachmentError("file_limit", "Attachment must be at most 10 MiB.", 413)
-    text, processing, reason = _extract(raw, metadata.type)
+
+    if size <= EXTRACT_MAX_BYTES:
+        try:
+            raw = Path(incoming_path).read_bytes()
+        except FileNotFoundError:
+            raise AttachmentError("file_limit", "Incoming file disappeared.") from None
+        text, processing, reason = _extract(raw, metadata.type)
+    else:
+        text = None
+        processing = "unsupported"
+        reason = "Too large to read as text; stored as a file."
+
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        privacy, _ = _session(db, session_id, resolve, active=True)
-        used = db.execute(
-            "SELECT COALESCE(SUM(size),0),COUNT(*) FROM attachments "
-            "WHERE session_id=? AND purged=0",
-            (session_id,),
-        ).fetchone()
-        if used[0] + len(raw) > MAX_SESSION_BYTES or used[1] >= 100:
-            raise AttachmentError(
-                "session_limit",
-                "Session attachment storage is limited to 100 files and 100 MiB.",
-                413,
+        try:
+            privacy, _ = _session(db, session_id, resolve, active=True)
+            identity = "attachment_" + uuid.uuid4().hex
+
+            db.execute(
+                "INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+                (
+                    identity,
+                    session_id,
+                    metadata.name,
+                    metadata.type,
+                    size,
+                    metadata.lastModified,
+                    time.time(),
+                    b"",  # Empty BLOB for disk storage
+                    sha256,
+                    text,
+                    processing,
+                    reason,
+                    json.dumps(privacy),
+                    "disk",  # Storage type
+                ),
             )
-        identity = "attachment_" + uuid.uuid4().hex
-        db.execute(
-            "INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
-            (
-                identity,
-                session_id,
-                metadata.name,
-                metadata.type,
-                len(raw),
-                metadata.lastModified,
-                time.time(),
-                raw,
-                hashlib.sha256(raw).hexdigest(),
-                text,
-                processing,
-                reason,
-                json.dumps(privacy),
-            ),
-        )
-        result = _view(db, _row(db, session_id, identity), resolve)
-        db.commit()
-        return result
+
+            final_path = attachment_files.blob_dir(store) / identity
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(incoming_path, final_path)
+
+            result = _view(db, _row(db, session_id, identity), resolve)
+            db.commit()
+            return result
+        except Exception:
+            with contextlib.suppress(Exception):
+                Path(incoming_path).unlink()
+            with contextlib.suppress(Exception):
+                final_path = attachment_files.blob_dir(store) / identity
+                final_path.unlink()
+            raise
+
+
+def upload(store, session_id, metadata: Metadata, raw: bytes, resolve=None):
+    """Upload bytes by writing them through Incoming and calling upload_file."""
+    metadata = Metadata.model_validate(metadata.model_dump())
+    if type(raw) is not bytes:
+        raise AttachmentError("file_limit", "Attachment must be bytes.")
+
+    incoming = attachment_files.Incoming(store)
+    try:
+        incoming.write(raw)
+        incoming_path, size, sha256 = incoming.close()
+        return upload_file(store, session_id, metadata, incoming_path, size, sha256, resolve)
+    except Exception:
+        incoming.discard()
+        raise
 
 
 def get(store, session_id, identity, resolve=None):
@@ -330,24 +385,48 @@ def listing(store, session_id, resolve=None):
         ]
 
 
-def _verified(db, session_id, identity, resolve):
+def _available(db, session_id, identity, resolve):
     row = _row(db, session_id, identity)
     view = _view(db, row, resolve)
     if view["availability"] not in ("available", "source-archived"):
         raise AttachmentError(
             "source_unavailable", "Attachment privacy or availability blocks content."
         )
-    raw = bytes(row["content"])
+    return row, view
+
+
+def _verified(db, session_id, identity, resolve):
+    row, view = _available(db, session_id, identity, resolve)
+    raw = _bytes(db, row)
     if len(raw) != row["size"] or hashlib.sha256(raw).hexdigest() != row["sha256"]:
         raise AttachmentError("integrity_failure", "Attachment integrity check failed.")
     return row, view, raw
 
 
 def download(store, session_id, identity, resolve=None):
+    """The view and the verified bytes."""
     with store._connect() as db:
         db.execute("BEGIN")
         _, view, raw = _verified(db, session_id, identity, resolve)
         return view, raw
+
+
+def download_file(store, session_id, identity, resolve=None):
+    """For streaming: a verified file path for disk rows (checked in chunks), bytes for legacy rows."""
+    with store._connect() as db:
+        db.execute("BEGIN")
+        row, view = _available(db, session_id, identity, resolve)
+        if row["storage"] != "disk":
+            _, view, raw = _verified(db, session_id, identity, resolve)
+            return view, raw
+        path = attachment_files.db_blob_dir(db) / identity
+    try:
+        size, digest = attachment_files.file_digest(path)
+    except FileNotFoundError:
+        raise AttachmentError("integrity_failure", "Attachment file is missing.") from None
+    if size != row["size"] or digest != row["sha256"]:
+        raise AttachmentError("integrity_failure", "Attachment integrity check failed.")
+    return view, path
 
 
 def extract(store, session_id, identity, resolve=None):
@@ -390,11 +469,10 @@ def bind(db, session_id, message_id, attachment_ids):
         raise ValueError("Message attachment binding requires a transaction.")
     if (
         not isinstance(attachment_ids, list)
-        or len(attachment_ids) > MAX_FILES
         or any(not isinstance(i, str) or not i or len(i) > 100 for i in attachment_ids)
         or len(set(attachment_ids)) != len(attachment_ids)
     ):
-        raise AttachmentError("invalid_bindings", "Bind at most five distinct attachment IDs.", 422)
+        raise AttachmentError("invalid_bindings", "Bind distinct attachment IDs.", 422)
     message = db.execute(
         "SELECT session_id,role FROM messages WHERE id=?", (message_id,)
     ).fetchone()
@@ -407,10 +485,8 @@ def bind(db, session_id, message_id, attachment_ids):
     ).fetchone():
         raise AttachmentError("immutable_bindings", "Message attachment bindings are immutable.")
     rows = [_row(db, session_id, identity) for identity in attachment_ids]
-    if any(row["purged"] for row in rows) or sum(row["size"] for row in rows) > MAX_MESSAGE_BYTES:
-        raise AttachmentError(
-            "message_limit", "Available attachments must total at most 25 MiB.", 413
-        )
+    if any(row["purged"] for row in rows):
+        raise AttachmentError("message_limit", "All attachments must be available.", 413)
     db.execute(
         "INSERT INTO message_attachment_sets VALUES(?,?)", (message_id, json.dumps(attachment_ids))
     )
@@ -485,11 +561,16 @@ def remove(store, session_id, identity, resolve=None):
             (identity,),
         )
         db.commit()
+        # After the commit, so a failed removal never loses bytes it still needed.
+        attachment_files.delete_purged_files(db, attachment_files.db_blob_dir(db))
         return receipt
 
 
 def redact(db, session_ids):
-    """Offline forgetting hook; caller owns atomicity and physical page cleanup."""
+    """Offline forgetting hook; caller owns atomicity and physical page cleanup.
+
+    Disk files are deleted by `attachment_files.delete_purged_files` once the forgetting transaction commits.
+    """
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='attachments'").fetchone():
         return
     for identity in session_ids:

@@ -2,8 +2,6 @@
 
 import hashlib
 import sqlite3
-from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
 
 import pytest
 from fastapi import FastAPI, Header, HTTPException
@@ -11,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi.api.routes.attachments import router
+from pi.content import attachment_files
 from pi.content import attachments as a
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -129,20 +128,17 @@ def test_session_and_privacy_isolation(store):
         assert a.project_source(db, other, saved["id"], resolve) is None
 
 
-def test_binding_is_exact_bounded_and_immutable(store, monkeypatch):
-    assert (a.MAX_FILES, a.MAX_BYTES, a.MAX_MESSAGE_BYTES) == (5, 10485760, 26214400)
+def test_binding_is_exact_bounded_and_immutable(store):
     session, other = store.create_session(), store.create_session()
     first, second = upload(store, session, b"123456"), upload(store, session, b"abcdef")
     foreign = upload(store, other)
     message = store.append_message(session, "user", "question")
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        for ids in ([first["id"]] * 2, [str(i) for i in range(6)], [foreign["id"]]):
+        # Test distinctness requirement and foreign session rejection
+        for ids in ([first["id"]] * 2, [foreign["id"]]):
             with pytest.raises(a.AttachmentError):
                 a.bind(db, session, message["id"], ids)
-        monkeypatch.setattr(a, "MAX_MESSAGE_BYTES", 10)
-        with pytest.raises(a.AttachmentError):
-            a.bind(db, session, message["id"], [first["id"], second["id"]])
         a.bind(db, session, message["id"], [first["id"]])
         assert a.message_views(db, message["id"], resolve)[0]["id"] == first["id"]
         with pytest.raises(a.AttachmentError):
@@ -161,33 +157,30 @@ def test_binding_is_exact_bounded_and_immutable(store, monkeypatch):
         db.commit()
 
 
-def test_byte_limit_and_competing_session_quota(store, monkeypatch):
+def test_upload_succeeds_without_size_limits(store):
+    """Test that uploads succeed without size limits."""
     session = store.create_session()
-    with pytest.raises(a.AttachmentError) as exc:
-        upload(store, session, b"x" * (a.MAX_BYTES + 1))
-    assert exc.value.status == 413
-    monkeypatch.setattr(a, "MAX_SESSION_BYTES", 10)
-    barrier = Barrier(2)
 
-    def save(_):
-        barrier.wait()
-        try:
-            return upload(store, session, b"123456")["size"]
-        except a.AttachmentError as exc:
-            return exc.detail["code"]
+    # Test that large files are accepted
+    large_content = b"x" * (15 * 1024 * 1024)  # 15 MiB
+    saved = upload(store, session, large_content)
+    assert saved["size"] == len(large_content)
 
-    with ThreadPoolExecutor(2) as pool:
-        assert sorted(map(str, pool.map(save, range(2)))) == ["6", "session_limit"]
-    assert len(a.listing(store, session, resolve)) == 1
+    # Test that many files are accepted
+    file_ids = []
+    for i in range(10):
+        saved = upload(store, session, f"content {i}".encode())
+        file_ids.append(saved["id"])
+
+    assert len(a.listing(store, session, resolve)) == 11
 
 
 def test_corrupted_bytes_block_download_and_extraction(store):
     session = store.create_session()
     saved = upload(store, session)
-    with store._connect() as db:
-        # Simulate on-disk corruption beyond normal API/schema mutation guards.
-        db.execute("DROP TRIGGER attachments_no_update")
-        db.execute("UPDATE attachments SET content=x'616263' WHERE id=?", (saved["id"],))
+    # Corrupt the disk file for disk-based storage
+    file_path = attachment_files.blob_dir(store) / saved["id"]
+    file_path.write_bytes(b"corrupted")
     for operation in (a.download, a.extract):
         with pytest.raises(a.AttachmentError, match="integrity"):
             operation(store, session, saved["id"], resolve)
@@ -219,14 +212,15 @@ def test_owner_raw_http_upload_and_safe_download(store):
     assert download.headers["x-content-type-options"] == "nosniff"
     assert download.headers["cache-control"] == "no-store"
     assert client.get(f"{url}/{identity}/text", headers={"key": "owner"}).status_code == 415
+    # Test that content-length validation still works
     assert (
         client.post(
             url,
-            headers={"key": "owner", "content-length": str(a.MAX_BYTES + 1)},
-            params={"name": "huge"},
+            headers={"key": "owner", "content-length": "-1"},
+            params={"name": "invalid"},
             content=b"",
         ).status_code
-        == 413
+        == 400
     )
 
 
@@ -255,18 +249,16 @@ def test_redaction_erases_bytes_text_name_and_digest(store):
         a.download(store, session, saved["id"], resolve)
 
 
-def test_unbound_removal_reclaims_quota_with_immutable_receipt(store, monkeypatch):
+def test_unbound_removal_with_immutable_receipt(store):
     session = store.create_session()
-    monkeypatch.setattr(a, "MAX_SESSION_BYTES", 10)
     saved = upload(store, session, b"123456", "private-unbound.txt")
-    with pytest.raises(a.AttachmentError):
-        upload(store, session, b"123456")
     receipt = a.remove(store, session, saved["id"], resolve)
     assert receipt["reason"] == "owner-removed" and receipt["attachment_id"] == saved["id"]
     assert "private-unbound" not in str(receipt)
     assert a.remove(store, session, saved["id"], resolve) == receipt
     assert a.get(store, session, saved["id"], resolve)["availability"] == "removed"
-    assert upload(store, session, b"123456")["size"] == 6
+    # Upload another file to show removal doesn't block new uploads
+    assert upload(store, session, b"789")["size"] == 3
     with store._connect() as db:
         row = db.execute(
             "SELECT content,sha256,extracted_text,name FROM attachments WHERE id=?", (saved["id"],)

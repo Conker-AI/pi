@@ -87,7 +87,7 @@ def install(db):
     continuity.initialize(db)
     db.executescript(drafts.SCHEMA)
     db.executescript(context_summaries.SCHEMA)
-    db.executescript(attachments.SCHEMA)
+    attachments.initialize(db)
     db.executescript(model_evaluations.SCHEMA)
     db.executescript(calls.SCHEMA)
     db.executescript(characters.SCHEMA)
