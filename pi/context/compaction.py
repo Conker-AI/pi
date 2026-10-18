@@ -1,8 +1,10 @@
 """Reviewed compaction folds messages into the summary; they are no longer sent to the model."""
 
+import time
+
 from pydantic import Field
 
-from pi.context import controls
+from pi.context import controls, summaries
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS summary_coverage (
@@ -16,9 +18,8 @@ class Compact(controls.Strict):
     expected_policy_revision: int = Field(ge=1)
     expected_summary_revision: int = Field(ge=0)
     summary: str = Field(min_length=1, max_length=16000)
-    covers: list[str] = Field(
-        min_length=1, max_length=10000
-    )  # distinct message ids, 1-200 chars each
+    # Distinct message ids of this chat (or inherited by it).
+    covers: list[str] = Field(min_length=1, max_length=10000)
 
 
 def compact(store, sid, body):
@@ -27,7 +28,6 @@ def compact(store, sid, body):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         try:
-            # 1. Chat exists, not forgotten, status open, not busy
             controls._session(db, sid)
             session = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
             if session["status"] != "open":
@@ -48,7 +48,6 @@ def compact(store, sid, body):
                     "session_busy", "Finish current work before compacting."
                 )
 
-            # 2. Policy exists and revision matches
             policy_row = db.execute(
                 "SELECT revision,policy FROM context_policies WHERE session_id=?", (sid,)
             ).fetchone()
@@ -61,25 +60,19 @@ def compact(store, sid, body):
                     "revision_conflict", "Context policy changed; reload before compacting."
                 )
 
-            # Summary revision must match
-            from pi.context import summaries
-
             current = summaries._current(db, sid)
             if current["revision"] != body.expected_summary_revision:
                 raise controls.ContextError(
                     "revision_conflict", "Summary changed; reload before compacting."
                 )
 
-            # 3. Validate covers
             if len(set(body.covers)) != len(body.covers):
                 raise controls.ContextError(
                     "duplicate", "Message IDs in covers must be distinct.", 422
                 )
 
-            # Check each cover message
             policy = controls.Policy.model_validate_json(policy_row[1])
             for message_id in body.covers:
-                # Check message belongs to this chat or inherited
                 message = db.execute(
                     "SELECT session_id FROM messages WHERE id=?", (message_id,)
                 ).fetchone()
@@ -92,7 +85,17 @@ def compact(store, sid, body):
                         "outside_boundary", "Message does not belong to this conversation.", 422
                     )
 
-                # Check current rule
+                # A rule on a hidden answer version would make every later turn fail.
+                if db.execute(
+                    "SELECT 1 FROM response_versions v JOIN response_families f "
+                    "ON f.root_message_id=v.root_message_id WHERE v.message_id=? "
+                    "AND f.session_id=? AND f.selected_message_id!=v.message_id",
+                    (message_id, sid),
+                ).fetchone():
+                    raise controls.ContextError(
+                        "inactive_version",
+                        "Select this response version before folding it.",
+                    )
                 current_rule = policy.messagePolicies.get(message_id)
                 if current_rule == "keep-exact":
                     raise controls.ContextError("pinned", "Pinned messages are never folded.")
@@ -101,18 +104,12 @@ def compact(store, sid, body):
                         "retrieve_rule", "Clear the retrieve rule before folding this message."
                     )
 
-            # 4. Write changes
             # Insert revision-0 baseline if needed
             if current["revision"] == 0:
-                import time
-
                 db.execute(
                     "INSERT OR IGNORE INTO context_summary_versions VALUES(?,0,?,?,?,NULL)",
                     (sid, current["summary"], current["source_session_id"], time.time()),
                 )
-
-            # Insert new summary version
-            import time
 
             revision = current["revision"] + 1
             db.execute(
@@ -120,17 +117,14 @@ def compact(store, sid, body):
                 (sid, revision, body.summary, current["source_session_id"], time.time(), None),
             )
 
-            # Update session summary
             db.execute("UPDATE sessions SET summary=? WHERE id=?", (body.summary, sid))
 
-            # Insert coverage rows
             for message_id in body.covers:
                 db.execute(
                     "INSERT INTO summary_coverage VALUES(?,?,?)",
                     (sid, revision, message_id),
                 )
 
-            # Update policy rules for covered messages
             updated_policy = policy.model_copy()
             for message_id in body.covers:
                 if updated_policy.messagePolicies.get(message_id) is None:
@@ -144,7 +138,6 @@ def compact(store, sid, body):
 
             db.commit()
 
-            # Return result
             covered_set = set(body.covers)
             folded = [
                 message_id
@@ -165,7 +158,6 @@ def compact(store, sid, body):
 
 def covered(db, sid):
     """Return the current coverage as a set of message IDs."""
-    # Get current summary version
     current = db.execute(
         "SELECT revision,restored_from FROM context_summary_versions "
         "WHERE session_id=? ORDER BY revision DESC LIMIT 1",
@@ -175,18 +167,17 @@ def covered(db, sid):
     if current is None:
         return set()
 
-    # If restored, follow the chain
-    revision = current[0]
-    restored_from = current[1]
-    if restored_from is not None:
-        # Find the coverage of the restored version
-        restored_coverage = db.execute(
-            "SELECT message_id FROM summary_coverage WHERE session_id=? AND revision=?",
-            (sid, restored_from),
-        ).fetchall()
-        return {row[0] for row in restored_coverage}
-
-    # Get coverage for current revision
+    revision, restored_from = current[0], current[1]
+    seen = set()
+    # A restore of a restore points back step by step to the version that owns the coverage.
+    while restored_from is not None and restored_from not in seen:
+        seen.add(revision)
+        revision = restored_from
+        row = db.execute(
+            "SELECT restored_from FROM context_summary_versions WHERE session_id=? AND revision=?",
+            (sid, revision),
+        ).fetchone()
+        restored_from = row[0] if row else None
     coverage = db.execute(
         "SELECT message_id FROM summary_coverage WHERE session_id=? AND revision=?",
         (sid, revision),
@@ -199,7 +190,6 @@ def view(store, sid):
     with store._connect() as db:
         controls._session(db, sid)
 
-        # Get current summary revision
         current = db.execute(
             "SELECT revision FROM context_summary_versions "
             "WHERE session_id=? ORDER BY revision DESC LIMIT 1",
@@ -207,10 +197,8 @@ def view(store, sid):
         ).fetchone()
         summary_revision = current[0] if current else 0
 
-        # Get covered messages
         covered_set = covered(db, sid)
 
-        # Get current policy to find folded messages
         policy_row = db.execute(
             "SELECT policy FROM context_policies WHERE session_id=?", (sid,)
         ).fetchone()
