@@ -127,3 +127,13 @@ def messages(execution) -> list[Message]:
     if not parts:
         return []
     return [Message("system", "Owner output settings for this chat. " + " ".join(parts))]
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's output settings; the caller owns the transaction."""
+    for table in ("session_output",):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            continue
+        db.executemany(
+            f"DELETE FROM {table} WHERE session_id=?", [(identity,) for identity in session_ids]
+        )

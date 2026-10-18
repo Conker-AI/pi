@@ -399,3 +399,13 @@ def router(get_store, get_providers, authorize):
             raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
 
     return api
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's fact checks; the caller owns the transaction."""
+    for table in ("fact_checks",):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            continue
+        db.executemany(
+            f"DELETE FROM {table} WHERE session_id=?", [(identity,) for identity in session_ids]
+        )

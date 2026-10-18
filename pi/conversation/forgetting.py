@@ -21,8 +21,17 @@ from pathlib import Path
 from pi.agents import skills
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachments
+from pi.context import decisions
 from pi.context import summaries as context_summaries
-from pi.conversation import citations, drafts, submissions
+from pi.conversation import (
+    citations,
+    drafts,
+    fact_checks,
+    judgements,
+    naming,
+    output_settings,
+    submissions,
+)
 from pi.conversation import settings as session_settings
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.store import FORGETTING_SCHEMA, Store
@@ -188,6 +197,9 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         memory_store.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])
         submissions.redact(db, plan["session_ids"])
+        # Review data can quote the chat (judge reasons, claims, decisions): delete it all.
+        for module in (judgements, fact_checks, decisions, naming, output_settings):
+            module.redact(db, plan["session_ids"])
         if db.execute("SELECT 1 FROM sqlite_master WHERE name='tool_actions'").fetchone():
             for session_id in plan["session_ids"]:
                 db.execute(

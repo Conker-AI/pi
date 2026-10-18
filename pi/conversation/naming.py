@@ -210,3 +210,13 @@ def after_turn(store, providers, sid) -> None:
         auto_name(store, adapters, sid, AutoName(expected_revision=0))
     except Exception:
         return
+
+
+def redact(db, session_ids):
+    """Offline forgetting hook: delete this chat's name record (the title itself is cleared with the session); the caller owns the transaction."""
+    for table in ("session_titles",):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            continue
+        db.executemany(
+            f"DELETE FROM {table} WHERE session_id=?", [(identity,) for identity in session_ids]
+        )
