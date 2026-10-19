@@ -6,13 +6,10 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from pi.core.errors import ServiceError
-
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+from pi.core.models import Strict
 
 
 def references(values):
@@ -23,7 +20,7 @@ def references(values):
     return values
 
 
-class MemorySelection(StrictModel):
+class MemorySelection(Strict):
     scope: Literal["none", "conversation", "selected", "owner"]
     memoryIds: list[str] = Field(max_length=1000)
 
@@ -39,7 +36,7 @@ class MemorySelection(StrictModel):
         return self
 
 
-class AgentInput(StrictModel):
+class AgentInput(Strict):
     name: str = Field(min_length=1, max_length=80)
     role: str = Field(min_length=1, max_length=160)
     instructions: str = Field(min_length=1, max_length=8000)
@@ -67,7 +64,7 @@ class AgentInput(StrictModel):
         return references(values)
 
 
-class AgentProfile(StrictModel):
+class AgentProfile(Strict):
     schemaVersion: Literal[1] = 1
     id: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
     kind: Literal["companion", "agent"]
@@ -82,17 +79,17 @@ class AgentProfile(StrictModel):
     reference_validation: Literal["not-performed"] = "not-performed"
 
 
-class AgentCollection(StrictModel):
+class AgentCollection(Strict):
     schemaVersion: Literal[1] = 1
     results: list[AgentProfile]
 
 
-class UpdateAgent(StrictModel):
+class UpdateAgent(Strict):
     expected_revision: int = Field(ge=1)
     configuration: AgentInput
 
 
-class ArchiveAgent(StrictModel):
+class ArchiveAgent(Strict):
     expected_revision: int = Field(ge=1)
     archived: bool
 

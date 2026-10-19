@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models.providers import Message
 
 AUTO = {"format": "auto", "length": "auto", "language": "auto"}
@@ -26,10 +27,6 @@ LENGTHS = {
     "medium": "medium, a few paragraphs",
     "long": "long and thorough",
 }
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Output(Strict):

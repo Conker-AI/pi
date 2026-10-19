@@ -8,17 +8,14 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models.providers import Message, ProviderUnavailable
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Channels(Strict):

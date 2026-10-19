@@ -8,6 +8,7 @@ import yaml
 from pydantic import Field
 
 from pi.agents import profiles as agents
+from pi.core.models import Strict
 from pi.models.providers import Message
 
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -23,13 +24,13 @@ CREATE TABLE IF NOT EXISTS skills (
 """
 
 
-class Import(agents.StrictModel):
+class Import(Strict):
     markdown: str = Field(min_length=1, max_length=MAX_MARKDOWN)
     expected_revision: int = Field(ge=0)
     expected_id: str | None = Field(default=None, max_length=64, pattern=f"^{SLUG}$")
 
 
-class State(agents.StrictModel):
+class State(Strict):
     expected_revision: int = Field(ge=1)
     enabled: bool
 

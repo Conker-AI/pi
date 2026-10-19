@@ -9,8 +9,8 @@ from typing import Literal
 from pydantic import Field
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
-from pi.agents.profiles import StrictModel
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 TOOL = "system.container-control"
 SERVICE_TOOL = "system.process-control"
@@ -27,19 +27,19 @@ CREATE TABLE IF NOT EXISTS system_actions (
 """
 
 
-class Request(StrictModel):
+class Request(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     container_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     action: Literal["start", "stop", "restart"]
 
 
-class ServiceRequest(StrictModel):
+class ServiceRequest(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     service_id: str = Field(pattern=SERVICE_PATTERN, max_length=260)
     action: Literal["start", "stop", "restart"]
 
 
-class PortRequest(StrictModel):
+class PortRequest(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     container_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     review_id: str = Field(pattern=r"^[a-f0-9]{48}$")

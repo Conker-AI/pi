@@ -5,6 +5,7 @@ import time
 from pydantic import Field
 
 from pi.context import controls, summaries
+from pi.core.models import Strict
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS summary_coverage (
@@ -14,7 +15,7 @@ CREATE TABLE IF NOT EXISTS summary_coverage (
 """
 
 
-class Compact(controls.Strict):
+class Compact(Strict):
     expected_policy_revision: int = Field(ge=1)
     expected_summary_revision: int = Field(ge=0)
     summary: str = Field(min_length=1, max_length=16000)

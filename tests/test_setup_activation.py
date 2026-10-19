@@ -12,7 +12,7 @@ from pi.models import roles as model_roles
 from pi.models.providers import Completion, OllamaProvider, ProviderUnavailable
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import models as setup_models
-from pi.setup import status as setup_status
+from pi.setup import status_steps
 
 
 class Adapter:
@@ -158,7 +158,7 @@ def test_setup_readiness_drops_after_selected_route_disappears(store, monkeypatc
     calls = inventory(monkeypatch, ["working:3b"])
     router = Router(OllamaProvider("http://127.0.0.1:11434", model="working:3b"))
 
-    status = setup_status._model(store, router)
+    status = status_steps._model(store, router)
 
     assert status.state == "degraded"
     assert status.blockingReasonCode == "model_provider_unavailable"

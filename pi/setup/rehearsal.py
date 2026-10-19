@@ -10,10 +10,11 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.setup import choices as setup_choices
 from pi.setup import receipts as setup_receipts
 
@@ -60,20 +61,16 @@ class RehearsalError(ServiceError):
         super().__init__(code, detail, status)
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class MemoryReviewInput(StrictModel):
+class MemoryReviewInput(Strict):
     requestId: str = Field(min_length=1, max_length=128, pattern=REQUEST_ID.pattern)
     expectedChoiceRevision: int = Field(gt=0)
 
 
-class ApprovalInput(StrictModel):
+class ApprovalInput(Strict):
     requestId: str = Field(min_length=1, max_length=128, pattern=REQUEST_ID.pattern)
 
 
-class Phase(StrictModel):
+class Phase(Strict):
     state: Literal[
         "missing",
         "complete",
@@ -85,7 +82,7 @@ class Phase(StrictModel):
     detail: str
 
 
-class Status(StrictModel):
+class Status(Strict):
     schemaVersion: Literal[1] = 1
     state: Literal["in_progress", "ready", "complete"]
     conversation: Phase

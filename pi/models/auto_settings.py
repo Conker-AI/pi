@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -33,8 +34,8 @@ INSTRUCTIONS = (
 )
 
 
-class Request(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Request(Strict):
+    pass
 
     text: str = Field(min_length=1, max_length=16000)
     session_id: str | None = Field(

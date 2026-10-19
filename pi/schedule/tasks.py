@@ -8,9 +8,10 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 Status = Literal["planned", "in_progress", "blocked", "completed", "cancelled"]
 TRANSITIONS = {
@@ -29,8 +30,7 @@ class TaskError(ServiceError):
         super().__init__(code, message, status, **extra)
 
 
-class TaskFields(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class TaskFields(Strict):
     outcome: str = Field(min_length=1, max_length=1000)
     criteria: list[str] = Field(min_length=1, max_length=20)
     parent_task_id: str | None = Field(default=None, min_length=1, max_length=128)
@@ -72,8 +72,7 @@ class UpdateTask(TaskFields):
     expected_revision: int = Field(ge=1)
 
 
-class TransitionTask(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class TransitionTask(Strict):
     expected_revision: int = Field(ge=1)
     status: Status
     note: str = Field(min_length=1, max_length=2000)
@@ -87,8 +86,7 @@ class TransitionTask(BaseModel):
         return value.strip()
 
 
-class ArchiveTask(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class ArchiveTask(Strict):
     expected_revision: int = Field(ge=1)
     archived: bool
 

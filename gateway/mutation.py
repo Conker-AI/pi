@@ -4,32 +4,61 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Annotated, BinaryIO, Literal
+from typing import BinaryIO, Literal
 
 import httpx
 from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    JsonValue,
-    TypeAdapter,
     ValidationError,
-    model_validator,
 )
 
-from pi.agents import characters
+from gateway.mutation_models import (
+    AGENT_MUTATION,
+    ARTIFACT_MUTATION,
+    CALL_MUTATION,
+    CHARACTER_MUTATION,
+    FILE_MUTATION,
+    INVENTORY_MUTATION,
+    JOB_MUTATION,
+    MEMORY_MUTATION,
+    MUTATIONS,
+    PROJECT_MUTATION,
+    TASK_MUTATION,
+    TEAM_MUTATION,
+    TOOL_MUTATION,
+    TURN_MUTATION,
+    AgentCreate,
+    AgentUpdate,
+    ApprovalDecision,
+    ArtifactAppend,
+    ArtifactCreate,
+    ArtifactFromMessage,
+    CallStart,
+    CallTurn,
+    FileListingRequest,
+    InventoryRequest,
+    JobState,
+    MemoryCorrect,
+    MemoryRetry,
+    ProjectArchive,
+    ProjectCreate,
+    ProjectUpdate,
+    ProposalDecision,
+    SessionUpdate,
+    TaskCreate,
+    TeamArchive,
+    TeamCreate,
+    TeamUpdate,
+    ToolAccess,
+    ToolPublish,
+    ToolSave,
+    TurnResume,
+)
+from pi.agents import characters, team_models
 from pi.agents import profiles as agents
-from pi.agents import teams as collaboration
 from pi.api.browser_contract import owner_allowed, runtime_allowed
-from pi.calls import runtime as calls
-from pi.content import artifacts
 from pi.context import projects
-from pi.conversation import settings as session_settings
-from pi.host import filesystem_reads
-from pi.host import inventory as system_inventory
-from pi.memory import edits as memory_edits
 from pi.memory import forget as memory_forget
-from pi.schedule import jobs, proposals, tasks
+from pi.schedule import job_models, proposals
 
 from .api import Config
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed
@@ -48,380 +77,6 @@ class Mutation:
     path: str
     payload: dict
     authority: Literal["owner", "runtime", "toolgate-owner", "toolgate-owner-execution"] = "owner"
-
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class AgentCreate(StrictModel):
-    operation: Literal["create"]
-    configuration: agents.AgentInput
-
-
-class AgentUpdate(StrictModel):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
-    expected_revision: int = Field(ge=1)
-    configuration: agents.AgentInput
-
-
-class AgentArchive(StrictModel):
-    operation: Literal["archive"]
-    id: str = Field(pattern=r"^agent_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    archived: bool
-
-
-AgentMutation = Annotated[
-    AgentCreate | AgentUpdate | AgentArchive, Field(discriminator="operation")
-]
-AGENT_MUTATION = TypeAdapter(AgentMutation)
-
-
-class ProjectCreate(StrictModel):
-    operation: Literal["create"]
-    fields: projects.Fields
-
-
-class ProjectUpdate(StrictModel):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    fields: projects.Fields
-
-
-class ProjectArchive(StrictModel):
-    operation: Literal["archive"]
-    id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    archived: bool
-
-
-class ProjectLink(StrictModel):
-    operation: Literal["link", "unlink"]
-    id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    reference: projects.Reference
-
-
-ProjectMutation = Annotated[
-    ProjectCreate | ProjectUpdate | ProjectArchive | ProjectLink,
-    Field(discriminator="operation"),
-]
-PROJECT_MUTATION = TypeAdapter(ProjectMutation)
-
-
-class TeamCreate(StrictModel):
-    operation: Literal["create"]
-    definition: collaboration.Team
-
-
-class TeamUpdate(StrictModel):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    definition: collaboration.Team
-
-
-class TeamArchive(StrictModel):
-    operation: Literal["archive"]
-    id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-
-
-class TeamRestore(StrictModel):
-    operation: Literal["restore"]
-    id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-
-
-TeamMutation = Annotated[
-    TeamCreate | TeamUpdate | TeamArchive | TeamRestore,
-    Field(discriminator="operation"),
-]
-TEAM_MUTATION = TypeAdapter(TeamMutation)
-
-
-class JobState(StrictModel):
-    operation: Literal["state"]
-    id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
-    expected_revision: int = Field(ge=1)
-    enabled: bool
-
-
-class JobRun(StrictModel):
-    operation: Literal["run"]
-    id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
-    request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
-
-
-JobMutation = Annotated[
-    JobState | JobRun,
-    Field(discriminator="operation"),
-]
-JOB_MUTATION = TypeAdapter(JobMutation)
-
-
-class MemoryForget(StrictModel):
-    operation: Literal["forget"]
-    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
-    memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
-    expected_revision: int = Field(ge=1)
-
-
-class MemoryCorrect(memory_edits.Apply):
-    operation: Literal["correct"]
-
-
-class MemoryRetry(memory_edits.Retry):
-    operation: Literal["retry-correction"]
-    request_id: str = Field(pattern=rf"^{memory_edits.REQUEST_ID}$")
-
-
-MEMORY_MUTATION = TypeAdapter(
-    Annotated[MemoryForget | MemoryCorrect | MemoryRetry, Field(discriminator="operation")]
-)
-
-
-class ProposalDecision(StrictModel):
-    operation: Literal["decide"]
-    id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_-]+$")
-    decision: Literal["accept", "decline", "never"]
-
-
-class TaskCreate(tasks.CreateTask):
-    operation: Literal["create"]
-
-
-class TaskUpdate(tasks.UpdateTask):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
-
-
-class TaskTransition(tasks.TransitionTask):
-    operation: Literal["transition"]
-    id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
-
-
-class TaskArchive(tasks.ArchiveTask):
-    operation: Literal["archive"]
-    id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
-
-
-TaskMutation = Annotated[
-    TaskCreate | TaskUpdate | TaskTransition | TaskArchive,
-    Field(discriminator="operation"),
-]
-TASK_MUTATION = TypeAdapter(TaskMutation)
-
-
-class ArtifactCreate(artifacts.Create):
-    operation: Literal["create"]
-
-
-class ArtifactFromMessage(artifacts.FromMessage):
-    operation: Literal["from_message"]
-
-
-class ArtifactAppend(artifacts.Append):
-    operation: Literal["append"]
-    id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
-
-
-class ArtifactRestore(artifacts.Restore):
-    operation: Literal["restore"]
-    id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
-
-
-class ArtifactArchive(artifacts.Archive):
-    operation: Literal["archive"]
-    id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
-
-
-ArtifactMutation = Annotated[
-    ArtifactCreate | ArtifactFromMessage | ArtifactAppend | ArtifactRestore | ArtifactArchive,
-    Field(discriminator="operation"),
-]
-ARTIFACT_MUTATION = TypeAdapter(ArtifactMutation)
-
-
-class SessionUpdate(session_settings.Update):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
-
-
-class ApprovalDecision(StrictModel):
-    operation: Literal["decide"]
-    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
-    status: Literal["approved", "rejected", "dismissed"]
-    note: str = Field(default="", max_length=2000)
-
-
-class TurnResume(StrictModel):
-    operation: Literal["resume"]
-    id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_-]+$")
-
-
-class SubmissionCancel(StrictModel):
-    operation: Literal["cancel_submission"]
-    request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-
-
-TurnMutation = Annotated[TurnResume | SubmissionCancel, Field(discriminator="operation")]
-TURN_MUTATION = TypeAdapter(TurnMutation)
-
-
-class FileListingRequest(filesystem_reads.Read):
-    operation: Literal["request"]
-
-
-class FileListingResume(StrictModel):
-    operation: Literal["resume"]
-    id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
-
-
-FileMutation = Annotated[FileListingRequest | FileListingResume, Field(discriminator="operation")]
-FILE_MUTATION = TypeAdapter(FileMutation)
-
-
-class InventoryRequest(system_inventory.Read):
-    operation: Literal["request"]
-
-
-class InventoryResume(StrictModel):
-    operation: Literal["resume"]
-    id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
-
-
-InventoryMutation = Annotated[InventoryRequest | InventoryResume, Field(discriminator="operation")]
-INVENTORY_MUTATION = TypeAdapter(InventoryMutation)
-
-
-class CharacterSave(characters.Save):
-    operation: Literal["save"]
-
-
-class CharacterImport(characters.Import):
-    operation: Literal["import"]
-
-
-class CharacterRestore(characters.Restore):
-    operation: Literal["restore"]
-
-
-CharacterMutation = Annotated[
-    CharacterSave | CharacterImport | CharacterRestore, Field(discriminator="operation")
-]
-CHARACTER_MUTATION = TypeAdapter(CharacterMutation)
-
-
-class CallStart(calls.Start):
-    operation: Literal["start"]
-
-
-class CallUpdate(calls.Update):
-    operation: Literal["update"]
-    id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
-
-
-class CallInterrupt(calls.Revision):
-    operation: Literal["interrupt"]
-    id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
-
-
-class CallEnd(calls.Revision):
-    operation: Literal["end"]
-    id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
-
-
-class CallTurn(calls.Send):
-    operation: Literal["turn"]
-    id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
-
-
-CallMutation = Annotated[
-    CallStart | CallUpdate | CallInterrupt | CallEnd | CallTurn,
-    Field(discriminator="operation"),
-]
-CALL_MUTATION = TypeAdapter(CallMutation)
-
-
-class ToolSave(StrictModel):
-    operation: Literal["save"]
-    id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
-    expected_revision: int = Field(ge=0)
-    document: dict[str, JsonValue]
-
-    @model_validator(mode="after")
-    def matching_document(self):
-        if self.document.get("id") != self.id:
-            raise ValueError("Draft document identity must match the route identity.")
-        return self
-
-
-class ToolPublish(StrictModel):
-    operation: Literal["publish"]
-    id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
-    expected_revision: int = Field(ge=1)
-    expected_publication_version: int = Field(ge=0)
-    authorization: Literal["auto", "owner_confirmation"]
-
-
-class ToolAccess(StrictModel):
-    operation: Literal["access"]
-    id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
-    version: int = Field(ge=1)
-    digest: str = Field(pattern=r"^[a-f0-9]{64}$")
-    enabled: bool
-
-
-class ToolRun(StrictModel):
-    operation: Literal["run"]
-    id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
-    version: int = Field(ge=1)
-    digest: str = Field(pattern=r"^[a-f0-9]{64}$")
-    action_id: str = Field(pattern=r"^editor_[a-f0-9]{32}$")
-    args: dict[str, JsonValue] = Field(default_factory=dict)
-    approval_request_id: str | None = Field(default=None, max_length=100)
-
-    @model_validator(mode="after")
-    def bounded_arguments(self):
-        encoded = json.dumps(
-            self.args, ensure_ascii=False, allow_nan=False, separators=(",", ":")
-        ).encode("utf-8")
-        if len(encoded) > 32768:
-            raise ValueError("Workflow arguments exceed 32 KiB.")
-        return self
-
-
-ToolMutation = Annotated[
-    ToolSave | ToolPublish | ToolAccess | ToolRun, Field(discriminator="operation")
-]
-TOOL_MUTATION = TypeAdapter(ToolMutation)
-
-
-MUTATIONS = frozenset(
-    {
-        "agents",
-        "approvals",
-        "artifacts",
-        "calls",
-        "character",
-        "files",
-        "inventory",
-        "jobs",
-        "memory",
-        "models",
-        "projects",
-        "proposals",
-        "sessions",
-        "tasks",
-        "teams",
-        "tools",
-        "turns",
-    }
-)
 
 
 def resources() -> tuple[str, ...]:
@@ -477,7 +132,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         if isinstance(value, TeamCreate):
             return Mutation("POST", "/collaboration/teams", value.definition.model_dump())
         if isinstance(value, TeamUpdate):
-            body = collaboration.UpdateTeam(
+            body = team_models.UpdateTeam(
                 expected_revision=value.expected_revision, definition=value.definition
             ).model_dump()
             return Mutation("POST", f"/collaboration/teams/{value.id}/update", body)
@@ -486,7 +141,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
                 expected_revision=value.expected_revision, archived=True
             ).model_dump()
             return Mutation("POST", f"/collaboration/teams/{value.id}/archive", body)
-        body = collaboration.Revision(expected_revision=value.expected_revision).model_dump()
+        body = team_models.Revision(expected_revision=value.expected_revision).model_dump()
         return Mutation("POST", f"/collaboration/teams/{value.id}/restore", body)
     if resource == "jobs":
         try:
@@ -494,7 +149,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         except ValidationError:
             raise MutationError("Job apply request has an unsupported shape.") from None
         if isinstance(value, JobState):
-            body = jobs.StateChange(
+            body = job_models.StateChange(
                 expected_revision=value.expected_revision, enabled=value.enabled
             ).model_dump()
             return Mutation("POST", f"/jobs/{value.id}/state", body)

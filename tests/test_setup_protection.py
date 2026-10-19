@@ -12,7 +12,7 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation.store import Store
 from pi.setup import protection as setup_protection
 from pi.setup import receipts as setup_receipts
-from pi.setup import status as setup_status
+from pi.setup import status_receipts
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 OWNER = "setup-protection-owner-" + "o" * 32
@@ -81,14 +81,14 @@ def test_protection_receipt_is_bound_to_current_policy(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         first = setup_protection.save(store, policy_input(), now=NOW)
         saved = setup_receipts.record(store, "protection", receipt(first), now=NOW)
-        assert setup_status._receipt_step(store, "protection", now=NOW).state == "complete"
+        assert status_receipts._receipt_step(store, "protection", now=NOW).state == "complete"
 
         setup_protection.save(
             store,
             policy_input("protection-policy-2", 1, "/media/conker"),
             now=NOW + timedelta(minutes=1),
         )
-        stale = setup_status._receipt_step(store, "protection", now=NOW)
+        stale = status_receipts._receipt_step(store, "protection", now=NOW)
         assert stale.state == "degraded"
         assert stale.blockingReasonCode == "protection_receipt_stale"
         assert "changed" in stale.evidence[0].detail

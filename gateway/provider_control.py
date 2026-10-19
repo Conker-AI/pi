@@ -5,14 +5,12 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError
+
+from pi.core.models import Strict
 
 ProviderId = Literal["openrouter", "openai", "anthropic"]
 Revision = Annotated[str, Field(pattern=r"^credential_[0-9a-f]{32}$")]
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Stage(Strict):

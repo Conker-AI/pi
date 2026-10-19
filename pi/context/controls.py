@@ -9,15 +9,12 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 PolicyName = Literal["keep-exact", "allow-summary", "retrieve", "exclude"]
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
 
 
 class Budget(Strict):

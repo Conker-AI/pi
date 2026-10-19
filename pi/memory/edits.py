@@ -10,8 +10,8 @@ from uuid import NAMESPACE_URL, uuid5
 import httpx
 from pydantic import Field, field_validator
 
-from pi.agents import profiles as agents
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
 
@@ -31,7 +31,7 @@ ON memory_edit_operations((1)) WHERE state IN ('applying','unknown');
 """
 
 
-class Apply(agents.StrictModel):
+class Apply(Strict):
     request_id: str = Field(pattern=rf"^{REQUEST_ID}$")
     memory_id: str = Field(pattern=rf"^{MEMORY_ID}$")
     expected_revision: int = Field(ge=1, le=2147483646)
@@ -46,7 +46,7 @@ class Apply(agents.StrictModel):
         return value
 
 
-class Retry(agents.StrictModel):
+class Retry(Strict):
     expected_payload_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 

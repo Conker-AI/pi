@@ -3,13 +3,14 @@
 from fastapi import APIRouter, Depends
 
 from pi.agents import team_execution as teams
+from pi.agents import team_models
 
 
 def create_router(store_provider, loop_provider, authorize):
     router = APIRouter(prefix="/team-runs", dependencies=[Depends(authorize)])
 
     @router.post("/from-team/{team_id}")
-    def start(team_id: str, body: teams.Start):
+    def start(team_id: str, body: team_models.Start):
         return teams.start(store_provider(), team_id, body)
 
     @router.get("/{identity}")
@@ -17,7 +18,7 @@ def create_router(store_provider, loop_provider, authorize):
         return teams.get(store_provider(), identity)
 
     @router.post("/{identity}/steps")
-    def execute(identity: str, body: teams.Step):
+    def execute(identity: str, body: team_models.Step):
         return teams.execute(store_provider(), loop_provider(), identity, body)
 
     @router.post("/{identity}/reconcile")
@@ -25,7 +26,7 @@ def create_router(store_provider, loop_provider, authorize):
         return teams.reconcile(store_provider(), identity)
 
     @router.post("/{identity}/finish")
-    def finish(identity: str, body: teams.Finish):
+    def finish(identity: str, body: team_models.Finish):
         return teams.finish(store_provider(), identity, body)
 
     return router

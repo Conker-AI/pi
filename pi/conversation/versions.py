@@ -3,9 +3,10 @@
 import json
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.schedule import tasks
 
 SCHEMA = """
@@ -112,8 +113,7 @@ def _view(db, sid, root):
     return {**dict(family), "versions": [dict(row) for row in versions]}
 
 
-class Selection(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Selection(Strict):
     message_id: str = Field(min_length=1, max_length=128)
     expected_revision: int = Field(ge=1)
 

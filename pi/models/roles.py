@@ -8,8 +8,9 @@ import math
 from functools import partial
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from pi.core.models import Strict
 from pi.models.providers import Message, ProviderUnavailable, require_images
 
 ROLES = (
@@ -26,10 +27,6 @@ ROLES = (
 # disabled: a new background use of the owner's conversations is never switched on
 # by an upgrade.
 LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking")
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Provider(Strict):

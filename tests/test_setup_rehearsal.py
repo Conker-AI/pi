@@ -13,7 +13,7 @@ from pi.conversation.store import Store
 from pi.setup import choices as setup_choices
 from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
-from pi.setup import status as setup_status
+from pi.setup import status_receipts
 
 NOW = datetime(2026, 9, 27, 8, 0, tzinfo=UTC)
 NOW_TS = NOW.timestamp()
@@ -117,7 +117,7 @@ def test_rehearsal_requires_real_conversation_memory_review_and_approval(tmp_pat
         changed = setup_rehearsal.status(store, now=NOW)
         assert changed.state == "in_progress"
         assert changed.memoryReview.state == "missing"
-        assert setup_status._receipt_step(store, "rehearsal", now=NOW).state == ("degraded")
+        assert status_receipts._receipt_step(store, "rehearsal", now=NOW).state == ("degraded")
 
 
 def test_memory_review_is_revision_bound_idempotent_and_content_free(tmp_path):

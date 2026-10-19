@@ -5,10 +5,11 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import TurnContext, history_size
 from pi.schedule import tasks
@@ -40,8 +41,7 @@ BEGIN SELECT RAISE(ABORT,'retry identity is permanent'); END;
 """
 
 
-class Retry(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Retry(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     model_id: str = Field(min_length=1, max_length=200)
 

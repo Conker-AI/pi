@@ -3,6 +3,7 @@ from contextlib import closing
 import pytest
 
 from pi.agents import team_execution as teams
+from pi.agents import team_models
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.memory.service import Memory
@@ -49,7 +50,7 @@ def test_team_reads_source_conversation_without_ingesting_team_messages(tmp_path
             store,
             runtime,
             run["id"],
-            teams.Step(
+            team_models.Step(
                 request_id="memory_step_request_01",
                 expected_revision=run["revision"],
                 roleId="first",

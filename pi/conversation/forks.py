@@ -6,10 +6,11 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.schedule import tasks
 
 SCHEMA = """
@@ -22,8 +23,7 @@ CREATE TABLE IF NOT EXISTS message_fork_requests (
 """
 
 
-class Fork(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Fork(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     expected_settings_revision: int = Field(ge=0)
     expected_context_revision: int = Field(ge=0)

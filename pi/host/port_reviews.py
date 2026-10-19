@@ -10,11 +10,11 @@ from typing import Literal
 import httpx
 from pydantic import Field, StrictInt, field_validator, model_validator
 
-from pi.agents.profiles import StrictModel
+from pi.core.models import Strict
 from pi.host.actions import ActionError
 
 
-class Mapping(StrictModel):
+class Mapping(Strict):
     hostAddress: str = Field(min_length=1, max_length=45)
     hostPort: StrictInt = Field(ge=1, le=65535)
     containerPort: StrictInt = Field(ge=1, le=65535)
@@ -26,7 +26,7 @@ class Mapping(StrictModel):
         return str(ipaddress.ip_address(value))
 
 
-class Request(StrictModel):
+class Request(Strict):
     container_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     operation: Literal["create", "edit", "remove"]
     mapping: Mapping | None = None

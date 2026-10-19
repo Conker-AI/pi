@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 from pydantic import Field
 
 from pi.actions.toolgate import ToolResult
-from pi.agents.profiles import StrictModel
+from pi.core.models import Strict
 from pi.host import actions
 from pi.host.port_reviews import exchange
 
 
-class Request(StrictModel):
+class Request(Strict):
     approval_request_id: str | None = Field(default=None, min_length=1, max_length=160)
 
 

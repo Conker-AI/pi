@@ -10,9 +10,10 @@ from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 IDENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.:/-]{0,127}")
 
@@ -47,11 +48,7 @@ class ProtectionError(ServiceError):
         super().__init__(code, detail, status)
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class PolicyInput(StrictModel):
+class PolicyInput(Strict):
     requestId: str = Field(min_length=1, max_length=128)
     destination: str = Field(min_length=2, max_length=1024)
     retentionCopies: int = Field(ge=2, le=64)
@@ -77,7 +74,7 @@ class PolicyInput(StrictModel):
         return value
 
 
-class Policy(StrictModel):
+class Policy(Strict):
     schemaVersion: Literal[1] = 1
     revision: int = Field(ge=0)
     requestId: str | None

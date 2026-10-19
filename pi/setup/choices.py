@@ -7,9 +7,10 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 ChoiceStep = Literal["companion", "memory", "capabilities"]
 ChoiceValue = Literal["undecided", "accept", "include", "skip"]
@@ -79,11 +80,7 @@ class ChoiceError(ServiceError):
         super().__init__(code, detail, status)
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class ChoiceInput(StrictModel):
+class ChoiceInput(Strict):
     requestId: str = Field(min_length=1, max_length=128)
     choice: Literal["accept", "include", "skip"]
     expectedRevision: int = Field(ge=0)
@@ -96,7 +93,7 @@ class ChoiceInput(StrictModel):
         return value
 
 
-class Choice(StrictModel):
+class Choice(Strict):
     step: ChoiceStep
     revision: int = Field(ge=0)
     requestId: str | None

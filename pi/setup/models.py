@@ -4,17 +4,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.setup import model_probes as setup_model_probes
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class Candidate(StrictModel):
+class Candidate(Strict):
     id: str = Field(min_length=1, max_length=200)
     providerId: str = Field(min_length=1, max_length=100)
     providerName: str = Field(min_length=1, max_length=160)
@@ -27,12 +24,12 @@ class Candidate(StrictModel):
     costNotice: str = Field(min_length=1, max_length=240)
 
 
-class Options(StrictModel):
+class Options(Strict):
     revision: int = Field(ge=0)
     candidates: list[Candidate] = Field(max_length=1000)
 
 
-class Selection(StrictModel):
+class Selection(Strict):
     candidateId: str = Field(min_length=1, max_length=200)
     expectedRevision: int = Field(ge=0)
 
@@ -41,7 +38,7 @@ class Activation(Selection):
     requestId: str = Field(min_length=1, max_length=128)
 
 
-class Activated(StrictModel):
+class Activated(Strict):
     revision: int = Field(gt=0)
     candidateId: str = Field(min_length=1, max_length=200)
     probe: setup_model_probes.ProbeReceipt

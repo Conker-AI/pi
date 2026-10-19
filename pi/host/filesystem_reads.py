@@ -8,8 +8,8 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
-from pi.agents.profiles import StrictModel
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 TOOL = "system.files-list"
 SCHEMA = """
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS filesystem_reads (
 """
 
 
-class Read(StrictModel):
+class Read(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     root_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     path: str = ""
@@ -35,18 +35,18 @@ class Read(StrictModel):
         return value
 
 
-class FileRoot(StrictModel):
+class FileRoot(Strict):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     path: str = Field(min_length=1, max_length=4097)
 
 
-class RootCapabilities(StrictModel):
+class RootCapabilities(Strict):
     list: Literal[True]
     read: Literal[False]
     write: Literal[False]
 
 
-class RootCatalogue(StrictModel):
+class RootCatalogue(Strict):
     schemaVersion: Literal[1] = 1
     mode: Literal["configured", "unavailable"]
     code: (
@@ -60,13 +60,13 @@ class RootCatalogue(StrictModel):
     contentIncluded: Literal[False] = False
 
 
-class DirectoryEntry(StrictModel):
+class DirectoryEntry(Strict):
     name: str = Field(min_length=1, max_length=255)
     path: str = Field(max_length=4096)
     kind: Literal["directory", "file", "symlink", "other"]
 
 
-class DirectoryListing(StrictModel):
+class DirectoryListing(Strict):
     mode: Literal["observed"]
     rootId: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     path: str = Field(max_length=4096)
@@ -75,7 +75,7 @@ class DirectoryListing(StrictModel):
     entries: list[DirectoryEntry] = Field(max_length=200)
 
 
-class DirectoryView(StrictModel):
+class DirectoryView(Strict):
     schemaVersion: Literal[1] = 1
     requestId: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     state: Literal["dispatching", "awaiting_approval", "unknown", "failed", "complete"]

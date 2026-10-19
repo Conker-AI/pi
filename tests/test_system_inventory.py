@@ -13,7 +13,7 @@ from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.api.routes import system_inventory as system_inventory_api
 from pi.conversation.store import Store
-from pi.host import inventory
+from pi.host import inventory, inventory_models
 from pi.host import targets as system_targets
 from pi.host.actions import ActionError
 
@@ -137,7 +137,7 @@ class Gate:
 
 def test_concurrent_request_and_restart_only_inspect_saved_action(tmp_path):
     path, gate = tmp_path / "pi.db", Gate()
-    body = inventory.Read(request_id="inventory_request_01", limit=12)
+    body = inventory_models.Read(request_id="inventory_request_01", limit=12)
     with closing(Store(path)) as store:
         with ThreadPoolExecutor(2) as pool:
             list(pool.map(lambda _: inventory.request(store, gate, body), range(2)))
@@ -161,7 +161,7 @@ def test_approval_is_not_recreated_and_resumes_exact_saved_request(tmp_path):
         gate.result = ApprovalRequired(
             "approval-one", None, "Review", inventory.TOOL, {"limit": 100}
         )
-        body = inventory.Read(request_id="inventory_approval_01")
+        body = inventory_models.Read(request_id="inventory_approval_01")
         first = inventory.request(store, gate, body)
         assert first["state"] == "awaiting_approval"
         inventory.request(store, gate, body)
@@ -178,7 +178,7 @@ def test_unknown_recovery_never_dispatches_and_keeps_known_completion(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         gate = Gate()
         gate.result = ToolPending("outcome_unknown", "Timeout", "action")
-        body = inventory.Read(request_id="inventory_unknown_01")
+        body = inventory_models.Read(request_id="inventory_unknown_01")
         assert inventory.request(store, gate, body)["state"] == "unknown"
         gate.result = ToolResult(True, observed(), inventory.TOOL)
         assert inventory.inspect(store, gate, body.request_id)["state"] == "complete"
@@ -235,14 +235,16 @@ def test_malformed_success_is_not_rendered_as_inventory(tmp_path, change):
         value = observed()
         value[change] = "invalid"
         gate.result = ToolResult(True, value, inventory.TOOL)
-        result = inventory.request(store, gate, inventory.Read(request_id="invalid_inventory_01"))
+        result = inventory.request(
+            store, gate, inventory_models.Read(request_id="invalid_inventory_01")
+        )
         assert result["state"] == "failed" and result["inventory"] is None
 
 
 def test_unconfigured_gate_does_not_reserve_or_fake_a_sample(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         with pytest.raises(inventory.InventoryError, match="not configured"):
-            inventory.request(store, None, inventory.Read(request_id="unconfigured_read_01"))
+            inventory.request(store, None, inventory_models.Read(request_id="unconfigured_read_01"))
         with store._connect() as db:
             assert db.execute("SELECT COUNT(*) FROM system_inventory_reads").fetchone()[0] == 0
 

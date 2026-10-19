@@ -9,6 +9,7 @@ from pydantic import Field
 from pi.context import controls, summaries
 from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -23,7 +24,7 @@ INSTRUCTIONS = (
 )
 
 
-class Request(controls.Strict):
+class Request(Strict):
     focus: str = Field(default="", max_length=500)
 
 

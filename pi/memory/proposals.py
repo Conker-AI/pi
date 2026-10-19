@@ -9,10 +9,11 @@ from pydantic import Field, field_validator
 
 from pi.agents import profiles as agents
 from pi.conversation import settings as session_settings
+from pi.core.models import Strict
 from pi.memory.corrections import CorrectionError
 
 
-class Create(agents.StrictModel):
+class Create(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     session_id: str = Field(min_length=1, max_length=200)
     memory_id: str = Field(pattern=r"^[A-Za-z0-9_.:-]{1,200}$")
@@ -28,7 +29,7 @@ class Create(agents.StrictModel):
         return agents.references(values)
 
 
-class Decision(agents.StrictModel):
+class Decision(Strict):
     decision: Literal["apply", "reject"]
 
 
