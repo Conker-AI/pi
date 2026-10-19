@@ -16,7 +16,8 @@ from pi.api.server import app
 from pi.conversation import forgetting
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.forgetting import ForgettingError, forget, preview
-from pi.conversation.store import SCHEMA, Store
+from pi.conversation.schema import SCHEMA
+from pi.conversation.store import Store
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.turns.loop import Loop, TurnFailed

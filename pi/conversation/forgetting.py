@@ -34,7 +34,8 @@ from pi.conversation import (
 )
 from pi.conversation import settings as session_settings
 from pi.conversation.access import MaintenanceRequired, acquire
-from pi.conversation.store import FORGETTING_SCHEMA, Store
+from pi.conversation.schema import FORGETTING_SCHEMA
+from pi.conversation.store import Store
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.schedule import tasks

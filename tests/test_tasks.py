@@ -13,7 +13,8 @@ from pydantic import ValidationError
 from pi.actions import identities as actions
 from pi.api import server as api
 from pi.conversation import activity, forgetting
-from pi.conversation.store import SCHEMA, Store
+from pi.conversation.schema import SCHEMA
+from pi.conversation.store import Store
 from pi.schedule import tasks
 
 
