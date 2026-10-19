@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi.agents import profiles as agents
+from pi.agents import team_models
 from pi.agents import teams as c
 from pi.api import server as api
 from pi.conversation.store import Store
@@ -31,12 +32,14 @@ def config(**changes):
 
 
 def template():
-    return c.Template(name="Research template", description="A careful reader", agent=config())
+    return team_models.Template(
+        name="Research template", description="A careful reader", agent=config()
+    )
 
 
 def team(identity):
     budget = {"maxTurns": 2, "maxTokens": 100, "maxCostCents": 0}
-    return c.Team.model_validate(
+    return team_models.Team.model_validate(
         {
             "name": "Review team",
             "objective": "Review evidence",
@@ -68,12 +71,12 @@ def test_durable_template_versions_and_whole_field_replacements(tmp_path):
     path = tmp_path / "test.db"
     with closing(Store(path)) as store:
         identity = c.save(store, "template", template())["id"]
-        publication = c.publish(store, identity, c.Revision(expected_revision=1))
+        publication = c.publish(store, identity, team_models.Revision(expected_revision=1))
         prepared = c.prepare(
             store,
             identity,
             "template",
-            c.Instantiate(
+            team_models.Instantiate(
                 expected_revision=2,
                 version=1,
                 name="New reader",
@@ -95,13 +98,13 @@ def test_durable_template_versions_and_whole_field_replacements(tmp_path):
                 store,
                 identity,
                 "template",
-                c.Instantiate(expected_revision=4, version=1, name="Other"),
+                team_models.Instantiate(expected_revision=4, version=1, name="Other"),
             )
         c.archive(
             store, identity, "template", agents.ArchiveAgent(expected_revision=4, archived=False)
         )
         with pytest.raises(agents.AgentError, match="Archive"):
-            c.remove(store, identity, "template", c.Revision(expected_revision=5))
+            c.remove(store, identity, "template", team_models.Revision(expected_revision=5))
     with closing(Store(path)) as store:
         assert c.list_all(store)["preparations"] == [prepared]
         assert c.get(store, identity, "template")["versions"] == [publication]
@@ -112,7 +115,7 @@ def test_publish_cas_and_duplicate_publication(store):
 
     def attempt(_):
         try:
-            return c.publish(store, identity, c.Revision(expected_revision=1))
+            return c.publish(store, identity, team_models.Revision(expected_revision=1))
         except agents.AgentError as exc:
             return exc.detail
 
@@ -121,40 +124,40 @@ def test_publish_cas_and_duplicate_publication(store):
     assert len([r for r in results if r.get("version") == 1]) == 1
     assert any(r.get("current_revision") == 2 for r in results)
     with pytest.raises(agents.AgentError, match="Change the draft"):
-        c.publish(store, identity, c.Revision(expected_revision=2))
+        c.publish(store, identity, team_models.Revision(expected_revision=2))
 
 
 def test_team_snapshots_revalidate_agent_changes_without_widening(store):
     agent = agents.create(store, config())
     definition = team(agent["id"])
     record = c.save(store, "team", definition)
-    prepared = c.prepare(store, record["id"], "team", c.Revision(expected_revision=1))
+    prepared = c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=1))
     assert prepared["agents"][0]["agentVersion"] == 1
     assert prepared["definition"]["roles"][0]["toolIds"] == ["read"]
     bad = definition.model_dump()
     bad["roles"][0]["memory"]["memoryIds"] = ["outside-selection"]
     with pytest.raises(agents.AgentError, match="memory exceeds"):
-        c.save(store, "team", c.Team.model_validate(bad), record["id"], 1)
+        c.save(store, "team", team_models.Team.model_validate(bad), record["id"], 1)
     agents.update(
         store,
         agent["id"],
         agents.UpdateAgent(expected_revision=1, configuration=config(toolIds=[])),
     )
     with pytest.raises(agents.AgentError, match="exceed"):
-        c.prepare(store, record["id"], "team", c.Revision(expected_revision=1))
+        c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=1))
     agents.archive(store, agent["id"], agents.ArchiveAgent(expected_revision=2, archived=True))
     with pytest.raises(agents.AgentError, match="active"):
-        c.prepare(store, record["id"], "team", c.Revision(expected_revision=1))
+        c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=1))
     assert c.list_all(store)["preparations"] == [prepared]
     with pytest.raises(agents.AgentError, match="Archive"):
-        c.remove(store, record["id"], "team", c.Revision(expected_revision=1))
+        c.remove(store, record["id"], "team", team_models.Revision(expected_revision=1))
 
 
 def test_team_role_cannot_inherit_companion_owner_memory():
     value = team("companion").model_dump()
     value["roles"][0]["memory"] = {"scope": "owner", "memoryIds": []}
     with pytest.raises(ValidationError, match="not available to team roles"):
-        c.Team.model_validate(value)
+        team_models.Team.model_validate(value)
 
 
 @pytest.mark.parametrize(
@@ -209,12 +212,12 @@ def test_team_graph_and_budget_validation(mutation):
         if mutation == "edge_pair":
             value["handoffs"].append({**edge, "id": "second"})
     with pytest.raises(ValidationError):
-        c.Team.model_validate(value)
+        team_models.Team.model_validate(value)
 
 
 def test_removal_tombstone_and_name_reuse(store):
     item = c.save(store, "template", template())
-    c.remove(store, item["id"], "template", c.Revision(expected_revision=1))
+    c.remove(store, item["id"], "template", team_models.Revision(expected_revision=1))
     assert c.list_all(store)["templates"] == []
     with pytest.raises(agents.AgentError):
         c.get(store, item["id"], "template")
@@ -227,12 +230,12 @@ def test_removal_tombstone_and_name_reuse(store):
 
 def test_snapshots_sql_immutable(store):
     item = c.save(store, "template", template())
-    c.publish(store, item["id"], c.Revision(expected_revision=1))
+    c.publish(store, item["id"], team_models.Revision(expected_revision=1))
     c.prepare(
         store,
         item["id"],
         "template",
-        c.Instantiate(expected_revision=2, version=1, name="Prepared"),
+        team_models.Instantiate(expected_revision=2, version=1, name="Prepared"),
     )
     with store._connect() as db:
         for table in ("template_publications", "collaboration_preparations"):
@@ -312,18 +315,18 @@ def test_team_bounded_cycle_update_archive_and_durable_snapshot(tmp_path):
                 "maxTransfers": 1,
             },
         ]
-        record = c.save(store, "team", c.Team.model_validate(value))
+        record = c.save(store, "team", team_models.Team.model_validate(value))
         value["objective"] = "Revised objective"
-        c.save(store, "team", c.Team.model_validate(value), record["id"], 1)
+        c.save(store, "team", team_models.Team.model_validate(value), record["id"], 1)
         with pytest.raises(agents.AgentError):
-            c.prepare(store, record["id"], "team", c.Revision(expected_revision=1))
-        prepared = c.prepare(store, record["id"], "team", c.Revision(expected_revision=2))
+            c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=1))
+        prepared = c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=2))
         archived = c.archive(
             store, record["id"], "team", agents.ArchiveAgent(expected_revision=2, archived=True)
         )
         assert archived["revision"] == 3
         with pytest.raises(agents.AgentError):
-            c.prepare(store, record["id"], "team", c.Revision(expected_revision=3))
+            c.prepare(store, record["id"], "team", team_models.Revision(expected_revision=3))
     with closing(Store(path)) as store:
         assert c.list_all(store)["preparations"] == [prepared]
         assert c.get(store, record["id"], "team")["archived_at"] is not None
@@ -332,6 +335,6 @@ def test_team_bounded_cycle_update_archive_and_durable_snapshot(tmp_path):
 def test_unused_team_can_be_removed_without_removing_agent(store):
     agent = agents.create(store, config())
     record = c.save(store, "team", team(agent["id"]))
-    c.remove(store, record["id"], "team", c.Revision(expected_revision=1))
+    c.remove(store, record["id"], "team", team_models.Revision(expected_revision=1))
     assert c.list_all(store)["teams"] == []
     assert agents.get(store, agent["id"]) == agent

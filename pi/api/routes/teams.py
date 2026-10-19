@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from pi.agents import profiles as agents
+from pi.agents import team_models
 from pi.agents import teams as c
 
 
@@ -32,7 +33,7 @@ def create_router(store_provider, authorize, owner_authorize=None):
         return c.list_all(store_provider())
 
     @router.post("/templates")
-    def create_template(body: c.Template):
+    def create_template(body: team_models.Template):
         return c.save(store_provider(), "template", body)
 
     @router.get("/templates/{identity}")
@@ -40,17 +41,17 @@ def create_router(store_provider, authorize, owner_authorize=None):
         return c.get(store_provider(), identity, "template")
 
     @router.post("/templates/{identity}/update")
-    def update_template(identity: str, body: c.UpdateTemplate):
+    def update_template(identity: str, body: team_models.UpdateTemplate):
         return c.save(
             store_provider(), "template", body.definition, identity, body.expected_revision
         )
 
     @router.post("/templates/{identity}/publish")
-    def publish_template(identity: str, body: c.Revision):
+    def publish_template(identity: str, body: team_models.Revision):
         return c.publish(store_provider(), identity, body)
 
     @router.post("/templates/{identity}/instantiate")
-    def instantiate_template(identity: str, body: c.Instantiate):
+    def instantiate_template(identity: str, body: team_models.Instantiate):
         return c.prepare(store_provider(), identity, "template", body)
 
     @router.post("/templates/{identity}/archive")
@@ -58,31 +59,31 @@ def create_router(store_provider, authorize, owner_authorize=None):
         return c.archive(store_provider(), identity, "template", body)
 
     @router.post("/templates/{identity}/remove")
-    def remove_template(identity: str, body: c.Revision):
+    def remove_template(identity: str, body: team_models.Revision):
         return c.remove(store_provider(), identity, "template", body)
 
-    @owner.get("/teams", response_model=c.TeamCollection)
+    @owner.get("/teams", response_model=team_models.TeamCollection)
     def list_teams(
         limit: int = Query(default=50, ge=1, le=100),
         cursor: str | None = Query(default=None, pattern=r"^team_[0-9a-f]{32}$"),
     ):
         return owner_call(c.owner_list, limit, cursor)
 
-    @owner.post("/teams", response_model=c.TeamView)
-    def create_team(body: c.Team):
+    @owner.post("/teams", response_model=team_models.TeamView)
+    def create_team(body: team_models.Team):
         return owner_call(c.save, "team", body, owner_view=True)
 
-    @owner.get("/teams/{identity}", response_model=c.TeamView)
+    @owner.get("/teams/{identity}", response_model=team_models.TeamView)
     def get_team(identity: TeamPath):
         return owner_call(c.owner_get, identity)
 
-    @owner.post("/teams/{identity}/update", response_model=c.TeamView)
-    def update_team(identity: TeamPath, body: c.UpdateTeam):
+    @owner.post("/teams/{identity}/update", response_model=team_models.TeamView)
+    def update_team(identity: TeamPath, body: team_models.UpdateTeam):
         return owner_call(
             c.save, "team", body.definition, identity, body.expected_revision, owner_view=True
         )
 
-    @owner.get("/teams/{identity}/versions", response_model=c.TeamHistory)
+    @owner.get("/teams/{identity}/versions", response_model=team_models.TeamHistory)
     def team_versions(
         identity: TeamPath,
         limit: int = Query(default=50, ge=1, le=100),
@@ -90,20 +91,20 @@ def create_router(store_provider, authorize, owner_authorize=None):
     ):
         return owner_call(c.owner_history, identity, limit, after)
 
-    @owner.get("/teams/{identity}/versions/{revision}", response_model=c.TeamRevision)
+    @owner.get("/teams/{identity}/versions/{revision}", response_model=team_models.TeamRevision)
     def team_revision(identity: TeamPath, revision: int = Path(ge=1, le=2147483647)):
         return owner_call(c.owner_revision, identity, revision)
 
     @router.post("/teams/{identity}/prepare")
-    def prepare_team(identity: str, body: c.Revision):
+    def prepare_team(identity: str, body: team_models.Revision):
         return c.prepare(store_provider(), identity, "team", body)
 
-    @owner.post("/teams/{identity}/archive", response_model=c.TeamView)
+    @owner.post("/teams/{identity}/archive", response_model=team_models.TeamView)
     def archive_team(identity: TeamPath, body: agents.ArchiveAgent):
         return owner_call(c.archive, identity, "team", body, owner_view=True)
 
-    @owner.post("/teams/{identity}/restore", response_model=c.TeamView)
-    def restore_team(identity: TeamPath, body: c.Revision):
+    @owner.post("/teams/{identity}/restore", response_model=team_models.TeamView)
+    def restore_team(identity: TeamPath, body: team_models.Revision):
         return owner_call(
             c.archive,
             identity,
@@ -113,7 +114,7 @@ def create_router(store_provider, authorize, owner_authorize=None):
         )
 
     @router.post("/teams/{identity}/remove")
-    def remove_team(identity: str, body: c.Revision):
+    def remove_team(identity: str, body: team_models.Revision):
         return c.remove(store_provider(), identity, "team", body)
 
     combined = APIRouter()

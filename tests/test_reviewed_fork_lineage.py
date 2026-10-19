@@ -3,6 +3,7 @@
 import pytest
 
 from pi.agents import profiles as agents
+from pi.agents import team_models
 from pi.conversation import settings, submissions
 from pi.models.routing import Router
 from pi.turns.loop import Loop
@@ -156,7 +157,7 @@ def test_creation_at_lineage_limit_refuses_atomically_even_with_inherited_raw_se
                 store,
                 Loop(store, Router(local_provider=NeverProvider(), local_model="test")),
                 run["id"],
-                team_execution.Step(
+                team_models.Step(
                     request_id="too_deep_team_step",
                     expected_revision=run["revision"],
                     roleId="first",

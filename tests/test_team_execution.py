@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from pi.actions.toolgate import Tool, ToolResult
 from pi.agents import profiles as agents
 from pi.agents import team_execution as teams
+from pi.agents import team_models
 from pi.agents import teams as collaboration
 from pi.api.routes import team_execution as team_execution_api
 from pi.conversation import forgetting
@@ -110,7 +111,7 @@ def setup(store, source_ids=None, tokens=100, cost=100, memory_scope="none"):
         }
         for identity in ("first", "second")
     ]
-    definition = collaboration.Team.model_validate(
+    definition = team_models.Team.model_validate(
         {
             "name": "Review",
             "objective": "Assess",
@@ -141,7 +142,7 @@ def start(store, record, sid, text="Owner task"):
     return teams.start(
         store,
         record["id"],
-        teams.Start(
+        team_models.Start(
             request_id="team_run_request_001",
             expected_revision=1,
             source_session_id=sid,
@@ -153,7 +154,7 @@ def start(store, record, sid, text="Owner task"):
 
 
 def execute(store, provider, run, second=False, **changes):
-    body = teams.Step(
+    body = team_models.Step(
         **{
             "request_id": "second_step_request_001" if second else "first_step_request_001",
             "expected_revision": run["revision"],
@@ -319,7 +320,7 @@ def test_forgetting_covers_source_task_and_derived_role_text(tmp_path):
 
 def test_explicit_budget_acknowledgement_required():
     with pytest.raises(ValidationError):
-        teams.Start(
+        team_models.Start(
             request_id="team_run_request_001",
             expected_revision=1,
             source_session_id="session",
@@ -370,13 +371,13 @@ def test_real_tools_remain_per_role_and_every_reply_is_metered(store):
     run = start(store, record, sid)
     provider, gate = ToolRecorder(), Tools()
     runtime = Loop(store, Router(local_provider=provider), toolgate=gate)
-    first_body = teams.Step(
+    first_body = team_models.Step(
         request_id="first_tools_request_001", expected_revision=run["revision"], roleId="first"
     )
     first = teams.execute(store, runtime, run["id"], first_body)
     assert gate.invoked == ["read"] and len(first["modelCalls"]) == 2
     assert all("- write" not in m.content for m in provider.calls[0][1])
-    second_body = teams.Step(
+    second_body = team_models.Step(
         request_id="second_tools_request_001",
         expected_revision=first["revision"],
         roleId="second",
@@ -400,10 +401,14 @@ def test_real_tools_remain_per_role_and_every_reply_is_metered(store):
     assert len(gate.invoked) == 1 and len(provider.calls) == 3
     with pytest.raises(agents.AgentError, match="Blocked work cannot be marked completed"):
         teams.finish(
-            store, run["id"], teams.Finish(expected_revision=second["revision"], state="completed")
+            store,
+            run["id"],
+            team_models.Finish(expected_revision=second["revision"], state="completed"),
         )
     finished = teams.finish(
-        store, run["id"], teams.Finish(expected_revision=second["revision"], state="cancelled")
+        store,
+        run["id"],
+        team_models.Finish(expected_revision=second["revision"], state="cancelled"),
     )
     assert teams.reconcile(store, run["id"])["state"] == "cancelled"
     with pytest.raises(agents.AgentError, match="Resolve"):
@@ -447,7 +452,7 @@ def test_owner_router_executes_only_explicit_step(store):
     app.include_router(team_execution_api.create_router(lambda: store, lambda: runtime, authorize))
     client, headers = TestClient(app), {"X-Owner-Key": "owner"}
     url = "/team-runs/from-team/" + record["id"]
-    body = teams.Start(
+    body = team_models.Start(
         request_id="team_run_request_001",
         expected_revision=1,
         source_session_id=sid,
@@ -460,7 +465,7 @@ def test_owner_router_executes_only_explicit_step(store):
     assert client.get("/team-runs/" + run["id"], headers=headers).status_code == 200
     assert not provider.calls
     url = "/team-runs/" + run["id"] + "/steps"
-    body = teams.Step(
+    body = team_models.Step(
         request_id="first_step_request_001", expected_revision=run["revision"], roleId="first"
     ).model_dump()
     assert client.post(url, json=body).status_code == 401
@@ -486,14 +491,14 @@ def test_completed_receipt_survives_reopen_without_dispatch(tmp_path):
 def test_citations_are_explicit_and_handoff_counts_are_strict(store):
     sid = store.create_session()
     record, _ = setup(store)
-    definition = collaboration.Team.model_validate(record["definition"])
+    definition = team_models.Team.model_validate(record["definition"])
     for role in definition.roles:
         role.budget.maxTurns = 2
     definition.budget.maxTurns = 4
     definition.budget.maxHandoffs = 2
     definition.handoffs[0].payload = "result_and_citations"
     definition.handoffs.append(
-        collaboration.Handoff(
+        team_models.Handoff(
             id="back",
             fromRoleId="second",
             toRoleId="first",
@@ -506,7 +511,7 @@ def test_citations_are_explicit_and_handoff_counts_are_strict(store):
     run = teams.start(
         store,
         record["id"],
-        teams.Start(
+        team_models.Start(
             request_id="team_run_request_001",
             expected_revision=2,
             source_session_id=sid,

@@ -17,9 +17,8 @@ from pydantic import (
     model_validator,
 )
 
-from pi.agents import characters
+from pi.agents import characters, team_models
 from pi.agents import profiles as agents
-from pi.agents import teams as collaboration
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.calls import runtime as calls
 from pi.content import artifact_models
@@ -114,14 +113,14 @@ PROJECT_MUTATION = TypeAdapter(ProjectMutation)
 
 class TeamCreate(StrictModel):
     operation: Literal["create"]
-    definition: collaboration.Team
+    definition: team_models.Team
 
 
 class TeamUpdate(StrictModel):
     operation: Literal["update"]
     id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
-    definition: collaboration.Team
+    definition: team_models.Team
 
 
 class TeamArchive(StrictModel):
@@ -477,7 +476,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         if isinstance(value, TeamCreate):
             return Mutation("POST", "/collaboration/teams", value.definition.model_dump())
         if isinstance(value, TeamUpdate):
-            body = collaboration.UpdateTeam(
+            body = team_models.UpdateTeam(
                 expected_revision=value.expected_revision, definition=value.definition
             ).model_dump()
             return Mutation("POST", f"/collaboration/teams/{value.id}/update", body)
@@ -486,7 +485,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
                 expected_revision=value.expected_revision, archived=True
             ).model_dump()
             return Mutation("POST", f"/collaboration/teams/{value.id}/archive", body)
-        body = collaboration.Revision(expected_revision=value.expected_revision).model_dump()
+        body = team_models.Revision(expected_revision=value.expected_revision).model_dump()
         return Mutation("POST", f"/collaboration/teams/{value.id}/restore", body)
     if resource == "jobs":
         try:

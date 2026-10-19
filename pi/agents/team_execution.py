@@ -5,16 +5,14 @@ import json
 import math
 import time
 import uuid
-from typing import Literal
-
-from pydantic import Field
 
 from pi.agents import profiles as agents
+from pi.agents import team_models
 from pi.agents import teams as collaboration
+from pi.agents.team_models import Finish, Start, Step
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
-from pi.core.models import Strict
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 
@@ -26,28 +24,6 @@ LIMITS = {
     "conditions": "owner-reviewed, not automatically evaluated",
     "authority": "none",
 }
-
-
-class Start(Strict):
-    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
-    expected_revision: int = Field(ge=1)
-    source_session_id: str = Field(min_length=1, max_length=200)
-    text: str = Field(min_length=1, max_length=8000)
-    budgetMode: Literal["observed-stop"]
-    acknowledgeCurrentCallMayOvershoot: Literal[True]
-
-
-class Step(Strict):
-    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
-    expected_revision: int = Field(ge=1)
-    roleId: str = Field(min_length=1, max_length=64)
-    handoffId: str | None = Field(default=None, min_length=1, max_length=64)
-    conditionReviewed: bool = False
-
-
-class Finish(Strict):
-    expected_revision: int = Field(ge=1)
-    state: Literal["completed", "cancelled"]
 
 
 SCHEMA = """
@@ -186,7 +162,7 @@ def start(store, team_id, body):
             identity = prior["id"]
         else:
             current = collaboration._get(db, team_id, "team", body.expected_revision, active=True)
-            definition = collaboration.Team.model_validate(current["definition"])
+            definition = team_models.Team.model_validate(current["definition"])
             profiles = collaboration._team_agents(db, definition)
             from pi.agents import characters
 
