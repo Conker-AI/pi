@@ -24,8 +24,7 @@ from pi.calls import runtime as calls
 from pi.content import artifact_models
 from pi.context import projects
 from pi.conversation import settings as session_settings
-from pi.host import filesystem_reads
-from pi.host import inventory as system_inventory
+from pi.host import filesystem_reads, inventory_models
 from pi.memory import edits as memory_edits
 from pi.memory import forget as memory_forget
 from pi.schedule import job_models, proposals, tasks
@@ -284,7 +283,7 @@ FileMutation = Annotated[FileListingRequest | FileListingResume, Field(discrimin
 FILE_MUTATION = TypeAdapter(FileMutation)
 
 
-class InventoryRequest(system_inventory.Read):
+class InventoryRequest(inventory_models.Read):
     operation: Literal["request"]
 
 
