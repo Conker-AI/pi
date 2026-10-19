@@ -4,7 +4,7 @@ import hashlib
 import json
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.context import controls as context_controls
@@ -385,17 +385,11 @@ def router(get_store, get_providers, authorize):
 
     @api.post("/sessions/{sid}/messages/{mid}/fact-check")
     def check_endpoint(sid: str, mid: str, body: Check):
-        try:
-            return check(get_store(), get_providers(), sid, mid, body)
-        except CheckError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return check(get_store(), get_providers(), sid, mid, body)
 
     @api.get("/sessions/{sid}/messages/{mid}/fact-checks")
     def history_endpoint(sid: str, mid: str):
-        try:
-            return history(get_store(), sid, mid)
-        except CheckError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return history(get_store(), sid, mid)
 
     return api
 

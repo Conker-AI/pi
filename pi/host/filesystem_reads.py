@@ -96,7 +96,7 @@ class DirectoryView(StrictModel):
     execution: Literal["directory-listing-only"] = "directory-listing-only"
 
 
-class FileReadError(ServiceError):
+class FileReadError(ServiceError, RuntimeError):
     pass
 
 

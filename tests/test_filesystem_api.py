@@ -9,6 +9,7 @@ from pi.actions.toolgate import ToolGateClient
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.api.routes import filesystem as filesystem_api
 from pi.conversation.store import Store
+from pi.core.errors import install
 
 
 def test_owner_routes_use_existing_gate_and_do_not_replay_listing(tmp_path, monkeypatch):
@@ -49,6 +50,7 @@ def test_owner_routes_use_existing_gate_and_do_not_replay_listing(tmp_path, monk
                 raise HTTPException(401)
 
         app = FastAPI()
+        install(app)
         app.include_router(filesystem_api.router(lambda: store, lambda: gate, authorize))
         with TestClient(app) as client:
             route = "/system/files/listings"
@@ -105,6 +107,7 @@ def test_browser_file_routes_are_exact_owner_only_and_reject_queries(tmp_path):
 
     with closing(Store(tmp_path / "pi.db")) as store:
         app = FastAPI()
+        install(app)
         app.include_router(filesystem_api.router(lambda: store, lambda: None, lambda: None))
         with TestClient(app) as client:
             response = client.get("/system/files/roots?path=ignored")

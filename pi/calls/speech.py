@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from pi.core.errors import ServiceError
+
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_SECONDS = 120
 MAX_TEXT_CHARACTERS = 4000
@@ -18,11 +20,9 @@ MAX_TRANSCRIPT_BYTES = 256 * 1024
 WAV_TYPES = {"audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave"}
 
 
-class SpeechError(RuntimeError):
+class SpeechError(ServiceError, RuntimeError):
     def __init__(self, code, status, message):
-        super().__init__(message)
-        self.code, self.status = code, status
-        self.detail = {"code": code, "message": message}
+        super().__init__(code, message, status)
 
 
 def _fail(code, status, message):

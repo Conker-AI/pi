@@ -33,10 +33,7 @@ def router(store, authorize):
     routes = APIRouter(prefix="/drafts", dependencies=[Depends(authorize), Depends(bounded_body)])
 
     def call(function, *args):
-        try:
-            return function(store(), *args)
-        except drafts.DraftError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from exc
+        return function(store(), *args)
 
     def scope(request, session_id=None, task_id=None, *, legacy=False):
         params = request.query_params

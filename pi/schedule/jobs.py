@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from pi.agents.profiles import StrictModel
+from pi.core.errors import ServiceError
 
 
 class Timing(StrictModel):
@@ -184,11 +185,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS scheduled_once ON scheduled_runs(job_id,schedu
 """
 
 
-class JobError(RuntimeError):
-    def __init__(self, detail, status=409):
-        super().__init__(detail)
-        self.detail = detail
-        self.status = status
+class JobError(ServiceError, RuntimeError):
+    def __init__(self, message, status=409):
+        super().__init__("not_found" if status == 404 else "job_conflict", message, status)
 
 
 def next_due(definition, after, *, anchor):

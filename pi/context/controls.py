@@ -91,7 +91,7 @@ BEGIN SELECT RAISE(ABORT,'turn context policy is immutable'); END;
 """
 
 
-class ContextError(ServiceError):
+class ContextError(ServiceError, RuntimeError):
     pass
 
 

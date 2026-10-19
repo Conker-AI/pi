@@ -247,7 +247,7 @@ BEGIN SELECT RAISE(ABORT,'call request receipts are permanent'); END;
 """
 
 
-class CallError(ServiceError):
+class CallError(ServiceError, RuntimeError):
     pass
 
 

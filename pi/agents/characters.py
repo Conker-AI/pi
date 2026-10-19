@@ -339,7 +339,7 @@ BEGIN SELECT RAISE(ABORT,'character versions are immutable'); END;
 """
 
 
-class CharacterError(ServiceError):
+class CharacterError(ServiceError, RuntimeError):
     pass
 
 

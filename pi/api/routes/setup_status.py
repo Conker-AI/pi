@@ -42,10 +42,7 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
     def record_choice(
         step: Annotated[setup_choices.ChoiceStep, Path()], body: setup_choices.ChoiceInput
     ):
-        try:
-            return setup_choices.record(store(), step, body)
-        except setup_choices.ChoiceError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_choices.record(store(), step, body)
 
     @routes.get("/boundaries")
     def boundaries():
@@ -63,10 +60,7 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
 
     @routes.post("/protection", response_model=setup_protection.Policy)
     def save_protection_policy(body: setup_protection.PolicyInput):
-        try:
-            return setup_protection.save(store(), body)
-        except setup_protection.ProtectionError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_protection.save(store(), body)
 
     @routes.get("/models", response_model=setup_models.Options)
     def model_options():
@@ -85,10 +79,7 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
 
     @routes.post("/models/probe", response_model=setup_model_probes.ProbeReceipt)
     def probe_model(body: setup_model_probes.ProbeInput):
-        try:
-            return setup_model_probes.probe(store(), model_router(), body)
-        except setup_model_probes.ProbeError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_model_probes.probe(store(), model_router(), body)
 
     @routes.get("/rehearsal", response_model=setup_rehearsal.Status)
     def rehearsal_status():
@@ -96,31 +87,19 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
 
     @routes.post("/rehearsal/memory-review", response_model=setup_rehearsal.Status)
     def rehearsal_memory_review(body: setup_rehearsal.MemoryReviewInput):
-        try:
-            return setup_rehearsal.review_memory(store(), body, memory())
-        except setup_rehearsal.RehearsalError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_rehearsal.review_memory(store(), body, memory())
 
     @routes.post("/rehearsal/approval/start", response_model=setup_rehearsal.Status)
     def rehearsal_approval_start(body: setup_rehearsal.ApprovalInput):
-        try:
-            return setup_rehearsal.start_approval(store(), body, toolgate())
-        except setup_rehearsal.RehearsalError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_rehearsal.start_approval(store(), body, toolgate())
 
     @routes.post("/rehearsal/approval/resume", response_model=setup_rehearsal.Status)
     def rehearsal_approval_resume(body: setup_rehearsal.ApprovalInput):
-        try:
-            return setup_rehearsal.resume_approval(store(), body, toolgate())
-        except setup_rehearsal.RehearsalError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_rehearsal.resume_approval(store(), body, toolgate())
 
     @routes.post("/rehearsal/finalize", response_model=setup_receipts.Receipt)
     def rehearsal_finalize():
-        try:
-            return setup_rehearsal.finalize(store())
-        except setup_rehearsal.RehearsalError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+        return setup_rehearsal.finalize(store())
 
     @routes.post("/models/activate", response_model=setup_models.Activated)
     def activate_model(body: setup_models.Activation):
@@ -132,55 +111,50 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
             raise HTTPException(404, str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(422, str(exc)) from exc
-        except setup_model_probes.ProbeError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
 
     @routes.post("/receipts/{step}", response_model=setup_receipts.Receipt)
     def record_receipt(
         step: Annotated[setup_receipts.ReceiptStep, Path()], body: setup_receipts.ReceiptInput
     ):
-        try:
-            if step == "rehearsal":
+        if step == "rehearsal":
+            raise setup_receipts.ReceiptError(
+                "server_evidence_required",
+                "Rehearsal evidence is created only by the verified first-run workflow.",
+                403,
+            )
+        if step == "protection":
+            policy = setup_protection.current(store())
+            expected_subject = setup_protection.receipt_subject(policy)
+            if expected_subject is None:
                 raise setup_receipts.ReceiptError(
-                    "server_evidence_required",
-                    "Rehearsal evidence is created only by the verified first-run workflow.",
-                    403,
+                    "protection_policy_missing",
+                    "Configure an off-machine backup policy before recording evidence.",
+                    409,
                 )
-            if step == "protection":
-                policy = setup_protection.current(store())
-                expected_subject = setup_protection.receipt_subject(policy)
-                if expected_subject is None:
-                    raise setup_receipts.ReceiptError(
-                        "protection_policy_missing",
-                        "Configure an off-machine backup policy before recording evidence.",
-                        409,
-                    )
-                if body.source != "conker.coordinated-backup" or body.subject != expected_subject:
-                    raise setup_receipts.ReceiptError(
-                        "protection_policy_changed",
-                        "Protection evidence does not match the current backup policy.",
-                        409,
-                    )
-            if step == "boundaries":
-                client = toolgate()
-                if client is None:
-                    raise setup_receipts.ReceiptError(
-                        "policy_unavailable", "ToolGate policy is unavailable.", 503
-                    )
-                try:
-                    digest = client.policy_summary()["digest"]
-                except Exception as exc:
-                    raise setup_receipts.ReceiptError(
-                        "policy_unavailable", "ToolGate policy is unavailable.", 503
-                    ) from exc
-                if body.evidenceDigest != digest:
-                    raise setup_receipts.ReceiptError(
-                        "policy_changed",
-                        "ToolGate policy changed before the review was recorded.",
-                        409,
-                    )
-            return setup_receipts.record(store(), step, body)
-        except setup_receipts.ReceiptError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.detail}) from exc
+            if body.source != "conker.coordinated-backup" or body.subject != expected_subject:
+                raise setup_receipts.ReceiptError(
+                    "protection_policy_changed",
+                    "Protection evidence does not match the current backup policy.",
+                    409,
+                )
+        if step == "boundaries":
+            client = toolgate()
+            if client is None:
+                raise setup_receipts.ReceiptError(
+                    "policy_unavailable", "ToolGate policy is unavailable.", 503
+                )
+            try:
+                digest = client.policy_summary()["digest"]
+            except Exception as exc:
+                raise setup_receipts.ReceiptError(
+                    "policy_unavailable", "ToolGate policy is unavailable.", 503
+                ) from exc
+            if body.evidenceDigest != digest:
+                raise setup_receipts.ReceiptError(
+                    "policy_changed",
+                    "ToolGate policy changed before the review was recorded.",
+                    409,
+                )
+        return setup_receipts.record(store(), step, body)
 
     return routes

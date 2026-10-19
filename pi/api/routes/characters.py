@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from pi.agents import characters
-from pi.agents import profiles as agents
 
 
 def router(store, authorize):
@@ -18,8 +17,6 @@ def router(store, authorize):
             return JSONResponse(
                 result, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
             )
-        except (characters.CharacterError, agents.AgentError) as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
         except (ValueError, RecursionError) as exc:
             raise HTTPException(422, "Invalid character package.") from exc
 

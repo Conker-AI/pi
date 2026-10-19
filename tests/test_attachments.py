@@ -13,6 +13,7 @@ from pi.content import attachment_files
 from pi.content import attachments as a
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core.errors import install
 
 resolve = session_settings.source_privacy
 
@@ -192,6 +193,7 @@ def test_owner_raw_http_upload_and_safe_download(store):
             raise HTTPException(403)
 
     app = FastAPI()
+    install(app)
     app.include_router(router(lambda: store, authorize, resolve))
     client = TestClient(app)
     session = store.create_session()

@@ -17,8 +17,6 @@ def router(store, authorize, resolve=None):
     def run(fn, *args):
         try:
             return fn(store(), *args, resolve=resolve)
-        except attachments.AttachmentError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
         except ValueError as exc:
             raise HTTPException(422, "Invalid attachment metadata.") from exc
 

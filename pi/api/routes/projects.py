@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from pi.context import projects
 
@@ -11,10 +11,7 @@ def router(store, authorize, resolve=None):
     routes = APIRouter(prefix="/projects", dependencies=[Depends(authorize)])
 
     def run(fn, *args, **kwargs):
-        try:
-            return fn(store(), *args, **kwargs)
-        except projects.ProjectError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return fn(store(), *args, **kwargs)
 
     ProjectPath = Annotated[str, Path(pattern=r"^project_[0-9a-f]{32}$")]
 

@@ -62,7 +62,7 @@ from pi.conversation import retries as response_retries
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
-from pi.core.errors import ServiceError
+from pi.core import errors
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
@@ -76,10 +76,7 @@ _health_cache: dict = {}
 app = FastAPI(title="Pi", version=SERVICE_VERSION, lifespan=lifespan)
 
 
-@app.exception_handler(ServiceError)
-async def service_error(request: Request, exc: ServiceError):
-    # Every refusal has one shape: {"detail": {"code", "message", ...}} with its status.
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+errors.install(app)
 
 
 @app.exception_handler(RequestValidationError)

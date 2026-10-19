@@ -5,6 +5,7 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only
 from pi.api.routes.calls import router
 from pi.calls import runtime as calls
 from pi.conversation.store import Store
+from pi.core.errors import install
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.turns.loop import Loop
@@ -87,6 +88,7 @@ def test_browser_call_lifecycle_is_typed_bounded_and_reconnectable(tmp_path):
             raise HTTPException(401)
 
     app = FastAPI()
+    install(app)
     app.include_router(router(lambda: store, lambda: loop, owner, lambda: speech))
     source = store.create_session()
     headers = {"X-Owner": "owner"}

@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from pi.agents.profiles import StrictModel
+from pi.core.errors import ServiceError
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversation_drafts (
@@ -84,10 +85,9 @@ class Start(StrictModel):
     expected_revision: int = Field(ge=1)
 
 
-class DraftError(ValueError):
+class DraftError(ServiceError, ValueError):
     def __init__(self, message, code="draft_conflict", status=409):
-        super().__init__(message)
-        self.code, self.status = code, status
+        super().__init__(code, message, status)
 
 
 def _bounded(body):

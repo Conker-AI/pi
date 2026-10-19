@@ -45,7 +45,7 @@ class PortRequest(StrictModel):
     review_id: str = Field(pattern=r"^[a-f0-9]{48}$")
 
 
-class ActionError(ServiceError):
+class ActionError(ServiceError, RuntimeError):
     pass
 
 

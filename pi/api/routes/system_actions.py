@@ -1,6 +1,6 @@
 """Owner system controls use the existing gate approval path, never direct Docker."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from pi.host import actions
@@ -14,10 +14,7 @@ def router(store, gate, authorize):
     routes = APIRouter(prefix="/system/actions", dependencies=[Depends(authorize)])
 
     def invoke(function, *args):
-        try:
-            return function(store(), gate(), *args)
-        except actions.ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return function(store(), gate(), *args)
 
     @routes.post("")
     def request(body: actions.Request):
@@ -64,38 +61,26 @@ def targets_router(gate, authorize):
 
     @routes.post("/port-reviews")
     def create_port_review(body: system_port_reviews.Request):
-        try:
-            return JSONResponse(
-                system_port_reviews.fetch(gate(), request=body),
-                headers={"Cache-Control": "no-store"},
-            )
-        except actions.ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return JSONResponse(
+            system_port_reviews.fetch(gate(), request=body),
+            headers={"Cache-Control": "no-store"},
+        )
 
     @routes.get("/port-reviews/{review_id}")
     def get_port_review(review_id: str):
-        try:
-            return JSONResponse(
-                system_port_reviews.fetch(gate(), review_id=review_id),
-                headers={"Cache-Control": "no-store"},
-            )
-        except actions.ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return JSONResponse(
+            system_port_reviews.fetch(gate(), review_id=review_id),
+            headers={"Cache-Control": "no-store"},
+        )
 
     @routes.get("/targets")
     def targets():
-        try:
-            return JSONResponse(system_targets.read(gate()), headers={"Cache-Control": "no-store"})
-        except actions.ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return JSONResponse(system_targets.read(gate()), headers={"Cache-Control": "no-store"})
 
     @routes.get("/services")
     def services():
-        try:
-            return JSONResponse(
-                system_targets.read(gate(), services=True), headers={"Cache-Control": "no-store"}
-            )
-        except actions.ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return JSONResponse(
+            system_targets.read(gate(), services=True), headers={"Cache-Control": "no-store"}
+        )
 
     return routes

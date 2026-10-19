@@ -310,7 +310,7 @@ class ConfiguredTargetsView(StrictModel):
     execution: Literal["not-triggered"] = "not-triggered"
 
 
-class InventoryError(ServiceError):
+class InventoryError(ServiceError, RuntimeError):
     pass
 
 

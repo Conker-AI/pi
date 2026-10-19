@@ -71,3 +71,5 @@ What works end to end in a real deployment is tracked in Conker's
 ## API reference
 
 [Pi OpenAPI](pi-openapi.json) · [Gateway OpenAPI](gateway-openapi.json)
+
+[Errors](errors.md): the one refusal shape every route uses.

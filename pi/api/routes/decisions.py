@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from pi.context import decisions
 
@@ -7,10 +7,7 @@ def router(store, authorize):
     routes = APIRouter(prefix="/context", dependencies=[Depends(authorize)])
 
     def invoke(fn, *args):
-        try:
-            return fn(store(), *args)
-        except decisions.DecisionError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.message}) from None
+        return fn(store(), *args)
 
     @routes.get("/{session_id}/items")
     def get_items(session_id: str):

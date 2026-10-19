@@ -6,7 +6,7 @@ import random
 import time
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.context import controls as context_controls
@@ -348,10 +348,7 @@ def router(get_store, get_providers, authorize):
 
     @api.post("/sessions/{sid}/response-families/{root}/judge")
     def judge_endpoint(sid: str, root: str, body: Judge):
-        try:
-            return judge(get_store(), get_providers(), sid, root, body)
-        except JudgeError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return judge(get_store(), get_providers(), sid, root, body)
 
     @api.get("/sessions/{sid}/response-families/{root}/judgements")
     def get_judgements_endpoint(sid: str, root: str):

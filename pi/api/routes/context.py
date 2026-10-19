@@ -7,10 +7,7 @@ def router(store, authorize):
     routes = APIRouter(prefix="/context", dependencies=[Depends(authorize)])
 
     def invoke(fn, *args):
-        try:
-            return fn(store(), *args)
-        except controls.ContextError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return fn(store(), *args)
 
     @routes.get("/{session_id}")
     def get(session_id: str):
@@ -27,10 +24,7 @@ def router(store, authorize):
     @routes.get("/{session_id}/selections/{request_id}")
     def selection(session_id: str, request_id: str):
         # Read-only inspection never starts or resumes a helper.
-        try:
-            value = retrieval.read(store(), session_id, request_id=request_id)
-        except controls.ContextError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        value = retrieval.read(store(), session_id, request_id=request_id)
         if value is None:
             raise HTTPException(404, "Context selection not found.")
         return value

@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 
 from pi.host import filesystem_reads as reads
 from pi.host import filesystem_roots
-from pi.host.actions import ActionError
 
 
 def router(store, gate, authorize):
@@ -25,16 +24,10 @@ def router(store, gate, authorize):
     def roots(request: Request, response: Response):
         exact(request)
         no_store(response)
-        try:
-            return filesystem_roots.browser_view(filesystem_roots.read(gate()))
-        except ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return filesystem_roots.browser_view(filesystem_roots.read(gate()))
 
     def invoke(function, *args):
-        try:
-            return reads.browser_view(function(store(), gate(), *args))
-        except reads.FileReadError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return reads.browser_view(function(store(), gate(), *args))
 
     @routes.post("/listings", response_model=reads.DirectoryView)
     def request(body: reads.Read, request: Request, response: Response):

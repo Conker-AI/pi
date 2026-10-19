@@ -13,8 +13,6 @@ def router(store, authorize, resolve=None):
     def run(fn, *args, **kwargs):
         try:
             return fn(store(), *args, resolve=resolve, **kwargs)
-        except artifacts.ArtifactError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
         except ValueError as exc:
             raise HTTPException(422, "Invalid artifact content.") from exc
 
