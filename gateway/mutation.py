@@ -22,7 +22,7 @@ from pi.agents import profiles as agents
 from pi.agents import teams as collaboration
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.calls import runtime as calls
-from pi.content import artifacts
+from pi.content import artifact_models
 from pi.context import projects
 from pi.conversation import settings as session_settings
 from pi.host import filesystem_reads
@@ -216,25 +216,25 @@ TaskMutation = Annotated[
 TASK_MUTATION = TypeAdapter(TaskMutation)
 
 
-class ArtifactCreate(artifacts.Create):
+class ArtifactCreate(artifact_models.Create):
     operation: Literal["create"]
 
 
-class ArtifactFromMessage(artifacts.FromMessage):
+class ArtifactFromMessage(artifact_models.FromMessage):
     operation: Literal["from_message"]
 
 
-class ArtifactAppend(artifacts.Append):
+class ArtifactAppend(artifact_models.Append):
     operation: Literal["append"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 
 
-class ArtifactRestore(artifacts.Restore):
+class ArtifactRestore(artifact_models.Restore):
     operation: Literal["restore"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 
 
-class ArtifactArchive(artifacts.Archive):
+class ArtifactArchive(artifact_models.Archive):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 
