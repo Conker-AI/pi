@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from pi.schedule.jobs import Target
+from pi.schedule.job_models import Target
 
 
 class PublishedJobs:

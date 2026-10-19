@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation.store import Store
-from pi.schedule import jobs
+from pi.schedule import job_models, jobs
 
 OWNER = "jobs-owner-control-key-" + "o" * 32
 
@@ -25,7 +25,7 @@ def definition(**changes):
         target=dict(kind="automation", id="report", publishedVersion=1, digest="a" * 64, args={}),
     )
     value.update(changes)
-    return jobs.Definition.model_validate(value)
+    return job_models.Definition.model_validate(value)
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ def test_snapshot_immutable_from_update_or_claim_tampering(store):
     jobs.update(
         store,
         job["id"],
-        jobs.Update(
+        job_models.Update(
             expected_revision=1,
             definition=definition(
                 target=dict(
@@ -98,7 +98,9 @@ def test_snapshot_immutable_from_update_or_claim_tampering(store):
     assert captured[0]["id"] == "report"
     assert captured[0]["publishedVersion"] == 1
     with pytest.raises(jobs.JobError, match="changed"):
-        jobs.update(store, job["id"], jobs.Update(expected_revision=1, definition=definition()))
+        jobs.update(
+            store, job["id"], job_models.Update(expected_revision=1, definition=definition())
+        )
 
 
 def test_uncertain_effect_never_retried_or_overlapped(store):
@@ -203,7 +205,7 @@ def test_approval_resume_uses_saved_identity_once(store):
     jobs.update(
         store,
         job["id"],
-        jobs.Update(expected_revision=1, definition=definition(agentId="changed")),
+        job_models.Update(expected_revision=1, definition=definition(agentId="changed")),
         now=3601,
     )
     calls = []

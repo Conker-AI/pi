@@ -3,7 +3,6 @@
 gateway/api.py 1265  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 gateway/mutation.py 739  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/calls/runtime.py 1019  # +2 import lines on 2026-10-15: the package move (A-01) split one relative import across packages; raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
-pi/schedule/jobs.py 650
 pi/turns/loop.py 1156  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/setup/status.py 764  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/conversation/store.py 640  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down

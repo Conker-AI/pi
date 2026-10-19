@@ -8,7 +8,7 @@ from test_jobs import definition, store  # noqa: F401
 
 from pi.actions.toolgate import ToolGateClient
 from pi.api.routes.jobs import router
-from pi.schedule import jobs
+from pi.schedule import job_models, jobs
 from pi.schedule.job_execution import PublishedJobs
 from pi.schedule.job_worker import JobWorker
 
@@ -37,7 +37,7 @@ def test_paid_runs_wait_bind_once_and_retain_budget_on_resume(request):
     run = jobs.runs(database, job["id"])[0]
     assert run["status"] == "awaiting_budget" and not adapter.calls
     assert jobs.dispatch_claim(database, run, adapter) == "awaiting_budget"
-    body = jobs.BudgetBinding(budget_id=BUDGET)
+    body = job_models.BudgetBinding(budget_id=BUDGET)
     adapter.valid = False
     with pytest.raises(jobs.JobError):
         jobs.bind_budget(database, run["id"], body, adapter)

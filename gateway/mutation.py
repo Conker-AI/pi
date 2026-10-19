@@ -28,7 +28,7 @@ from pi.host import filesystem_reads
 from pi.host import inventory as system_inventory
 from pi.memory import edits as memory_edits
 from pi.memory import forget as memory_forget
-from pi.schedule import jobs, proposals, tasks
+from pi.schedule import job_models, proposals, tasks
 
 from .api import Config
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed
@@ -493,7 +493,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         except ValidationError:
             raise MutationError("Job apply request has an unsupported shape.") from None
         if isinstance(value, JobState):
-            body = jobs.StateChange(
+            body = job_models.StateChange(
                 expected_revision=value.expected_revision, enabled=value.enabled
             ).model_dump()
             return Mutation("POST", f"/jobs/{value.id}/state", body)
