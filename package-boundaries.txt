@@ -59,6 +59,7 @@ gateway -> calls
 gateway -> content
 gateway -> context
 gateway -> conversation
+gateway -> core
 gateway -> host
 gateway -> memory
 gateway -> models

@@ -8,8 +8,6 @@ from typing import Annotated, BinaryIO, Literal
 
 import httpx
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     JsonValue,
     TypeAdapter,
@@ -24,6 +22,7 @@ from pi.calls import runtime as calls
 from pi.content import artifact_models
 from pi.context import projects
 from pi.conversation import settings as session_settings
+from pi.core.models import Strict
 from pi.host import filesystem_reads, inventory_models
 from pi.memory import edits as memory_edits
 from pi.memory import forget as memory_forget
@@ -48,23 +47,19 @@ class Mutation:
     authority: Literal["owner", "runtime", "toolgate-owner", "toolgate-owner-execution"] = "owner"
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class AgentCreate(StrictModel):
+class AgentCreate(Strict):
     operation: Literal["create"]
     configuration: agents.AgentInput
 
 
-class AgentUpdate(StrictModel):
+class AgentUpdate(Strict):
     operation: Literal["update"]
     id: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
     expected_revision: int = Field(ge=1)
     configuration: agents.AgentInput
 
 
-class AgentArchive(StrictModel):
+class AgentArchive(Strict):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^agent_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
@@ -77,26 +72,26 @@ AgentMutation = Annotated[
 AGENT_MUTATION = TypeAdapter(AgentMutation)
 
 
-class ProjectCreate(StrictModel):
+class ProjectCreate(Strict):
     operation: Literal["create"]
     fields: projects.Fields
 
 
-class ProjectUpdate(StrictModel):
+class ProjectUpdate(Strict):
     operation: Literal["update"]
     id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
     fields: projects.Fields
 
 
-class ProjectArchive(StrictModel):
+class ProjectArchive(Strict):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
     archived: bool
 
 
-class ProjectLink(StrictModel):
+class ProjectLink(Strict):
     operation: Literal["link", "unlink"]
     id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
@@ -110,25 +105,25 @@ ProjectMutation = Annotated[
 PROJECT_MUTATION = TypeAdapter(ProjectMutation)
 
 
-class TeamCreate(StrictModel):
+class TeamCreate(Strict):
     operation: Literal["create"]
     definition: team_models.Team
 
 
-class TeamUpdate(StrictModel):
+class TeamUpdate(Strict):
     operation: Literal["update"]
     id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
     definition: team_models.Team
 
 
-class TeamArchive(StrictModel):
+class TeamArchive(Strict):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
 
 
-class TeamRestore(StrictModel):
+class TeamRestore(Strict):
     operation: Literal["restore"]
     id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
@@ -141,14 +136,14 @@ TeamMutation = Annotated[
 TEAM_MUTATION = TypeAdapter(TeamMutation)
 
 
-class JobState(StrictModel):
+class JobState(Strict):
     operation: Literal["state"]
     id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
     enabled: bool
 
 
-class JobRun(StrictModel):
+class JobRun(Strict):
     operation: Literal["run"]
     id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
@@ -161,7 +156,7 @@ JobMutation = Annotated[
 JOB_MUTATION = TypeAdapter(JobMutation)
 
 
-class MemoryForget(StrictModel):
+class MemoryForget(Strict):
     operation: Literal["forget"]
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
@@ -182,7 +177,7 @@ MEMORY_MUTATION = TypeAdapter(
 )
 
 
-class ProposalDecision(StrictModel):
+class ProposalDecision(Strict):
     operation: Literal["decide"]
     id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_-]+$")
     decision: Literal["accept", "decline", "never"]
@@ -249,19 +244,19 @@ class SessionUpdate(session_settings.Update):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
 
 
-class ApprovalDecision(StrictModel):
+class ApprovalDecision(Strict):
     operation: Literal["decide"]
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
     status: Literal["approved", "rejected", "dismissed"]
     note: str = Field(default="", max_length=2000)
 
 
-class TurnResume(StrictModel):
+class TurnResume(Strict):
     operation: Literal["resume"]
     id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_-]+$")
 
 
-class SubmissionCancel(StrictModel):
+class SubmissionCancel(Strict):
     operation: Literal["cancel_submission"]
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
@@ -274,7 +269,7 @@ class FileListingRequest(filesystem_reads.Read):
     operation: Literal["request"]
 
 
-class FileListingResume(StrictModel):
+class FileListingResume(Strict):
     operation: Literal["resume"]
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
 
@@ -287,7 +282,7 @@ class InventoryRequest(inventory_models.Read):
     operation: Literal["request"]
 
 
-class InventoryResume(StrictModel):
+class InventoryResume(Strict):
     operation: Literal["resume"]
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
 
@@ -345,7 +340,7 @@ CallMutation = Annotated[
 CALL_MUTATION = TypeAdapter(CallMutation)
 
 
-class ToolSave(StrictModel):
+class ToolSave(Strict):
     operation: Literal["save"]
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     expected_revision: int = Field(ge=0)
@@ -358,7 +353,7 @@ class ToolSave(StrictModel):
         return self
 
 
-class ToolPublish(StrictModel):
+class ToolPublish(Strict):
     operation: Literal["publish"]
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     expected_revision: int = Field(ge=1)
@@ -366,7 +361,7 @@ class ToolPublish(StrictModel):
     authorization: Literal["auto", "owner_confirmation"]
 
 
-class ToolAccess(StrictModel):
+class ToolAccess(Strict):
     operation: Literal["access"]
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     version: int = Field(ge=1)
@@ -374,7 +369,7 @@ class ToolAccess(StrictModel):
     enabled: bool
 
 
-class ToolRun(StrictModel):
+class ToolRun(Strict):
     operation: Literal["run"]
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     version: int = Field(ge=1)
