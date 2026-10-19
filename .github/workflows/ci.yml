@@ -65,6 +65,10 @@ jobs:
         # One package per type; cross-package imports are listed and may only be removed.
         run: python scripts/check_package_boundaries.py
 
+      - name: OpenAPI documents match the code
+        # docs/*-openapi.json are the API reference; written by hand once, they fell months behind.
+        run: python scripts/export_openapi.py --check
+
       - name: Tests
         run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q
 
