@@ -8,9 +8,10 @@ from typing import Literal
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from pi.agents import profiles as agents
+from pi.core.models import Strict
 
 
-class Budget(agents.StrictModel):
+class Budget(Strict):
     maxTurns: int = Field(ge=1, le=200)
     maxTokens: int = Field(ge=1, le=1000000)
     maxCostCents: int = Field(ge=0, le=1000000)
@@ -20,7 +21,7 @@ class TeamBudget(Budget):
     maxHandoffs: int = Field(ge=0, le=100)
 
 
-class Context(agents.StrictModel):
+class Context(Strict):
     mode: Literal["task_only", "selected"]
     sourceIds: list[str] = Field(max_length=100)
 
@@ -36,7 +37,7 @@ class Context(agents.StrictModel):
         return self
 
 
-class Role(agents.StrictModel):
+class Role(Strict):
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     name: str = Field(min_length=1, max_length=80)
     agentId: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
@@ -72,7 +73,7 @@ class Role(agents.StrictModel):
         return value
 
 
-class Handoff(agents.StrictModel):
+class Handoff(Strict):
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     fromRoleId: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     toRoleId: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
@@ -86,7 +87,7 @@ class Handoff(agents.StrictModel):
         return agents.AgentInput.text(value)
 
 
-class Team(agents.StrictModel):
+class Team(Strict):
     name: str = Field(min_length=1, max_length=80)
     objective: str = Field(min_length=1, max_length=2000)
     roles: list[Role] = Field(min_length=1, max_length=12)
@@ -126,7 +127,7 @@ class Team(agents.StrictModel):
         return self
 
 
-class Template(agents.StrictModel):
+class Template(Strict):
     name: str = Field(min_length=1, max_length=80)
     description: str = Field(min_length=1, max_length=1000)
     agent: agents.AgentInput
@@ -144,7 +145,7 @@ class Template(agents.StrictModel):
         return value
 
 
-class Revision(agents.StrictModel):
+class Revision(Strict):
     expected_revision: int = Field(ge=1)
 
 
@@ -156,7 +157,7 @@ class UpdateTeam(Revision):
     definition: Team
 
 
-class TeamSummary(agents.StrictModel):
+class TeamSummary(Strict):
     schemaVersion: Literal[1] = 1
     id: str = Field(pattern=r"^team_[0-9a-f]{32}$")
     revision: int = Field(ge=1)
@@ -172,7 +173,7 @@ class TeamSummary(agents.StrictModel):
     )
 
 
-class AgentReference(agents.StrictModel):
+class AgentReference(Strict):
     roleId: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     agentId: str = Field(pattern=r"^(?:companion|agent_[0-9a-f]{32})$")
     revision: int = Field(ge=1)
@@ -185,7 +186,7 @@ class TeamView(TeamSummary):
     agentReferenceState: Literal["available", "unavailable", "selection-conflict"]
 
 
-class TeamCollection(agents.StrictModel):
+class TeamCollection(Strict):
     schemaVersion: Literal[1] = 1
     results: list[TeamSummary] = Field(max_length=100)
     nextCursor: str | None = Field(default=None, pattern=r"^team_[0-9a-f]{32}$")
@@ -197,7 +198,7 @@ class TeamRevision(TeamSummary):
     historical: Literal[True] = True
 
 
-class TeamHistory(agents.StrictModel):
+class TeamHistory(Strict):
     schemaVersion: Literal[1] = 1
     results: list[TeamSummary] = Field(max_length=100)
     nextRevision: int | None = Field(default=None, ge=1)

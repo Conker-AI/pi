@@ -14,6 +14,7 @@ from pi.agents import teams as collaboration
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 
@@ -27,7 +28,7 @@ LIMITS = {
 }
 
 
-class Start(agents.StrictModel):
+class Start(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     expected_revision: int = Field(ge=1)
     source_session_id: str = Field(min_length=1, max_length=200)
@@ -36,7 +37,7 @@ class Start(agents.StrictModel):
     acknowledgeCurrentCallMayOvershoot: Literal[True]
 
 
-class Step(agents.StrictModel):
+class Step(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     expected_revision: int = Field(ge=1)
     roleId: str = Field(min_length=1, max_length=64)
@@ -44,7 +45,7 @@ class Step(agents.StrictModel):
     conditionReviewed: bool = False
 
 
-class Finish(agents.StrictModel):
+class Finish(Strict):
     expected_revision: int = Field(ge=1)
     state: Literal["completed", "cancelled"]
 

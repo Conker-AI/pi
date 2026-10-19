@@ -12,8 +12,6 @@ import zlib
 from typing import Annotated, Literal
 
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     StringConstraints,
     field_validator,
@@ -22,6 +20,7 @@ from pydantic import (
 
 from pi.agents import profiles as agents
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 MAX_PACKAGE_BYTES = 32 * 1024 * 1024
 MAX_REQUEST_BYTES = 66 * 1024 * 1024
@@ -32,10 +31,6 @@ AssetId = Annotated[
     str, StringConstraints(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9_-]+$")
 ]
 Assignment = Annotated[str, Field(max_length=80)] | None
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 def _media(source, kind):

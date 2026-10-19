@@ -12,14 +12,12 @@ from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from pi.core.models import Strict
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class QuietHours(StrictModel):
+class QuietHours(Strict):
     enabled: bool
     start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -43,13 +41,13 @@ class QuietHours(StrictModel):
         return self
 
 
-class DailyBudget(StrictModel):
+class DailyBudget(Strict):
     suggestions: int = Field(ge=0, le=100)
     researchMinutes: int = Field(ge=0, le=1440)
     costCents: int = Field(ge=0, le=100000)
 
 
-class OwnerPreferences(StrictModel):
+class OwnerPreferences(Strict):
     quietHours: QuietHours
     urgency: Literal["meaningful", "urgent_only", "off"]
     dailyBudget: DailyBudget
@@ -63,7 +61,7 @@ class OwnerPreferences(StrictModel):
         return value
 
 
-class UpdatePreferences(StrictModel):
+class UpdatePreferences(Strict):
     expected_revision: int = Field(ge=1)
     preferences: OwnerPreferences
 
@@ -147,7 +145,7 @@ def quiet_now(preferences: OwnerPreferences, instant: datetime) -> bool:
     return clock >= quiet.start or clock < quiet.end
 
 
-class Usage(StrictModel):
+class Usage(Strict):
     suggestions: int = Field(ge=0)
     researchMinutes: int = Field(ge=0)
     costCents: int = Field(ge=0)

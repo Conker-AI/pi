@@ -24,8 +24,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from pi.agents import profiles as agents
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models.providers import Message
 from pi.owner import preferences as prefs
 from pi.schedule import proactive_budget
@@ -84,7 +84,7 @@ take over", "ifApproved": "one sentence: what would be prepared or asked next", 
 "evidence": ["e1", "e2"]}}]}}"""
 
 
-class Decision(agents.StrictModel):
+class Decision(Strict):
     decision: Literal["accept", "decline", "never"]
 
 

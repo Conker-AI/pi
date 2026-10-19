@@ -12,15 +12,11 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
+from pydantic import Field, StringConstraints, TypeAdapter, model_validator
 
 from pi.conversation import citations
 from pi.core.errors import ServiceError
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
+from pi.core.models import Strict
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 NodeID = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]

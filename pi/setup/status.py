@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.agents import profiles as agents
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
@@ -109,18 +110,14 @@ OPERATIONS: dict[BlockingReasonCode, RecommendedOperation] = {
 }
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class Evidence(StrictModel):
+class Evidence(Strict):
     source: str = Field(min_length=1, max_length=80)
     status: Literal["ok", "missing", "degraded", "unknown"]
     revision: int | None = Field(default=None, ge=0)
     detail: str = Field(min_length=1, max_length=160)
 
 
-class Step(StrictModel):
+class Step(Strict):
     id: StepId
     state: StepState
     required: bool
@@ -129,7 +126,7 @@ class Step(StrictModel):
     evidence: list[Evidence]
 
 
-class SetupStatus(StrictModel):
+class SetupStatus(Strict):
     schemaVersion: Literal[1] = 1
     workflow: Literal["first-run"] = "first-run"
     state: WorkflowState

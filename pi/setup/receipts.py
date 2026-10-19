@@ -7,9 +7,10 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 ReceiptStep = Literal["boundaries", "protection", "rehearsal"]
 ReceiptState = Literal["valid", "stale"]
@@ -62,11 +63,7 @@ class ReceiptError(ServiceError):
         super().__init__(code, detail, status)
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class ReceiptInput(StrictModel):
+class ReceiptInput(Strict):
     receiptId: str = Field(min_length=1, max_length=128)
     source: str = Field(min_length=1, max_length=128)
     subject: str = Field(min_length=1, max_length=96)
@@ -113,7 +110,7 @@ class ReceiptInput(StrictModel):
         return self
 
 
-class Receipt(StrictModel):
+class Receipt(Strict):
     step: ReceiptStep
     revision: int = Field(gt=0)
     receiptId: str

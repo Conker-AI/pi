@@ -12,14 +12,10 @@ import time
 import uuid
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator
 
 from pi.core.errors import ServiceError
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
+from pi.core.models import Strict
 
 ProjectId = Annotated[str, StringConstraints(pattern=r"^project_[0-9a-f]{32}$")]
 SessionId = Annotated[str, StringConstraints(pattern=r"^ses_[0-9a-f]{16}$")]

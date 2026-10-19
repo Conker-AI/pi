@@ -5,6 +5,7 @@ import time
 from pydantic import Field
 
 from pi.context import controls
+from pi.core.models import Strict
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_summary_versions (
@@ -34,12 +35,12 @@ END;
 """
 
 
-class Edit(controls.Strict):
+class Edit(Strict):
     expected_revision: int = Field(ge=0)
     summary: str = Field(max_length=16000)
 
 
-class Restore(controls.Strict):
+class Restore(Strict):
     expected_revision: int = Field(ge=0)
     revision: int = Field(ge=0)
 

@@ -5,13 +5,14 @@ import json
 import time
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.context import controls as context_controls
 from pi.context import research
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -28,8 +29,7 @@ class CheckError(ServiceError):
     pass
 
 
-class Check(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Check(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
 

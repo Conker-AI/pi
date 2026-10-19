@@ -8,6 +8,7 @@ from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.conversation import settings as session_settings
+from pi.core.models import Strict
 from pi.owner import preferences as owner_preferences
 
 SCHEMA = """
@@ -75,7 +76,7 @@ def urgency(status):
     }
 
 
-class Acknowledge(agents.StrictModel):
+class Acknowledge(Strict):
     event_ids: list[str] = Field(min_length=1, max_length=100)
 
 

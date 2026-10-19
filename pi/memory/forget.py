@@ -12,13 +12,13 @@ import threading
 import httpx
 from pydantic import Field
 
-from pi.agents import profiles as agents
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
 
 
-class Forget(agents.StrictModel):
+class Forget(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
     expected_revision: int = Field(ge=1, le=2147483646)

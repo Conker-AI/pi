@@ -6,12 +6,13 @@ import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.content import attachment_turns, attachments
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.schedule import tasks
 
 SCHEMA = """
@@ -29,8 +30,7 @@ CREATE INDEX IF NOT EXISTS queued_turn_order ON queued_turns(session_id,created_
 """
 
 
-class Enqueue(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Enqueue(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     text: str = Field(min_length=1, max_length=4000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=5)
@@ -40,14 +40,12 @@ class Enqueue(BaseModel):
     think: bool = False
 
 
-class Edit(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Edit(Strict):
     expected_revision: int = Field(ge=1)
     text: str = Field(min_length=1, max_length=4000)
 
 
-class Revision(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Revision(Strict):
     expected_revision: int = Field(ge=1)
 
 
@@ -57,8 +55,7 @@ class Review(Revision):
     think: bool = False
 
 
-class QueueRevision(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class QueueRevision(Strict):
     expected_revision: int = Field(ge=0)
 
 

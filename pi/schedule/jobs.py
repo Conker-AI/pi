@@ -11,18 +11,18 @@ from zoneinfo import ZoneInfo
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
-from pi.agents.profiles import StrictModel
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 
-class Timing(StrictModel):
+class Timing(Strict):
     kind: Literal["daily", "weekly", "interval"]
     time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     day: int = Field(ge=0, le=6)
     hours: int = Field(ge=1, le=168)
 
 
-class Target(StrictModel):
+class Target(Strict):
     kind: Literal["tool", "automation"]
     id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.-]+$")
     publishedVersion: int = Field(ge=1)
@@ -37,7 +37,7 @@ class Target(StrictModel):
         return value
 
 
-class Definition(StrictModel):
+class Definition(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructions: str = Field(min_length=1, max_length=4000)
     agentId: str = Field(min_length=1, max_length=200)
@@ -72,7 +72,7 @@ class Definition(StrictModel):
         return value.strip()
 
 
-class Update(StrictModel):
+class Update(Strict):
     expected_revision: int = Field(ge=1)
     definition: Definition
 
@@ -81,12 +81,12 @@ JobId = Annotated[str, StringConstraints(pattern=r"^job_[a-f0-9]{32}$")]
 RunId = Annotated[str, StringConstraints(pattern=r"^scheduled_[a-f0-9]{32}$")]
 
 
-class StateChange(StrictModel):
+class StateChange(Strict):
     expected_revision: int = Field(ge=1)
     enabled: bool
 
 
-class TargetSummary(StrictModel):
+class TargetSummary(Strict):
     kind: Literal["tool", "automation"]
     id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.-]+$")
     publishedVersion: int = Field(ge=1)
@@ -94,7 +94,7 @@ class TargetSummary(StrictModel):
     inputsConfigured: bool
 
 
-class DefinitionSummary(StrictModel):
+class DefinitionSummary(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructionsConfigured: bool
     agentId: str = Field(min_length=1, max_length=200)
@@ -108,7 +108,7 @@ class DefinitionSummary(StrictModel):
     budgetAllowanceConfigured: bool
 
 
-class JobView(StrictModel):
+class JobView(Strict):
     schemaVersion: Literal[1] = 1
     id: JobId
     revision: int = Field(ge=1)
@@ -120,7 +120,7 @@ class JobView(StrictModel):
     execution: Literal["not-triggered"] = "not-triggered"
 
 
-class JobCollection(StrictModel):
+class JobCollection(Strict):
     schemaVersion: Literal[1] = 1
     results: list[JobView] = Field(max_length=100)
     nextCursor: JobId | None = None
@@ -138,7 +138,7 @@ RunStatus = Literal[
 ]
 
 
-class RunView(StrictModel):
+class RunView(Strict):
     schemaVersion: Literal[1] = 1
     id: RunId
     jobId: JobId
@@ -155,7 +155,7 @@ class RunView(StrictModel):
     execution: Literal["admitted-only", "waiting", "dispatched", "resolved", "uncertain"]
 
 
-class RunCollection(StrictModel):
+class RunCollection(Strict):
     schemaVersion: Literal[1] = 1
     results: list[RunView] = Field(max_length=100)
     nextCursor: RunId | None = None
@@ -565,7 +565,7 @@ def reconcile(store, identity, adapter):
         return db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()[0]
 
 
-class BudgetBinding(StrictModel):
+class BudgetBinding(Strict):
     budget_id: str = Field(pattern=r"^job_[a-f0-9]{32}$")
 
 

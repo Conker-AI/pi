@@ -66,7 +66,6 @@ gateway -> owner
 gateway -> schedule
 gateway -> setup
 host -> actions
-host -> agents
 host -> core
 memory -> agents
 memory -> context
@@ -80,8 +79,8 @@ models -> conversation
 models -> core
 models -> owner
 models -> turns
+owner -> core
 owner -> schedule
-schedule -> agents
 schedule -> core
 schedule -> models
 schedule -> owner
@@ -95,6 +94,7 @@ turns -> calls
 turns -> content
 turns -> context
 turns -> conversation
+turns -> core
 turns -> memory
 turns -> models
 turns -> schedule

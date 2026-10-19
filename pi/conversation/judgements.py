@@ -7,12 +7,13 @@ import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import versions
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 from pi.schedule import tasks
@@ -35,15 +36,13 @@ class JudgeError(ServiceError):
     pass
 
 
-class Judge(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Judge(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     rubric: str = Field(default="", max_length=2000)
 
 
-class Vote(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Vote(Strict):
     message_id: str = Field(min_length=1, max_length=128)
     vote: Literal["up", "down", "winner", "clear"]
 

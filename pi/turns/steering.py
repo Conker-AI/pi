@@ -5,9 +5,10 @@ import json
 import time
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.conversation import submissions
+from pi.core.models import Strict
 from pi.schedule import tasks
 
 SCHEMA = """
@@ -42,8 +43,7 @@ class Pending(Exception):
     """Discard stale model output and rebuild at the same turn's next boundary."""
 
 
-class Steer(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class Steer(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     text: str = Field(min_length=1, max_length=4000)
 

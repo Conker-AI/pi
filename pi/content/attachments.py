@@ -11,17 +11,17 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints, field_validator
 
 from pi.content import attachment_files, attachment_passages, document_text, image_input, pdf_text
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 MAX_TEXT_CHARACTERS = 200_000
 EXTRACT_MAX_BYTES = 25 * 1024 * 1024
 
 
-class Metadata(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Metadata(Strict):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     type: str = Field(default="", max_length=255)
     lastModified: float = Field(default=0, ge=0, allow_inf_nan=False)
@@ -45,8 +45,7 @@ class Metadata(BaseModel):
         return value
 
 
-class Privacy(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Privacy(Strict):
     memoryDisabled: bool
     harnessDisabled: bool
     incognito: bool = False

@@ -8,14 +8,15 @@ from pydantic import Field, model_validator
 from pi.agents import profiles as agents
 from pi.context import decisions, projects
 from pi.conversation import output_settings
+from pi.core.models import Strict
 
 
-class Privacy(agents.StrictModel):
+class Privacy(Strict):
     memoryDisabled: bool
     harnessDisabled: bool
 
 
-class Settings(agents.StrictModel):
+class Settings(Strict):
     agentId: str = Field(min_length=1, max_length=200)
     privacy: Privacy
     projectId: projects.ProjectId | None = None
@@ -30,7 +31,7 @@ class Settings(agents.StrictModel):
         return self
 
 
-class Update(agents.StrictModel):
+class Update(Strict):
     expected_revision: int = Field(ge=0)
     settings: Settings
 

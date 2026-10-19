@@ -5,7 +5,7 @@ import json
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.content import artifacts
@@ -13,6 +13,7 @@ from pi.context import projects
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation.search_excerpt import excerpt
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 from pi.schedule import jobs, tasks
@@ -37,16 +38,14 @@ CREATE TABLE IF NOT EXISTS owner_search_settings (
 SCAN_LIMIT = 200
 
 
-class Settings(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Settings(Strict):
     sources: list[str] = Field(default_factory=lambda: list(SOURCES), max_length=len(SOURCES))
     exactText: bool = True
     semantic: bool = False
     reranking: bool = False
 
 
-class SaveSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class SaveSettings(Strict):
     expected_revision: int = Field(ge=0)
     configuration: Settings
 

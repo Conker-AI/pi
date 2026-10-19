@@ -8,9 +8,10 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 
@@ -60,17 +61,13 @@ class ProbeError(ServiceError):
         super().__init__(code, detail, status)
 
 
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-
-class ProbeInput(StrictModel):
+class ProbeInput(Strict):
     requestId: str = Field(min_length=1, max_length=128)
     candidateId: str = Field(min_length=1, max_length=200)
     expectedRevision: int = Field(gt=0)
 
 
-class ProbeReceipt(StrictModel):
+class ProbeReceipt(Strict):
     schemaVersion: Literal[1] = 1
     requestId: str
     configurationRevision: int = Field(gt=0)

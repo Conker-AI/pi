@@ -7,14 +7,11 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.models.providers import Message
-
-
-class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Add(Strict):

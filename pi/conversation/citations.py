@@ -10,11 +10,12 @@ import json
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
+from pydantic import Field, TypeAdapter, field_validator
+
+from pi.core.models import Strict
 
 
-class Citation(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+class Citation(Strict):
     id: str = Field(min_length=1, max_length=200)
     label: str = Field(min_length=1, max_length=500)
     href: str | None = Field(default=None, max_length=2048)

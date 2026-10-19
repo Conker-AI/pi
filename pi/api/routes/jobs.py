@@ -5,11 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
-from pi.agents.profiles import StrictModel
+from pi.core.models import Strict
 from pi.schedule import jobs
 
 
-class RunRequest(StrictModel):
+class RunRequest(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 

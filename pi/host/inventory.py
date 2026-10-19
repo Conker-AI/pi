@@ -11,8 +11,8 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
-from pi.agents.profiles import StrictModel
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 TOOL = "system.inventory"
 SCHEMA = """
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS system_inventory_identity (
 """
 
 
-class Read(StrictModel):
+class Read(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     limit: int = Field(default=100, ge=1, le=200)
 
@@ -48,7 +48,7 @@ ErrorCode = Literal[
 ]
 
 
-class ObservedProcess(StrictModel):
+class ObservedProcess(Strict):
     id: str = Field(max_length=256)
     pid: int = Field(gt=0)
     createdAt: float = Field(ge=0, allow_inf_nan=False)
@@ -69,7 +69,7 @@ class ObservedProcess(StrictModel):
         return self
 
 
-class ObservedContainer(StrictModel):
+class ObservedContainer(Strict):
     id: str = Field(min_length=1, max_length=128)
     name: str = Field(max_length=160)
     image: str = Field(max_length=256)
@@ -79,7 +79,7 @@ class ObservedContainer(StrictModel):
     managed: Literal[False]
 
 
-class ObservedPort(StrictModel):
+class ObservedPort(Strict):
     id: str = Field(pattern=r"^(?:listener|binding):[a-f0-9]{64}$")
     kind: Literal["listener", "container-binding"]
     hostAddress: str = Field(max_length=64)
@@ -115,7 +115,7 @@ class ObservedPort(StrictModel):
         return self
 
 
-class ObservedSection(StrictModel):
+class ObservedSection(Strict):
     status: Literal["ok", "partial", "unavailable"]
     truncated: bool
     errors: list[ErrorCode] = Field(max_length=16)
@@ -133,7 +133,7 @@ class ObservedPorts(ObservedSection):
     results: list[ObservedPort] = Field(max_length=200)
 
 
-class ObservedSource(StrictModel):
+class ObservedSource(Strict):
     procfs: str = Field(max_length=4096)
     processScope: Literal["configured-procfs", "collector-namespace"]
     networkScope: Literal["collector-namespace"]
@@ -142,7 +142,7 @@ class ObservedSource(StrictModel):
     ]
 
 
-class ObservedCapabilities(StrictModel):
+class ObservedCapabilities(Strict):
     inspection: Literal[True]
     processActions: Literal[False]
     containerActions: Literal[False]
@@ -158,7 +158,7 @@ class ObservedCapabilities(StrictModel):
         return value
 
 
-class ObservedEnvelope(StrictModel):
+class ObservedEnvelope(Strict):
     mode: Literal["observed"]
     sampledAt: str = Field(max_length=64)
     ageSeconds: float = Field(ge=0, allow_inf_nan=False)
@@ -206,7 +206,7 @@ class ObservedEnvelope(StrictModel):
         return self
 
 
-class ProcessView(StrictModel):
+class ProcessView(Strict):
     id: str = Field(pattern=r"^process_[a-f0-9]{64}$")
     name: str = Field(max_length=160)
     status: str = Field(max_length=40)
@@ -214,14 +214,14 @@ class ProcessView(StrictModel):
     memoryBytes: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
-class ContainerView(StrictModel):
+class ContainerView(Strict):
     id: str = Field(pattern=r"^container_[a-f0-9]{64}$")
     name: str = Field(max_length=160)
     status: str = Field(max_length=40)
     imageConfigured: bool
 
 
-class PortView(StrictModel):
+class PortView(Strict):
     id: str = Field(pattern=r"^port_[a-f0-9]{64}$")
     kind: Literal["listener", "container-binding"]
     addressScope: Literal["loopback", "all-interfaces", "specific"]
@@ -233,7 +233,7 @@ class PortView(StrictModel):
     state: Literal["listening", "bound", "declared-binding"]
 
 
-class SectionView(StrictModel):
+class SectionView(Strict):
     status: Literal["ok", "partial", "unavailable"]
     truncated: bool
     errors: list[ErrorCode] = Field(max_length=16)
@@ -251,13 +251,13 @@ class PortSectionView(SectionView):
     results: list[PortView] = Field(max_length=200)
 
 
-class SourceScopeView(StrictModel):
+class SourceScopeView(Strict):
     process: Literal["configured-procfs", "collector-namespace"]
     network: Literal["collector-namespace"]
     containers: Literal["configured-docker-daemon", "configured-container-source", "unavailable"]
 
 
-class InventoryObservation(StrictModel):
+class InventoryObservation(Strict):
     mode: Literal["observed"]
     status: Literal["ok", "partial"]
     sampledAt: str = Field(max_length=64)
@@ -271,7 +271,7 @@ class InventoryObservation(StrictModel):
     capabilities: ObservedCapabilities
 
 
-class InventoryView(StrictModel):
+class InventoryView(Strict):
     schemaVersion: Literal[1] = 1
     requestId: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
     state: Literal["dispatching", "awaiting_approval", "unknown", "failed", "complete"]
@@ -290,13 +290,13 @@ class InventoryView(StrictModel):
     execution: Literal["read-only-observation"] = "read-only-observation"
 
 
-class ConfiguredTarget(StrictModel):
+class ConfiguredTarget(Strict):
     id: str = Field(pattern=r"^(?:service|container)_[a-f0-9]{64}$")
     kind: Literal["service", "container"]
     name: str | None = Field(default=None, max_length=260)
 
 
-class ConfiguredTargetsView(StrictModel):
+class ConfiguredTargetsView(Strict):
     schemaVersion: Literal[1] = 1
     kind: Literal["services", "containers"]
     status: Literal[

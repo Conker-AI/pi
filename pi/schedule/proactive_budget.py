@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from pydantic import Field
 
+from pi.core.models import Strict
 from pi.owner import preferences as prefs
 
 SCHEMA = """
@@ -25,7 +26,7 @@ BEGIN SELECT RAISE(ABORT,'proactive reservation exists'); END;
 """
 
 
-class Request(prefs.StrictModel):
+class Request(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     expected_revision: int = Field(ge=1)
     proposed: prefs.Usage

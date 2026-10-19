@@ -12,11 +12,12 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from pi.agents import profiles as agents
+from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 
 
-class Case(agents.StrictModel):
+class Case(Strict):
     name: str = Field(min_length=1, max_length=80)
     role: Literal["routing", "context-selection", "summarization"]
     prompt: str = Field(min_length=1, max_length=16000)
@@ -60,12 +61,12 @@ class Case(agents.StrictModel):
         return self
 
 
-class Update(agents.StrictModel):
+class Update(Strict):
     expected_revision: int = Field(ge=1)
     definition: Case
 
 
-class Run(agents.StrictModel):
+class Run(Strict):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     expected_case_revision: int = Field(ge=1)
     expected_configuration_revision: int = Field(ge=1)

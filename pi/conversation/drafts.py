@@ -6,8 +6,8 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from pi.agents.profiles import StrictModel
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversation_drafts (
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS draft_starts (
 """
 
 
-class Intent(StrictModel):
+class Intent(Strict):
     text: str = Field(max_length=16000)
     research_mode: Literal["off", "web", "deep"] = "off"
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
@@ -80,7 +80,7 @@ class NewSave(Save):
         return value
 
 
-class Start(StrictModel):
+class Start(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     expected_revision: int = Field(ge=1)
 
