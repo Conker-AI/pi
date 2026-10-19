@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pi.core.errors import ServiceError
+
 Status = Literal["planned", "in_progress", "blocked", "completed", "cancelled"]
 TRANSITIONS = {
     "planned": {"in_progress", "blocked", "cancelled"},
@@ -21,13 +23,10 @@ TRANSITIONS = {
 TERMINAL = {"completed", "cancelled"}
 
 
-class TaskError(Exception):
+class TaskError(ServiceError):
     def __init__(self, code, message, status=409, current_revision=None):
-        super().__init__(message)
-        self.status = status
-        self.detail = {"code": code, "message": message}
-        if current_revision is not None:
-            self.detail["current_revision"] = current_revision
+        extra = {} if current_revision is None else {"current_revision": current_revision}
+        super().__init__(code, message, status, **extra)
 
 
 class TaskFields(BaseModel):

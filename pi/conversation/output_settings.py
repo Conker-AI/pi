@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pi.core.errors import ServiceError
 from pi.models.providers import Message
 
 AUTO = {"format": "auto", "length": "auto", "language": "auto"}
@@ -42,10 +43,8 @@ class Update(Strict):
     output: Output
 
 
-class OutputError(Exception):
-    def __init__(self, code: str, message: str, status: int) -> None:
-        super().__init__(message)
-        self.code, self.message, self.status = code, message, status
+class OutputError(ServiceError):
+    pass
 
 
 SCHEMA = """

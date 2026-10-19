@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from pi.agents import profiles as agents
+from pi.core.errors import ServiceError
 from pi.models.providers import Message
 from pi.owner import preferences as prefs
 from pi.schedule import proactive_budget
@@ -87,10 +88,8 @@ class Decision(agents.StrictModel):
     decision: Literal["accept", "decline", "never"]
 
 
-class ProposalError(Exception):
-    def __init__(self, code, message, status):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ProposalError(ServiceError):
+    pass
 
 
 def fingerprint(title: str) -> str:

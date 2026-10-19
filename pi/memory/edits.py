@@ -11,6 +11,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from pi.agents import profiles as agents
+from pi.core.errors import ServiceError
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
 
@@ -49,10 +50,8 @@ class Retry(agents.StrictModel):
     expected_payload_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class EditError(Exception):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class EditError(ServiceError):
+    pass
 
 
 def _error(code, message, status=409):

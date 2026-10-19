@@ -21,6 +21,7 @@ from pydantic import (
 )
 
 from pi.agents import profiles as agents
+from pi.core.errors import ServiceError
 
 MAX_PACKAGE_BYTES = 32 * 1024 * 1024
 MAX_REQUEST_BYTES = 66 * 1024 * 1024
@@ -338,10 +339,8 @@ BEGIN SELECT RAISE(ABORT,'character versions are immutable'); END;
 """
 
 
-class CharacterError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class CharacterError(ServiceError):
+    pass
 
 
 def _serialize(profile):

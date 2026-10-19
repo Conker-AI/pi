@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pi.agents import profiles as agents
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models.providers import Message, ProviderUnavailable
 
 
@@ -246,10 +247,8 @@ BEGIN SELECT RAISE(ABORT,'call request receipts are permanent'); END;
 """
 
 
-class CallError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class CallError(ServiceError):
+    pass
 
 
 def _digest(value):

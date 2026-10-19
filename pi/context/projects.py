@@ -14,6 +14,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from pi.core.errors import ServiceError
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -133,10 +135,8 @@ CREATE TABLE IF NOT EXISTS projects (
 """
 
 
-class ProjectError(Exception):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ProjectError(ServiceError):
+    pass
 
 
 def _row(db, identity, revision=None):

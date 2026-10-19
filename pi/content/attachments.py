@@ -14,6 +14,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from pi.content import attachment_files, attachment_passages, document_text, image_input, pdf_text
+from pi.core.errors import ServiceError
 
 MAX_TEXT_CHARACTERS = 200_000
 EXTRACT_MAX_BYTES = 25 * 1024 * 1024
@@ -153,10 +154,8 @@ BEGIN SELECT RAISE(ABORT,'message attachment bindings are immutable'); END;
 """
 
 
-class AttachmentError(Exception):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class AttachmentError(ServiceError):
+    pass
 
 
 def initialize(db):

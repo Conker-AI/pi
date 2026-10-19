@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pi.core.errors import ServiceError
 from pi.models.providers import Message
 
 
@@ -31,10 +32,8 @@ class State(Strict):
     by: Literal["owner", "ai"] = "owner"
 
 
-class DecisionError(Exception):
-    def __init__(self, code: str, message: str, status: int) -> None:
-        super().__init__(message)
-        self.code, self.message, self.status = code, message, status
+class DecisionError(ServiceError):
+    pass
 
 
 SCHEMA = """

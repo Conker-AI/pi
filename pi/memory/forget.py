@@ -13,6 +13,7 @@ import httpx
 from pydantic import Field
 
 from pi.agents import profiles as agents
+from pi.core.errors import ServiceError
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
 
@@ -23,10 +24,8 @@ class Forget(agents.StrictModel):
     expected_revision: int = Field(ge=1, le=2147483646)
 
 
-class ForgetError(Exception):
-    def __init__(self, code, message, status):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ForgetError(ServiceError):
+    pass
 
 
 _active_lock = threading.Lock()

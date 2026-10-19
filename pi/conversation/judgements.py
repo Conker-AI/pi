@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import versions
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 from pi.schedule import tasks
@@ -30,10 +31,8 @@ CREATE TABLE IF NOT EXISTS response_votes (
 """
 
 
-class JudgeError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class JudgeError(ServiceError):
+    pass
 
 
 class Judge(BaseModel):

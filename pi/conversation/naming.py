@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pi.context import controls
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -43,10 +44,8 @@ class AutoName(Strict):
     expected_revision: int = Field(ge=0)
 
 
-class NamingError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.message, self.status = code, message, status
+class NamingError(ServiceError):
+    pass
 
 
 def clean(title: str) -> str:

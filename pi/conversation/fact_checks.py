@@ -11,6 +11,7 @@ from pi.context import controls as context_controls
 from pi.context import research
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -23,10 +24,8 @@ CREATE TABLE IF NOT EXISTS fact_checks (
 """
 
 
-class CheckError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class CheckError(ServiceError):
+    pass
 
 
 class Check(BaseModel):

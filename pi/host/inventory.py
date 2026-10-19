@@ -12,6 +12,7 @@ from pydantic import Field, field_validator, model_validator
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.agents.profiles import StrictModel
+from pi.core.errors import ServiceError
 
 TOOL = "system.inventory"
 SCHEMA = """
@@ -309,10 +310,8 @@ class ConfiguredTargetsView(StrictModel):
     execution: Literal["not-triggered"] = "not-triggered"
 
 
-class InventoryError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class InventoryError(ServiceError):
+    pass
 
 
 def initialize(db):

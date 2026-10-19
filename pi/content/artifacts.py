@@ -15,6 +15,7 @@ from urllib.parse import urlsplit, urlunsplit
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
 from pi.conversation import citations
+from pi.core.errors import ServiceError
 
 
 class Strict(BaseModel):
@@ -309,10 +310,8 @@ CREATE INDEX IF NOT EXISTS artifacts_source ON artifacts(source_session_id);
 """
 
 
-class ArtifactError(Exception):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ArtifactError(ServiceError):
+    pass
 
 
 def _now():
