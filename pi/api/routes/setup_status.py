@@ -9,12 +9,13 @@ from pi.setup import protection as setup_protection
 from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
 from pi.setup import status as setup_status
+from pi.setup import status_models
 
 
 def router(store, owner_key_configured, memory, toolgate, model_router, speech, authorize):
     routes = APIRouter(prefix="/setup", dependencies=[Depends(authorize)])
 
-    @routes.get("/status", response_model=setup_status.SetupStatus)
+    @routes.get("/status", response_model=status_models.SetupStatus)
     def status():
         return setup_status.load(
             store(),

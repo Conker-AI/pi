@@ -15,7 +15,7 @@ from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import models as setup_models
-from pi.setup import status as setup_status
+from pi.setup import status_steps
 
 AVAILABLE = "synthetic/available:free"
 MISSING = "synthetic/not-in-catalogue"
@@ -367,7 +367,7 @@ def test_configured_routes_remain_unverified_and_owner_selectable(monkeypatch, t
             store, router, setup_models.Selection(candidateId="missing", expectedRevision=1)
         )
         assert saved["configuration"]["defaultModelId"] == "missing"
-        assert setup_status._model(store, router).blockingReasonCode == "model_response_unverified"
+        assert status_steps._model(store, router).blockingReasonCode == "model_response_unverified"
     assert seen == {"catalogue": [CATALOGUE_URL], "inference": []}
 
 
@@ -403,7 +403,7 @@ def test_explicit_unverified_activation_records_receipt_and_replay_does_not_disp
         assert result.probe.requestedModel == AVAILABLE
         assert result.probe.actualModel == "synthetic/actual-result"
         assert result.probe.execution == "hosted"
-        assert setup_status._model(store, router).state == "complete"
+        assert status_steps._model(store, router).state == "complete"
         assert setup_model_probes.current(store, 2, "hosted") == result.probe
         later = model_roles.save(
             store, model_roles.Update(expected_revision=2, configuration=before["configuration"])
