@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pi.core.errors import ServiceError
+
 ReceiptStep = Literal["boundaries", "protection", "rehearsal"]
 ReceiptState = Literal["valid", "stale"]
 
@@ -55,10 +57,9 @@ END;
 """
 
 
-class ReceiptError(Exception):
+class ReceiptError(ServiceError):
     def __init__(self, code: str, detail: str, status: int = 422):
-        self.code, self.detail, self.status = code, detail, status
-        super().__init__(detail)
+        super().__init__(code, detail, status)
 
 
 class StrictModel(BaseModel):

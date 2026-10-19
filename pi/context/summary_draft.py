@@ -8,6 +8,7 @@ from pydantic import Field
 
 from pi.context import controls, summaries
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -26,10 +27,8 @@ class Request(controls.Strict):
     focus: str = Field(default="", max_length=500)
 
 
-class DraftError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class DraftError(ServiceError):
+    pass
 
 
 def eligible(policy, rows) -> list[dict]:

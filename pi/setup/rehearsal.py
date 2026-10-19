@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
+from pi.core.errors import ServiceError
 from pi.setup import choices as setup_choices
 from pi.setup import receipts as setup_receipts
 
@@ -54,10 +55,9 @@ CREATE INDEX IF NOT EXISTS setup_rehearsal_approvals_latest
 """
 
 
-class RehearsalError(Exception):
+class RehearsalError(ServiceError):
     def __init__(self, code: str, detail: str, status: int = 422):
-        self.code, self.detail, self.status = code, detail, status
-        super().__init__(detail)
+        super().__init__(code, detail, status)
 
 
 class StrictModel(BaseModel):
@@ -436,7 +436,7 @@ def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
     try:
         return setup_receipts.record(store, "rehearsal", value, now=observed)
     except setup_receipts.ReceiptError as exc:
-        raise RehearsalError(exc.code, exc.detail, exc.status) from exc
+        raise RehearsalError(exc.code, exc.message, exc.status) from exc
 
 
 def _rehearsal_digest(conversation, memory, approval) -> str | None:

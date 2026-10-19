@@ -6,12 +6,13 @@ import random
 import time
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import versions
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 from pi.schedule import tasks
@@ -30,10 +31,8 @@ CREATE TABLE IF NOT EXISTS response_votes (
 """
 
 
-class JudgeError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class JudgeError(ServiceError):
+    pass
 
 
 class Judge(BaseModel):
@@ -349,10 +348,7 @@ def router(get_store, get_providers, authorize):
 
     @api.post("/sessions/{sid}/response-families/{root}/judge")
     def judge_endpoint(sid: str, root: str, body: Judge):
-        try:
-            return judge(get_store(), get_providers(), sid, root, body)
-        except JudgeError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return judge(get_store(), get_providers(), sid, root, body)
 
     @api.get("/sessions/{sid}/response-families/{root}/judgements")
     def get_judgements_endpoint(sid: str, root: str):

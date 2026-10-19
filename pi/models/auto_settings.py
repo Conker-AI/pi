@@ -13,6 +13,7 @@ import json
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -42,10 +43,8 @@ class Request(BaseModel):
     harness_disabled: bool = False
 
 
-class ProposalError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class ProposalError(ServiceError):
+    pass
 
 
 def parse(text: str) -> dict:

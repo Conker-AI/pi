@@ -246,6 +246,7 @@ def test_api_authorization_validation_and_receipts(store):
     from fastapi import FastAPI, HTTPException
 
     from pi.api.routes.jobs import router
+    from pi.core.errors import install
 
     allowed = False
 
@@ -254,6 +255,7 @@ def test_api_authorization_validation_and_receipts(store):
             raise HTTPException(403)
 
     app = FastAPI()
+    install(app)
     app.include_router(router(lambda: store, authorize))
     with TestClient(app) as client:
         assert client.get("/jobs").status_code == 403

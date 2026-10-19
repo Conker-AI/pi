@@ -1,6 +1,6 @@
 """Compaction API routes."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from pi.context import compaction
 
@@ -11,10 +11,7 @@ def router(store, authorize):
     )
 
     def invoke(fn, *args):
-        try:
-            return fn(store(), *args)
-        except compaction.controls.ContextError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return fn(store(), *args)
 
     @routes.post("/compact")
     def compact(session_id: str, body: compaction.Compact):

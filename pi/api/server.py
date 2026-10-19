@@ -17,7 +17,6 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from pi.agents import profiles as agents
 from pi.api.browser_contract import runtime_allowed
 from pi.api.routes import activity as activity_api
 from pi.api.routes import agents as agents_api
@@ -56,7 +55,6 @@ from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
 from pi.api.startup import lifespan
-from pi.context import controls as context_controls
 from pi.context import project_sources
 from pi.conversation import fact_checks, judgements
 from pi.conversation import forks as message_forks
@@ -64,7 +62,7 @@ from pi.conversation import retries as response_retries
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
-from pi.schedule import tasks
+from pi.core import errors
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
@@ -78,16 +76,14 @@ _health_cache: dict = {}
 app = FastAPI(title="Pi", version=SERVICE_VERSION, lifespan=lifespan)
 
 
+errors.install(app)
+
+
 @app.exception_handler(RequestValidationError)
 async def request_validation_error(request: Request, exc: RequestValidationError):
     # FastAPI's default body includes rejected input values. Owner requests may
     # accidentally contain credentials, so validation responses are deliberately static.
     return JSONResponse({"detail": "Request validation failed."}, status_code=422)
-
-
-@app.exception_handler(tasks.TaskError)
-async def task_error(request: Request, exc: tasks.TaskError):
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
 def require_key(
@@ -274,17 +270,7 @@ app.include_router(
 )
 
 
-@app.exception_handler(context_controls.ContextError)
-async def context_error(request: Request, exc: context_controls.ContextError):
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
-
-
 app.include_router(owner_preferences_api.router(lambda: app.state, require_admin))
-
-
-@app.exception_handler(agents.AgentError)
-async def agent_error(request: Request, exc: agents.AgentError):
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
 
 
 app.include_router(agents_api.router(lambda: app.state, require_owner))

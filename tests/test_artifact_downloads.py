@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 from pi.api.routes.artifacts import router
 from pi.content import artifacts as a
 from pi.conversation.store import Store
+from pi.core.errors import install
 
 
 @pytest.fixture
@@ -26,6 +27,7 @@ def api(tmp_path):
             return None if state["unknown"] else {"memoryDisabled": False, "harnessDisabled": False}
 
         app = FastAPI()
+        install(app)
         app.include_router(router(lambda: store, authorize, resolve))
         with TestClient(app) as client:
             yield store, client, state, resolve

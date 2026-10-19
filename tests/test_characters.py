@@ -19,6 +19,7 @@ from pi.agents import profiles as agents
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.api.routes import characters as characters_api
 from pi.conversation.store import Store
+from pi.core.errors import install
 
 
 def png(animated=False):
@@ -256,6 +257,7 @@ def test_import_export_are_reviewable_drafts(store):
 
 def test_owner_api_and_stream_bound(store, monkeypatch):
     app = FastAPI()
+    install(app)
 
     def authorize(x_owner: str | None = Header(default=None)):
         if x_owner != "yes":

@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pi.core.errors import ServiceError
+
 PolicyName = Literal["keep-exact", "allow-summary", "retrieve", "exclude"]
 
 
@@ -89,10 +91,8 @@ BEGIN SELECT RAISE(ABORT,'turn context policy is immutable'); END;
 """
 
 
-class ContextError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ContextError(ServiceError, RuntimeError):
+    pass
 
 
 def _session(db, identity):

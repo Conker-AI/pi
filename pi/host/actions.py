@@ -10,6 +10,7 @@ from pydantic import Field
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.agents.profiles import StrictModel
+from pi.core.errors import ServiceError
 
 TOOL = "system.container-control"
 SERVICE_TOOL = "system.process-control"
@@ -44,10 +45,8 @@ class PortRequest(StrictModel):
     review_id: str = Field(pattern=r"^[a-f0-9]{48}$")
 
 
-class ActionError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.status, self.detail = status, {"code": code, "message": message}
+class ActionError(ServiceError, RuntimeError):
+    pass
 
 
 def _configured(gate):

@@ -1,6 +1,6 @@
 """Explicit admin evaluation requests; GET never runs a provider."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from pi.agents import profiles as agents
 from pi.models import evaluations
@@ -10,10 +10,7 @@ def router(store, authorize, providers):
     routes = APIRouter(prefix="/model-evaluations", dependencies=[Depends(authorize)])
 
     def call(fn, *args):
-        try:
-            return fn(store(), *args)
-        except evaluations.EvaluationError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return fn(store(), *args)
 
     @routes.get("/cases")
     def cases():

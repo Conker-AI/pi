@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from pi.conversation import output_settings
 
@@ -7,10 +7,7 @@ def router(store, authorize):
     routes = APIRouter(prefix="/sessions", dependencies=[Depends(authorize)])
 
     def invoke(fn, *args):
-        try:
-            return fn(store(), *args)
-        except output_settings.OutputError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": exc.message}) from None
+        return fn(store(), *args)
 
     @routes.get("/{session_id}/output")
     def get(session_id: str):

@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pi.core.errors import ServiceError
+
 IDENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.:/-]{0,127}")
 
 SCHEMA = """
@@ -40,10 +42,9 @@ END;
 """
 
 
-class ProtectionError(Exception):
+class ProtectionError(ServiceError):
     def __init__(self, code: str, detail: str, status: int = 422):
-        self.code, self.detail, self.status = code, detail, status
-        super().__init__(detail)
+        super().__init__(code, detail, status)
 
 
 class StrictModel(BaseModel):

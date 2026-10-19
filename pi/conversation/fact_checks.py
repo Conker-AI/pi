@@ -4,13 +4,14 @@ import hashlib
 import json
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.context import controls as context_controls
 from pi.context import research
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -23,10 +24,8 @@ CREATE TABLE IF NOT EXISTS fact_checks (
 """
 
 
-class CheckError(Exception):
-    def __init__(self, code: str, message: str, status: int):
-        super().__init__(message)
-        self.code, self.status = code, status
+class CheckError(ServiceError):
+    pass
 
 
 class Check(BaseModel):
@@ -386,17 +385,11 @@ def router(get_store, get_providers, authorize):
 
     @api.post("/sessions/{sid}/messages/{mid}/fact-check")
     def check_endpoint(sid: str, mid: str, body: Check):
-        try:
-            return check(get_store(), get_providers(), sid, mid, body)
-        except CheckError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return check(get_store(), get_providers(), sid, mid, body)
 
     @api.get("/sessions/{sid}/messages/{mid}/fact-checks")
     def history_endpoint(sid: str, mid: str):
-        try:
-            return history(get_store(), sid, mid)
-        except CheckError as exc:
-            raise HTTPException(exc.status, {"code": exc.code, "message": str(exc)}) from None
+        return history(get_store(), sid, mid)
 
     return api
 

@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pi.core.errors import ServiceError
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 
@@ -54,10 +55,9 @@ END;
 """
 
 
-class ProbeError(Exception):
+class ProbeError(ServiceError):
     def __init__(self, code: str, detail: str, status: int = 422):
-        self.code, self.detail, self.status = code, detail, status
-        super().__init__(detail)
+        super().__init__(code, detail, status)
 
 
 class StrictModel(BaseModel):

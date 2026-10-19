@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pi.core.errors import ServiceError
+
 ChoiceStep = Literal["companion", "memory", "capabilities"]
 ChoiceValue = Literal["undecided", "accept", "include", "skip"]
 
@@ -72,10 +74,9 @@ END;
 """
 
 
-class ChoiceError(Exception):
+class ChoiceError(ServiceError):
     def __init__(self, code: str, detail: str, status: int = 422):
-        self.code, self.detail, self.status = code, detail, status
-        super().__init__(detail)
+        super().__init__(code, detail, status)
 
 
 class StrictModel(BaseModel):

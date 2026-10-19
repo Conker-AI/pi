@@ -17,10 +17,7 @@ def router(store, authorize, executor=None):
     routes = APIRouter(prefix="/jobs", dependencies=[Depends(authorize)])
 
     def call(function, *args, **kwargs):
-        try:
-            return function(store(), *args, **kwargs)
-        except jobs.JobError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return function(store(), *args, **kwargs)
 
     JobPath = Annotated[str, Path(pattern=r"^job_[a-f0-9]{32}$")]
     RunPath = Annotated[str, Path(pattern=r"^scheduled_[a-f0-9]{32}$")]
@@ -94,10 +91,7 @@ def router(store, authorize, executor=None):
 
     @routes.post("/runs/{identity}/resume", response_model=jobs.RunView)
     def resume(identity: RunPath):
-        try:
-            jobs.dispatch_claim(store(), {"id": identity}, execution_adapter(), resume=True)
-        except jobs.JobError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        jobs.dispatch_claim(store(), {"id": identity}, execution_adapter(), resume=True)
         return jobs.browser_run(call(jobs.get_run, identity))
 
     @routes.post("/runs/{identity}/reconcile", response_model=jobs.RunView)

@@ -23,8 +23,6 @@ def router(store, loop, authorize, speech=None):
     def execute(fn, *args, **kwargs):
         try:
             return fn(store(), *args, **kwargs)
-        except calls.CallError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
         except ValueError as exc:
             raise HTTPException(422, "Invalid call request.") from exc
 

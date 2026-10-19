@@ -9,6 +9,7 @@ from pydantic import Field, field_validator
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.agents.profiles import StrictModel
+from pi.core.errors import ServiceError
 
 TOOL = "system.files-list"
 SCHEMA = """
@@ -95,11 +96,8 @@ class DirectoryView(StrictModel):
     execution: Literal["directory-listing-only"] = "directory-listing-only"
 
 
-class FileReadError(RuntimeError):
-    def __init__(self, code, message, status=409):
-        super().__init__(message)
-        self.code = code
-        self.status, self.detail = status, {"code": code, "message": message}
+class FileReadError(ServiceError, RuntimeError):
+    pass
 
 
 def _row(db, identity):

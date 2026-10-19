@@ -6,17 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 
 from pi.host import inventory
 from pi.host import targets as system_targets
-from pi.host.actions import ActionError
 
 
 def router(store, gate, authorize):
     routes = APIRouter(prefix="/system/inventory", dependencies=[Depends(authorize)])
 
     def invoke(function, *args):
-        try:
-            return function(store(), gate(), *args)
-        except inventory.InventoryError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return function(store(), gate(), *args)
 
     RequestPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{16,100}$")]
 
@@ -31,21 +27,15 @@ def router(store, gate, authorize):
     def configured_services(request: Request, response: Response):
         exact(request)
         no_store(response)
-        try:
-            return inventory.configured_targets(
-                store(), system_targets.read(gate(), services=True), "services"
-            )
-        except ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return inventory.configured_targets(
+            store(), system_targets.read(gate(), services=True), "services"
+        )
 
     @routes.get("/configured/containers", response_model=inventory.ConfiguredTargetsView)
     def configured_containers(request: Request, response: Response):
         exact(request)
         no_store(response)
-        try:
-            return inventory.configured_targets(store(), system_targets.read(gate()), "containers")
-        except ActionError as exc:
-            raise HTTPException(exc.status, exc.detail) from exc
+        return inventory.configured_targets(store(), system_targets.read(gate()), "containers")
 
     @routes.post("", response_model=inventory.InventoryView)
     def create(body: inventory.Read, request: Request, response: Response):

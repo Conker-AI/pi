@@ -13,6 +13,7 @@ from pi.api.routes.projects import router
 from pi.context import project_sources
 from pi.context import projects as p
 from pi.conversation.store import Store
+from pi.core.errors import install
 
 FIELDS = dict(name="Build Conker", description="Deliver", instructions="Be critical")
 PUBLIC = dict(memoryDisabled=False, harnessDisabled=False)
@@ -121,6 +122,7 @@ def test_unknown_source_fails_closed_and_validation(setup):
 
 def test_api_is_owner_guarded(setup):
     app = FastAPI()
+    install(app)
 
     def denied():
         raise HTTPException(403, "Owner only")

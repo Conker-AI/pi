@@ -38,10 +38,7 @@ class BoundedRoute(APIRoute):
                             status_code=413,
                         )
                 request._body = bytes(raw)
-            try:
-                return await handler(request)
-            except edits.EditError as exc:
-                return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+            return await handler(request)
 
         return bounded
 
