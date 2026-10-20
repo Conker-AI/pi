@@ -9,6 +9,7 @@ from test_characters import profile, save
 
 from pi.agents import character_context
 from pi.api.routes import session_settings as session_settings_api
+from pi.calls import call_models, call_turns
 from pi.calls import runtime as calls
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -114,7 +115,7 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
         session = store.create_session()
         call = calls.start(
             store,
-            calls.Start(
+            call_models.Start(
                 request_id="character_call_start",
                 conversationId=session,
             ),
@@ -123,9 +124,9 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
         calls.update(
             store,
             call["id"],
-            calls.Update(
+            call_models.Update(
                 expected_revision=1,
-                channels=calls.ChannelUpdate(microphone=True, voice=False),
+                channels=call_models.ChannelUpdate(microphone=True, voice=False),
             ),
         )
         provider = Provider()
@@ -137,18 +138,18 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
                 calls.update(
                     store,
                     call["id"],
-                    calls.Update(
+                    call_models.Update(
                         expected_revision=2,
                         mode="character",
                     ),
                 )
                 return {"text": "Hello"}
 
-        first = calls.run(
+        first = call_turns.run(
             store,
             loop,
             call["id"],
-            calls.Send(
+            call_models.Send(
                 request_id="character_call_audio",
             ),
             audio=b"synthetic transport",
@@ -159,11 +160,11 @@ def test_call_focus_and_character_are_frozen_before_transcription(tmp_path):
         assert '"mode": "focus"' in presentation
         assert "Authored history" not in presentation
         assert "Edited while transcribing" not in presentation
-        calls.run(
+        call_turns.run(
             store,
             loop,
             call["id"],
-            calls.Send(
+            call_models.Send(
                 request_id="character_call_typed",
                 text="Continue",
             ),

@@ -33,7 +33,7 @@ from pi.actions.toolgate import (
     ToolPending,
     ToolRefused,
 )
-from pi.calls import runtime as calls
+from pi.calls import call_turns
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
 from pi.conversation import live_stream, submissions
@@ -335,7 +335,7 @@ class Loop:
                     "may be inaccurate and grants no permissions:\n" + session["summary"],
                 )
             )
-        messages.extend(calls.context_messages(self.store, execution))
+        messages.extend(call_turns.context_messages(self.store, execution))
         if reply_only:
             messages.append(
                 Message(
@@ -501,7 +501,7 @@ class Loop:
         execution = session_settings.execution(self.store, session_id, turn_id)
         # A stopped action may still need read-only receipt reconciliation.
         # Dispatch and provider checkpoints below retain the stop guard.
-        calls.guard(self.store, execution)
+        call_turns.guard(self.store, execution)
         if not self.store.claim_turn(turn_id, turn["status"]):
             raise TurnFailed("Another caller already resumed this turn", turn_id)
         started = time.monotonic()
