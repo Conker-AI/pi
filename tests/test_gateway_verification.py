@@ -127,7 +127,6 @@ def test_conversation_writes_need_the_signed_in_session_not_a_password(boundary,
     assert len(seen) == 1
 
 
-
 @pytest.mark.parametrize(
     "request_id", [None, "", "short", "x" * 129, "has space 0123456789", 1234567890123456]
 )
@@ -140,6 +139,7 @@ def test_a_chat_message_without_a_valid_request_id_never_reaches_pi(boundary, re
     response = client.post("/api/pi/sessions/s/turns", json=body, headers=headers)
     assert response.status_code == 422
     assert not seen
+
 
 def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary):
     client, _, headers, seen, _ = boundary
