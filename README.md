@@ -113,7 +113,7 @@ never as zero. How the model is chosen: [routing](docs/routing.md).
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q
+python -m pytest -q -n auto   # parallel: minutes, not the better part of an hour
 ruff check . && ruff format --check .
 ```
 
