@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.api.routes.calls import router
+from pi.calls import call_models
 from pi.calls import runtime as calls
 from pi.conversation.store import Store
 from pi.core.errors import install
@@ -179,7 +180,7 @@ def test_browser_projection_keeps_only_latest_bounded_history(tmp_path):
     store = Store(tmp_path / "calls.db")
     source = store.create_session()
     value = calls.start(
-        store, calls.Start(request_id="bounded_call_start_01", conversationId=source)
+        store, call_models.Start(request_id="bounded_call_start_01", conversationId=source)
     )
     value["events"] = [
         {"id": f"call_event_{index}", "at": float(index), "kind": "event", "text": "status"}
@@ -200,7 +201,7 @@ def test_browser_projection_keeps_only_latest_bounded_history(tmp_path):
         }
         for index in range(105)
     ]
-    projected = calls.browser_view(value)
+    projected = call_models.browser_view(value)
     assert projected.eventsTruncated and projected.requestsTruncated
     assert len(projected.events) == 200 and projected.events[0].id == "call_event_5"
     assert len(projected.requests) == 100 and projected.requests[0].requestId.endswith("005")

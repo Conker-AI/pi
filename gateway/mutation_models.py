@@ -9,7 +9,7 @@ from pydantic import Field, JsonValue, TypeAdapter, model_validator
 
 from pi.agents import characters, team_models
 from pi.agents import profiles as agents
-from pi.calls import runtime as calls
+from pi.calls import call_models
 from pi.content import artifact_models
 from pi.context import projects
 from pi.conversation import settings as session_settings
@@ -301,26 +301,26 @@ CharacterMutation = Annotated[
 CHARACTER_MUTATION = TypeAdapter(CharacterMutation)
 
 
-class CallStart(calls.Start):
+class CallStart(call_models.Start):
     operation: Literal["start"]
 
 
-class CallUpdate(calls.Update):
+class CallUpdate(call_models.Update):
     operation: Literal["update"]
     id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
 
 
-class CallInterrupt(calls.Revision):
+class CallInterrupt(call_models.Revision):
     operation: Literal["interrupt"]
     id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
 
 
-class CallEnd(calls.Revision):
+class CallEnd(call_models.Revision):
     operation: Literal["end"]
     id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
 
 
-class CallTurn(calls.Send):
+class CallTurn(call_models.Send):
     operation: Literal["turn"]
     id: str = Field(pattern=r"^call_[a-f0-9]{32}$")
 

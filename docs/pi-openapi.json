@@ -4233,7 +4233,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__runtime__Start"
+                "$ref": "#/components/schemas/pi__calls__call_models__Start"
               }
             }
           }
@@ -4566,7 +4566,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__runtime__Start"
+                "$ref": "#/components/schemas/pi__calls__call_models__Start"
               }
             }
           }
@@ -4720,7 +4720,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__runtime__Update"
+                "$ref": "#/components/schemas/pi__calls__call_models__Update"
               }
             }
           }
@@ -5198,7 +5198,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__runtime__Update"
+                "$ref": "#/components/schemas/pi__calls__call_models__Update"
               }
             }
           }
@@ -21729,7 +21729,7 @@
             "title": "Modelid"
           },
           "privacy": {
-            "$ref": "#/components/schemas/pi__calls__runtime__Privacy"
+            "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
           },
           "events": {
             "items": {
@@ -28531,7 +28531,7 @@
         ],
         "title": "Start"
       },
-      "pi__calls__runtime__Privacy": {
+      "pi__calls__call_models__Privacy": {
         "properties": {
           "memory": {
             "type": "boolean",
@@ -28548,7 +28548,7 @@
         "type": "object",
         "title": "Privacy"
       },
-      "pi__calls__runtime__Start": {
+      "pi__calls__call_models__Start": {
         "properties": {
           "request_id": {
             "type": "string",
@@ -28562,7 +28562,7 @@
             "title": "Conversationid"
           },
           "privacy": {
-            "$ref": "#/components/schemas/pi__calls__runtime__Privacy"
+            "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
           }
         },
         "additionalProperties": false,
@@ -28573,7 +28573,7 @@
         ],
         "title": "Start"
       },
-      "pi__calls__runtime__Update": {
+      "pi__calls__call_models__Update": {
         "properties": {
           "expected_revision": {
             "type": "integer",
@@ -28619,7 +28619,7 @@
           "privacy": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/pi__calls__runtime__Privacy"
+                "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
               },
               {
                 "type": "null"

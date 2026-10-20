@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 
+from pi.calls import call_models, call_records, call_turns
 from pi.calls import runtime as calls
 
 
@@ -32,7 +33,7 @@ def router(store, loop, authorize, speech=None):
             from pi.models.providers import ProviderUnavailable
 
             try:
-                calls.guard(
+                call_turns.guard(
                     store(),
                     {
                         "callExecution": {
@@ -55,7 +56,7 @@ def router(store, loop, authorize, speech=None):
         return result
 
     @routes.post("")
-    def start(body: calls.Start):
+    def start(body: call_models.Start):
         return execute(calls.start, body)
 
     @routes.get("")
@@ -77,47 +78,49 @@ def router(store, loop, authorize, speech=None):
             "devices": "client-owned; not captured by Pi",
         }
 
-    @routes.get("/browser/capabilities", response_model=calls.BrowserCallAvailability)
+    @routes.get("/browser/capabilities", response_model=call_models.BrowserCallAvailability)
     def browser_capabilities(request: Request):
         exact(request)
-        return calls.browser_availability(speech() if speech else None)
+        return call_models.browser_availability(speech() if speech else None)
 
-    @routes.get("/browser/active/{conversation_id}", response_model=calls.BrowserCall)
+    @routes.get("/browser/active/{conversation_id}", response_model=call_models.BrowserCall)
     def browser_active(conversation_id: ConversationPath, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.active, conversation_id))
+        return call_models.browser_view(execute(calls.active, conversation_id))
 
-    @routes.post("/browser", response_model=calls.BrowserCall)
-    def browser_start(body: calls.Start, request: Request):
+    @routes.post("/browser", response_model=call_models.BrowserCall)
+    def browser_start(body: call_models.Start, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.start, body))
+        return call_models.browser_view(execute(calls.start, body))
 
-    @routes.get("/browser/{identity}", response_model=calls.BrowserCall)
+    @routes.get("/browser/{identity}", response_model=call_models.BrowserCall)
     def browser_get(identity: CallPath, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.get, identity))
+        return call_models.browser_view(execute(call_records.get, identity))
 
-    @routes.post("/browser/{identity}/update", response_model=calls.BrowserCall)
-    def browser_update(identity: CallPath, body: calls.Update, request: Request):
+    @routes.post("/browser/{identity}/update", response_model=call_models.BrowserCall)
+    def browser_update(identity: CallPath, body: call_models.Update, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.update, identity, body))
+        return call_models.browser_view(execute(calls.update, identity, body))
 
-    @routes.post("/browser/{identity}/interrupt", response_model=calls.BrowserCall)
-    def browser_interrupt(identity: CallPath, body: calls.Revision, request: Request):
+    @routes.post("/browser/{identity}/interrupt", response_model=call_models.BrowserCall)
+    def browser_interrupt(identity: CallPath, body: call_models.Revision, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.interrupt, identity, body))
+        return call_models.browser_view(execute(calls.interrupt, identity, body))
 
-    @routes.post("/browser/{identity}/end", response_model=calls.BrowserCall)
-    def browser_end(identity: CallPath, body: calls.Revision, request: Request):
+    @routes.post("/browser/{identity}/end", response_model=call_models.BrowserCall)
+    def browser_end(identity: CallPath, body: call_models.Revision, request: Request):
         exact(request)
-        return calls.browser_view(execute(calls.interrupt, identity, body, ended=True))
+        return call_models.browser_view(execute(calls.interrupt, identity, body, ended=True))
 
-    @routes.post("/browser/{identity}/turns", response_model=calls.BrowserCallTurn)
-    def browser_typed(identity: CallPath, body: calls.Send, request: Request):
+    @routes.post("/browser/{identity}/turns", response_model=call_models.BrowserCallTurn)
+    def browser_typed(identity: CallPath, body: call_models.Send, request: Request):
         exact(request)
-        return calls.browser_turn(execute(calls.run, loop(), identity, body, speech=None))
+        return call_models.browser_turn(
+            execute(call_turns.run, loop(), identity, body, speech=None)
+        )
 
-    @routes.post("/browser/{identity}/audio", response_model=calls.BrowserAudioTurn)
+    @routes.post("/browser/{identity}/audio", response_model=call_models.BrowserAudioTurn)
     async def browser_audio(
         identity: CallPath,
         request: Request,
@@ -148,38 +151,38 @@ def router(store, loop, authorize, speech=None):
         result = await run_in_threadpool(
             lambda: response(
                 execute(
-                    calls.run,
+                    call_turns.run,
                     loop(),
                     identity,
-                    calls.Send(request_id=request_id),
+                    call_models.Send(request_id=request_id),
                     speech=speech() if speech else None,
                     audio=bytes(data),
                     mime=media,
                 )
             )
         )
-        return calls.browser_audio_turn(result)
+        return call_models.browser_audio_turn(result)
 
     @routes.get("/{identity}")
     def get(identity: str):
-        return execute(calls.get, identity)
+        return execute(call_records.get, identity)
 
     @routes.post("/{identity}/update")
-    def update(identity: str, body: calls.Update):
+    def update(identity: str, body: call_models.Update):
         return execute(calls.update, identity, body)
 
     @routes.post("/{identity}/interrupt")
-    def interrupt(identity: str, body: calls.Revision):
+    def interrupt(identity: str, body: call_models.Revision):
         return execute(calls.interrupt, identity, body)
 
     @routes.post("/{identity}/end")
-    def end(identity: str, body: calls.Revision):
+    def end(identity: str, body: call_models.Revision):
         return execute(calls.interrupt, identity, body, ended=True)
 
     @routes.post("/{identity}/turns")
-    def typed(identity: str, body: calls.Send):
+    def typed(identity: str, body: call_models.Send):
         return response(
-            execute(calls.run, loop(), identity, body, speech=speech() if speech else None)
+            execute(call_turns.run, loop(), identity, body, speech=speech() if speech else None)
         )
 
     @routes.post("/{identity}/audio")
@@ -204,10 +207,10 @@ def router(store, loop, authorize, speech=None):
         return await run_in_threadpool(
             lambda: response(
                 execute(
-                    calls.run,
+                    call_turns.run,
                     loop(),
                     identity,
-                    calls.Send(request_id=request_id),
+                    call_models.Send(request_id=request_id),
                     speech=speech() if speech else None,
                     audio=bytes(data),
                     mime=request.headers.get("content-type", "audio/wav"),
