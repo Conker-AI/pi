@@ -13,7 +13,8 @@ from pi.conversation.store import Store
 from pi.models.providers import Completion, ProviderUnavailable
 from pi.models.routing import Router
 from pi.setup import choices as setup_choices
-from pi.turns.loop import ActedWithoutReply, Loop, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
+from pi.turns.loop import Loop
 
 
 class Scripted:

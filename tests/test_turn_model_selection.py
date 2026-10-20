@@ -16,7 +16,8 @@ from pi.models import roles as model_roles
 from pi.models.routing import Router
 from pi.schedule import tasks
 from pi.turns import queue as q
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 def setup(store, second_fail=False):

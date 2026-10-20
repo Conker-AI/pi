@@ -16,7 +16,8 @@ from pi.models.direct import AnthropicProvider, OpenAIProvider, configured
 from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns import inference_control
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 @pytest.fixture(autouse=True)

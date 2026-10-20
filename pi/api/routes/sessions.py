@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from pi.conversation import submissions
 from pi.turns import control as turn_control
 from pi.turns import thinking as background_thinking
-from pi.turns.loop import ActedWithoutReply, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 
 class NewSession(BaseModel):

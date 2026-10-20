@@ -25,7 +25,7 @@ CASES = [
     ),
     (
         "context-not-used",
-        "pi/turns/loop.py",
+        "pi/turns/history.py",
         "if memory_prompt:",
         "if False:",
     ),

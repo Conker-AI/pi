@@ -108,7 +108,7 @@ def test_steering_after_action_preserves_acted_state_on_later_failure(tmp_path):
     from test_tool_turns import Scripted
 
     from pi.models.providers import ProviderUnavailable
-    from pi.turns.loop import ActedWithoutReply
+    from pi.turns.failures import ActedWithoutReply
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()

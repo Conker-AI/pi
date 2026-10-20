@@ -9,7 +9,7 @@ from test_web_research import SEARCH, SearchGate
 from pi.actions.toolgate import Tool, ToolGateUnavailable, ToolResult
 from pi.context import research
 from pi.conversation.store import Store
-from pi.turns.loop import ActedWithoutReply, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 HANDLE = "rr_current_turn_source_01"
 FETCH = json.dumps({"tool": "research.fetch", "args": {"result_id": HANDLE, "max_chars": 3000}})

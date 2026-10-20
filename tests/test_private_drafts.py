@@ -23,7 +23,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.schedule import tasks
 from pi.setup import choices as setup_choices
-from pi.turns.loop import TurnFailed
+from pi.turns.failures import TurnFailed
 
 
 @pytest.fixture

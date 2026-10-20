@@ -574,7 +574,7 @@ def test_failed_turn_does_not_schedule_after_turn(tmp_path, monkeypatch):
 
         from unittest.mock import MagicMock
 
-        from pi.turns.loop import TurnFailed
+        from pi.turns.failures import TurnFailed
 
         loop_mock = MagicMock()
         loop_mock.run_turn.side_effect = TurnFailed("provider error", "trn_test")

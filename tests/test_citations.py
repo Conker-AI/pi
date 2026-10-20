@@ -161,7 +161,8 @@ def test_store_citation_validation_rolls_back_reply_and_completion(store):
 def test_loop_persists_only_explicit_provider_evidence(store):
     from pi.models.providers import Completion
     from pi.models.routing import Router
-    from pi.turns.loop import Loop, TurnFailed
+    from pi.turns.failures import TurnFailed
+    from pi.turns.loop import Loop
 
     class Provider:
         name = "test"

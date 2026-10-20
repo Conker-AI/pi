@@ -20,7 +20,8 @@ from pi.memory.service import Memory, MemoryClient
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.setup import choices as setup_choices
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 class Provider:

@@ -10,7 +10,7 @@ from pi.context import research, research_usage
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
-from pi.turns.loop import ActedWithoutReply
+from pi.turns.failures import ActedWithoutReply
 
 
 def priced(provider, unknown=False):

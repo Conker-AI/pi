@@ -217,7 +217,7 @@ def router(get_loop, owner):
 
     @api.post("/sessions/{sid}/messages/{mid}/retry")
     def retry(sid: str, mid: str, body: Retry):
-        from pi.turns.loop import TurnFailed
+        from pi.turns.failures import TurnFailed
 
         try:
             return run(get_loop(), sid, mid, body)

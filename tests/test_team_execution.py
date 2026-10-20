@@ -22,7 +22,8 @@ from pi.models import roles as model_roles
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.schedule import tasks
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 class Recorder:

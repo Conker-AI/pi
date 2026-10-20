@@ -13,7 +13,7 @@ from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 from pi.turns import control as turn_control
-from pi.turns.loop import ActedWithoutReply, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 
 def test_stop_during_provider_discards_answer_and_replay_does_not_restart(tmp_path):

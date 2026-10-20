@@ -12,7 +12,7 @@ from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 from pi.turns import control as turn_control
-from pi.turns.loop import ActedWithoutReply
+from pi.turns.failures import ActedWithoutReply
 
 
 def stopped(store):
