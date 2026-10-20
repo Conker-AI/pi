@@ -13,6 +13,9 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only
 from .operations import json_body
 from .store import AuthError
 
+CHAT_SEND = re.compile(r"/sessions/[A-Za-z0-9_-]+/turns")
+REQUEST_ID = re.compile(r"[A-Za-z0-9_-]{16,128}")
+
 
 def router(app, session, forward, admit_write, stream_transport):
     routes = APIRouter()
@@ -79,6 +82,13 @@ def router(app, session, forward, admit_write, stream_transport):
                 # Signed-in session, CSRF and origin were checked above; see ADR-0010.
                 if request.scope["query_string"]:
                     raise AuthError("Write operations must not include query parameters.", 422)
+                # A chat message pays for a model call. With its request_id a lost reply is
+                # checked, not resent; without one, a retried send would answer (and pay) twice.
+                if CHAT_SEND.fullmatch(target) and not (
+                    isinstance(body.get("request_id"), str)
+                    and REQUEST_ID.fullmatch(body["request_id"])
+                ):
+                    raise AuthError("Send chat messages with a request_id.", 422)
             else:
                 admit_write(request, body)
         from starlette.concurrency import run_in_threadpool

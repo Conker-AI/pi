@@ -105,6 +105,8 @@ def test_conversation_writes_need_the_signed_in_session_not_a_password(boundary,
     """ADR-0010: chatting and stopping are session-bound; risky writes keep proofs."""
     client, _, headers, seen, _ = boundary
     body = {"text": "private content"}
+    if path.endswith("/turns"):
+        body["request_id"] = "send_0123456789abcdef"
     assert client.post(path, json=body).status_code == 403
     assert (
         client.post(path, json=body, headers={**headers, "X-CSRF-Token": "x" * 43}).status_code
@@ -124,6 +126,20 @@ def test_conversation_writes_need_the_signed_in_session_not_a_password(boundary,
     assert client.post(path, json=body, headers=headers).status_code == 401
     assert len(seen) == 1
 
+
+
+@pytest.mark.parametrize(
+    "request_id", [None, "", "short", "x" * 129, "has space 0123456789", 1234567890123456]
+)
+def test_a_chat_message_without_a_valid_request_id_never_reaches_pi(boundary, request_id):
+    """A retried send without a request_id would answer, and pay, twice."""
+    client, _, headers, seen, _ = boundary
+    body = {"text": "private content"}
+    if request_id is not None:
+        body["request_id"] = request_id
+    response = client.post("/api/pi/sessions/s/turns", json=body, headers=headers)
+    assert response.status_code == 422
+    assert not seen
 
 def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary):
     client, _, headers, seen, _ = boundary
