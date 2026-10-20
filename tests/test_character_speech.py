@@ -9,8 +9,8 @@ from test_calls import runtime, send, start
 from test_characters import profile, save
 from test_speech import wav
 
+from pi.calls import call_models, speech
 from pi.calls import runtime as calls
-from pi.calls import speech
 from pi.conversation.store import Store
 
 
@@ -109,7 +109,7 @@ def test_call_freezes_voice_before_provider_and_applies_edits_to_next_request(st
         changed = copy.deepcopy(value)
         changed["studio"]["voice"]["description"] = "New identity"
         save(store, 1, changed)
-        calls.update(store, call["id"], calls.Update(expected_revision=1, mode="character"))
+        calls.update(store, call["id"], call_models.Update(expected_revision=1, mode="character"))
 
     provider.callback = edit
     result = send(store, loop, call, speech=service)
@@ -146,7 +146,7 @@ def test_call_interruption_during_design_synthesis_discards_audio(store):
 
     def stop(request):
         assert json.loads(request.read())["task_type"] == "VoiceDesign"
-        calls.interrupt(store, call["id"], calls.Revision(expected_revision=1), ended=True)
+        calls.interrupt(store, call["id"], call_models.Revision(expected_revision=1), ended=True)
         return httpx.Response(200, content=wav(), headers={"content-type": "audio/wav"})
 
     service = speech.SpeechClient(

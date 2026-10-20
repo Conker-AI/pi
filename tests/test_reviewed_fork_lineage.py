@@ -4,6 +4,7 @@ import pytest
 
 from pi.agents import profiles as agents
 from pi.agents import team_models
+from pi.calls import call_models
 from pi.conversation import settings, submissions
 from pi.models.routing import Router
 from pi.turns.loop import Loop
@@ -149,7 +150,9 @@ def test_creation_at_lineage_limit_refuses_atomically_even_with_inherited_raw_se
                 ),
             )
         elif kind == "call":
-            calls.start(store, calls.Start(request_id="too_deep_call_start", conversationId=parent))
+            calls.start(
+                store, call_models.Start(request_id="too_deep_call_start", conversationId=parent)
+            )
         elif kind == "team_start":
             start(store, team, parent)
         else:

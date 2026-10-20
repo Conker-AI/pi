@@ -6,6 +6,7 @@ from threading import Event
 import pytest
 
 from pi.agents import profiles as agents
+from pi.calls import call_models, call_records, call_turns
 from pi.calls import runtime as c
 from pi.context import controls as context_controls
 from pi.conversation import forgetting
@@ -61,7 +62,9 @@ class Speech:
 
 def start(store, source=None):
     source = source or store.create_session()
-    return c.start(store, c.Start(request_id="start_request_857300", conversationId=source))
+    return c.start(
+        store, call_models.Start(request_id="start_request_857300", conversationId=source)
+    )
 
 
 def runtime(store, provider=None, gate=None):
@@ -70,11 +73,11 @@ def runtime(store, provider=None, gate=None):
 
 
 def send(store, loop, call, number=1, **kwargs):
-    return c.run(
+    return call_turns.run(
         store,
         loop,
         call["id"],
-        c.Send(request_id=f"call_request_8573_{number}", text="typed question"),
+        call_models.Send(request_id=f"call_request_8573_{number}", text="typed question"),
         **kwargs,
     )
 
@@ -108,7 +111,7 @@ def test_real_typed_turn_replay_history_and_independent_conversation(store):
     store.close()
     reopened = Store(path)
     try:
-        assert c.get(reopened, identity)["requests"] == result["call"]["requests"]
+        assert call_records.get(reopened, identity)["requests"] == result["call"]["requests"]
     finally:
         reopened.close()
 
@@ -116,29 +119,35 @@ def test_real_typed_turn_replay_history_and_independent_conversation(store):
 def test_pause_before_send_and_microphone_keyboard_independence(store):
     call = start(store)
     loop, provider = runtime(store)
-    call = c.update(store, call["id"], c.Update(expected_revision=1, paused=True))
-    with pytest.raises(c.CallError, match="paused"):
+    call = c.update(store, call["id"], call_models.Update(expected_revision=1, paused=True))
+    with pytest.raises(call_records.CallError, match="paused"):
         send(store, loop, call)
     assert not provider.seen
     call = c.update(
         store,
         call["id"],
-        c.Update(expected_revision=2, paused=False, channels=c.ChannelUpdate(voice=False)),
+        call_models.Update(
+            expected_revision=2, paused=False, channels=call_models.ChannelUpdate(voice=False)
+        ),
     )
     assert send(store, loop, call)["call"]["requests"][0]["state"] == "complete"
     assert call["channels"]["microphone"] is False
-    with pytest.raises(c.CallError, match="input channel"):
-        c.run(
+    with pytest.raises(call_records.CallError, match="input channel"):
+        call_turns.run(
             store,
             loop,
             call["id"],
-            c.Send(request_id="audio_request_8573"),
+            call_models.Send(request_id="audio_request_8573"),
             audio=b"audio",
             speech=Speech(),
         )
-    with pytest.raises(c.CallError, match="Camera"):
+    with pytest.raises(call_records.CallError, match="Camera"):
         c.update(
-            store, call["id"], c.Update(expected_revision=3, channels=c.ChannelUpdate(camera=True))
+            store,
+            call["id"],
+            call_models.Update(
+                expected_revision=3, channels=call_models.ChannelUpdate(camera=True)
+            ),
         )
 
 
@@ -153,7 +162,7 @@ def test_pause_during_actual_provider_blocks_answer_tools_and_speech(store):
     with ThreadPoolExecutor(1) as pool:
         future = pool.submit(send, store, loop, call, speech=speech)
         assert entered.wait(5)
-        c.update(store, call["id"], c.Update(expected_revision=1, paused=True))
+        c.update(store, call["id"], call_models.Update(expected_revision=1, paused=True))
         release.set()
         result = future.result(timeout=5)
     assert result["audio"] is None and speech.tts == 0 and not gate.invocations
@@ -170,7 +179,7 @@ def test_already_inflight_tool_outcome_remains_truthful(store):
     class Gate(FakeGate):
         def invoke(self, *args, **kwargs):
             result = super().invoke(*args, **kwargs)
-            c.interrupt(store, call["id"], c.Revision(expected_revision=1), ended=True)
+            c.interrupt(store, call["id"], call_models.Revision(expected_revision=1), ended=True)
             return result
 
     gate, provider = Gate(), Scripted([CALL, "must not produce a next answer"])
@@ -188,21 +197,26 @@ def test_stt_loop_tts_is_once_and_output_is_transient(store):
     call = c.update(
         store,
         call["id"],
-        c.Update(expected_revision=1, channels=c.ChannelUpdate(microphone=True, keyboard=False)),
+        call_models.Update(
+            expected_revision=1, channels=call_models.ChannelUpdate(microphone=True, keyboard=False)
+        ),
     )
     loop, provider = runtime(store)
     speech = Speech()
-    body = c.Send(request_id="spoken_request_8573")
-    result = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
+    body = call_models.Send(request_id="spoken_request_8573")
+    result = call_turns.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
     assert result["audio"]["audio"] == b"transient audio"
     assert (speech.stt, speech.tts, len(provider.seen)) == (1, 1, 1)
     assert store.messages(call["sessionId"])[0]["content"] == "spoken question"
     assert (
-        c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)["audio"] is None
+        call_turns.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)[
+            "audio"
+        ]
+        is None
     )
     assert (speech.stt, speech.tts, len(provider.seen)) == (1, 1, 1)
-    with pytest.raises(c.CallError, match="different input"):
-        c.run(store, loop, call["id"], body, audio=b"changed", speech=speech)
+    with pytest.raises(call_records.CallError, match="different input"):
+        call_turns.run(store, loop, call["id"], body, audio=b"changed", speech=speech)
     assert b"synthetic pcm" not in store.path.read_bytes()
     assert b"transient audio" not in store.path.read_bytes()
 
@@ -251,8 +265,12 @@ def test_source_privacy_and_policy_pins_are_inherited_separately(store):
     prompt = [m.content for m in provider.seen[0][0]]
     assert "exact pinned words" in prompt and "excluded words" not in prompt
     assert "Inherited instruction" in prompt
-    with pytest.raises(c.CallError, match="cannot be relaxed"):
-        c.update(store, call["id"], c.Update(expected_revision=1, privacy=c.Privacy()))
+    with pytest.raises(call_records.CallError, match="cannot be relaxed"):
+        c.update(
+            store,
+            call["id"],
+            call_models.Update(expected_revision=1, privacy=call_models.Privacy()),
+        )
     with pytest.raises(agents.AgentError):
         session_settings.save(
             store,
@@ -277,7 +295,7 @@ def test_summary_is_referenced_and_source_changes_stop_next_turn(store):
     assert any("Earlier untrusted summary" in m.content for m in provider.seen[0][0])
     with store._connect() as db:
         db.execute("UPDATE sessions SET summary='changed' WHERE id=?", (source,))
-    with pytest.raises(c.CallError, match="summary changed"):
+    with pytest.raises(call_records.CallError, match="summary changed"):
         send(store, loop, call, 2)
     assert len(provider.seen) == 1
 
@@ -296,7 +314,7 @@ def test_recovery_marks_unknown_and_never_restarts_work(store):
     reopened = Store(path)
     try:
         assert c.recover(reopened) == 1
-        view = c.get(reopened, call["id"])
+        view = call_records.get(reopened, call["id"])
         assert view["paused"] is True and view["requests"][0]["state"] == "unknown"
         assert view["generation"] == 2
     finally:
@@ -307,16 +325,16 @@ def test_parent_forgetting_erases_call_transcript_and_hashes(store):
     source = store.create_session(summary="call-secret-summary-8573")
     call = start(store, source)
     loop, _ = runtime(store)
-    body = c.Send(request_id="private_request_8573", text="call-secret-message-8573")
-    c.run(store, loop, call["id"], body)
+    body = call_models.Send(request_id="private_request_8573", text="call-secret-message-8573")
+    call_turns.run(store, loop, call["id"], body)
     path = store.path
     store.close()
     receipt = forgetting.forget(path, source, forgetting.preview(path, source)["confirmation"])
     assert set(receipt["session_ids"]) == {source, call["sessionId"]}
     reopened = Store(path)
     try:
-        with pytest.raises(c.CallError):
-            c.get(reopened, call["id"])
+        with pytest.raises(call_records.CallError):
+            call_records.get(reopened, call["id"])
         with reopened._connect() as db:
             assert db.execute("SELECT payload_hash,preferences FROM call_requests").fetchone()[
                 :
@@ -343,21 +361,25 @@ def test_model_preference_changes_only_future_accepted_requests(store):
     call = c.update(
         store,
         call["id"],
-        c.Update(
-            expected_revision=1, modelId="a", channels=c.ChannelUpdate(microphone=True, voice=False)
+        call_models.Update(
+            expected_revision=1,
+            modelId="a",
+            channels=call_models.ChannelUpdate(microphone=True, voice=False),
         ),
     )
     first, second = Provider(), Provider()
     second.name = "two"
     loop = Loop(store, Router(local_provider=first, local_model="a", hosted_provider=second))
     speech = Speech(
-        callback=lambda: c.update(store, call["id"], c.Update(expected_revision=2, modelId="b"))
+        callback=lambda: c.update(
+            store, call["id"], call_models.Update(expected_revision=2, modelId="b")
+        )
     )
-    result = c.run(
+    result = call_turns.run(
         store,
         loop,
         call["id"],
-        c.Send(request_id="model_freeze_857300"),
+        call_models.Send(request_id="model_freeze_857300"),
         speech=speech,
         audio=b"synthetic pcm",
     )
@@ -389,7 +411,7 @@ def test_interruption_blocks_configured_model_fallback(store):
     call = start(store)
 
     def stop_then_fail():
-        c.interrupt(store, call["id"], c.Revision(expected_revision=1))
+        c.interrupt(store, call["id"], call_models.Revision(expected_revision=1))
         raise ProviderUnavailable("synthetic provider outage")
 
     first, second = Provider(stop_then_fail), Provider()
@@ -406,7 +428,7 @@ def test_atomic_final_commit_rechecks_generation(store, monkeypatch):
     original = store.complete_turn
 
     def stop_at_commit(*args, **kwargs):
-        c.interrupt(store, call["id"], c.Revision(expected_revision=1), ended=True)
+        c.interrupt(store, call["id"], call_models.Revision(expected_revision=1), ended=True)
         return original(*args, **kwargs)
 
     monkeypatch.setattr(store, "complete_turn", stop_at_commit)
@@ -422,7 +444,7 @@ def test_end_during_tts_discards_transient_audio(store):
     class EndSpeech(Speech):
         def synthesize(self, text):
             result = super().synthesize(text)
-            c.interrupt(store, call["id"], c.Revision(expected_revision=1), ended=True)
+            c.interrupt(store, call["id"], call_models.Revision(expected_revision=1), ended=True)
             return result
 
     result = send(store, loop, call, speech=EndSpeech())
@@ -474,9 +496,9 @@ def test_caption_segments_are_transient_and_generation_bound(store, pause, with_
     call = c.update(
         store,
         call["id"],
-        c.Update(
+        call_models.Update(
             expected_revision=1,
-            channels=c.ChannelUpdate(microphone=True, voice=False),
+            channels=call_models.ChannelUpdate(microphone=True, voice=False),
         ),
     )
     segments = [{"start": 0.25, "end": 0.75, "text": "spoken question"}]
@@ -498,15 +520,17 @@ def test_caption_segments_are_transient_and_generation_bound(store, pause, with_
 
     def interrupt():
         if pause:
-            current = c.get(store, call["id"])
+            current = call_records.get(store, call["id"])
             c.update(
-                store, call["id"], c.Update(expected_revision=current["revision"], paused=True)
+                store,
+                call["id"],
+                call_models.Update(expected_revision=current["revision"], paused=True),
             )
 
     speech = TimedSpeech(callback=interrupt)
     loop, provider = runtime(store)
-    body = c.Send(request_id="timed_caption_request")
-    result = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
+    body = call_models.Send(request_id="timed_caption_request")
+    result = call_turns.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
     assert result["audio"] is None
     if pause:
         assert result["transcription"] is None
@@ -520,6 +544,8 @@ def test_caption_segments_are_transient_and_generation_bound(store, pause, with_
             "timing": "provider-words" if with_words else "provider-segments",
             "retention": "transient-response-only",
         }
-        replay = c.run(store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech)
+        replay = call_turns.run(
+            store, loop, call["id"], body, audio=b"synthetic pcm", speech=speech
+        )
         assert replay["transcription"] is None and speech.stt == 1
-        assert "segments" not in str(c.get(store, call["id"]))
+        assert "segments" not in str(call_records.get(store, call["id"]))

@@ -27,7 +27,7 @@ from typing import Any
 
 from pi.actions import identities as actions
 from pi.agents import profiles as agents
-from pi.calls import runtime as calls
+from pi.calls import call_turns
 from pi.context import research_usage
 from pi.conversation import citations as message_citations
 from pi.conversation import schema, submissions
@@ -318,7 +318,7 @@ class Store:
                 "SELECT snapshot FROM turn_settings WHERE turn_id=?", (turn_id,)
             ).fetchone()
             execution = json.loads(snapshot[0]) if snapshot else None
-            calls.guard_db(db, execution)
+            call_turns.guard_db(db, execution)
             turn_control.guard_db(db, turn_id, reply_request_id)
             turn_steering.guard_db(db, turn_id)
             message = submissions.append(
