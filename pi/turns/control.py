@@ -189,9 +189,9 @@ def claim_reply(store, turn_id, request_id):
 
 
 def guard(store, execution):
-    from pi.calls import runtime as calls
+    from pi.calls import call_turns
 
-    calls.guard(store, execution)
+    call_turns.guard(store, execution)
     turn_id = (execution or {}).get("turnExecutionId")
     request_id = (execution or {}).get("submissionExecutionId")
     if turn_id or request_id:
