@@ -16,12 +16,13 @@ from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from gateway.operations import json_body
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.owner.terminal import TerminalError
 
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .diagnostics import collect_diagnostics
-from .operations import fingerprint, parse_object
+from .operations import fingerprint
 from .store import AuthError, AuthStore
 from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
@@ -1247,19 +1248,6 @@ def create_app(
         return app.state.dashboard.response(path, request)
 
     return app
-
-
-async def json_body(request: Request, *, max_bytes: int = 65536) -> dict:
-    if request.headers.get("content-type", "").split(";")[0] != "application/json":
-        raise AuthError("Send application/json.", 415)
-    raw = bytearray()
-    async for chunk in request.stream():
-        raw.extend(chunk)
-        if len(raw) > max_bytes:
-            raise AuthError(
-                "Request is too large; keep it below the operation-specific limit.", 413
-            )
-    return parse_object(raw)
 
 
 app = create_app()
