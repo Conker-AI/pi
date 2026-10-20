@@ -29,6 +29,7 @@ from pi.api.routes import compaction as compaction_api
 from pi.api.routes import context as context_api
 from pi.api.routes import continuity as continuity_api
 from pi.api.routes import decisions as decisions_api
+from pi.api.routes import definitions as definitions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import inbox as inbox_api
@@ -156,6 +157,7 @@ def require_skill_read(
 
 app.include_router(skills_api.router(lambda: app.state.store, require_skill_read, require_owner))
 app.include_router(context_api.router(lambda: app.state.store, require_owner))
+app.include_router(definitions_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
