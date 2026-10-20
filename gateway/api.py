@@ -277,6 +277,78 @@ def create_app(
         )
         return response
 
+    def upstream(
+        method: str,
+        url: str,
+        key_header: str,
+        key: str,
+        body: dict | None,
+        query: bytes,
+        *,
+        timeout: float = 660,
+        extra_headers: dict | None = None,
+    ) -> httpx.Response:
+        outgoing = app.state.client.build_request(
+            method,
+            url,
+            headers={key_header: key, **(extra_headers or {})},
+            json=body,
+            params=query.decode("ascii") if query else None,
+            timeout=timeout,
+        )
+        # A shared HTTP client must not turn a service's Set-Cookie into later authority.
+        outgoing.headers.pop("cookie", None)
+        return app.state.client.send(outgoing)
+
+    def forward(
+        method: str,
+        url: str,
+        key_header: str,
+        key: str,
+        body: dict | None,
+        query: bytes,
+        extra_headers=None,
+    ):
+        if not key:
+            raise AuthError(
+                "Owner approval channel is not configured. "
+                "Provision its scoped credential on the host.",
+                503,
+            )
+        try:
+            response = upstream(
+                method, url, key_header, key, body, query, extra_headers=extra_headers
+            )
+        except (httpx.HTTPError, UnicodeError):
+            raise AuthError(
+                "Service unavailable; check conker status. The operation was not retried; "
+                "check its state before repeating it.",
+                503,
+            ) from None
+        if 300 <= response.status_code < 400:
+            raise AuthError(
+                "Service returned an unexpected redirect. Check gateway service URLs on the host.",
+                502,
+            )
+        try:
+            data = response.json()
+        except ValueError:
+            raise AuthError(
+                "Service returned an unreadable response. Check its logs before retrying.", 502
+            ) from None
+        # Upstream headers (especially cookies) never cross the browser boundary.
+        return JSONResponse(data, status_code=response.status_code)
+
+    def admit_write(request: Request, body: dict) -> None:
+        if request.scope["query_string"]:
+            raise AuthError("Write operations must not include query parameters.", 422)
+        binding = fingerprint(request.method, request.url.path, body)
+        app.state.auth.consume(
+            request.cookies.get(app.state.config.cookie_name, ""),
+            request.headers.get("x-conker-verification", ""),
+            binding,
+        )
+
     @app.get("/health")
     def health():
         checks = {
@@ -452,78 +524,6 @@ def create_app(
         admit_write(request, body)
         app.state.auth.revoke()
         return {"revoked": True}
-
-    def upstream(
-        method: str,
-        url: str,
-        key_header: str,
-        key: str,
-        body: dict | None,
-        query: bytes,
-        *,
-        timeout: float = 660,
-        extra_headers: dict | None = None,
-    ) -> httpx.Response:
-        outgoing = app.state.client.build_request(
-            method,
-            url,
-            headers={key_header: key, **(extra_headers or {})},
-            json=body,
-            params=query.decode("ascii") if query else None,
-            timeout=timeout,
-        )
-        # A shared HTTP client must not turn a service's Set-Cookie into later authority.
-        outgoing.headers.pop("cookie", None)
-        return app.state.client.send(outgoing)
-
-    def forward(
-        method: str,
-        url: str,
-        key_header: str,
-        key: str,
-        body: dict | None,
-        query: bytes,
-        extra_headers=None,
-    ):
-        if not key:
-            raise AuthError(
-                "Owner approval channel is not configured. "
-                "Provision its scoped credential on the host.",
-                503,
-            )
-        try:
-            response = upstream(
-                method, url, key_header, key, body, query, extra_headers=extra_headers
-            )
-        except (httpx.HTTPError, UnicodeError):
-            raise AuthError(
-                "Service unavailable; check conker status. The operation was not retried; "
-                "check its state before repeating it.",
-                503,
-            ) from None
-        if 300 <= response.status_code < 400:
-            raise AuthError(
-                "Service returned an unexpected redirect. Check gateway service URLs on the host.",
-                502,
-            )
-        try:
-            data = response.json()
-        except ValueError:
-            raise AuthError(
-                "Service returned an unreadable response. Check its logs before retrying.", 502
-            ) from None
-        # Upstream headers (especially cookies) never cross the browser boundary.
-        return JSONResponse(data, status_code=response.status_code)
-
-    def admit_write(request: Request, body: dict) -> None:
-        if request.scope["query_string"]:
-            raise AuthError("Write operations must not include query parameters.", 422)
-        binding = fingerprint(request.method, request.url.path, body)
-        app.state.auth.consume(
-            request.cookies.get(app.state.config.cookie_name, ""),
-            request.headers.get("x-conker-verification", ""),
-            binding,
-        )
 
     @app.get("/api/host/providers")
     @app.post("/api/host/providers")
