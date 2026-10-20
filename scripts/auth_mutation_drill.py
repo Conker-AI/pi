@@ -143,6 +143,13 @@ CASES = [
         API + "test_proxy_keeps_credentials_separate_and_preserves_memory_status",
     ),
     (
+        "chat-send-without-request-id",
+        "gateway/service_routes.py",
+        "if CHAT_SEND.fullmatch(target) and not (",
+        "if False and not (",
+        VERIFY + "test_a_chat_message_without_a_valid_request_id_never_reaches_pi",
+    ),
+    (
         "gateway-forwards-any-route",
         "gateway/service_routes.py",
         "if not runtime_allowed(request.method, target):",
