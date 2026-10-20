@@ -2,4 +2,3 @@
 # Each may only shrink; delete its line once it is under the limit. Never add a line.
 gateway/api.py 1265  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
 pi/turns/loop.py 1156  # raised once on 2026-10-13 to merge pre-guardrail work (feat/conker-daily-companion); restructure brings it back down
-tests/test_gateway_mutation.py 1467
