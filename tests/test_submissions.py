@@ -18,7 +18,7 @@ from pi.conversation import activity, forgetting, submissions
 from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
-from pi.turns.loop import ActedWithoutReply, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 REQUEST = "submission_request_001"
 

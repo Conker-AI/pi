@@ -12,7 +12,7 @@ from pi.conversation import submissions
 from pi.conversation.store import Store
 from pi.schedule import tasks
 from pi.turns import queue as q
-from pi.turns.loop import TurnFailed
+from pi.turns.failures import TurnFailed
 
 
 def test_reply_is_present_in_model_context_and_input_projection_after_reopen(tmp_path):

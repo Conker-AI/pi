@@ -22,7 +22,8 @@ from pi.turns import control as turn_control
 from pi.turns import inference_control, routing_memo
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
-from pi.turns.loop import ActedWithoutReply, Loop
+from pi.turns.failures import ActedWithoutReply
+from pi.turns.loop import Loop
 
 
 class Answers:

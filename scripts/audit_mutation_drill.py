@@ -23,7 +23,7 @@ CASES = [
     ),
     (
         "F1-resume-new-identity",
-        "pi/turns/loop.py",
+        "pi/turns/replies.py",
         "action = actions.latest(self.store, turn_id)",
         'action = {**actions.latest(self.store, turn_id), "id": ToolGateClient.new_action_id()}',
         EXEC,
@@ -91,14 +91,14 @@ CASES = [
     ("F2b-negative-receipt-marks-acted", "pi/actions/identities.py", "int(outcome.ok)", "1", EXEC),
     (
         "F2b-unknown-redispatches",
-        "pi/turns/loop.py",
+        "pi/turns/replies.py",
         'outcome = self.toolgate.check_action(action["id"], action["tool_id"])',
         'outcome = self.toolgate.invoke(action["tool_id"], action["args"], action_id=action["id"])',
         EXEC,
     ),
     (
         "F4-two-resume-owners",
-        "pi/turns/loop.py",
+        "pi/turns/replies.py",
         'if not self.store.claim_turn(turn_id, turn["status"]):',
         "if False:",
         EXEC,
@@ -195,14 +195,14 @@ CASES = [
     ),
     (
         "F11-summary-is-system",
-        "pi/turns/loop.py",
+        "pi/turns/history.py",
         '"assistant",\n                    "Untrusted model summary',
         '"system",\n                    "Untrusted model summary',
         MODELS,
     ),
     (
         "F9-completion-outage-removes-local",
-        "pi/turns/loop.py",
+        "pi/turns/model_calls.py",
         "except ProviderUnavailable as exc:\n                turn_control.guard(self.store, execution)\n                # A provider outage",
         "except KeyError as exc:\n                turn_control.guard(self.store, execution)\n                # A provider outage",
         MODELS,

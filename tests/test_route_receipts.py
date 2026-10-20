@@ -12,7 +12,8 @@ from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from pi.models.providers import ProviderUnavailable
 from pi.models.routing import Reason, Router, Tier, TurnContext
-from pi.turns.loop import ActedWithoutReply, Loop
+from pi.turns.failures import ActedWithoutReply
+from pi.turns.loop import Loop
 
 
 def automatic(*, answer_fallback=False):

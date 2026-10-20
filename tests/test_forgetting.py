@@ -20,7 +20,8 @@ from pi.conversation.schema import SCHEMA
 from pi.conversation.store import Store
 from pi.models.providers import Completion
 from pi.models.routing import Router
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 SECRET = "private-7f9919-никому-не-говори"
 

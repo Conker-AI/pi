@@ -8,7 +8,7 @@ from test_tool_turns import CALL, FakeGate, build
 
 from pi.actions.tools import InvalidToolOutput, describe, parse, validate_answer
 from pi.conversation.store import Store
-from pi.turns.loop import ActedWithoutReply, TurnFailed
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 
 @pytest.fixture

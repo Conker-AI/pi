@@ -12,7 +12,7 @@ from pi.actions.toolgate import ToolGateClient, ToolPending
 from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
-from pi.turns.loop import TurnFailed
+from pi.turns.failures import TurnFailed
 
 
 def test_id_is_committed_before_dispatch_and_reused_with_owner_job(tmp_path, monkeypatch):

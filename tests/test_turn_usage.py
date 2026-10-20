@@ -25,7 +25,8 @@ from pi.memory.ranking import ConfiguredMemoryRanker
 from pi.models import roles as model_roles
 from pi.models.providers import Completion, ProviderUnavailable
 from pi.models.routing import Router
-from pi.turns.loop import ActedWithoutReply, Loop
+from pi.turns.failures import ActedWithoutReply
+from pi.turns.loop import Loop
 
 
 def test_ordinary_tool_steps_and_final_are_summed_once_after_request_replay(tmp_path):

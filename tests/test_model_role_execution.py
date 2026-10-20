@@ -12,7 +12,8 @@ from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from pi.models.providers import Completion, ProviderUnavailable
 from pi.models.routing import Router
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 class Adapter:

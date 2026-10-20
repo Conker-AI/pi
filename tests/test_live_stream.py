@@ -339,7 +339,7 @@ def test_stop_ends_the_answer_mid_stream_and_cancels_the_turn(tmp_path):
     import threading
 
     from pi.turns import control as turn_control
-    from pi.turns.loop import TurnFailed
+    from pi.turns.failures import TurnFailed
 
     produced = []
     first_piece = threading.Event()

@@ -13,7 +13,8 @@ from pi.conversation.store import Store
 from pi.models.openrouter import ModelUnusable
 from pi.models.providers import Completion, Message, ProviderUnavailable
 from pi.models.routing import Router
-from pi.turns.loop import Loop, TurnFailed
+from pi.turns.failures import TurnFailed
+from pi.turns.loop import Loop
 
 
 def loop_with(store, provider, **kwargs):
