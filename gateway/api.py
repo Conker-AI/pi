@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import hmac
 import os
 import re
@@ -12,16 +11,16 @@ from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
-from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.owner.terminal import TerminalError
 
+from . import auth_routes, host_routes, owner_routes, service_routes, terminal_routes
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .diagnostics import collect_diagnostics
-from .operations import fingerprint, parse_object
+from .operations import fingerprint
 from .store import AuthError, AuthStore
 from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
@@ -277,182 +276,6 @@ def create_app(
         )
         return response
 
-    @app.get("/health")
-    def health():
-        checks = {
-            "owner_login": {
-                "status": "ok" if app.state.auth.configured() else "degraded",
-                "reason": "Password configured"
-                if app.state.auth.configured()
-                else "Run conker auth setup on the host",
-            }
-        }
-        checks["owner_terminal"] = {
-            "status": "ok" if app.state.terminals else "not_configured",
-            "reason": (
-                "Isolated terminal sidecar ready"
-                if app.state.terminals
-                else "Terminal sidecar is not configured"
-            ),
-        }
-        for name, url, header, key in (
-            (
-                "runtime",
-                app.state.config.pi_url.rstrip("/") + "/health",
-                "X-Pi-Gateway-Key",
-                app.state.config.pi_key,
-            ),
-            (
-                "owner_channel",
-                app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
-                "X-ToolGate-Owner-Key",
-                app.state.config.owner_key,
-            ),
-        ):
-            if not key:
-                checks[name] = {
-                    "status": "not_configured",
-                    "reason": "Provision the owner channel on the host",
-                }
-                continue
-            try:
-                result = upstream("GET", url, header, key, None, b"", timeout=3)
-                value = result.json()
-                status = value.get("status", "unknown") if name == "runtime" else "ok"
-                checks[name] = {"status": status if result.status_code == 200 else "unavailable"}
-            except (httpx.HTTPError, ValueError, AttributeError):
-                checks[name] = {"status": "unavailable"}
-        degraded = sorted(
-            name
-            for name, value in checks.items()
-            if value["status"] not in {"ok", "not_configured"}
-        )
-        return {
-            "service": "gateway",
-            "version": "0.1.0",
-            "status": "degraded" if degraded else "ok",
-            "checks": checks,
-            "degraded": degraded,
-            "checked_at": datetime.now(UTC).isoformat(),
-            "age_seconds": 0.0,
-        }
-
-    @app.get("/api/diagnostics")
-    def diagnostics(request: Request):
-        session(request)
-        if request.scope["query_string"]:
-            raise AuthError("Diagnostics do not accept query parameters.", 422)
-        return collect_diagnostics(app.state.config, app.state.auth, app.state.client)
-
-    @app.get("/auth/session")
-    def auth_session(request: Request):
-        try:
-            value = session(request, authenticated=False)
-        except AuthError:
-            value = app.state.auth.anonymous()
-        response = JSONResponse(
-            {
-                "authenticated": bool(value["authenticated"]),
-                "csrf_token": value["csrf"],
-                "session_id": value["id"],
-                "expires_at": value["expires"],
-                "unlock_expires_at": value["unlock_expires_at"],
-                "setup_required": not app.state.auth.configured(),
-            }
-        )
-        return cookie(response, value["token"]) if "token" in value else response
-
-    @app.post("/auth/login")
-    async def login(request: Request):
-        session(request, authenticated=False)
-        body = await json_body(request)
-        if set(body) != {"password"} or not isinstance(body["password"], str):
-            raise AuthError("Send a password in a JSON object.", 422)
-        # FastAPI runs sync routes in a threadpool; do the expensive check there too.
-        from starlette.concurrency import run_in_threadpool
-
-        value = await run_in_threadpool(
-            app.state.auth.login,
-            request.cookies.get(app.state.config.cookie_name, ""),
-            body["password"],
-            request.client.host if request.client else "unknown",
-        )
-        return cookie(
-            JSONResponse(
-                {
-                    "authenticated": True,
-                    "csrf_token": value["csrf"],
-                    "session_id": value["id"],
-                    "expires_at": value["expires"],
-                    "unlock_expires_at": value["unlock_expires_at"],
-                }
-            ),
-            value["token"],
-        )
-
-    @app.post("/auth/verify")
-    async def verify(request: Request):
-        session(request)
-        # A verified Character Studio operation may carry bounded embedded media.
-        # The caller is already an authenticated owner; fingerprint still rejects
-        # every route outside the explicit browser contract.
-        body = await json_body(request, max_bytes=66 * 1024 * 1024)
-        operation = body.get("operation")
-        if (
-            set(body) != {"password", "operation"}
-            or not isinstance(body["password"], str)
-            or not isinstance(operation, dict)
-            or set(operation) != {"method", "path", "body"}
-        ):
-            raise AuthError("Send a password and the complete operation to verify.", 422)
-        binding = fingerprint(operation["method"], operation["path"], operation["body"])
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            app.state.auth.verify,
-            request.cookies.get(app.state.config.cookie_name, ""),
-            body["password"],
-            request.client.host if request.client else "unknown",
-            binding,
-        )
-
-    @app.post("/auth/logout")
-    def logout(request: Request):
-        value = session(request)
-        app.state.auth.revoke(value["id"])
-        response = JSONResponse({"authenticated": False})
-        response.delete_cookie(
-            app.state.config.cookie_name, path="/", secure=True, httponly=True, samesite="strict"
-        )
-        return response
-
-    @app.get("/auth/sessions")
-    def sessions(request: Request):
-        session(request)
-        return {"results": app.state.auth.sessions()}
-
-    @app.post("/auth/sessions/{identity}/revoke")
-    async def revoke(identity: str, request: Request):
-        session(request)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", identity):
-            raise AuthError("Invalid browser session identity.", 422)
-        body = await json_body(request, max_bytes=1024)
-        if body:
-            raise AuthError("Session revocation takes an empty operation object.", 422)
-        admit_write(request, body)
-        app.state.auth.revoke(identity)
-        return {"revoked": True}
-
-    @app.post("/auth/revoke-all")
-    async def revoke_all(request: Request):
-        session(request)
-        body = await json_body(request, max_bytes=1024)
-        if body:
-            raise AuthError("Session revocation takes an empty operation object.", 422)
-        admit_write(request, body)
-        app.state.auth.revoke()
-        return {"revoked": True}
-
     def upstream(
         method: str,
         url: str,
@@ -525,720 +348,79 @@ def create_app(
             binding,
         )
 
-    @app.get("/api/host/providers")
-    @app.post("/api/host/providers")
-    async def host_providers(request: Request):
-        from starlette.concurrency import run_in_threadpool
-
-        from . import provider_control
-
-        session(request)
-        if request.scope["query_string"]:
-            raise AuthError("Provider control does not accept query parameters.", 422)
-        body = None
-        if request.method == "POST":
-            try:
-                body = provider_control.validate_operation(
-                    await json_body(request, max_bytes=16384)
-                )
-            except provider_control.ProviderControlError:
-                raise AuthError("Invalid provider operation.", 422) from None
-            admit_write(request, body)
-        try:
-            value = await run_in_threadpool(
-                provider_control.request,
-                app.state.config.provider_control_socket,
-                request.method,
-                body,
-                transport=app.state.provider_transport
-                if app.state.config.provider_control_socket
-                else None,
-            )
-        except provider_control.ProviderControlError as error:
-            raise AuthError(str(error), 503) from None
-        return JSONResponse(value)
-
-    @app.get("/api/host/chatgpt")
-    @app.post("/api/host/chatgpt")
-    async def host_chatgpt(request: Request):
-        from starlette.concurrency import run_in_threadpool
-
-        from . import chatgpt
-        from .provider_control import ProviderControlError
-
-        session(request)
-        if request.scope["query_string"]:
-            raise AuthError("Subscription control does not accept query parameters.", 422)
-        body = None
-        if request.method == "POST":
-            try:
-                body = chatgpt.validate_operation(await json_body(request, max_bytes=1024))
-            except ProviderControlError:
-                raise AuthError("Invalid subscription operation.", 422) from None
-            admit_write(request, body)
-        try:
-            value = await run_in_threadpool(
-                chatgpt.request,
-                app.state.config.provider_control_socket,
-                request.method,
-                body,
-                transport=app.state.provider_transport,
-            )
-        except ProviderControlError as error:
-            raise AuthError(str(error), 503) from None
-        return JSONResponse(value)
-
-    @app.get("/api/host/claude")
-    @app.post("/api/host/claude")
-    async def host_claude(request: Request):
-        from starlette.concurrency import run_in_threadpool
-
-        from . import native_claude
-        from .provider_control import ProviderControlError
-
-        session(request)
-        if request.scope["query_string"]:
-            raise AuthError("Native control does not accept query parameters.", 422)
-        body = None
-        if request.method == "POST":
-            try:
-                body = native_claude.Operation.model_validate(
-                    await json_body(request, max_bytes=1024)
-                ).model_dump(exclude_none=True)
-                if body["operation"] != "login" and "billing" in body:
-                    raise ValueError()
-            except ValueError:
-                raise AuthError("Invalid native authentication operation.", 422) from None
-            admit_write(request, body)
-        try:
-            return JSONResponse(
-                await run_in_threadpool(
-                    native_claude.request, app.state.provider_transport, request.method, body
-                )
-            )
-        except ProviderControlError as exc:
-            raise AuthError(str(exc), 503) from None
-
-    async def native_session_request(request: Request, action: str, identity: str | None = None):
-        from starlette.concurrency import run_in_threadpool
-
-        from . import native_sessions
-
-        session(request)
-        if request.scope["query_string"] or (
-            identity is not None and not re.fullmatch(native_sessions.SESSION_ID, identity)
-        ):
-            raise AuthError(
-                "Invalid native session request.", 422, code="invalid_native_session_request"
-            )
-        body = None
-        if action == "stop":
-            try:
-                body = native_sessions.Stop.model_validate(
-                    await json_body(request, max_bytes=1024)
-                ).model_dump()
-            except ValueError:
-                raise AuthError(
-                    "Invalid native session stop operation.",
-                    422,
-                    code="invalid_native_session_request",
-                ) from None
-            admit_write(request, body)
-        try:
-            result = await run_in_threadpool(
-                native_sessions.request, app.state.provider_transport, action, identity, body
-            )
-        except native_sessions.NativeSessionsError as exc:
-            raise AuthError(str(exc), exc.status, code=exc.code) from None
-        return JSONResponse(result)
-
-    @app.get("/api/host/claude/sessions")
-    async def native_session_list(request: Request):
-        return await native_session_request(request, "list")
-
-    @app.get("/api/host/claude/sessions/{identity}")
-    async def native_session_status(identity: str, request: Request):
-        return await native_session_request(request, "status", identity)
-
-    @app.get("/api/host/claude/sessions/{identity}/output")
-    async def native_session_output(identity: str, request: Request):
-        return await native_session_request(request, "output", identity)
-
-    @app.post("/api/host/claude/sessions/{identity}/stop")
-    async def native_session_stop(identity: str, request: Request):
-        return await native_session_request(request, "stop", identity)
-
-    async def codex_session_request(request: Request, action: str, identity: str | None = None):
-        from starlette.concurrency import run_in_threadpool
-
-        from . import codex_sessions
-        from .native_sessions import NativeSessionsError
-
-        session(request)
-        try:
-            result = await run_in_threadpool(
-                codex_sessions.request,
-                app.state.provider_transport,
-                action,
-                identity,
-                request.scope["query_string"],
-            )
-        except NativeSessionsError as exc:
-            raise AuthError(str(exc), exc.status, code=exc.code) from None
-        return JSONResponse(result)
-
-    @app.get("/api/host/codex/sessions")
-    async def codex_session_list(request: Request):
-        return await codex_session_request(request, "list")
-
-    @app.get("/api/host/codex/sessions/{identity}")
-    async def codex_session_status(identity: str, request: Request):
-        return await codex_session_request(request, "status", identity)
-
-    def terminal_access(request):
-        owner = session(request)
-        if app.state.terminals is None:
-            raise AuthError("Owner terminal is not configured.", 503)
-        return owner, app.state.terminals
-
-    @app.post("/api/terminal")
-    async def terminal_create(request: Request):
-        owner, manager = terminal_access(request)
-        body = await json_body(request)
-        if set(body) != {"requestId"} or request.scope["query_string"]:
-            raise AuthError("Supply only a terminal requestId.", 422)
-        token = request.cookies.get(app.state.config.cookie_name, "")
-
-        def validate():
-            current = app.state.auth.session(token)
-            if current["id"] != owner["id"]:
-                raise AuthError("Terminal session identity changed.")
-
-        return manager.create(
-            owner["id"], body["requestId"], validate, lambda: admit_write(request, body)
-        )
-
-    @app.get("/api/terminal/current")
-    def terminal_current(request: Request):
-        owner, manager = terminal_access(request)
-        return {
-            "lease": manager.current(owner["id"]),
-            "workspace": app.state.config.terminal_workspace_label,
-            "maximumLifetimeSeconds": 900,
-            "commandsPersisted": False,
-            "outputPersisted": False,
-        }
-
-    @app.get("/api/terminal/{identity}")
-    def terminal_read(identity: str, request: Request, cursor: int = Query(default=0, ge=0)):
-        owner, manager = terminal_access(request)
-        result = manager.use(owner["id"], identity, "read", cursor)
-        return {
-            **result,
-            "data": base64.b64encode(result["data"]).decode("ascii"),
-            "encoding": "base64",
-        }
-
-    @app.post("/api/terminal/{identity}/{operation}")
-    async def terminal_write(identity: str, operation: str, request: Request):
-        owner, manager = terminal_access(request)
-        body = await json_body(request)
-        if request.scope["query_string"]:
-            raise AuthError("Terminal writes cannot include query parameters.", 422)
-        if operation == "input" and set(body) == {"data"} and isinstance(body["data"], str):
-            try:
-                data = base64.b64decode(body["data"], validate=True)
-            except ValueError:
-                raise AuthError("Use base64 terminal input.", 422) from None
-            return {
-                "acceptedBytes": manager.use(owner["id"], identity, "write", data),
-                "automaticReplay": False,
+    @app.get("/health")
+    def health():
+        checks = {
+            "owner_login": {
+                "status": "ok" if app.state.auth.configured() else "degraded",
+                "reason": "Password configured"
+                if app.state.auth.configured()
+                else "Run conker auth setup on the host",
             }
-        if operation == "resize" and set(body) == {"rows", "columns"}:
-            manager.use(owner["id"], identity, "resize", body["rows"], body["columns"])
-            return {"resized": True}
-        if operation == "close" and not body:
-            manager.use(owner["id"], identity, "close")
-            return {"closed": True}
-        raise AuthError("Invalid terminal operation.", 422)
-
-    @app.get("/api/pi/turn-submissions/{request_id}/stream", operation_id="runtime_stream")
-    async def runtime_stream(request_id: str, request: Request, after: int = Query(0, ge=0)):
-        """Relay a live answer preview. Bytes pass through; upstream headers never do."""
-        session(request)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", request_id):
-            raise AuthError("Invalid submission identity.", 422)
-        url = f"{app.state.config.pi_url.rstrip('/')}/turn-submissions/{request_id}/stream"
-        client = httpx.AsyncClient(
-            transport=stream_transport,
-            trust_env=False,
-            follow_redirects=False,
-            timeout=httpx.Timeout(10.0, read=60.0),
-        )
-        try:
-            upstream_request = client.build_request(
-                "GET",
-                url,
-                headers={"X-Pi-Gateway-Key": app.state.config.pi_key},
-                params={"after": after},
-            )
-            response = await client.send(upstream_request, stream=True)
-        except httpx.HTTPError:
-            await client.aclose()
-            raise AuthError(
-                "Live preview unavailable; the saved turn is unaffected.", 503
-            ) from None
-        if response.status_code != 200 or not response.headers.get("content-type", "").startswith(
-            "text/event-stream"
+        }
+        checks["owner_terminal"] = {
+            "status": "ok" if app.state.terminals else "not_configured",
+            "reason": (
+                "Isolated terminal sidecar ready"
+                if app.state.terminals
+                else "Terminal sidecar is not configured"
+            ),
+        }
+        for name, url, header, key in (
+            (
+                "runtime",
+                app.state.config.pi_url.rstrip("/") + "/health",
+                "X-Pi-Gateway-Key",
+                app.state.config.pi_key,
+            ),
+            (
+                "owner_channel",
+                app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
+                "X-ToolGate-Owner-Key",
+                app.state.config.owner_key,
+            ),
         ):
-            await response.aclose()
-            await client.aclose()
-            raise AuthError("Live preview unavailable; the saved turn is unaffected.", 502)
-
-        async def relay():
-            try:
-                async for chunk in response.aiter_bytes():
-                    yield chunk
-            except httpx.HTTPError:
-                return
-            finally:
-                await response.aclose()
-                await client.aclose()
-
-        return StreamingResponse(
-            relay(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
-        )
-
-    @app.get("/api/pi/{path:path}", operation_id="runtime_read")
-    @app.post("/api/pi/{path:path}", operation_id="runtime_write")
-    async def runtime(path: str, request: Request):
-        session(request)
-        target = "/" + path
-        if not runtime_allowed(request.method, target):
-            raise AuthError("This operation is not available through the browser gateway.", 403)
-        body = await json_body(request) if request.method == "POST" else None
-        if body is not None:
-            if session_only_write(request.method, target):
-                # Signed-in session, CSRF and origin were checked above; see ADR-0010.
-                if request.scope["query_string"]:
-                    raise AuthError("Write operations must not include query parameters.", 422)
-            else:
-                admit_write(request, body)
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.pi_url.rstrip("/") + target,
-            "X-Pi-Gateway-Key",
-            app.state.config.pi_key,
-            body,
-            request.scope["query_string"],
-        )
-
-    @app.post("/api/control/pi/calls/browser/{identity}/audio")
-    async def control_call_audio(identity: str, request: Request):
-        """Relay one bounded transient WAV turn without converting media to JSON."""
-        session(request)
-        if not re.fullmatch(r"call_[a-f0-9]{32}", identity):
-            raise AuthError("Invalid call identity.", 422)
-        params = request.query_params
-        request_id = params.get("request_id", "")
-        if (
-            set(params) != {"request_id"}
-            or len(params.getlist("request_id")) != 1
-            or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id)
-        ):
-            raise AuthError("Audio turns require exactly one valid request_id.", 422)
-        if not app.state.config.pi_owner_key:
-            raise AuthError("Pi owner-control connection is not configured.", 503)
-        media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-        if media not in {"audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave"}:
-            raise AuthError("Audio turns require PCM WAV audio.", 415)
-        declared = request.headers.get("content-length")
-        if declared:
-            if not declared.isdecimal():
-                raise AuthError("Invalid audio content length.", 400)
-            if int(declared) > 10 * 1024 * 1024:
-                raise AuthError("Audio exceeds 10 MiB.", 413)
-        body = bytearray()
-        async for chunk in request.stream():
-            if len(body) + len(chunk) > 10 * 1024 * 1024:
-                raise AuthError("Audio exceeds 10 MiB.", 413)
-            body.extend(chunk)
-        if not body:
-            raise AuthError("Audio is empty.", 422)
-
-        def relay_audio():
-            try:
-                outgoing = app.state.client.build_request(
-                    "POST",
-                    app.state.config.pi_url.rstrip("/") + f"/calls/browser/{identity}/audio",
-                    headers={
-                        "X-Pi-Owner-Key": app.state.config.pi_owner_key,
-                        "Content-Type": "audio/wav",
-                        "Accept": "application/json",
-                    },
-                    params={"request_id": request_id},
-                    content=bytes(body),
-                    timeout=660,
-                )
-                outgoing.headers.pop("cookie", None)
-                response = app.state.client.send(outgoing)
-            except (httpx.HTTPError, UnicodeError):
-                raise AuthError(
-                    "Speech service unavailable. The turn was not retried; check the saved call.",
-                    503,
-                ) from None
-            if 300 <= response.status_code < 400:
-                raise AuthError("Speech service returned an unexpected redirect.", 502)
-            if len(response.content) > 32 * 1024 * 1024:
-                raise AuthError("Speech response exceeded the browser boundary.", 502)
-            try:
-                data = response.json()
-            except ValueError:
-                raise AuthError("Speech service returned an unreadable response.", 502) from None
-            return JSONResponse(data, status_code=response.status_code)
-
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(relay_audio)
-
-    @app.get("/api/control/pi/{path:path}", operation_id="control_read")
-    @app.post("/api/control/pi/{path:path}", operation_id="control_write")
-    async def control(path: str, request: Request):
-        session(request)
-        target = "/" + path
-        if not owner_allowed(request.method, target):
-            raise AuthError("This owner operation is not available through the gateway.", 403)
-        if target.startswith("/memory/corrections") and request.scope["query_string"]:
-            raise AuthError("Memory corrections do not accept query parameters.", 422)
-        if not app.state.config.pi_owner_key:
-            raise AuthError("Pi owner-control connection is not configured.", 503)
-        body = (
-            await json_body(
-                request,
-                max_bytes=66 * 1024 * 1024
-                if target.startswith("/characters/companion/")
-                else 128000
-                if target.startswith("/memory/corrections")
-                else 65536,
-            )
-            if request.method == "POST"
-            else None
-        )
-        if body is not None:
-            if session_only_write(request.method, target):
-                if request.scope["query_string"]:
-                    raise AuthError("Write operations must not include query parameters.", 422)
-            else:
-                admit_write(request, body)
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.pi_url.rstrip("/") + target,
-            "X-Pi-Owner-Key",
-            app.state.config.pi_owner_key,
-            body,
-            request.scope["query_string"],
-        )
-
-    @app.get("/api/owner/mcp/tools")
-    @app.get("/api/owner/mcp/tools/{identity}/access")
-    @app.post("/api/owner/mcp/discover")
-    @app.post("/api/owner/mcp/import")
-    @app.post("/api/owner/mcp/tools/{identity}/state")
-    @app.post("/api/owner/mcp/tools/{identity}/access")
-    async def mcp_control(request: Request, identity: str | None = None):
-        from starlette.concurrency import run_in_threadpool
-
-        from .mcp_control import TOOL_ID, validate_body
-
-        session(request)
-        if request.scope["query_string"] or (
-            identity is not None and not re.fullmatch(TOOL_ID, identity)
-        ):
-            raise AuthError("Select a saved MCP tool without query parameters.", 422)
-        operation = request.url.path.rsplit("/", 1)[-1]
-        extra = None
-        if operation == "access":
-            key = app.state.config.toolgate_execution_key
             if not key:
-                raise AuthError("The scoped chat execution credential is not configured.", 503)
-            extra = {"X-ToolGate-Execution-Key": key}
-        body = await json_body(request) if request.method == "POST" else None
-        if body is not None:
-            validate_body(operation, body)
-            admit_write(request, body)
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.toolgate_url.rstrip("/")
-            + request.url.path.replace("/api/owner/mcp/", "/v2/owner/mcp/", 1),
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            b"",
-            extra,
+                checks[name] = {
+                    "status": "not_configured",
+                    "reason": "Provision the owner channel on the host",
+                }
+                continue
+            try:
+                result = upstream("GET", url, header, key, None, b"", timeout=3)
+                value = result.json()
+                status = value.get("status", "unknown") if name == "runtime" else "ok"
+                checks[name] = {"status": status if result.status_code == 200 else "unavailable"}
+            except (httpx.HTTPError, ValueError, AttributeError):
+                checks[name] = {"status": "unavailable"}
+        degraded = sorted(
+            name
+            for name, value in checks.items()
+            if value["status"] not in {"ok", "not_configured"}
         )
+        return {
+            "service": "gateway",
+            "version": "0.1.0",
+            "status": "degraded" if degraded else "ok",
+            "checks": checks,
+            "degraded": degraded,
+            "checked_at": datetime.now(UTC).isoformat(),
+            "age_seconds": 0.0,
+        }
 
-    @app.get("/api/owner/editor-capabilities")
-    def editor_capabilities(request: Request):
+    @app.get("/api/diagnostics")
+    def diagnostics(request: Request):
         session(request)
-        params = request.query_params
-        if set(params) - {"kind", "q", "after", "limit"} or any(
-            len(params.getlist(key)) != 1 for key in params
-        ):
-            raise AuthError("Use only capability search parameters.", 422)
-        if (
-            params.get("kind", "tool") not in {"tool", "workflow"}
-            or len(params.get("q", "")) > 100
-            or (
-                "after" in params and not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,79}", params["after"])
-            )
-            or (
-                "limit" in params
-                and (
-                    not re.fullmatch(r"[0-9]{1,3}", params["limit"])
-                    or not 1 <= int(params["limit"]) <= 100
-                )
-            )
-        ):
-            raise AuthError("Invalid capability search parameters.", 422)
-        return forward(
-            "GET",
-            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-capabilities",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            None,
-            request.scope["query_string"],
-        )
+        if request.scope["query_string"]:
+            raise AuthError("Diagnostics do not accept query parameters.", 422)
+        return collect_diagnostics(app.state.config, app.state.auth, app.state.client)
 
-    @app.get("/api/owner/editor-drafts")
-    def editor_drafts(request: Request):
-        session(request)
-        params = request.query_params
-        if set(params) - {"limit", "after"} or any(len(params.getlist(key)) != 1 for key in params):
-            raise AuthError("Use only editor draft pagination parameters.", 422)
-        limit, after = params.get("limit"), params.get("after")
-        if (
-            limit is not None
-            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 100)
-        ) or (after is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", after)):
-            raise AuthError("Invalid editor draft pagination.", 422)
-        return forward(
-            "GET",
-            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/editor-drafts",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            None,
-            request.scope["query_string"],
-        )
-
-    @app.get("/api/owner/editor-drafts/{identity}")
-    @app.post("/api/owner/editor-drafts/{identity}")
-    async def editor_draft(identity: str, request: Request):
-        session(request)
-        if (
-            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity)
-            or request.scope["query_string"]
-        ):
-            raise AuthError("Invalid editor draft identity.", 422)
-        body = await json_body(request) if request.method == "POST" else None
-        if body is not None:
-            if (
-                set(body) != {"expected_revision", "document"}
-                or type(body.get("expected_revision")) is not int
-                or body["expected_revision"] < 0
-                or not isinstance(body.get("document"), dict)
-                or body["document"].get("id") != identity
-            ):
-                raise AuthError("Send an editor document and its expected revision.", 422)
-            admit_write(request, body)
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/editor-drafts/{identity}",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            b"",
-        )
-
-    @app.get("/api/owner/editor-drafts/{identity}/access")
-    @app.post("/api/owner/editor-drafts/{identity}/access")
-    @app.get("/api/owner/editor-drafts/{identity}/runs")
-    @app.post("/api/owner/editor-drafts/{identity}/runs")
-    async def editor_execution(identity: str, request: Request):
-        session(request)
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity):
-            raise AuthError("Invalid editor draft identity.", 422)
-        key = app.state.config.toolgate_execution_key
-        if not key:
-            raise AuthError(
-                "The scoped workflow execution credential is not configured on this host.", 503
-            )
-        operation = request.url.path.rsplit("/", 1)[-1]
-        body = await json_body(request) if request.method == "POST" else None
-        params = request.query_params
-        if body is not None:
-            required = (
-                {"version", "digest", "enabled"}
-                if operation == "access"
-                else {"version", "digest", "action_id", "args"}
-            )
-            optional = set() if operation == "access" else {"approval_request_id"}
-            if (
-                not required <= body.keys()
-                or body.keys() - required - optional
-                or type(body.get("version")) is not int
-                or body["version"] < 1
-                or not isinstance(body.get("digest"), str)
-                or not re.fullmatch(r"[a-f0-9]{64}", body["digest"])
-                or (operation == "access" and type(body.get("enabled")) is not bool)
-                or (
-                    operation == "runs"
-                    and (
-                        not isinstance(body.get("action_id"), str)
-                        or not re.fullmatch(r"editor_[a-f0-9]{32}", body["action_id"])
-                        or not isinstance(body.get("args"), dict)
-                    )
-                )
-            ):
-                raise AuthError(
-                    "Supply the exact workflow version and bounded operation fields.", 422
-                )
-            admit_write(request, body)
-        elif operation == "access":
-            if (
-                set(params) != {"version", "digest"}
-                or any(len(params.getlist(k)) != 1 for k in params)
-                or not re.fullmatch(r"[1-9][0-9]{0,8}", params["version"])
-                or not re.fullmatch(r"[a-f0-9]{64}", params["digest"])
-            ):
-                raise AuthError("Select the exact published workflow version.", 422)
-        elif params:
-            raise AuthError("Run history accepts no query parameters.", 422)
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.toolgate_url.rstrip("/")
-            + f"/v2/owner/editor-drafts/{identity}/{operation}",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            request.scope["query_string"],
-            {"X-ToolGate-Execution-Key": key},
-        )
-
-    @app.get("/api/owner/editor-drafts/{identity}/publications")
-    @app.get("/api/owner/editor-drafts/{identity}/validation")
-    @app.post("/api/owner/editor-drafts/{identity}/publish")
-    async def editor_publication(identity: str, request: Request):
-        session(request)
-        if (
-            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", identity)
-            or request.scope["query_string"]
-        ):
-            raise AuthError("Invalid editor draft identity.", 422)
-        operation = request.url.path.rsplit("/", 1)[-1]
-        body = await json_body(request) if request.method == "POST" else None
-        if body is not None:
-            if (
-                set(body) != {"expected_revision", "expected_publication_version", "authorization"}
-                or type(body.get("expected_revision")) is not int
-                or body["expected_revision"] < 1
-                or type(body.get("expected_publication_version")) is not int
-                or body["expected_publication_version"] < 0
-                or body.get("authorization") not in {"auto", "owner_confirmation"}
-            ):
-                raise AuthError(
-                    "Select the saved draft, publication version and authorization.", 422
-                )
-            admit_write(request, body)
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.toolgate_url.rstrip("/")
-            + f"/v2/owner/editor-drafts/{identity}/{operation}",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            b"",
-        )
-
-    @app.get("/api/owner/requests")
-    def owner_requests(request: Request):
-        session(request)
-        # Only the bounded owner-list pagination contract crosses this channel.
-        if set(request.query_params) - {"limit", "cursor"} or any(
-            len(request.query_params.getlist(key)) != 1 for key in request.query_params
-        ):
-            raise AuthError("Use only owner request pagination parameters.", 422)
-        limit, cursor = request.query_params.get("limit"), request.query_params.get("cursor")
-        if (
-            limit is not None
-            and (not re.fullmatch(r"[0-9]{1,3}", limit) or not 1 <= int(limit) <= 200)
-        ) or (cursor is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", cursor)):
-            raise AuthError("Use valid owner request pagination parameters.", 422)
-        return forward(
-            "GET",
-            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            None,
-            request.scope["query_string"],
-        )
-
-    @app.get("/api/owner/requests/{identity}")
-    def owner_request(identity: str, request: Request):
-        session(request)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identity) or request.scope["query_string"]:
-            raise AuthError("Invalid owner request identity.", 422)
-        return forward(
-            "GET",
-            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            None,
-            b"",
-        )
-
-    @app.post("/api/owner/requests/{identity}/decision")
-    async def owner_decision(identity: str, request: Request):
-        session(request)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identity):
-            raise AuthError("Invalid request identifier. Reload the approval list.", 422)
-        body = await json_body(request)
-        if (
-            set(body) - {"status", "note"}
-            or body.get("status") not in {"approved", "rejected", "dismissed"}
-            or not isinstance(body.get("note", ""), str)
-            or len(body.get("note", "")) > 2000
-        ):
-            raise AuthError("Send a decision status and optional note.", 422)
-        from starlette.concurrency import run_in_threadpool
-
-        admit_write(request, body)
-        return await run_in_threadpool(
-            forward,
-            "POST",
-            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}/decision",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            b"",
-        )
+    # Registered in their original order: the Pi proxies and the dashboard end in catch-all paths.
+    app.include_router(auth_routes.router(app, session, cookie, admit_write))
+    app.include_router(host_routes.router(app, session, admit_write))
+    app.include_router(terminal_routes.router(app, session, admit_write))
+    app.include_router(service_routes.router(app, session, forward, admit_write, stream_transport))
+    app.include_router(owner_routes.router(app, session, forward, admit_write))
 
     @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def dashboard(path: str, request: Request):
@@ -1247,19 +429,6 @@ def create_app(
         return app.state.dashboard.response(path, request)
 
     return app
-
-
-async def json_body(request: Request, *, max_bytes: int = 65536) -> dict:
-    if request.headers.get("content-type", "").split(";")[0] != "application/json":
-        raise AuthError("Send application/json.", 415)
-    raw = bytearray()
-    async for chunk in request.stream():
-        raw.extend(chunk)
-        if len(raw) > max_bytes:
-            raise AuthError(
-                "Request is too large; keep it below the operation-specific limit.", 413
-            )
-    return parse_object(raw)
 
 
 app = create_app()
