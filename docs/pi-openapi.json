@@ -10047,6 +10047,77 @@
         }
       }
     },
+    "/workflow-drafts/draft": {
+      "post": {
+        "summary": "Draft",
+        "description": "A proposed editor workflow for review; saves nothing.",
+        "operationId": "draft_workflow_drafts_draft_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Gateway-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Gateway-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pi__agents__workflow_drafts__Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/context/{session_id}/compact": {
       "post": {
         "tags": [
@@ -22492,6 +22563,90 @@
         ],
         "title": "Candidate"
       },
+      "Capability": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tool",
+              "workflow"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 800,
+            "title": "Description",
+            "default": ""
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityInput"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Inputs"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "title": "Capability"
+      },
+      "CapabilityInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Type",
+            "default": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CapabilityInput"
+      },
       "Case": {
         "properties": {
           "name": {
@@ -23942,6 +24097,31 @@
         ],
         "title": "Evidence"
       },
+      "Exchange": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "builder"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Exchange"
+      },
       "Fields": {
         "properties": {
           "name": {
@@ -24586,6 +24766,7 @@
         ],
         "title": "JobView"
       },
+      "JsonValue": {},
       "Judge": {
         "properties": {
           "request_id": {
@@ -28750,6 +28931,72 @@
           "acknowledgeCurrentCallMayOvershoot"
         ],
         "title": "Start"
+      },
+      "pi__agents__workflow_drafts__Request": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "draftId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draftid"
+          },
+          "conversation": {
+            "items": {
+              "$ref": "#/components/schemas/Exchange"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Conversation"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Capabilities"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Issues"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "title": "Request"
       },
       "pi__calls__call_models__Privacy": {
         "properties": {

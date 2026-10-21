@@ -44,6 +44,7 @@ What works end to end in a real deployment is tracked in Conker's
 | | |
 |---|---|
 | [Scheduled jobs](jobs.md) | Pinned tool and automation runs on a schedule |
+| [Workflow drafts](workflow-drafts.md) | The talking model drafts an editor workflow from the owner's words |
 | [Proposals](proposals.md) · [Proactive budgets](proactive-budgets.md) · [Recurring budgets](recurring-budgets.md) | Ideas Conker offers, and their limits |
 | [Tasks, runs and events](task-ledger.md) | The durable work ledger |
 | [Research](research.md) | Research request contract |
