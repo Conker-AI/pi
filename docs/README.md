@@ -52,6 +52,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Artifacts](artifacts.md) | Durable outputs |
 | [Agents](agents.md) · [Collaboration](collaboration.md) · [Team execution](team-execution.md) · [Characters](characters.md) | Configurable agents and teams |
 | [Owner preferences](owner-preferences.md) · [Continuity](continuity.md) · [Notifications](continuity-notifications.md) · [Inbox](inbox.md) | How Conker follows up and what needs the owner |
+| [Plan usage alerts](plan-alerts.md) | A heads-up when a ChatGPT or Claude plan passes the owner's level, and when it resets |
 | [Calls](calls.md) · [Speech adapters](speech-adapters.md) | Voice |
 
 ## The machine

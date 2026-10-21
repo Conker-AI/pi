@@ -2340,6 +2340,138 @@
         }
       }
     },
+    "/plans/usage": {
+      "get": {
+        "summary": "Usage",
+        "description": "The latest reading of each plan window and the alerts still open.",
+        "operationId": "usage_plans_usage_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Gateway-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Gateway-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/alerts/{alert_id}/dismiss": {
+      "post": {
+        "summary": "Dismiss",
+        "description": "Hide an alert until its window resets.",
+        "operationId": "dismiss_plans_alerts__alert_id__dismiss_post",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^plan_[0-9a-f]{32}$",
+              "title": "Alert Id"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Gateway-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Gateway-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/characters/{agent_id}": {
       "get": {
         "summary": "Get",
@@ -25425,6 +25557,9 @@
           "idleTimeoutMinutes": {
             "type": "integer",
             "title": "Idletimeoutminutes"
+          },
+          "planAlerts": {
+            "$ref": "#/components/schemas/PlanAlerts"
           }
         },
         "additionalProperties": false,
@@ -25463,6 +25598,27 @@
           "detail"
         ],
         "title": "Phase"
+      },
+      "PlanAlerts": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 50.0,
+            "title": "Percent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled",
+          "percent"
+        ],
+        "title": "PlanAlerts"
       },
       "Policy-Input": {
         "properties": {

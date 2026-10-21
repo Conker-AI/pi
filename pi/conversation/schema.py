@@ -28,6 +28,7 @@ from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
+from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
 from pi.schedule import jobs, proposals, tasks
 from pi.setup import choices as setup_choices
@@ -73,6 +74,7 @@ def install(db):
     db.executescript(universal_search.SCHEMA)
     db.executescript(message_citations.SCHEMA)
     owner_preferences.initialize(db)
+    plan_alerts.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)

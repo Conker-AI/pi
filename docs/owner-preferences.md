@@ -15,7 +15,8 @@ The preference document matches the frontend configuration fields:
   },
   "urgency": "meaningful",
   "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
-  "idleTimeoutMinutes": 15
+  "idleTimeoutMinutes": 15,
+  "planAlerts": {"enabled": true, "percent": 80}
 }
 ```
 
@@ -23,7 +24,8 @@ Fields are strict: unknown fields and coercions are rejected. Quiet-hour times u
 24-hour HH:mm and an available IANA zone; enabled start and end must differ.
 Urgency accepts `meaningful`, `urgent_only`, or `off`. Integer daily ceilings are
 0–100 suggestions, 0–1440 research minutes, and 0–100000 cents. Idle timeout accepts
-0, 5, 15, 30, or 60 minutes. Validation failures return 422. Stale revisions return
+0, 5, 15, 30, or 60 minutes. [Plan usage alerts](plan-alerts.md) take a level from 50 to 100
+percent; preferences saved before that field existed read its default. Validation failures return 422. Stale revisions return
 409 with `detail.code=revision_conflict` and `detail.current_revision`; reload and
 reconcile before saving. SQLite serializes concurrent updates and retains the
 configuration across restart. Saving never dispatches a turn or changes grants.
