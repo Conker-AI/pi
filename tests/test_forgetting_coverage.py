@@ -97,6 +97,9 @@ OWNER_CONFIGURATION = {
     "template_publications",
 }
 
+# Readings from the subscription runtimes: plan names, window labels and percentages, no chat.
+PROVIDER_READINGS = {"plan_alerts", "plan_usage"}
+
 
 def tables(tmp_path):
     with closing(Store(tmp_path / "pi.db")), closing(sqlite3.connect(tmp_path / "pi.db")) as db:
@@ -122,7 +125,7 @@ def test_every_table_is_forgotten_or_holds_no_chat_text(tmp_path):
     present = tables(tmp_path)
     code = forgetting_code()
     named = {name for name in present if re.search(rf"\b{re.escape(name)}\b", code)}
-    listed = IDS_ONLY | OWNER_CONFIGURATION
+    listed = IDS_ONLY | OWNER_CONFIGURATION | PROVIDER_READINGS
 
     unclassified = sorted(present - named - listed)
     assert not unclassified, (
