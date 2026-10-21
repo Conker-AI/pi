@@ -43,6 +43,7 @@ from pi.api.routes import model_roles as model_roles_api
 from pi.api.routes import naming as naming_api
 from pi.api.routes import output_settings as output_settings_api
 from pi.api.routes import owner_preferences as owner_preferences_api
+from pi.api.routes import plan_alerts as plan_alerts_api
 from pi.api.routes import projects as projects_api
 from pi.api.routes import proposals as proposals_api
 from pi.api.routes import session_settings as session_settings_api
@@ -161,6 +162,7 @@ app.include_router(context_api.router(lambda: app.state.store, require_owner))
 app.include_router(definitions_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
+app.include_router(plan_alerts_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     system_inventory_api.router(

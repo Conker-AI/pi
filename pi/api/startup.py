@@ -257,10 +257,26 @@ async def lifespan(app: FastAPI):
             interval_hours=float(os.environ.get("PI_PROPOSALS_INTERVAL_HOURS", "24")),
         )
         proposal_worker.start()
+    plan_worker = None
+
+    def plan_readers():
+        adapters = app.state.router.adapters().values()
+        return [adapter.plan_limits for adapter in adapters if hasattr(adapter, "plan_limits")]
+
+    # Subscription runtimes report plan usage; the owner's planAlerts preference turns checks off.
+    if plan_readers():
+        from pi.owner.plan_alerts import PlanAlertWorker
+
+        plan_worker = PlanAlertWorker(
+            store, plan_readers, check_seconds=_seconds("PI_PLAN_CHECK_SECONDS", 900)
+        )
+        plan_worker.start()
     try:
         yield
     finally:
         app.state.loop.thinking.close()
+        if plan_worker:
+            plan_worker.close()
         if proposal_worker:
             proposal_worker.close()
         if queue_worker:

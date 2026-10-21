@@ -47,11 +47,18 @@ class DailyBudget(Strict):
     costCents: int = Field(ge=0, le=100000)
 
 
+class PlanAlerts(Strict):
+    enabled: bool
+    percent: int = Field(ge=50, le=100)
+
+
 class OwnerPreferences(Strict):
     quietHours: QuietHours
     urgency: Literal["meaningful", "urgent_only", "off"]
     dailyBudget: DailyBudget
     idleTimeoutMinutes: int
+    # Added 2026-10-21; preferences saved before then read the default.
+    planAlerts: PlanAlerts = Field(default_factory=lambda: PlanAlerts(enabled=True, percent=80))
 
     @field_validator("idleTimeoutMinutes")
     @classmethod
@@ -77,6 +84,7 @@ DEFAULT = {
     "urgency": "meaningful",
     "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
     "idleTimeoutMinutes": 15,
+    "planAlerts": {"enabled": True, "percent": 80},
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owner_preferences (
@@ -106,7 +114,12 @@ def load(store):
         row = db.execute(
             "SELECT revision,preferences FROM owner_preferences WHERE singleton=1"
         ).fetchone()
-    return {"revision": row["revision"], "preferences": json.loads(row["preferences"])}
+    stored = json.loads(row["preferences"])
+    # A setting added after these preferences were saved reads as its default.
+    return {
+        "revision": row["revision"],
+        "preferences": {key: value for key, value in DEFAULT.items() if key not in stored} | stored,
+    }
 
 
 def save(store, request: UpdatePreferences):

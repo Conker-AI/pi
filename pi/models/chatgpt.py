@@ -56,6 +56,15 @@ class ChatGPTProvider:
         except (httpx.HTTPError, OSError, ValueError):
             return {"status": "unavailable"}
 
+    def plan_limits(self):
+        """The plan's usage in percent per window, from the runtime; reads only."""
+        with self.client(60) as client:
+            result = client.get("http://conker-chatgpt/limits")
+            result.raise_for_status()
+            if len(result.content) > 64_000:
+                raise ValueError("Plan usage response is too large.")
+            return result.json()
+
     def complete(self, messages, *, model):
         return self.complete_bounded(messages, model=model, timeout=self.timeout)
 

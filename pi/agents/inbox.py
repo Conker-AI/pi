@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from pi.agents import continuity
 from pi.conversation import settings as session_settings
+from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
 
 
@@ -342,11 +343,16 @@ def inbox(store, *, now=None):
     needs_you.extend(_needs_suggestion_items(store))
     needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store))
+    needs_you.extend(plan_alerts.needs_you(store))
 
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
     needs_you = needs_you[:50]  # Limit to 50
 
-    handled = _handled_items(store, day_start)[:50]  # Already sorted newest first
+    handled = sorted(
+        _handled_items(store, day_start) + plan_alerts.resets(store, day_start),
+        key=lambda item: item["at"],
+        reverse=True,
+    )[:50]
     upcoming = _upcoming_items(store, now)[:20]  # Already sorted soonest first
 
     impact = _impact_counts(store, day_start, week_start)
