@@ -81,7 +81,6 @@ models -> core
 models -> owner
 models -> turns
 owner -> core
-owner -> schedule
 schedule -> core
 schedule -> models
 schedule -> owner
