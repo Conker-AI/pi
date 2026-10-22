@@ -36,6 +36,8 @@ The answer is `{reply, ready, document, issues, modelId, configurationRevision}`
 - An unknown `effect` becomes `write`, the most careful label.
 - The whole request is at most 1 MB. Terminal control characters are removed from `reply`,
   which the command line shows as a question.
+- The model gets up to 10 minutes per draft, longer than a chat answer's limit: writing a whole
+  document on a CPU-only local model takes minutes.
 - Output that is not a usable draft is refused with `502 unusable`. A missing model configuration
   is `503 not_configured`, and a model that does not answer is `503 unavailable`.
 

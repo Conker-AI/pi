@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- The workflow builder waits up to 10 minutes for the model, past the answer role's
+  120-second limit: on a CPU-only local model a whole draft takes minutes. Chat answers keep
+  their own limit.
+
 ## 0.6.0
 
 - **Conversations.** Thinking is explicit and cancellable and continues reliably across

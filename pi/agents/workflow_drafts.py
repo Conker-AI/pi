@@ -37,6 +37,10 @@ NODE_TYPES = {
 FIELD_TYPES = {"string", "number", "boolean", "array", "object"}
 EFFECTS = {"read", "prepare", "write"}
 BUDGETS = {"maxSteps": (2, 200, 50), "maxLoopItems": (1, 50, 20), "timeoutMs": (100, 30000, 15000)}
+# The owner starts a draft and waits for it, and the model writes a whole document: on a
+# CPU-only local model that takes minutes, past the answer role's limit (at most 120 s).
+# Under the command line's own 11-minute wait.
+MODEL_WAIT_MS = 600_000
 
 INSTRUCTIONS = """You draft one workflow for ToolGate's visual editor from the owner's description.
 You cannot run, save or publish anything; the owner reviews the draft first.
@@ -290,7 +294,13 @@ def draft(store, providers, body: Request) -> dict:
         ),
     ]
     try:
-        decision = model_roles.dispatch(saved["configuration"], "answer", messages, providers)
+        decision = model_roles.dispatch(
+            saved["configuration"],
+            "answer",
+            messages,
+            providers,
+            minimum_timeout_ms=MODEL_WAIT_MS,
+        )
     except (ValueError, TypeError, model_roles.SelectionError):
         raise DraftError(
             "unavailable", "The talking model did not answer. Try again.", 503

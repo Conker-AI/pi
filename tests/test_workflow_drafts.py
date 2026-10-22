@@ -61,7 +61,7 @@ class Recording(Adapter):
         self.messages = []
 
     def complete_bounded(self, messages, *, model, timeout):
-        self.messages = messages
+        self.messages, self.timeout = messages, timeout
         return super().complete_bounded(messages, model=model, timeout=timeout)
 
 
@@ -265,3 +265,10 @@ def test_a_request_over_one_megabyte_is_refused():
     ]
     with pytest.raises(ValueError, match="under 1 MB"):
         request(capabilities=huge)
+
+
+def test_the_builder_waits_longer_than_an_answer(tmp_path):
+    # A slow local model needs minutes to write a whole draft; chat answers keep their limit.
+    result, adapter = drafted(tmp_path, {"reply": "Which city?", "ready": False, "document": None})
+    assert result["ready"] is False
+    assert adapter.timeout == workflow_drafts.MODEL_WAIT_MS / 1000 == 600
