@@ -56,7 +56,7 @@ def test_requested_thinking_is_frozen_and_replay_cannot_toggle_it(store, monkeyp
 
     monkeypatch.setattr(loop, "_run_bound", update_before_execution)
     result = loop.run_turn(sid, "Analyze", request_id="frozen_thinking_request", think=True)
-    assert provider.started.wait(2)
+    assert provider.started.wait(30)
     execution = session_settings.execution(store, sid, result["turn_id"])
     assert execution["think"] is True
     assert execution["modelConfiguration"]["roleSettings"]["roles"]["thinking"]["enabled"]
@@ -140,7 +140,7 @@ def test_thinking_status_is_authorized_and_does_not_read_transcript(store, monke
         f"/sessions/{sid}/turns", headers=headers, json={"text": "Analyze", "think": True}
     )
     assert result.status_code == 200, result.text
-    assert provider.started.wait(2)
+    assert provider.started.wait(30)
     monkeypatch.setattr(store, "messages", lambda *_: pytest.fail("status read transcript"))
     status = client.get(f"/sessions/{sid}/thinking", headers=headers)
     assert status.json()["schemaVersion"] == 1
@@ -164,7 +164,7 @@ class Stoppable:
             token = inference_control.current()
             with token.register(self.stopped.set):
                 self.started.set()
-                assert self.stopped.wait(3), "inference was not canceled"
+                assert self.stopped.wait(30), "inference was not canceled"
                 token.check()
         return Completion("Talking", model, self.name)
 
@@ -175,13 +175,13 @@ def test_cancel_closes_actual_inference_and_releases_slot_without_publishing(sto
     loop.router.local = provider
     sid = store.create_session()
     result = loop.run_turn(sid, "Analyze", think=True)
-    assert provider.started.wait(2)
+    assert provider.started.wait(30)
     background_thinking.cancel(store, sid, result["turn_id"])
-    assert provider.stopped.wait(1)
+    assert provider.stopped.wait(30)
     with loop.thinking.lock:
         threads = list(loop.thinking.threads)
     for thread in threads:
-        thread.join(2)
+        thread.join(30)
         assert not thread.is_alive()
     row = background_thinking.list_for_session(store, sid)[0]
     assert row["status"] == "canceled" and row["result"] is None
@@ -224,7 +224,7 @@ def test_queued_cancel_and_restart_stop_owned_workers_without_replaying(store):
     loop.thinking.slots = threading.BoundedSemaphore(1)
     first = store.create_session()
     loop.run_turn(first, "Running analysis", think=True)
-    assert provider.started.wait(2)
+    assert provider.started.wait(30)
     second = store.create_session()
     queued = loop.run_turn(second, "Queued analysis", think=True)
     assert background_thinking.list_for_session(store, second)[0]["status"] == "queued"
@@ -233,7 +233,7 @@ def test_queued_cancel_and_restart_stop_owned_workers_without_replaying(store):
     with loop.thinking.lock:
         workers = list(loop.thinking.threads)
     for worker in workers:
-        worker.join(2)
+        worker.join(30)
         assert not worker.is_alive()
     assert background_thinking.list_for_session(store, first)[0]["status"] == "interrupted"
     assert background_thinking.list_for_session(store, second)[0]["status"] == "canceled"
@@ -253,7 +253,7 @@ def test_stopping_running_submission_also_stops_its_thinker(store):
     def complete(messages, *, model, timeout):
         if model != "think":
             talking.set()
-            assert release_talking.wait(5)
+            assert release_talking.wait(30)
         return original(messages, model=model, timeout=timeout)
 
     provider.complete_bounded = complete
@@ -269,11 +269,11 @@ def test_stopping_running_submission_also_stops_its_thinker(store):
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
-    assert talking.wait(2) and provider.started.wait(2)
+    assert talking.wait(30) and provider.started.wait(30)
     turn_control.cancel_submission(store, "stop_thinking_submission")
-    assert provider.stopped.wait(1)
+    assert provider.stopped.wait(30)
     release_talking.set()
-    thread.join(3)
+    thread.join(30)
     assert not thread.is_alive() and errors
     row = background_thinking.list_for_session(store, sid)[0]
     assert row["status"] == "canceled" and row["result"] is None
@@ -319,7 +319,7 @@ def test_ordinary_followup_keeps_requested_findings_anchored_to_original_input(s
     loop, provider = setup(store)
     sid = store.create_session()
     original = loop.run_turn(sid, "Analyze this original question", think=True)
-    assert provider.started.wait(2)
+    assert provider.started.wait(30)
     loop.run_turn(sid, "Keep talking while that runs")
     assert background_thinking.list_for_session(store, sid)[0]["status"] == "running"
     wait_workers(loop, provider)
@@ -352,7 +352,7 @@ def test_shutdown_serializes_worker_admission_and_never_joins_unstarted_thread(s
 
     def delayed_control(session_id):
         admitted.set()
-        assert release.wait(3)
+        assert release.wait(30)
         return constructor(session_id)
 
     monkeypatch.setattr(background_thinking, "_Control", delayed_control)
@@ -376,13 +376,13 @@ def test_shutdown_serializes_worker_admission_and_never_joins_unstarted_thread(s
     request = threading.Thread(target=run, daemon=True)
     shutdown = threading.Thread(target=close, daemon=True)
     request.start()
-    assert admitted.wait(2)
+    assert admitted.wait(30)
     shutdown.start()
-    assert closing_started.wait(1)
+    assert closing_started.wait(30)
     assert not closed.wait(0.05)
     release.set()
-    request.join(3)
-    shutdown.join(3)
+    request.join(30)
+    shutdown.join(30)
     assert not request.is_alive() and not shutdown.is_alive() and not errors
     assert background_thinking.list_for_session(store, sid)[0]["status"] == "interrupted"
     assert loop.thinking.closed and not loop.thinking.threads

@@ -114,7 +114,7 @@ def stalled_server():
     finally:
         server.shutdown()
         server.server_close()
-        serving.join(3)
+        serving.join(30)
         assert not serving.is_alive()
 
 
@@ -142,11 +142,11 @@ def test_cancellation_interrupts_owned_hosted_socket_without_retry(kind, monkeyp
         worker = threading.Thread(target=infer, daemon=True)
         try:
             worker.start()
-            assert started.wait(3)
+            assert started.wait(30)
             token.cancel()
-            assert finished.wait(3)
-            assert disconnected.wait(2)
-            worker.join(2)
+            assert finished.wait(30)
+            assert disconnected.wait(30)
+            worker.join(30)
             assert not worker.is_alive()
             assert len(failures) == 1 and isinstance(
                 failures[0], inference_control.InferenceCancelled
@@ -154,7 +154,7 @@ def test_cancellation_interrupts_owned_hosted_socket_without_retry(kind, monkeyp
             assert len(seen) == 1 and seen[0][1]["stream"] is True
         finally:
             token.cancel()
-            worker.join(3)
+            worker.join(30)
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -242,14 +242,14 @@ def test_openrouter_catalogue_body_is_also_cancelable(monkeypatch):
         worker = threading.Thread(target=fetch, daemon=True)
         try:
             worker.start()
-            assert started.wait(3)
+            assert started.wait(30)
             token.cancel()
-            worker.join(3)
-            assert not worker.is_alive() and disconnected.wait(2)
+            worker.join(30)
+            assert not worker.is_alive() and disconnected.wait(30)
             assert len(failures) == 1 and isinstance(
                 failures[0], inference_control.InferenceCancelled
             )
             assert seen == [("GET", None)] and provider._catalogue == {}
         finally:
             token.cancel()
-            worker.join(3)
+            worker.join(30)

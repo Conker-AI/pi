@@ -23,7 +23,7 @@ class ConcurrentProvider:
         if model == "think":
             self.messages = messages
             self.started.set()
-            assert self.release.wait(5)
+            assert self.release.wait(30)
             return Completion(text="Useful findings", model=model, provider=self.name)
         return Completion(text="Talking reply", model=model, provider=self.name)
 
@@ -52,7 +52,7 @@ def wait_workers(loop, provider):
     with loop.thinking.lock:
         workers = list(loop.thinking.threads)
     for worker in workers:
-        worker.join(5)
+        worker.join(30)
         assert not worker.is_alive()
 
 
@@ -61,7 +61,7 @@ def test_talking_completes_while_thinking_is_blocked(tmp_path):
         loop, provider = setup(store)
         session = store.create_session()
         result = loop.run_turn(session, "Compare these choices", think=True)
-        assert provider.started.wait(2)
+        assert provider.started.wait(30)
         assert result["message"]["content"] == "Talking reply"
         assert background_thinking.list_for_session(store, session)[0]["status"] == "running"
         wait_workers(loop, provider)

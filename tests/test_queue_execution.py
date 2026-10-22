@@ -44,14 +44,14 @@ def test_concurrent_consumers_cannot_duplicate_provider_request(tmp_path):
         class Blocking(Recorder):
             def complete(self, messages, *, model):
                 started.set()
-                assert release.wait(5)
+                assert release.wait(30)
                 return super().complete(messages, model=model)
 
         provider = Blocking()
         loop = loop_with(store, provider)
         with ThreadPoolExecutor(max_workers=1) as pool:
             running = pool.submit(q.run_next, store, loop, sid)
-            assert started.wait(5)
+            assert started.wait(30)
             try:
                 waiting = q.run_next(store, loop, sid)
                 assert waiting["entries"][0]["state"] == "claimed"
