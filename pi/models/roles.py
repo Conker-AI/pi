@@ -285,11 +285,13 @@ def dispatch(
     routing_memo=None,
     configuration_revision=None,
     hints=None,
+    minimum_timeout_ms=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
     Returns completion plus visible attempt metadata. Transport timeouts bound each
     request's inactivity; they are not a guarantee that a remote server stopped work.
+    `minimum_timeout_ms` lets a caller doing longer work wait longer than the role's limit.
     """
     config = Configuration.model_validate(configuration)
     if role not in ROLES:
@@ -430,7 +432,7 @@ def dispatch(
                 adapter.complete_bounded,
                 messages,
                 model=model.route,
-                timeout=assignment.timeoutMs / 1000,
+                timeout=max(assignment.timeoutMs, minimum_timeout_ms or 0) / 1000,
             )
             completion = (
                 observe_call(
