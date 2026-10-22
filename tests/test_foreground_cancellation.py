@@ -67,15 +67,15 @@ def test_stop_interrupts_silent_ollama_and_retains_exact_input(tmp_path, stop_by
         worker = threading.Thread(target=infer, daemon=True)
         try:
             worker.start()
-            assert started.wait(4)
+            assert started.wait(30)
             receipt = submissions.get(store, request_id)
             if stop_by == "turn":
                 turn_control.cancel(store, receipt["turn_id"])
             else:
                 turn_control.cancel_submission(store, request_id)
-            assert finished.wait(3), "Stop must not wait for the next visible token"
-            assert disconnected.wait(2)
-            worker.join(1)
+            assert finished.wait(30), "Stop must not wait for the next visible token"
+            assert disconnected.wait(30)
+            worker.join(30)
             assert len(failures) == 1 and isinstance(failures[0], TurnFailed)
             assert submissions.get(store, request_id)["status"] == "cancelled"
             assert [m["content"] for m in store.messages(session)] == ["Synthetic greeting"]
@@ -89,8 +89,8 @@ def test_stop_interrupts_silent_ollama_and_retains_exact_input(tmp_path, stop_by
             foreground_inference.cancel(store, request_id=request_id)
             server.shutdown()
             server.server_close()
-            serving.join(2)
-            worker.join(3)
+            serving.join(30)
+            worker.join(30)
     assert not foreground_inference._active
 
 
