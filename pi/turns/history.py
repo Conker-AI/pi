@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pi.agents import workflow_offers
 from pi.calls import call_turns
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
@@ -58,6 +59,9 @@ class History:
                 )
                 if acknowledgement:
                     messages.append(Message("system", acknowledgement))
+                offer = workflow_offers.note(self.store, turn_id)
+                if offer:
+                    messages.append(Message("system", offer))
         from pi.context import research
 
         research_used = (

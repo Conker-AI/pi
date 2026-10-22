@@ -33,6 +33,7 @@ from pi.actions.toolgate import (
     ToolPending,
     ToolRefused,
 )
+from pi.agents import workflow_offers
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
 from pi.conversation import live_stream, submissions
@@ -289,6 +290,11 @@ class Loop(ModelCalls, History, Replies):
 
         available = research.tools(execution, self._available_tools(execution))
         allowed = {t.id for t in available}
+        if not continued:
+            # Before the history is built, so the companion is told about the offer Pi made.
+            workflow_offers.consider(
+                self.store, execution, turn_id, user_text, tools=bool(available)
+            )
         acted = bool(self.store.get_turn(turn_id)["acted"])
         context = dict(context or {})
         context.setdefault("needs_tools", bool(available))
