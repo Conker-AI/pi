@@ -236,3 +236,12 @@ def test_http_route_needs_the_admin_key(tmp_path):
         )
         assert owner.status_code == 401
         assert client.post("/workflow-drafts/draft", json=body).status_code == 401
+
+
+def test_the_prompts_example_is_a_complete_valid_draft():
+    text = workflow_drafts.INSTRUCTIONS
+    example = json.loads(text[text.rindex('{"reply"') : text.index('\nWhen "issues"')])
+    capability = workflow_drafts.Capability(id="web.lookup", kind="tool", name="Lookup")
+    document, issues = workflow_drafts.normalize(example["document"], [capability], "example")
+    assert issues == [] and example["ready"] is True
+    assert [node["type"] for node in document["nodes"]] == ["input", "tool_call", "return"]
