@@ -127,8 +127,9 @@ def note(store, turn_id: str) -> str | None:
         "The owner's latest message asks for something to happen by itself. Pi has put an offer "
         "in the owner's Inbox to draft a workflow from that message. Nothing is drafted, saved "
         "or run until the owner accepts the offer there, reviews the draft and publishes it. "
-        "Answer the message as usual and add one short sentence saying the offer is in their "
-        "Inbox. Do not say the workflow exists, is scheduled or will run."
+        "You cannot do anything on a schedule yourself, so never promise to do it every morning "
+        "or at all. Answer what you can now, and add one short sentence saying the offer to "
+        "draft a workflow is in their Inbox."
     )
 
 
