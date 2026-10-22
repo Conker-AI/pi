@@ -214,6 +214,13 @@ CASES = [
         "UPDATE tool_actions SET args=args",
         EXEC,
     ),
+    (
+        "workflow-drafts-outlive-forgetting",
+        "pi/conversation/forgetting.py",
+        'workflow_proposals.redact(db, plan["session_ids"])',
+        "pass",
+        "tests/test_workflow_proposals.py",
+    ),
 ]
 
 

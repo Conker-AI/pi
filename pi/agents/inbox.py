@@ -5,7 +5,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from pi.agents import continuity
+from pi.agents import continuity, workflow_proposals
 from pi.conversation import settings as session_settings
 from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
@@ -344,6 +344,7 @@ def inbox(store, *, now=None):
     needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store))
     needs_you.extend(plan_alerts.needs_you(store))
+    needs_you.extend(workflow_proposals.needs_you(store))
 
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
     needs_you = needs_you[:50]  # Limit to 50

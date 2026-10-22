@@ -57,6 +57,7 @@ from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
 from pi.api.routes import workflow_drafts as workflow_drafts_api
+from pi.api.routes import workflow_proposals as workflow_proposals_api
 from pi.api.startup import lifespan
 from pi.context import project_sources
 from pi.conversation import fact_checks, judgements
@@ -163,6 +164,7 @@ app.include_router(definitions_api.router(lambda: app.state.store, require_owner
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_admin))
+app.include_router(workflow_proposals_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     system_inventory_api.router(
