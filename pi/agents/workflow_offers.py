@@ -84,8 +84,8 @@ def asks_for_workflow(text: str) -> bool:
 def consider(store, execution, turn_id: str, text: str, *, tools: bool) -> dict | None:
     """Offer a draft for this turn's owner message when it asks for one; at most once per message.
 
-    Only in the companion's own chats, only while tools can be offered at all, and never in a
-    chat whose harness is off.
+    Only in the companion's own chats, only while the owner has tools at all (ToolGate is there
+    and tools were not left out at setup), and never in a chat whose harness is off.
     """
     if (
         not tools

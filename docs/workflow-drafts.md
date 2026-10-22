@@ -69,8 +69,10 @@ The companion drafts nothing and is never given a tool for it.
 - Only the owner's own message is read, by a narrow pattern check before the model is called;
   the model's reply, tool results and web pages never make an offer, so injected text cannot.
   A question about something ("why does my phone send alerts every morning?") is not a request.
-- Only in the companion's own chats, only while tools can be offered at all, never in a chat
-  whose harness is off, and at most one offer per message.
+- Only in the companion's own chats, only while the owner has tools at all (ToolGate is
+  connected and tools were not left out at setup), never in a chat whose harness is off, and at
+  most one offer per message. The companion's own tool grants do not matter: a workflow runs on
+  the owner's tools in ToolGate.
 - Each open offer is a **Needs you** item, `kind: "workflow-offer"`: "Draft a workflow from your
   message? <its first 80 characters>".
 - Accepting is drafting from that message exactly as above (`conker workflow accept wfo_...`

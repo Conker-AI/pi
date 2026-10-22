@@ -10,6 +10,7 @@ from pi.api import server
 from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.models.routing import Router
+from pi.setup import choices as setup_choices
 from pi.turns.loop import Loop
 from tests.test_tool_turns import FakeGate, Scripted
 
@@ -81,11 +82,28 @@ def test_the_companion_mentions_the_offer_and_the_inbox_holds_it(tmp_path):
     assert not any("Inbox" in m.content for m in provider.sent[1] if m.role == "system")
 
 
-def test_no_offer_when_no_tool_could_run_it(tmp_path):
-    store, loop, provider = build(tmp_path, ["Sure."], FakeGate(unavailable=True))
+def test_no_offer_when_the_owner_has_no_tools(tmp_path):
+    store, loop, provider = build(tmp_path, ["Sure.", "Sure."])
+    loop.toolgate = None
+    loop.run_turn(store.create_session(), WEATHER)
+    loop.toolgate = FakeGate()
+    setup_choices.record(
+        store,
+        "capabilities",
+        setup_choices.ChoiceInput(requestId="skip-tools", choice="skip", expectedRevision=0),
+    )
     loop.run_turn(store.create_session(), WEATHER)
     assert offers_in(store) == []
-    assert not any("Inbox" in m.content for m in provider.sent[0] if m.role == "system")
+    assert not any(
+        "Inbox" in m.content for sent in provider.sent for m in sent if m.role == "system"
+    )
+
+
+def test_the_companions_own_grants_do_not_matter(tmp_path):
+    # ToolGate grants the companion nothing, but the owner's tools can still run a workflow.
+    store, loop, _ = build(tmp_path, ["Sure."], FakeGate(unavailable=True))
+    loop.run_turn(store.create_session(), WEATHER)
+    assert len(offers_in(store)) == 1
 
 
 def offered(tmp_path):
