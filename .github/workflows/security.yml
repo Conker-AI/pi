@@ -1,0 +1,38 @@
+name: Weekly security check
+
+# New vulnerabilities are published for code nobody touched, and CI only looks when code
+# changes. This checks every dependency this repository ships against the public advisory
+# databases each Monday and whenever those dependencies change, and fails loudly: a red run,
+# which GitHub emails to whoever last edited this schedule. GitHub pauses schedules in public
+# repositories after 60 days without a commit; "Run workflow" on the Actions tab resumes it.
+
+on:
+  schedule:
+    - cron: "7 5 * * 1"
+  pull_request:
+    paths:
+      - ".github/workflows/security.yml"
+      - "requirements.txt"
+  workflow_dispatch:
+
+# Read-only token: the check reads code and public advisories; it writes nothing.
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: python -m pip install --quiet pip-audit==2.10.1
+
+      - name: Service requirements
+        # Resolved the way the image build resolves them, then checked package by package.
+        run: pip-audit --strict --progress-spinner off -r requirements.txt

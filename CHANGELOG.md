@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Update Pillow to 13.0.0 for eight published advisories in 12.3.0. Pi decodes attached
+  images with it.
+- A weekly security check (`.github/workflows/security.yml`) audits every dependency this
+  repository ships against the public advisory databases each Monday and whenever they
+  change, and fails loudly.
+
 ## 0.5.6
 
 - Add a distinct ChatGPT subscription provider via Conker's private inference
