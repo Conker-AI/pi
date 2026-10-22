@@ -11,7 +11,7 @@ import json
 import re
 from typing import Literal
 
-from pydantic import Field, JsonValue
+from pydantic import Field, JsonValue, model_validator
 
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
@@ -21,6 +21,9 @@ from pi.models.providers import Message
 IDENTIFIER = r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
 CAPABILITY = r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"
 DOCUMENT_LIMIT = 150_000  # bytes, ToolGate's editor draft limit
+REQUEST_LIMIT = 1_000_000  # bytes for the whole request, capabilities included
+# Terminal control characters (C0 except tab and newline, DEL, C1): the reply is shown in a terminal.
+CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 NODE_TYPES = {
     "input",
     "tool_call",
@@ -107,6 +110,12 @@ class Request(Strict):
     previous: dict[str, JsonValue] | None = None
     issues: list[str] = Field(default_factory=list, max_length=20)
 
+    @model_validator(mode="after")
+    def bounded(self):
+        if len(self.model_dump_json().encode("utf-8")) > REQUEST_LIMIT:
+            raise ValueError("Keep the whole request under 1 MB.")
+        return self
+
 
 class DraftError(ServiceError):
     pass
@@ -132,7 +141,8 @@ def answer(text: str) -> dict:
         raise ValueError("the reply is missing or too long")
     if not isinstance(ready, bool) or (ready and not isinstance(document, dict)):
         raise ValueError("a ready draft needs a document")
-    return {"reply": reply.strip(), "ready": ready, "document": document if ready else None}
+    reply = CONTROL.sub("", reply).strip()
+    return {"reply": reply, "ready": ready, "document": document if ready else None}
 
 
 def text(value, limit, default=None):

@@ -27,5 +27,6 @@ limits), as the subscription reports it. Pi never estimates prices or tokens.
 - POST `/plans/alerts/{id}/dismiss` hides an alert until its window resets. Dismissing does not
   stop a later period from alerting.
 
-Readings that do not parse, or a runtime that is unreachable, are logged without content and
+Window labels follow the runtimes' rule: letters, digits, spaces and `. ( ) + / : -`, up to 60
+characters. Readings that do not parse, or a runtime that is unreachable, are logged without content and
 retried at the next check. Nothing is sent outside the machine, and no notification is pushed.
