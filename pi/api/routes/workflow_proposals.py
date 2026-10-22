@@ -2,7 +2,9 @@
 
 from fastapi import APIRouter, Depends, Path
 
-from pi.agents import workflow_proposals
+from pi.agents import workflow_offers, workflow_proposals
+
+OFFER_ID = r"^wfo_[0-9a-f]{32}$"
 
 
 def router(store, authorize):
@@ -17,6 +19,21 @@ def router(store, authorize):
     def listing():
         """Drafts made from chat messages that still wait for the owner."""
         return {"items": workflow_proposals.open_items(store())}
+
+    @routes.get("/offers")
+    def offers():
+        """Offers Pi made to draft a workflow from one of the owner's messages."""
+        return {"items": workflow_offers.open_items(store())}
+
+    @routes.get("/offers/{offer_id}")
+    def offer(offer_id: str = Path(pattern=OFFER_ID)):
+        """One offer: which chat and message to draft from."""
+        return workflow_offers.get(store(), offer_id)
+
+    @routes.post("/offers/{offer_id}/dismiss")
+    def dismiss_offer(offer_id: str = Path(pattern=OFFER_ID)):
+        """Decline an offer; nothing was drafted."""
+        return workflow_offers.dismiss(store(), offer_id)
 
     @routes.post("/published")
     def published(body: workflow_proposals.Published):

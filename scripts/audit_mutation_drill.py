@@ -221,6 +221,13 @@ CASES = [
         "pass",
         "tests/test_workflow_proposals.py",
     ),
+    (
+        "workflow-offers-outlive-forgetting",
+        "pi/conversation/forgetting.py",
+        'workflow_offers.redact(db, plan["session_ids"])',
+        "pass",
+        "tests/test_workflow_offers.py",
+    ),
 ]
 
 

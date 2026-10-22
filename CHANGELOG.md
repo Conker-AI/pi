@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- When the owner asks the companion in chat for something recurring, Pi offers a
+  workflow draft in the Inbox and the companion mentions it. A narrow check of the owner's
+  own message makes the offer before the model is called, so neither the model nor
+  injected text can; the companion gets no new tool. Accepting drafts from that message as
+  `from-chat` does. New admin routes: GET `/workflow-proposals/offers` and
+  `/workflow-proposals/offers/{id}`, POST `/workflow-proposals/offers/{id}/dismiss`.
 - Update Pillow to 13.0.0 for eight published advisories in 12.3.0. Pi decodes attached
   images with it.
 - Update pypdf to 6.21.2 for eight published advisories in 6.19.0. Pi reads attached PDFs

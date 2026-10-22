@@ -13,6 +13,7 @@ import uuid
 
 from pydantic import Field
 
+from pi.agents import workflow_offers
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -80,6 +81,7 @@ def record(store, body: Record, *, now: float | None = None) -> dict:
     if message["role"] != "user" or message.get("content_status") == "forgotten":
         raise ProposalError("not_owner_message", "Make workflows only from your own messages.", 409)
     identity = "wfp_" + uuid.uuid4().hex
+    now = time.time() if now is None else now
     with store._connect() as db:
         db.execute(
             "INSERT INTO workflow_proposals VALUES (?,?,?,?,?,?,'open',?,NULL)",
@@ -90,9 +92,11 @@ def record(store, body: Record, *, now: float | None = None) -> dict:
                 body.draftId,
                 body.name.strip(),
                 int(body.valid),
-                time.time() if now is None else now,
+                now,
             ),
         )
+        # Pi had offered a draft for this message; the draft now waits in its place.
+        workflow_offers.accepted(db, body.messageId, now)
         db.commit()
         row = db.execute("SELECT * FROM workflow_proposals WHERE id=?", (identity,)).fetchone()
     return _view(row)
