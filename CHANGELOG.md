@@ -6,6 +6,45 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.6.0
+
+- **Conversations.** Thinking is explicit and cancellable and continues reliably across
+  providers, with concurrent thinking roles; a durable Stop interrupts the foreground
+  inference it owns. Native Claude Code and Codex subscription transports run on the host,
+  with owner-bound Claude session recovery and Codex saved-session discovery. The composer
+  keeps private draft intent and promotes it atomically into a new chat. Chats get names
+  (owner rename and an automatic name), searchable history pages that apply the shared
+  privacy policy before paging, per-chat output settings, a readable context policy and
+  summary, reviewed compaction that folds messages into the summary, and decisions and open
+  threads. Messages name the turn that consumed or produced them.
+- **Answer quality.** A blind judge scores answer versions and the owner can vote on them;
+  fact checks run against an answer's own sources; read-only model profiles come from
+  recorded outcomes; Auto settings proposals come with a complexity hint.
+- **Memory.** Complete memory evidence stays within the context byte budget and empty
+  metadata stays out of prompts; source-bound delivery is acknowledged; the owner can
+  correct a memory's text through a reviewed, durably recoverable flow. Forgetting a chat
+  now also removes its review data, summary coverage and workflow drafts.
+- **Models and setup.** Exact local model tags are verified, and setup activates a model
+  only after exact readiness. Hosted catalogue health is reported apart from inference
+  readiness, and selection evidence apart from escalation and fallback. Ollama's cached
+  prompt usage is kept. Identical Laya decisions are reused within one turn attempt, and a
+  stopped turn cancels its exact decision request.
+- **Skills, tools and MCP.** Explicitly selected skills are frozen into each turn without
+  granting tools, and a skill replacement is bound to the reviewed registry identity. MCP
+  setup and access stay behind exact owner verification, and complete MCP argument schemas
+  reach model context. Malformed tool proposals are refused instead of recorded as answers.
+- **Inbox and workflows.** An Inbox shows what happened and what needs the owner, including
+  plan usage alerts. The talking model drafts editor workflows from the owner's words or
+  from one of their chat messages; drafts wait in the Inbox and only the owner publishes.
+  One summary list covers everything the owner organizes.
+- **Files.** Files and pictures shared in a chat are kept: uploads stream to disk inside
+  Pi's data volume (so volume backups include them) and the database keeps metadata, size
+  and SHA-256. The per-file, per-message and per-chat size limits are gone; text extraction
+  still stops at 25 MiB. Older stored files keep working.
+- **Contract changes.** Browser chat sends need a `request_id`, so a retried send is
+  answered once. New owner routes back everything above; `docs/*-openapi.json` lists them.
+- The workflow builder's request is bounded to 1 MB in total, and plan readings and window
+  labels are bounded and filtered.
 - When the owner asks the companion in chat for something recurring, Pi offers a
   workflow draft in the Inbox and the companion mentions it. A narrow check of the owner's
   own message makes the offer before the model is called, so neither the model nor
