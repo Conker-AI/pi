@@ -34,6 +34,8 @@ The answer is `{reply, ready, document, issues, modelId, configurationRevision}`
   out top to bottom. Budgets outside the editor's bounds fall back to 50 steps, 20 loop items and
   15 seconds.
 - An unknown `effect` becomes `write`, the most careful label.
+- The whole request is at most 1 MB. Terminal control characters are removed from `reply`,
+  which the command line shows as a question.
 - Output that is not a usable draft is refused with `502 unusable`. A missing model configuration
   is `503 not_configured`, and a model that does not answer is `503 unavailable`.
 

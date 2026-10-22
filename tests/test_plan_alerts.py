@@ -92,6 +92,11 @@ def test_unavailable_plans_and_bad_readings_record_nothing(store):
     assert plan_alerts.record(store, plan(99, available=False), 80, now=NOW) == []
     with pytest.raises(ValueError):
         plan_alerts.record(store, plan(140), 80, now=NOW)
+    for label in ("<b>weekly</b>", "weekly\x1b[2J", "x" * 61):
+        reading = plan(90)
+        reading["windows"][0]["label"] = label
+        with pytest.raises(ValueError):
+            plan_alerts.record(store, reading, 80, now=NOW)
     assert plan_alerts.overview(store) == {"windows": [], "alerts": []}
 
 

@@ -56,7 +56,8 @@ class Reading(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
-    label: str = Field(min_length=1, max_length=60)
+    # The runtimes' own label rule: words, spaces and . ( ) + / : - only.
+    label: str = Field(pattern=r"^[\w .()+/:-]{1,60}$")
     usedPercent: int = Field(ge=0, le=100)
     resetsAt: str | None = Field(default=None, max_length=64)
 

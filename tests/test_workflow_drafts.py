@@ -236,3 +236,23 @@ def test_http_route_needs_the_admin_key(tmp_path):
         )
         assert owner.status_code == 401
         assert client.post("/workflow-drafts/draft", json=body).status_code == 401
+
+
+def test_terminal_control_characters_never_reach_the_reply(tmp_path):
+    reply = "\x1b]52;c;cGF5bG9hZA==\x07Which \x9bcity?\x1b[2J\nOne line."
+    result, _ = drafted(tmp_path, {"reply": reply, "ready": False, "document": None})
+    assert result["reply"] == "]52;c;cGF5bG9hZA==Which city?[2J\nOne line."
+
+
+def test_a_request_over_one_megabyte_is_refused():
+    huge = [
+        {
+            **CAPABILITIES[0],
+            "id": f"tool-{index}",
+            "description": "d" * 800,
+            "inputs": [{"name": f"i{n}", "description": "x" * 500} for n in range(20)],
+        }
+        for index in range(120)
+    ]
+    with pytest.raises(ValueError, match="under 1 MB"):
+        request(capabilities=huge)
