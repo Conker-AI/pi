@@ -238,6 +238,15 @@ def test_http_route_needs_the_admin_key(tmp_path):
         assert client.post("/workflow-drafts/draft", json=body).status_code == 401
 
 
+def test_the_prompts_example_is_a_complete_valid_draft():
+    text = workflow_drafts.INSTRUCTIONS
+    example = json.loads(text[text.rindex('{"reply"') : text.index('\nWhen "issues"')])
+    capability = workflow_drafts.Capability(id="web.lookup", kind="tool", name="Lookup")
+    document, issues = workflow_drafts.normalize(example["document"], [capability], "example")
+    assert issues == [] and example["ready"] is True
+    assert [node["type"] for node in document["nodes"]] == ["input", "tool_call", "return"]
+
+
 def test_terminal_control_characters_never_reach_the_reply(tmp_path):
     reply = "\x1b]52;c;cGF5bG9hZA==\x07Which \x9bcity?\x1b[2J\nOne line."
     result, _ = drafted(tmp_path, {"reply": reply, "ready": False, "document": None})
