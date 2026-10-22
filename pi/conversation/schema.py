@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pi.actions import identities as actions
-from pi.agents import characters, continuity, skills, team_execution
+from pi.agents import characters, continuity, skills, team_execution, workflow_proposals
 from pi.agents import profiles as agents
 from pi.agents import teams as collaboration
 from pi.calls import runtime as calls
@@ -76,6 +76,7 @@ def install(db):
     owner_preferences.initialize(db)
     db.executescript(proactive_budget.SCHEMA)
     plan_alerts.initialize(db)
+    workflow_proposals.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)

@@ -44,3 +44,19 @@ for an authorization (`owner_confirmation` by default), and every tool it calls 
 grants and approvals.
 
 The command line drives the whole loop: `conker workflow draft "..."` in Conker.
+
+## Drafts made from a chat message
+
+The owner can turn one of their own chat messages into a workflow (`conker workflow from-chat`
+now, a button with the UI). The command line drafts it as above, saves it in ToolGate's editor,
+then records the link here with POST `/workflow-proposals` (admin key):
+`{sessionId, messageId, draftId, name, valid}`. Pi refuses a message that is not the owner's, is
+not in that chat, or was forgotten.
+
+- Each open record is a **Needs you** item in the [Inbox](inbox.md), `kind: "workflow"`:
+  "Workflow draft ready: <name>", or "Workflow draft to fix: <name>" when ToolGate found problems.
+- POST `/workflow-proposals/published` `{draftId}` closes the items for a published draft;
+  POST `/workflow-proposals/{id}/dismiss` closes one without publishing. GET `/workflow-proposals`
+  lists the open ones.
+- Pi keeps only the link and the draft's name. Forgetting the chat deletes the record (the audit
+  mutation drill checks it); the ToolGate draft stays, as the owner's own work.
