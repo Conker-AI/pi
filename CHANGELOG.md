@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.6.1
+
 - Add the optional `drafting` model role. The workflow builder uses it when the owner
   enabled it with a model, and the answer role otherwise, so chat can stay on a small local
   model while drafts use a stronger one. Older saved settings gain it disabled.

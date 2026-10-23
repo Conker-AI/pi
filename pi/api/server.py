@@ -70,7 +70,7 @@ from pi.core import errors
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
-SERVICE_VERSION = "0.6.0"
+SERVICE_VERSION = "0.6.1"
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
