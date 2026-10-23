@@ -272,3 +272,37 @@ def test_the_builder_waits_longer_than_an_answer(tmp_path):
     result, adapter = drafted(tmp_path, {"reply": "Which city?", "ready": False, "document": None})
     assert result["ready"] is False
     assert adapter.timeout == workflow_drafts.MODEL_WAIT_MS / 1000 == 600
+
+
+def test_a_drafting_model_of_its_own_drafts_while_chat_stays_put(tmp_path):
+    settings = config()
+    settings["roleSettings"]["roles"]["drafting"] = {
+        **settings["roleSettings"]["roles"]["drafting"],
+        "enabled": True,
+        "eligibleModelIds": ["b"],
+        "modelId": "b",
+    }
+    local = Recording(json.dumps({"reply": "Which city?", "ready": False, "document": None}))
+    strong = Recording(json.dumps({"reply": "Which city?", "ready": False, "document": None}))
+    with closing(Store(tmp_path / "pi.db")) as store:
+        model_roles.save(
+            store,
+            model_roles.Update(
+                expected_revision=0,
+                configuration=model_roles.Configuration.model_validate(settings),
+            ),
+        )
+        result = workflow_drafts.draft(store, {"one": local, "two": strong}, request())
+    assert result["modelId"] == "b" and strong.messages and not local.messages
+    assert strong.timeout == 600
+
+
+def test_older_settings_gain_drafting_switched_off(tmp_path):
+    settings = config()
+    del settings["roleSettings"]["roles"]["drafting"]
+    loaded = model_roles.Configuration.model_validate(settings)
+    assert loaded.roleSettings.roles["drafting"].enabled is False
+    adapter = Recording(json.dumps({"reply": "Which city?", "ready": False, "document": None}))
+    with closing(Store(tmp_path / "pi.db")) as store:
+        model_roles.save(store, model_roles.Update(expected_revision=0, configuration=loaded))
+        assert workflow_drafts.draft(store, {"one": adapter}, request())["modelId"] == "a"
