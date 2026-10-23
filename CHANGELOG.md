@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Add the optional `drafting` model role. The workflow builder uses it when the owner
+  enabled it with a model, and the answer role otherwise, so chat can stay on a small local
+  model while drafts use a stronger one. Older saved settings gain it disabled.
 - The workflow builder waits up to 10 minutes for the model, past the answer role's
   120-second limit: on a CPU-only local model a whole draft takes minutes. Chat answers keep
   their own limit.

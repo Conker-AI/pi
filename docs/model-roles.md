@@ -14,6 +14,11 @@ Successful configured answers record `route_tier= configured`, `route_reason=con
 
 Validation:
 
+The workflow builder uses the optional `drafting` role when it is enabled with a model, and
+the answer role otherwise, so chat can stay on a small local model while drafts use a stronger
+one. Older saved settings gain it disabled. It runs only when the owner asks for a draft, with
+the builder's 10-minute wait, and sees only the request and the capability list.
+
 The development search API has a separate optional `search-ranking` role,
 migrated disabled with a 2,000ms transport timeout. It does not reuse memory
 ranking or conversation context selection. Owner search settings must explicitly

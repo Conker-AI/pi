@@ -293,10 +293,14 @@ def draft(store, providers, body: Request) -> dict:
             ),
         ),
     ]
+    # A drafting model of its own when the owner set one, so chat can stay on a small local
+    # model while drafts use a stronger one; otherwise the talking model drafts.
+    drafting = saved["configuration"]["roleSettings"]["roles"].get("drafting", {})
+    role = "drafting" if drafting.get("enabled") and drafting.get("modelId") else "answer"
     try:
         decision = model_roles.dispatch(
             saved["configuration"],
-            "answer",
+            role,
             messages,
             providers,
             minimum_timeout_ms=MODEL_WAIT_MS,

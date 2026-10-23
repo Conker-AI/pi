@@ -22,11 +22,12 @@ ROLES = (
     "memory-ranking",
     "search-ranking",
     "proposals",
+    "drafting",
 )
 # Roles added after configurations were first saved. Older saved settings gain them
 # disabled: a new background use of the owner's conversations is never switched on
 # by an upgrade.
-LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking")
+LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking", "drafting")
 
 
 class Provider(Strict):
