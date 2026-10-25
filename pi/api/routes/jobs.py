@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
 from pi.core.models import Strict
-from pi.schedule import agent_jobs, job_models, jobs
+from pi.schedule import agent_hooks, agent_jobs, job_models, jobs
 
 
 class RunRequest(Strict):
@@ -47,6 +47,16 @@ def router(store, authorize, executor=None):
     def dismiss_agent_job_note(identity: Annotated[str, Path(pattern=agent_jobs.NOTE_ID)]):
         """Hide a note; the job's chat keeps the full reply."""
         return call(agent_jobs.dismiss, identity)
+
+    @routes.post("/{identity}/hook", response_model=job_models.HookIssued)
+    def issue_hook(identity: JobPath):
+        """A new webhook secret for this AI job, shown once; any earlier one stops working."""
+        return call(agent_hooks.issue, identity)
+
+    @routes.post("/{identity}/hook/revoke")
+    def revoke_hook(identity: JobPath):
+        """Stop the webhook; the job keeps its timing or watch."""
+        return call(agent_hooks.revoke, identity)
 
     @routes.get("/{identity}", response_model=job_models.JobView)
     def get(identity: JobPath):

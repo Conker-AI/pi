@@ -34,6 +34,8 @@ RUNTIME_ROUTES = {
         r"/proposals/passes",
     ),
     "POST": (
+        # A webhook call; Pi checks the job's own secret, the job and the rate.
+        r"/hooks/job_[a-f0-9]{32}",
         r"/sessions",
         r"/sessions/[A-Za-z0-9_-]+/turns",
         r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
@@ -155,6 +157,9 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}/(?:state|run)",
         # An AI job only, never a raw tool target; creating one asks for the password.
         r"/jobs/agent",
+        # A webhook secret is shown once; making or stopping one asks for the password.
+        r"/jobs/job_[0-9a-f]{32}/hook",
+        r"/jobs/job_[0-9a-f]{32}/hook/revoke",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
         r"/jobs/runs/scheduled_[0-9a-f]{32}/(?:budget|provision-budget|cancel|resume|reconcile)",
         r"/projects",

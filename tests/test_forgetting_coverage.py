@@ -27,6 +27,8 @@ HELPERS = {
 # Identifiers, states, counts and costs: no text from a message.
 IDS_ONLY = {
     "activity_events",
+    # A fingerprint of a webhook secret and when it was last used; never the secret.
+    "agent_job_hooks",
     # A fingerprint of a watched tool's answer and when it was read; never the answer.
     "agent_job_watch",
     "attachment_removals",

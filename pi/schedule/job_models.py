@@ -152,6 +152,8 @@ class AgentTargetSummary(Strict):
     kind: Literal["agent"]
     # The AI job's own chat, where its turns, replies and approvals live.
     sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
+    # Whether a webhook can start it; the secret itself is shown once, when it is made.
+    webhook: bool = False
 
 
 class WatchSummary(Strict):
@@ -232,6 +234,19 @@ class AgentJobNote(Strict):
     title: str = Field(min_length=1, max_length=160)
     detail: str = Field(max_length=400)
     createdAt: float = Field(ge=0, allow_inf_nan=False)
+
+
+class HookIssued(Strict):
+    jobId: JobId
+    token: str = Field(pattern=r"^hook_[A-Za-z0-9_-]{43}$")
+    header: Literal["X-Conker-Hook-Token"]
+    path: str = Field(pattern=r"^/hooks/job_[a-f0-9]{32}$")
+
+
+class HookReceived(Strict):
+    started: bool
+    runId: RunId | None = None
+    reason: Literal["busy", "paused"] | None = None
 
 
 class AgentJobNoteCollection(Strict):

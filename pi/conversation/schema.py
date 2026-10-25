@@ -37,7 +37,15 @@ from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
-from pi.schedule import agent_jobs, agent_triggers, jobs, proactive_budget, proposals, tasks
+from pi.schedule import (
+    agent_hooks,
+    agent_jobs,
+    agent_triggers,
+    jobs,
+    proactive_budget,
+    proposals,
+    tasks,
+)
 from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import protection as setup_protection
@@ -85,6 +93,7 @@ def install(db):
     plan_alerts.initialize(db)
     agent_jobs.initialize(db)
     agent_triggers.initialize(db)
+    agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
     workflow_offers.initialize(db)
     agents.initialize(db)

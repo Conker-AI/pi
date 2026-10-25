@@ -153,4 +153,24 @@ time stops the watch once (`problem: "needs_approval"`) instead of asking every 
 other failures are retried at the next look. Watches pause in quiet hours. Changing the watch
 starts over. The browser view shows the watch's tool, interval, last look and problem.
 
-- Next: a webhook and Conker events (a new Inbox item, another job finishing) start the same turn.
+
+### Starting from a webhook (2026-10-25)
+
+Anything that can call a web address can start an AI job (`pi/schedule/agent_hooks.py`,
+`gateway/hook_routes.py`). The owner makes a webhook for one job (`POST /jobs/{id}/hook`, asks for
+the password) and sees its secret once; Pi keeps only its SHA-256 fingerprint. Making a new one
+replaces the old; `POST /jobs/{id}/hook/revoke` stops it.
+
+A caller sends `POST /hooks/{job_id}` to the gateway with the secret in the `X-Conker-Hook-Token`
+header (never the address or query, which the server logs) and at most 16 KB: JSON, or plain text
+as `{"text": ...}`. The gateway forwards it with its runtime credential; Pi gives every bad secret
+or unknown job the same 403, allows one call every 30 seconds per job (429), never starts a paused
+job or one that is still running (`started: false` with the reason), and admits one run per call.
+What the caller sent (at most 8000 characters) waits for that run, reaches the agent wrapped as
+information from outside Conker and never as instructions, and is deleted as the run takes it
+(or after a day, or when the job's chat is forgotten). Tools still ask exactly as in chat.
+
+The gateway is reachable from the owner's own devices (Tailscale); a service on the internet can
+only call it if the owner exposes the gateway on purpose.
+
+- Next: Conker events (a new Inbox item, another job finishing) start the same turn.

@@ -74,7 +74,8 @@ _COLUMNS = (
     "*, (SELECT session_id FROM agent_job_sessions c WHERE c.job_id=scheduled_jobs.id)"
     " AS agent_session_id,"
     " (SELECT checked_at FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_checked_at,"
-    " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure"
+    " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure,"
+    " EXISTS(SELECT 1 FROM agent_job_hooks h WHERE h.job_id=scheduled_jobs.id) AS has_webhook"
 )
 
 
@@ -318,7 +319,11 @@ def browser_job(row):
             timeZone=definition.timeZone,
             enabled=definition.enabled,
             state="enabled" if definition.enabled else "paused",
-            target=AgentTargetSummary(kind="agent", sessionId=row.get("agent_session_id"))
+            target=AgentTargetSummary(
+                kind="agent",
+                sessionId=row.get("agent_session_id"),
+                webhook=bool(row.get("has_webhook")),
+            )
             if target.kind == "agent"
             else TargetSummary(
                 kind=target.kind,
