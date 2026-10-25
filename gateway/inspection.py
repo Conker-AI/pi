@@ -34,6 +34,7 @@ INSPECTIONS = {
     "approvals": Inspection("toolgate-owner", "/v2/owner/requests"),
     "artifacts": Inspection("owner", "/artifacts"),
     "boundaries": Inspection("owner", "/setup/boundaries"),
+    "change-requests": Inspection("owner", "/change-requests"),
     "character": Inspection("owner", "/characters/companion"),
     "character-export": Inspection("owner", "/characters/companion/export"),
     "character-history": Inspection("owner", "/characters/companion/history"),

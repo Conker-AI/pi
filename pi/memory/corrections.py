@@ -88,5 +88,15 @@ class Client:
             json={"memory_id": memory_id, "expected_revision": revision},
         )
 
+    def remember(self, identity, text):
+        """Store one owner-approved statement word for word; replaying the identity is safe."""
+        result = self._request("PUT", "remember/" + quote(identity, safe=""), json={"text": text})
+        if not isinstance(result.get("memory_id"), str) or result.get("status") not in (
+            "remembered",
+            "already_remembered",
+        ):
+            raise ValueError("Invalid statement receipt.")
+        return {"memoryId": result["memory_id"], "status": result["status"]}
+
     def close(self):
         self.http.close()

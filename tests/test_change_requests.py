@@ -1,6 +1,7 @@
 """Conker prepares cron jobs, tools and memories; nothing becomes real until the owner approves."""
 
 import hashlib
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -125,8 +126,8 @@ def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
     with pytest.raises(change_requests.ChangeRequestError) as unsaved:
         change_requests.approve(store, request["id"])
     assert unsaved.value.code == "draft_required"
-    done = change_requests.approve(
-        store, request["id"], draft=change_requests.DraftSaved(draftId="group-digest")
+    done = change_requests.saved(
+        store, request["id"], change_requests.DraftSaved(draftId="group-digest")
     )
     assert done["result"] == {"draftId": "group-digest"}
 
@@ -166,13 +167,22 @@ def test_remembering_files_a_request_and_saves_only_on_approval(store):
     with pytest.raises(change_requests.ChangeRequestError) as unavailable:
         change_requests.approve(store, request["id"])
     assert unavailable.value.status == 503
+
+    def down(identity, text):
+        raise OSError("memory is down")
+
+    with pytest.raises(change_requests.ChangeRequestError) as failed:
+        change_requests.approve(store, request["id"], memory=down)
+    assert failed.value.status == 503
+    assert change_requests.get(store, request["id"])["state"] == "open"  # the owner can retry
     saved = []
     done = change_requests.approve(
-        store, request["id"], memory=lambda text: saved.append(text) or {"memoryId": "m1"}
+        store,
+        request["id"],
+        memory=lambda identity, text: saved.append((identity, text)) or {"memoryId": "m1"},
     )
-    assert saved == ["The owner's physics exam is on Thursday."] and done["result"] == {
-        "memoryId": "m1"
-    }
+    assert saved == [(request["id"], "The owner's physics exam is on Thursday.")]
+    assert done["result"] == {"memoryId": "m1"}
 
 
 def test_a_chat_turn_can_ask_for_a_cron_job(store):
@@ -201,6 +211,9 @@ def test_the_owner_routes_and_contract(store, monkeypatch):
     assert session_only_write("POST", request + "/decline") and not session_only_write(
         "POST", request + "/approve"
     )
+    assert owner_allowed("POST", request + "/saved") and session_only_write(
+        "POST", request + "/saved"
+    )
     schedule(store)
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "synthetic-admin", raising=False)
@@ -211,7 +224,12 @@ def test_the_owner_routes_and_contract(store, monkeypatch):
     client = TestClient(api.app)
     owner = {"X-Pi-Owner-Key": OWNER}
     [filed] = client.get("/change-requests", headers=owner).json()["results"]
-    approved = client.post(f"/change-requests/{filed['id']}/approve", headers=owner, json={})
+    # Reporting a saved draft never makes a job: only the verified approval does.
+    wrong = client.post(
+        f"/change-requests/{filed['id']}/saved", headers=owner, json={"draftId": "x"}
+    )
+    assert wrong.status_code == 409 and wrong.json()["detail"]["code"] == "not_a_tool_draft"
+    approved = client.post(f"/change-requests/{filed['id']}/approve", headers=owner)
     assert approved.status_code == 200 and approved.json()["state"] == "approved"
     listed = client.get("/tools", headers={"X-Pi-Key": "synthetic-admin"}).json()
     assert {"conker.schedule", "conker.draft_tool", "conker.remember"} <= {
@@ -225,3 +243,78 @@ def test_forgetting_the_chat_drops_its_requests(store):
     with store._connect() as db:
         change_requests.redact(db, [session])
     assert change_requests.listing(store) == []
+
+
+def test_the_memory_client_stores_a_statement_by_request_id():
+    import httpx
+
+    from pi.memory import corrections
+
+    seen = []
+
+    def answer(request):
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(
+            200,
+            json={"agent_id": "owner", "memory_id": "m1", "status": "remembered", "revision": 1},
+        )
+
+    client = corrections.Client(
+        "http://memory.test", "k" * 32, "owner", transport=httpx.MockTransport(answer)
+    )
+    identity = "creq_" + "c" * 32
+    assert client.remember(identity, "Exam on Thursday.") == {
+        "memoryId": "m1",
+        "status": "remembered",
+    }
+    assert seen == [
+        ("PUT", f"/runtime/corrections/remember/{identity}", {"text": "Exam on Thursday."})
+    ]
+
+
+@pytest.mark.parametrize(
+    ("payload", "path", "body"),
+    [
+        ({"operation": "approve", "id": "creq_" + "d" * 32}, "/approve", {}),
+        ({"operation": "decline", "id": "creq_" + "d" * 32}, "/decline", {}),
+        (
+            {"operation": "saved", "id": "creq_" + "d" * 32, "draftId": "digest"},
+            "/saved",
+            {"draftId": "digest"},
+        ),
+    ],
+)
+def test_the_cli_decides_requests_through_the_owner_routes(payload, path, body):
+    import io
+
+    import httpx
+
+    from gateway.mutation import apply_resource
+    from tests.test_gateway_mutation import config
+
+    seen = []
+
+    def upstream(request):
+        seen.append(request)
+        return httpx.Response(200, json={"id": payload["id"], "state": "approved"})
+
+    with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
+        apply_resource(config(), "requests", io.BytesIO(json.dumps(payload).encode()), client)
+    [request] = seen
+    assert request.url.path == "/change-requests/" + payload["id"] + path
+    assert owner_allowed("POST", request.url.path) and json.loads(request.content) == body
+    assert request.headers["x-pi-owner-key"] == config().pi_owner_key
+
+
+def test_the_cli_never_edits_a_request():
+    import io
+
+    from gateway.mutation import MutationError, apply_resource
+    from tests.test_gateway_mutation import config
+
+    for payload in (
+        {"operation": "approve", "id": "creq_" + "d" * 32, "payload": {"name": "x"}},
+        {"operation": "edit", "id": "creq_" + "d" * 32},
+    ):
+        with pytest.raises(MutationError):
+            apply_resource(config(), "requests", io.BytesIO(json.dumps(payload).encode()), None)

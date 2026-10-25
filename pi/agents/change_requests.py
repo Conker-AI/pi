@@ -8,8 +8,10 @@ A request is never edited after it is filed: what the owner approves is exactly 
 - `ai_job`: approving creates the AI job in Pi (`agent_jobs.create`), so the owner's password
   verification on the approval is the only way it starts to run.
 - `tool_draft`: Pi holds no ToolGate authority. The owner's browser saves the document as a draft
-  in ToolGate's editor and reports the draft's id here; the owner then publishes it there.
-- `memory`: approving writes the stated text to memory (when MemoryGate offers that route).
+  in ToolGate's editor (password verified there) and reports the draft's id here (`saved`), which
+  creates nothing; the owner then publishes it there.
+- `memory`: approving stores the exact text through MemoryGate's correction capability, keyed by
+  the request id, so a retry after a lost answer never stores it twice.
 """
 
 from __future__ import annotations
@@ -49,12 +51,6 @@ class DraftSaved(Strict):
     """The owner's browser saved the requested document in ToolGate's editor."""
 
     draftId: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
-
-
-class Approve(Strict):
-    """The approval body: empty, or the saved draft's id for a tool draft."""
-
-    draftId: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 
 class View(Strict):
@@ -170,7 +166,7 @@ def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
     if request["kind"] == "tool_draft":
         if draft is None:
             raise ChangeRequestError(
-                "draft_required", "Save the draft in Tools first; then approve with its id.", 422
+                "draft_required", "Save the draft in Tools first; then report its id.", 422
             )
         saved = DraftSaved.model_validate(
             draft.model_dump() if hasattr(draft, "model_dump") else draft
@@ -178,15 +174,24 @@ def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
         return _close(store, identity, "approved", {"draftId": saved.draftId}, now)
     if memory is None:
         raise ChangeRequestError(
-            "memory_unavailable", "Saving memories from a request is not available yet.", 503
+            "memory_unavailable", "Memory isn't connected, so nothing was saved.", 503
         )
     try:
-        result = memory(request["payload"]["text"])
+        result = memory(identity, request["payload"]["text"])
     except Exception:
-        return _close(
-            store, identity, "failed", {"reason": "Memory didn't save; nothing was changed."}, now
-        )
+        # The request stays open: retrying with the same id is safe on MemoryGate's side.
+        raise ChangeRequestError(
+            "memory_unavailable", "Memory didn't answer, so nothing was saved. Try again.", 503
+        ) from None
     return _close(store, identity, "approved", result, now)
+
+
+def saved(store, identity, draft: DraftSaved, now=None) -> dict:
+    """Record the Tools draft the owner saved from a tool request. Only tool requests: a job or
+    a memory is made real by `approve` alone."""
+    if get(store, identity)["kind"] != "tool_draft":
+        raise ChangeRequestError("not_a_tool_draft", "Only a tool request is saved in Tools.", 409)
+    return approve(store, identity, draft=draft, now=now)
 
 
 def decline(store, identity, now=None) -> dict:

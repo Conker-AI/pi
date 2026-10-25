@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Path
+from fastapi import APIRouter, Depends, Path
 
 from pi.agents import change_requests
 
@@ -24,13 +24,14 @@ def router(store, authorize, memory_writer=lambda: None):
         return change_requests.get(store(), identity)
 
     @routes.post("/{identity}/approve")
-    def approve(
-        identity: RequestPath,
-        body: Annotated[change_requests.Approve | None, Body()] = None,
-    ):
-        """Make it real exactly as filed. A tool draft must already be saved in Tools."""
-        draft = change_requests.DraftSaved(draftId=body.draftId) if body and body.draftId else None
-        return change_requests.approve(store(), identity, draft=draft, memory=memory_writer())
+    def approve(identity: RequestPath):
+        """Make a cron job or memory real exactly as filed."""
+        return change_requests.approve(store(), identity, memory=memory_writer())
+
+    @routes.post("/{identity}/saved")
+    def saved(identity: RequestPath, body: change_requests.DraftSaved):
+        """The owner saved this tool request as a draft in Tools; recording it creates nothing."""
+        return change_requests.saved(store(), identity, body)
 
     @routes.post("/{identity}/decline")
     def decline(identity: RequestPath):

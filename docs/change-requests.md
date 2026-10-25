@@ -9,7 +9,7 @@ owner did not leave tools out at setup:
 |---|---|---|
 | `conker.schedule` | an AI job: name, instructions, repeat (hours, daily, weekly, webhook) | creates the AI job (`agent_jobs.create`) in the owner's time zone |
 | `conker.draft_tool` | a workflow drafted by the drafting model from the owner's existing tools | the owner's browser saves it in ToolGate's editor and reports the draft id; the owner publishes it there |
-| `conker.remember` | one stated fact | writes it to memory (route pending in MemoryGate; until then approval answers 503) |
+| `conker.remember` | one stated fact | stores the exact text through MemoryGate's correction capability (`PUT /runtime/corrections/remember/{request id}`), so a retry never stores it twice; if memory is not connected or does not answer, the request stays open (503) |
 
 Calling one only records a change request (`pi/agents/change_requests.py`) and answers at once with
 "waiting for the owner". A request is never edited after it is filed: what the owner approves is
@@ -21,6 +21,8 @@ reach ToolGate only through the owner's browser. A prompt attack on Conker can t
 leave a request the owner declines. Conker's own tools do not count as tool use for model routing.
 
 Owner routes: `GET /change-requests`, `GET /change-requests/{id}`, `POST .../approve` (password
-verified; a tool draft needs `{"draftId": ...}`), `POST .../decline` (signed-in session only).
+verified; jobs and memories), `POST .../saved` with `{"draftId": ...}` (tool requests only; the
+owner's password-verified save in Tools already happened, so this records the id and needs only the
+signed-in session), `POST .../decline` (signed-in session only).
 `GET /tools` lists Conker's own tools first, so the owner sees everything the AI can call. The Inbox
 lists open requests (`kind: "change-request"`). Forgetting a chat deletes its requests.

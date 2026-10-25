@@ -120,6 +120,7 @@ def test_model_apply_uses_fixed_owner_route_and_exact_json():
         "models",
         "projects",
         "proposals",
+        "requests",
         "sessions",
         "tasks",
         "teams",
