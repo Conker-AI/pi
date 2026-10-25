@@ -15,6 +15,14 @@ from pi.turns import steering as turn_steering
 class ModelCalls:
     """Part of Loop: model calls. Uses the attributes Loop.__init__ sets."""
 
+    def _offers_tools(self) -> bool:
+        """ToolGate is set up and the owner did not leave tools out at setup."""
+        if self.toolgate is None:
+            return False
+        from pi.setup import choices as setup_choices
+
+        return setup_choices.current(self.store, "capabilities").choice != "skip"
+
     def _available_tools(self, execution=None):
         """What this key is scoped to right now, or nothing.
 

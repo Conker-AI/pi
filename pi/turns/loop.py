@@ -45,6 +45,7 @@ from pi.models.providers import ProviderUnavailable
 from pi.models.routing import Router, TurnContext, history_size
 from pi.schedule import tasks
 from pi.turns import control as turn_control
+from pi.turns import native_tools
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 from pi.turns.failures import ActedWithoutReply, TurnFailed
@@ -288,7 +289,11 @@ class Loop(ModelCalls, History, Replies):
 
         from pi.context import research
 
-        available = research.tools(execution, self._available_tools(execution))
+        published = self._available_tools(execution)
+        # Conker's own tools only file requests for the owner's approval (see native_tools).
+        # They follow the owner's tool choice: offered when ToolGate is set up and not skipped.
+        own = native_tools.catalog(execution) if self._offers_tools() else []
+        available = research.tools(execution, published + own)
         allowed = {t.id for t in available}
         if not continued:
             from pi.setup import choices as setup_choices
@@ -306,7 +311,8 @@ class Loop(ModelCalls, History, Replies):
             )
         acted = bool(self.store.get_turn(turn_id)["acted"])
         context = dict(context or {})
-        context.setdefault("needs_tools", bool(available))
+        # Only published tools need a tool-capable model; Conker's own requests do not.
+        context.setdefault("needs_tools", bool(published))
         history = self._history(session_id, tools=available, turn_id=turn_id)
         ctx = TurnContext(history_chars=history_size(history), **context)
 
@@ -362,9 +368,19 @@ class Loop(ModelCalls, History, Replies):
                     raise
                 try:
                     turn_control.guard(self.store, execution)
-                    outcome = self.toolgate.invoke(
-                        call.tool_id, call.args, action_id=action["id"], job_id=action["job_id"]
-                    )
+                    if native_tools.owns(call.tool_id):
+                        outcome = native_tools.call(
+                            self,
+                            call.tool_id,
+                            call.args,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            execution=execution,
+                        )
+                    else:
+                        outcome = self.toolgate.invoke(
+                            call.tool_id, call.args, action_id=action["id"], job_id=action["job_id"]
+                        )
                 except ToolRefused as refusal:
                     if refusal.code == "BUDGET_DENIED":
                         return self._hold(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pi.actions import identities as actions
 from pi.agents import (
+    change_requests,
     characters,
     continuity,
     skills,
@@ -95,6 +96,7 @@ def install(db):
     agent_triggers.initialize(db)
     agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
+    change_requests.initialize(db)
     workflow_offers.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)

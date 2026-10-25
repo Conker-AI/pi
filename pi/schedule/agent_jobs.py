@@ -61,6 +61,11 @@ def initialize(db):
     db.executescript(SCHEMA)
 
 
+def owner_time_zone(store) -> str:
+    """The owner's own zone (from quiet hours), for jobs Conker prepares on their behalf."""
+    return prefs.load(store)["preferences"]["quietHours"]["timeZone"]
+
+
 def quiet(store, instant: float) -> bool:
     """The owner's quiet hours, which hold repeating AI jobs back like every proactive pass."""
     preferences = prefs.OwnerPreferences.model_validate(prefs.load(store)["preferences"])

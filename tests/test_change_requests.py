@@ -1,0 +1,227 @@
+"""Conker prepares cron jobs, tools and memories; nothing becomes real until the owner approves."""
+
+import hashlib
+
+import pytest
+from fastapi.testclient import TestClient
+from test_tool_turns import FakeGate, build
+
+from pi.agents import change_requests, workflow_drafts
+from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, session_only_write
+from pi.conversation.store import Store
+from pi.schedule import jobs
+from pi.turns import native_tools
+
+OWNER = "change-requests-owner-key-" + "o" * 32
+
+
+@pytest.fixture()
+def store(tmp_path):
+    return Store(tmp_path / "pi.db")
+
+
+def schedule(store, **args):
+    loop, _ = build(store, [], FakeGate())
+    value = {
+        "name": "Weekly life review",
+        "instructions": "Look at my whole week and suggest a better plan.",
+        "repeat": "weekly",
+        "day": "sunday",
+        "time": "21:00",
+    }
+    value.update(args)
+    return native_tools.call(
+        loop,
+        native_tools.SCHEDULE,
+        value,
+        session_id=None,
+        turn_id=None,
+        execution={"kind": "companion", "agentId": "companion"},
+    )
+
+
+def test_scheduling_files_a_request_and_creates_nothing(store):
+    result = schedule(store)
+    assert result.ok and result.result["status"] == "waiting_for_owner"
+    [request] = change_requests.listing(store)
+    assert (
+        request["kind"] == "ai_job"
+        and request["title"] == "Create the AI job “Weekly life review”, every Sunday at 21:00"
+    )
+    assert request["payload"]["timing"] == {
+        "kind": "weekly",
+        "time": "21:00",
+        "day": 0,
+        "hours": 24,
+    }
+    assert jobs.list_jobs(store) == []
+
+
+def test_approving_creates_exactly_what_was_filed_once(store):
+    schedule(store, repeat="webhook")
+    [request] = change_requests.listing(store)
+    approved = change_requests.approve(store, request["id"])
+    assert approved["state"] == "approved"
+    [job] = jobs.list_jobs(store)
+    assert job["id"] == approved["result"]["jobId"]
+    assert job["definition"]["name"] == "Weekly life review" and job["definition"]["target"] == {
+        "kind": "agent",
+        "clock": False,
+    }
+    with pytest.raises(change_requests.ChangeRequestError) as again:
+        change_requests.approve(store, request["id"])
+    assert again.value.status == 409
+    assert len(jobs.list_jobs(store)) == 1
+
+
+def test_declining_creates_nothing(store):
+    schedule(store)
+    [request] = change_requests.listing(store)
+    assert change_requests.decline(store, request["id"])["state"] == "declined"
+    assert change_requests.listing(store) == [] and jobs.list_jobs(store) == []
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"repeat": "monthly"},
+        {"repeat": "hours", "hours": 99},
+        {"time": "25:00"},
+        {"day": "someday"},
+        {"name": ""},
+    ],
+)
+def test_bad_arguments_are_an_answer_not_a_request(store, args):
+    result = schedule(store, **args)
+    assert not result.ok and result.result["status"] == "invalid"
+    assert change_requests.listing(store) == []
+
+
+def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
+    document = {"name": "Group digest", "nodes": [], "edges": []}
+    monkeypatch.setattr(
+        workflow_drafts,
+        "draft",
+        lambda *_args, **_kwargs: {
+            "ready": True,
+            "document": document,
+            "reply": "Summarizes the group chat.",
+            "issues": [],
+        },
+    )
+    loop, _ = build(store, [], FakeGate())
+    result = native_tools.call(
+        loop,
+        native_tools.DRAFT_TOOL,
+        {"description": "Summarize my study group chat"},
+        session_id=None,
+        turn_id=None,
+        execution={"kind": "companion", "agentId": "companion"},
+    )
+    assert result.ok
+    [request] = change_requests.listing(store)
+    assert request["kind"] == "tool_draft" and request["payload"]["document"] == document
+    with pytest.raises(change_requests.ChangeRequestError) as unsaved:
+        change_requests.approve(store, request["id"])
+    assert unsaved.value.code == "draft_required"
+    done = change_requests.approve(
+        store, request["id"], draft=change_requests.DraftSaved(draftId="group-digest")
+    )
+    assert done["result"] == {"draftId": "group-digest"}
+
+
+def test_a_draft_that_needs_detail_asks_instead_of_filing(store, monkeypatch):
+    monkeypatch.setattr(
+        workflow_drafts,
+        "draft",
+        lambda *_a, **_k: {"ready": False, "document": None, "reply": "Which chat?", "issues": []},
+    )
+    loop, _ = build(store, [], FakeGate())
+    result = native_tools.call(
+        loop,
+        native_tools.DRAFT_TOOL,
+        {"description": "Summarize my chat"},
+        session_id=None,
+        turn_id=None,
+        execution={"kind": "companion", "agentId": "companion"},
+    )
+    assert (
+        result.result == {"status": "needs_detail", "message": "Which chat?"}
+        and change_requests.listing(store) == []
+    )
+
+
+def test_remembering_files_a_request_and_saves_only_on_approval(store):
+    loop, _ = build(store, [], FakeGate())
+    native_tools.call(
+        loop,
+        native_tools.REMEMBER,
+        {"text": "The owner's physics exam is on Thursday."},
+        session_id=None,
+        turn_id=None,
+        execution=None,
+    )
+    [request] = change_requests.listing(store)
+    with pytest.raises(change_requests.ChangeRequestError) as unavailable:
+        change_requests.approve(store, request["id"])
+    assert unavailable.value.status == 503
+    saved = []
+    done = change_requests.approve(
+        store, request["id"], memory=lambda text: saved.append(text) or {"memoryId": "m1"}
+    )
+    assert saved == ["The owner's physics exam is on Thursday."] and done["result"] == {
+        "memoryId": "m1"
+    }
+
+
+def test_a_chat_turn_can_ask_for_a_cron_job(store):
+    call = '{"tool": "conker.schedule", "args": {"name": "Morning check", "instructions": "Tell me what needs me today.", "repeat": "daily", "time": "08:00"}}'
+    loop, provider = build(store, [call, "I filed it; approve it in your Inbox."], FakeGate())
+    session = store.create_session()
+    result = loop.run_turn(session, "Every morning at 8, check what needs me.")
+    assert result["message"]["content"] == "I filed it; approve it in your Inbox."
+    [request] = change_requests.listing(store)
+    assert request["sessionId"] == session and request["payload"]["timing"]["kind"] == "daily"
+    assert any("conker.schedule" in message.content for message in provider.sent[0])
+    assert jobs.list_jobs(store) == []
+
+
+def test_other_agents_get_conkers_tools_only_when_selected():
+    assert native_tools.catalog({"kind": "agent", "configuration": {"toolIds": []}}) == []
+    chosen = native_tools.catalog(
+        {"kind": "agent", "configuration": {"toolIds": ["conker.remember"]}}
+    )
+    assert [tool.id for tool in chosen] == ["conker.remember"]
+
+
+def test_the_owner_routes_and_contract(store, monkeypatch):
+    request = "/change-requests/creq_" + "a" * 32
+    assert owner_allowed("GET", "/change-requests") and owner_allowed("POST", request + "/approve")
+    assert session_only_write("POST", request + "/decline") and not session_only_write(
+        "POST", request + "/approve"
+    )
+    schedule(store)
+    monkeypatch.setattr(api.app.state, "store", store, raising=False)
+    monkeypatch.setattr(api.app.state, "admin_key", "synthetic-admin", raising=False)
+    monkeypatch.setattr(
+        api.app.state, "owner_key_hash", hashlib.sha256(OWNER.encode()).hexdigest(), raising=False
+    )
+    monkeypatch.setattr(api.app.state, "toolgate", None, raising=False)
+    client = TestClient(api.app)
+    owner = {"X-Pi-Owner-Key": OWNER}
+    [filed] = client.get("/change-requests", headers=owner).json()["results"]
+    approved = client.post(f"/change-requests/{filed['id']}/approve", headers=owner)
+    assert approved.status_code == 200 and approved.json()["state"] == "approved"
+    listed = client.get("/tools", headers={"X-Pi-Key": "synthetic-admin"}).json()
+    assert {"conker.schedule", "conker.draft_tool", "conker.remember"} <= {
+        tool["id"] for tool in listed["results"]
+    }
+
+
+def test_forgetting_the_chat_drops_its_requests(store):
+    session = store.create_session()
+    change_requests.file(store, "memory", "Remember: x", "x", {"text": "x"}, session_id=session)
+    with store._connect() as db:
+        change_requests.redact(db, [session])
+    assert change_requests.listing(store) == []

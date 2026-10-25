@@ -2472,6 +2472,296 @@
         }
       }
     },
+    "/change-requests": {
+      "get": {
+        "summary": "Listing",
+        "description": "Open requests, newest first.",
+        "operationId": "listing_change_requests_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/change-requests/{identity}": {
+      "get": {
+        "summary": "Get",
+        "operationId": "get_change_requests__identity__get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^creq_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/change-requests/{identity}/approve": {
+      "post": {
+        "summary": "Approve",
+        "description": "Make it real exactly as filed. A tool draft must already be saved in Tools.",
+        "operationId": "approve_change_requests__identity__approve_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^creq_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DraftSaved"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/change-requests/{identity}/decline": {
+      "post": {
+        "summary": "Decline",
+        "description": "Nothing is created; Conker is told it was declined if it asks again.",
+        "operationId": "decline_change_requests__identity__decline_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^creq_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflow-proposals": {
       "post": {
         "summary": "Record",
@@ -25257,6 +25547,22 @@
           "refreshRequiresNewRequest"
         ],
         "title": "DirectoryView"
+      },
+      "DraftSaved": {
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "title": "Draftid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draftId"
+        ],
+        "title": "DraftSaved",
+        "description": "The owner's browser saved the requested document in ToolGate's editor."
       },
       "Edge": {
         "properties": {
