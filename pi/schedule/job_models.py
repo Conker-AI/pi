@@ -39,6 +39,21 @@ class AgentTarget(Strict):
     kind: Literal["agent"]
 
 
+class ToolWatch(Strict):
+    """Start an AI job when a get tool's answer changes; Pi looks every few minutes."""
+
+    toolId: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:-]+$")
+    args: dict = Field(default_factory=dict)
+    everyMinutes: int = Field(default=15, ge=5, le=1440)
+
+    @field_validator("args")
+    @classmethod
+    def bounded(cls, value):
+        if len(json.dumps(value, allow_nan=False)) > 10000:
+            raise ValueError("Watch inputs exceed 10000 characters.")
+        return value
+
+
 class Definition(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructions: str = Field(min_length=1, max_length=4000)
@@ -47,6 +62,8 @@ class Definition(Strict):
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool
     target: Annotated[Target | AgentTarget, Field(discriminator="kind")]
+    # When set, the job starts when this tool has something new instead of on its timing.
+    watch: ToolWatch | None = None
     overlap: Literal["skip"] = "skip"
     requireBudget: bool = False
     budgetAllowanceId: str | None = Field(default=None, pattern=r"^allowance_[a-f0-9]{32}$")
@@ -58,6 +75,8 @@ class Definition(Strict):
         # An AI job spends through the tools it calls, each with ToolGate's own limits.
         if self.target.kind == "agent" and self.requireBudget:
             raise ValueError("AI jobs use each tool's own budget, not a job budget.")
+        if self.watch is not None and self.target.kind != "agent":
+            raise ValueError("Only AI jobs can start from a tool.")
         return self
 
     @field_validator("timeZone")
@@ -102,6 +121,7 @@ class AgentJobCreate(Strict):
     timing: Timing
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool = True
+    watch: ToolWatch | None = None
 
     @field_validator("name", "instructions", "agentId")
     @classmethod
@@ -134,6 +154,14 @@ class AgentTargetSummary(Strict):
     sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
 
 
+class WatchSummary(Strict):
+    toolId: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.:-]+$")
+    everyMinutes: int = Field(ge=5, le=1440)
+    inputsConfigured: bool
+    lastCheckedAt: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    problem: Literal["needs_approval", "no_credential", "failed"] | None = None
+
+
 class DefinitionSummary(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructionsConfigured: bool
@@ -143,6 +171,7 @@ class DefinitionSummary(Strict):
     enabled: bool
     state: Literal["enabled", "paused"]
     target: Annotated[TargetSummary | AgentTargetSummary, Field(discriminator="kind")]
+    watch: WatchSummary | None = None
     overlap: Literal["skip"]
     requireBudget: bool
     budgetAllowanceConfigured: bool

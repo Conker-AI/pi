@@ -21664,6 +21664,16 @@
             "type": "boolean",
             "title": "Enabled",
             "default": true
+          },
+          "watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolWatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -24567,6 +24577,16 @@
               }
             }
           },
+          "watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolWatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "overlap": {
             "type": "string",
             "const": "skip",
@@ -24661,6 +24681,16 @@
                 "tool": "#/components/schemas/TargetSummary"
               }
             }
+          },
+          "watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "overlap": {
             "type": "string",
@@ -29530,6 +29560,36 @@
         ],
         "title": "Timing"
       },
+      "ToolWatch": {
+        "properties": {
+          "toolId": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Toolid"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "everyMinutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Everyminutes",
+            "default": 15
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "toolId"
+        ],
+        "title": "ToolWatch",
+        "description": "Start an AI job when a get tool's answer changes; Pi looks every few minutes."
+      },
       "TransitionTask": {
         "properties": {
           "expected_revision": {
@@ -29932,6 +29992,63 @@
           "vote"
         ],
         "title": "Vote"
+      },
+      "WatchSummary": {
+        "properties": {
+          "toolId": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Toolid"
+          },
+          "everyMinutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Everyminutes"
+          },
+          "inputsConfigured": {
+            "type": "boolean",
+            "title": "Inputsconfigured"
+          },
+          "lastCheckedAt": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastcheckedat"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "needs_approval",
+                  "no_credential",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "toolId",
+          "everyMinutes",
+          "inputsConfigured"
+        ],
+        "title": "WatchSummary"
       },
       "pi__agents__skills__State": {
         "properties": {

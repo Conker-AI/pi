@@ -138,5 +138,19 @@ that need no confirmation (get tools) run on their own, and a tool that needs th
 - Owner routes: `POST /jobs/agent` creates one (name, instructions, timing, time zone; never a raw
   tool target, and the gateway asks for the password), `GET /jobs/agent/notes` lists open notes,
   `POST /jobs/agent/notes/{id}/dismiss` hides one (signed-in session only).
-- Next: event triggers (something new from a get tool, a webhook, a Conker event) start the same
-  turn; only how a job starts changes.
+
+### Starting from a tool (2026-10-25)
+
+An AI job with `watch` (`toolId`, `args`, `everyMinutes` 5-1440) starts when that get tool has
+something new instead of on its timing (`pi/schedule/agent_triggers.py`). At each look Pi calls
+the tool through the agent's scoped ToolGate client, exactly as a chat would, and compares a
+SHA-256 fingerprint of the answer with the last one; Pi stores only the fingerprint and when it
+looked, never the answer. The first look is a baseline. A change admits one run (request
+`watch_<fingerprint>_<last look>`, so the same change seen twice replays); the turn is told which
+tool has something new and reads it with its own tools. A change while a run is still going keeps
+the old fingerprint, so the next look starts the job. A tool that asks for the owner's OK each
+time stops the watch once (`problem: "needs_approval"`) instead of asking every few minutes;
+other failures are retried at the next look. Watches pause in quiet hours. Changing the watch
+starts over. The browser view shows the watch's tool, interval, last look and problem.
+
+- Next: a webhook and Conker events (a new Inbox item, another job finishing) start the same turn.
