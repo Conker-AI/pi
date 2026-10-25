@@ -34,7 +34,7 @@ class Target(Strict):
 
 
 class AgentTarget(Strict):
-    """An AI check: one turn by the job's agent in the job's own chat (see agent_checks)."""
+    """An AI job: one turn by the job's agent in the job's own chat (see agent_jobs)."""
 
     kind: Literal["agent"]
 
@@ -55,9 +55,9 @@ class Definition(Strict):
     def allowance_requires_budget(self):
         if self.budgetAllowanceId and not self.requireBudget:
             raise ValueError("A recurring allowance requires budgeted execution.")
-        # An AI check spends through the tools it calls, each with ToolGate's own limits.
+        # An AI job spends through the tools it calls, each with ToolGate's own limits.
         if self.target.kind == "agent" and self.requireBudget:
-            raise ValueError("AI checks use each tool's own budget, not a job budget.")
+            raise ValueError("AI jobs use each tool's own budget, not a job budget.")
         return self
 
     @field_validator("timeZone")
@@ -93,13 +93,13 @@ class StateChange(Strict):
     enabled: bool
 
 
-class CheckCreate(Strict):
-    """What the browser may create: an AI check, never a raw tool target."""
+class AgentJobCreate(Strict):
+    """What the browser may create: an AI job with any timing, never a raw tool target."""
 
     name: str = Field(min_length=1, max_length=80)
     instructions: str = Field(min_length=1, max_length=4000)
     agentId: str = Field(default="companion", min_length=1, max_length=200)
-    hours: int = Field(ge=1, le=24)
+    timing: Timing
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool = True
 
@@ -130,7 +130,7 @@ class TargetSummary(Strict):
 
 class AgentTargetSummary(Strict):
     kind: Literal["agent"]
-    # The check's own chat, where its turns, replies and approvals live.
+    # The AI job's own chat, where its turns, replies and approvals live.
     sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
 
 
@@ -195,7 +195,7 @@ class RunView(Strict):
     execution: Literal["admitted-only", "waiting", "dispatched", "resolved", "uncertain"]
 
 
-class CheckNote(Strict):
+class AgentJobNote(Strict):
     id: str = Field(pattern=r"^note_[a-f0-9]{32}$")
     jobId: JobId
     sessionId: str = Field(pattern=r"^ses_[a-f0-9]{16}$")
@@ -205,9 +205,9 @@ class CheckNote(Strict):
     createdAt: float = Field(ge=0, allow_inf_nan=False)
 
 
-class CheckNoteCollection(Strict):
+class AgentJobNoteCollection(Strict):
     schemaVersion: Literal[1] = 1
-    results: list[CheckNote] = Field(max_length=50)
+    results: list[AgentJobNote] = Field(max_length=50)
 
 
 class RunCollection(Strict):

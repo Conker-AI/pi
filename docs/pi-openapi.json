@@ -14738,11 +14738,11 @@
         }
       }
     },
-    "/jobs/checks": {
+    "/jobs/agent": {
       "post": {
-        "summary": "Create Check",
-        "description": "An AI check: its agent runs on a schedule in its own chat; tools still ask as in chat.",
-        "operationId": "create_check_jobs_checks_post",
+        "summary": "Create Agent Job",
+        "description": "An AI job: its agent carries out the instructions on schedule; tools ask as in chat.",
+        "operationId": "create_agent_job_jobs_agent_post",
         "parameters": [
           {
             "name": "X-Pi-Owner-Key",
@@ -14782,7 +14782,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CheckCreate"
+                "$ref": "#/components/schemas/AgentJobCreate"
               }
             }
           }
@@ -14811,11 +14811,11 @@
         }
       }
     },
-    "/jobs/checks/notes": {
+    "/jobs/agent/notes": {
       "get": {
-        "summary": "Check Notes",
-        "description": "What AI checks found for the owner, newest first, until dismissed.",
-        "operationId": "check_notes_jobs_checks_notes_get",
+        "summary": "Agent Job Notes",
+        "description": "What AI jobs found for the owner, newest first, until dismissed.",
+        "operationId": "agent_job_notes_jobs_agent_notes_get",
         "parameters": [
           {
             "name": "X-Pi-Owner-Key",
@@ -14856,7 +14856,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CheckNoteCollection"
+                  "$ref": "#/components/schemas/AgentJobNoteCollection"
                 }
               }
             }
@@ -14874,11 +14874,11 @@
         }
       }
     },
-    "/jobs/checks/notes/{identity}/dismiss": {
+    "/jobs/agent/notes/{identity}/dismiss": {
       "post": {
-        "summary": "Dismiss Check Note",
-        "description": "Hide a note; the check's chat keeps the full reply.",
-        "operationId": "dismiss_check_note_jobs_checks_notes__identity__dismiss_post",
+        "summary": "Dismiss Agent Job Note",
+        "description": "Hide a note; the job's chat keeps the full reply.",
+        "operationId": "dismiss_agent_job_note_jobs_agent_notes__identity__dismiss_post",
         "parameters": [
           {
             "name": "identity",
@@ -21630,6 +21630,135 @@
         ],
         "title": "AgentInput"
       },
+      "AgentJobCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions"
+          },
+          "agentId": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Agentid",
+            "default": "companion"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/Timing"
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Timezone"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "instructions",
+          "timing",
+          "timeZone"
+        ],
+        "title": "AgentJobCreate",
+        "description": "What the browser may create: an AI job with any timing, never a raw tool target."
+      },
+      "AgentJobNote": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^note_[a-f0-9]{32}$",
+            "title": "Id"
+          },
+          "jobId": {
+            "type": "string",
+            "pattern": "^job_[a-f0-9]{32}$",
+            "title": "Jobid"
+          },
+          "sessionId": {
+            "type": "string",
+            "pattern": "^ses_[a-f0-9]{16}$",
+            "title": "Sessionid"
+          },
+          "messageId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^msg_[a-f0-9]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messageid"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Detail"
+          },
+          "createdAt": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "jobId",
+          "sessionId",
+          "title",
+          "detail",
+          "createdAt"
+        ],
+        "title": "AgentJobNote"
+      },
+      "AgentJobNoteCollection": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion",
+            "default": 1
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AgentJobNote"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "AgentJobNoteCollection"
+      },
       "AgentProfile": {
         "properties": {
           "schemaVersion": {
@@ -21764,7 +21893,7 @@
           "kind"
         ],
         "title": "AgentTarget",
-        "description": "An AI check: one turn by the job's agent in the job's own chat (see agent_checks)."
+        "description": "An AI job: one turn by the job's agent in the job's own chat (see agent_jobs)."
       },
       "AgentTargetSummary": {
         "properties": {
@@ -23775,138 +23904,6 @@
           "request_id"
         ],
         "title": "Check"
-      },
-      "CheckCreate": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "instructions": {
-            "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Instructions"
-          },
-          "agentId": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Agentid",
-            "default": "companion"
-          },
-          "hours": {
-            "type": "integer",
-            "maximum": 24.0,
-            "minimum": 1.0,
-            "title": "Hours"
-          },
-          "timeZone": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Timezone"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "default": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name",
-          "instructions",
-          "hours",
-          "timeZone"
-        ],
-        "title": "CheckCreate",
-        "description": "What the browser may create: an AI check, never a raw tool target."
-      },
-      "CheckNote": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^note_[a-f0-9]{32}$",
-            "title": "Id"
-          },
-          "jobId": {
-            "type": "string",
-            "pattern": "^job_[a-f0-9]{32}$",
-            "title": "Jobid"
-          },
-          "sessionId": {
-            "type": "string",
-            "pattern": "^ses_[a-f0-9]{16}$",
-            "title": "Sessionid"
-          },
-          "messageId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^msg_[a-f0-9]{16}$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Messageid"
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Title"
-          },
-          "detail": {
-            "type": "string",
-            "maxLength": 400,
-            "title": "Detail"
-          },
-          "createdAt": {
-            "type": "number",
-            "minimum": 0.0,
-            "title": "Createdat"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "jobId",
-          "sessionId",
-          "title",
-          "detail",
-          "createdAt"
-        ],
-        "title": "CheckNote"
-      },
-      "CheckNoteCollection": {
-        "properties": {
-          "schemaVersion": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schemaversion",
-            "default": 1
-          },
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/CheckNote"
-            },
-            "type": "array",
-            "maxItems": 50,
-            "title": "Results"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "results"
-        ],
-        "title": "CheckNoteCollection"
       },
       "Choice": {
         "properties": {

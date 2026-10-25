@@ -175,10 +175,10 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # Transactional DDL keeps the exception invisible to every other connection.
         # The runtime lease prevents a provider response from arriving after deletion.
         from pi.context import controls as context_controls
-        from pi.schedule import agent_checks, proposals
+        from pi.schedule import agent_jobs, proposals
 
         context_controls.redact(db, plan["session_ids"])
-        agent_checks.redact(db, plan["session_ids"])
+        agent_jobs.redact(db, plan["session_ids"])
         skills.redact(db, plan["session_ids"])
         workflow_proposals.redact(db, plan["session_ids"])
         workflow_offers.redact(db, plan["session_ids"])

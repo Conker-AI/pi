@@ -6,12 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- **AI checks:** a cron job can run its agent on a schedule (`target.kind: "agent"`) in its own
-  chat, outside quiet hours. Tools behave exactly as in chat: get tools run on their own, set
-  tools wait for the owner's approval in the Inbox. A reply other than `NOTHING` adds an Inbox
-  note linking to the chat. New owner routes `POST /jobs/checks`, `GET /jobs/checks/notes` and
-  `POST /jobs/checks/notes/{id}/dismiss`; the browser can create checks only, never raw tool jobs.
-  Browser job views show an AI check as `target.kind: "agent"` with its chat. See docs/jobs.md.
+- **AI jobs:** a cron job can have its agent carry out the owner's instructions with tools
+  (`target.kind: "agent"`), on any cron timing, in its own chat. Tools behave exactly as in chat:
+  get tools run on their own, set tools wait for the owner's approval in the Inbox. Repeating jobs
+  skip quiet hours. A reply other than `NOTHING` adds an Inbox note linking to the chat. New owner
+  routes `POST /jobs/agent`, `GET /jobs/agent/notes` and `POST /jobs/agent/notes/{id}/dismiss`;
+  the browser can create AI jobs only, never raw tool jobs. See docs/jobs.md.
 
 ## 0.6.1
 
