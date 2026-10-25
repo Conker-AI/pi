@@ -37,6 +37,8 @@ class AgentTarget(Strict):
     """An AI job: one turn by the job's agent in the job's own chat (see agent_jobs)."""
 
     kind: Literal["agent"]
+    # False: only its webhook, its watch or Run now start it, never its timing.
+    clock: bool = True
 
 
 class ToolWatch(Strict):
@@ -122,6 +124,8 @@ class AgentJobCreate(Strict):
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool = True
     watch: ToolWatch | None = None
+    # False: only a webhook or Run now start it (see AgentTarget.clock).
+    clock: bool = True
 
     @field_validator("name", "instructions", "agentId")
     @classmethod
@@ -152,6 +156,9 @@ class AgentTargetSummary(Strict):
     kind: Literal["agent"]
     # The AI job's own chat, where its turns, replies and approvals live.
     sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
+    # Whether a webhook can start it; the secret itself is shown once, when it is made.
+    webhook: bool = False
+    clock: bool = True
 
 
 class WatchSummary(Strict):
@@ -232,6 +239,19 @@ class AgentJobNote(Strict):
     title: str = Field(min_length=1, max_length=160)
     detail: str = Field(max_length=400)
     createdAt: float = Field(ge=0, allow_inf_nan=False)
+
+
+class HookIssued(Strict):
+    jobId: JobId
+    token: str = Field(pattern=r"^hook_[A-Za-z0-9_-]{43}$")
+    header: Literal["X-Conker-Hook-Token"]
+    path: str = Field(pattern=r"^/hooks/job_[a-f0-9]{32}$")
+
+
+class HookReceived(Strict):
+    started: bool
+    runId: RunId | None = None
+    reason: Literal["busy", "paused"] | None = None
 
 
 class AgentJobNoteCollection(Strict):

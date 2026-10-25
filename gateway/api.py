@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from pi.owner.terminal import TerminalError
 
-from . import auth_routes, host_routes, owner_routes, service_routes, terminal_routes
+from . import auth_routes, hook_routes, host_routes, owner_routes, service_routes, terminal_routes
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .diagnostics import collect_diagnostics
 from .operations import fingerprint
@@ -421,6 +421,8 @@ def create_app(
     app.include_router(terminal_routes.router(app, session, admit_write))
     app.include_router(service_routes.router(app, session, forward, admit_write, stream_transport))
     app.include_router(owner_routes.router(app, session, forward, admit_write))
+    # Outside sign-in: one AI job's webhook, proven only by that job's secret (see hook_routes).
+    app.include_router(hook_routes.router(app, forward))
 
     @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def dashboard(path: str, request: Request):

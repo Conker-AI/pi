@@ -16,6 +16,11 @@ be a decision with visible consequences.
   other tool that needs no confirmation) has something new, checked every 5-1440 minutes. Pi
   keeps only a fingerprint of the answer. A tool that needs approval each time stops the watch
   with a plain reason. See docs/jobs.md § Starting from a tool.
+- **AI jobs that start from a webhook:** `POST /hooks/{job_id}` with the job's secret in the
+  `X-Conker-Hook-Token` header starts it once (one call every 30 seconds, never while running).
+  The secret is shown once and kept as a fingerprint; what the caller sent reaches the agent as
+  information, never instructions, and is deleted once read. Owner routes
+  `POST /jobs/{id}/hook` and `/hook/revoke`. See docs/jobs.md § Starting from a webhook.
 
 ## 0.6.1
 

@@ -14577,6 +14577,113 @@
         }
       }
     },
+    "/hooks/{job_id}": {
+      "post": {
+        "summary": "Receive Hook",
+        "description": "A webhook call: starts its AI job at most once, never while the job is running.",
+        "operationId": "receive_hook_hooks__job_id__post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^job_[a-f0-9]{32}$",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "X-Conker-Hook-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Conker-Hook-Token"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Gateway-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Gateway-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookReceived"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs": {
       "get": {
         "summary": "Listing",
@@ -14887,6 +14994,150 @@
             "schema": {
               "type": "string",
               "pattern": "^note_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{identity}/hook": {
+      "post": {
+        "summary": "Issue Hook",
+        "description": "A new webhook secret for this AI job, shown once; any earlier one stops working.",
+        "operationId": "issue_hook_jobs__identity__hook_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^job_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookIssued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{identity}/hook/revoke": {
+      "post": {
+        "summary": "Revoke Hook",
+        "description": "Stop the webhook; the job keeps its timing or watch.",
+        "operationId": "revoke_hook_jobs__identity__hook_revoke_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^job_[a-f0-9]{32}$",
               "title": "Identity"
             }
           },
@@ -21674,6 +21925,11 @@
                 "type": "null"
               }
             ]
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -21895,6 +22151,11 @@
             "type": "string",
             "const": "agent",
             "title": "Kind"
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -21923,6 +22184,16 @@
               }
             ],
             "title": "Sessionid"
+          },
+          "webhook": {
+            "type": "boolean",
+            "title": "Webhook",
+            "default": false
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -25442,6 +25713,80 @@
           "maxTransfers"
         ],
         "title": "Handoff"
+      },
+      "HookIssued": {
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "pattern": "^job_[a-f0-9]{32}$",
+            "title": "Jobid"
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^hook_[A-Za-z0-9_-]{43}$",
+            "title": "Token"
+          },
+          "header": {
+            "type": "string",
+            "const": "X-Conker-Hook-Token",
+            "title": "Header"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/hooks/job_[a-f0-9]{32}$",
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "jobId",
+          "token",
+          "header",
+          "path"
+        ],
+        "title": "HookIssued"
+      },
+      "HookReceived": {
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "title": "Started"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^scheduled_[a-f0-9]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "busy",
+                  "paused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "started"
+        ],
+        "title": "HookReceived"
       },
       "Import": {
         "properties": {

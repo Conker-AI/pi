@@ -12,8 +12,10 @@ import hashlib
 import secrets
 import time
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Path as PathParameter
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -67,6 +69,7 @@ from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.core import errors
+from pi.schedule import agent_hooks, job_models
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
@@ -275,6 +278,20 @@ app.include_router(
         lambda: app.state.store, require_admin, lambda: app.state.router.adapters()
     )
 )
+
+
+@app.post("/hooks/{job_id}", response_model=job_models.HookReceived, status_code=202)
+def receive_hook(
+    request: Request,
+    job_id: str = PathParameter(pattern=r"^job_[a-f0-9]{32}$"),
+    body: Annotated[dict | None, Body()] = None,
+    token: str | None = Header(None, alias="X-Conker-Hook-Token"),
+    _identity: str = Depends(require_key),
+):
+    """A webhook call: starts its AI job at most once, never while the job is running."""
+    return agent_hooks.receive(app.state.store, job_id, token, body or {})
+
+
 app.include_router(
     jobs_api.router(
         lambda: app.state.store, require_owner, lambda: getattr(app.state, "job_executor", None)

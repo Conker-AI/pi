@@ -74,7 +74,8 @@ _COLUMNS = (
     "*, (SELECT session_id FROM agent_job_sessions c WHERE c.job_id=scheduled_jobs.id)"
     " AS agent_session_id,"
     " (SELECT checked_at FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_checked_at,"
-    " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure"
+    " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure,"
+    " EXISTS(SELECT 1 FROM agent_job_hooks h WHERE h.job_id=scheduled_jobs.id) AS has_webhook"
 )
 
 
@@ -208,8 +209,14 @@ def claim_due(store, now=None, limit=20):
             definition = Definition.model_validate_json(row["definition"])
             # Repeating AI jobs skip quiet hours; one set for a time of day runs then.
             repeating = definition.target.kind == "agent" and definition.timing.kind == "interval"
-            # A watched job starts from its tool, never from the clock.
-            if definition.enabled and definition.watch is None and not (repeating and quiet_hours):
+            # A watched job starts from its tool and a clockless one from its webhook, never the clock.
+            clockless = definition.target.kind == "agent" and not definition.target.clock
+            if (
+                definition.enabled
+                and definition.watch is None
+                and not clockless
+                and not (repeating and quiet_hours)
+            ):
                 run = _claim(db, row, now)
                 if run:
                     claimed.append(run)
@@ -318,7 +325,12 @@ def browser_job(row):
             timeZone=definition.timeZone,
             enabled=definition.enabled,
             state="enabled" if definition.enabled else "paused",
-            target=AgentTargetSummary(kind="agent", sessionId=row.get("agent_session_id"))
+            target=AgentTargetSummary(
+                kind="agent",
+                sessionId=row.get("agent_session_id"),
+                webhook=bool(row.get("has_webhook")),
+                clock=target.clock,
+            )
             if target.kind == "agent"
             else TargetSummary(
                 kind=target.kind,
