@@ -112,3 +112,31 @@ This operation withdraws Pi's dispatch only. It does not revoke a ToolGate appro
 or return a spending grant to a reusable pool. Saved approvals remain evidence;
 ToolGate authority outside this scheduler is administered separately. No browser
 response exposes the saved approval, receipt or budget identifier.
+
+
+## AI jobs (2026-10-25)
+
+An AI job is a cron job whose target is `{"kind": "agent"}`: at each slot its agent carries out
+the job's instructions in one ordinary chat turn, in the job's own chat, after a fixed preamble.
+Nothing about what a job does is built in; a weekly life review, a deadline watch or a follow-up
+with friends are all instructions. ToolGate decides every tool call exactly as in chat: tools
+that need no confirmation (get tools) run on their own, and a tool that needs the owner's OK
+(set tools) parks the turn as an Inbox approval. Pi grants nothing of its own
+(`pi/schedule/agent_jobs.py`).
+
+- Timing is any cron timing: every N hours, daily at a time, or weekly on a day. Repeating
+  (interval) jobs skip slots inside the owner's quiet hours; a job set for a time of day runs then.
+- The run ID is the turn's request ID, so a repeated dispatch replays the saved turn instead of
+  running it twice. Reconcile reads the saved submission; a missing one is never permission to run.
+- A reply of exactly `NOTHING` stays quiet, which is how a condition in the instructions ("only
+  if...") is expressed. Any other reply adds one Inbox note (`kind: "agent-job"`): its first line,
+  up to 160 characters, and the next 400 characters, linking to the chat.
+- AI jobs carry no job budget (`requireBudget` is refused); each tool keeps its own limits.
+- Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
+  something the owner keeps asking. Forgetting a job's chat deletes its notes; the next run starts
+  a new chat.
+- Owner routes: `POST /jobs/agent` creates one (name, instructions, timing, time zone; never a raw
+  tool target, and the gateway asks for the password), `GET /jobs/agent/notes` lists open notes,
+  `POST /jobs/agent/notes/{id}/dismiss` hides one (signed-in session only).
+- Next: event triggers (something new from a get tool, a webhook, a Conker event) start the same
+  turn; only how a job starts changes.

@@ -67,6 +67,8 @@ SESSION_ONLY_WRITES = (
     r"/models/auto-settings",
     # Deciding on a proposal records a preference; it grants and runs nothing.
     r"/proposals/[A-Za-z0-9_-]+/decision",
+    # Dismissing an AI job's note hides one line; the chat keeps the reply.
+    r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
     # Browser calls use bounded transient audio or typed turns. Neither grants new
     # authority, and any external effect still requires ToolGate approval.
     r"/calls/browser",
@@ -99,6 +101,7 @@ OWNER_ROUTES = {
         r"/jobs",
         r"/jobs/job_[0-9a-f]{32}",
         r"/jobs/job_[0-9a-f]{32}/runs",
+        r"/jobs/agent/notes",
         r"/projects",
         r"/projects/project_[0-9a-f]{32}",
         r"/agents",
@@ -150,6 +153,9 @@ OWNER_ROUTES = {
         r"/artifacts/from-message",
         r"/artifacts/artifact_[0-9a-f]{32}/(?:versions|restore|archive)",
         r"/jobs/job_[0-9a-f]{32}/(?:state|run)",
+        # An AI job only, never a raw tool target; creating one asks for the password.
+        r"/jobs/agent",
+        r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
         r"/jobs/runs/scheduled_[0-9a-f]{32}/(?:budget|provision-budget|cancel|resume|reconcile)",
         r"/projects",
         r"/projects/project_[0-9a-f]{32}/(?:update|archive|link|unlink)",

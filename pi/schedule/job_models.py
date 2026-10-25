@@ -33,6 +33,12 @@ class Target(Strict):
         return value
 
 
+class AgentTarget(Strict):
+    """An AI job: one turn by the job's agent in the job's own chat (see agent_jobs)."""
+
+    kind: Literal["agent"]
+
+
 class Definition(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructions: str = Field(min_length=1, max_length=4000)
@@ -40,7 +46,7 @@ class Definition(Strict):
     timing: Timing
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool
-    target: Target
+    target: Annotated[Target | AgentTarget, Field(discriminator="kind")]
     overlap: Literal["skip"] = "skip"
     requireBudget: bool = False
     budgetAllowanceId: str | None = Field(default=None, pattern=r"^allowance_[a-f0-9]{32}$")
@@ -49,6 +55,9 @@ class Definition(Strict):
     def allowance_requires_budget(self):
         if self.budgetAllowanceId and not self.requireBudget:
             raise ValueError("A recurring allowance requires budgeted execution.")
+        # An AI job spends through the tools it calls, each with ToolGate's own limits.
+        if self.target.kind == "agent" and self.requireBudget:
+            raise ValueError("AI jobs use each tool's own budget, not a job budget.")
         return self
 
     @field_validator("timeZone")
@@ -84,12 +93,45 @@ class StateChange(Strict):
     enabled: bool
 
 
+class AgentJobCreate(Strict):
+    """What the browser may create: an AI job with any timing, never a raw tool target."""
+
+    name: str = Field(min_length=1, max_length=80)
+    instructions: str = Field(min_length=1, max_length=4000)
+    agentId: str = Field(default="companion", min_length=1, max_length=200)
+    timing: Timing
+    timeZone: str = Field(min_length=1, max_length=100)
+    enabled: bool = True
+
+    @field_validator("name", "instructions", "agentId")
+    @classmethod
+    def text(cls, value):
+        if not value.strip():
+            raise ValueError("Provide nonempty text.")
+        return value.strip()
+
+    @field_validator("timeZone")
+    @classmethod
+    def zone(cls, value):
+        try:
+            ZoneInfo(value)
+        except (KeyError, ValueError) as exc:
+            raise ValueError("Use an available IANA time zone.") from exc
+        return value
+
+
 class TargetSummary(Strict):
     kind: Literal["tool", "automation"]
     id: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.-]+$")
     publishedVersion: int = Field(ge=1)
     digest: str = Field(pattern=r"^[a-f0-9]{64}$")
     inputsConfigured: bool
+
+
+class AgentTargetSummary(Strict):
+    kind: Literal["agent"]
+    # The AI job's own chat, where its turns, replies and approvals live.
+    sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
 
 
 class DefinitionSummary(Strict):
@@ -100,7 +142,7 @@ class DefinitionSummary(Strict):
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool
     state: Literal["enabled", "paused"]
-    target: TargetSummary
+    target: Annotated[TargetSummary | AgentTargetSummary, Field(discriminator="kind")]
     overlap: Literal["skip"]
     requireBudget: bool
     budgetAllowanceConfigured: bool
@@ -151,6 +193,21 @@ class RunView(Strict):
     authority: Literal["none"] = "none"
     contentIncluded: Literal[False] = False
     execution: Literal["admitted-only", "waiting", "dispatched", "resolved", "uncertain"]
+
+
+class AgentJobNote(Strict):
+    id: str = Field(pattern=r"^note_[a-f0-9]{32}$")
+    jobId: JobId
+    sessionId: str = Field(pattern=r"^ses_[a-f0-9]{16}$")
+    messageId: str | None = Field(default=None, pattern=r"^msg_[a-f0-9]{16}$")
+    title: str = Field(min_length=1, max_length=160)
+    detail: str = Field(max_length=400)
+    createdAt: float = Field(ge=0, allow_inf_nan=False)
+
+
+class AgentJobNoteCollection(Strict):
+    schemaVersion: Literal[1] = 1
+    results: list[AgentJobNote] = Field(max_length=50)
 
 
 class RunCollection(Strict):

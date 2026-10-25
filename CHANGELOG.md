@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **AI jobs:** a cron job can have its agent carry out the owner's instructions with tools
+  (`target.kind: "agent"`), on any cron timing, in its own chat. Tools behave exactly as in chat:
+  get tools run on their own, set tools wait for the owner's approval in the Inbox. Repeating jobs
+  skip quiet hours. A reply other than `NOTHING` adds an Inbox note linking to the chat. New owner
+  routes `POST /jobs/agent`, `GET /jobs/agent/notes` and `POST /jobs/agent/notes/{id}/dismiss`;
+  the browser can create AI jobs only, never raw tool jobs. See docs/jobs.md.
+
 ## 0.6.1
 
 - Add the optional `drafting` model role. The workflow builder uses it when the owner

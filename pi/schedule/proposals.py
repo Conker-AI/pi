@@ -109,6 +109,8 @@ def _evidence(db, since: float, until: float) -> list[dict]:
         LEFT JOIN message_privacy p ON p.message_id=m.id
         WHERE m.role='user' AND m.created_at>? AND m.created_at<=?
           AND m.session_id NOT IN (SELECT session_id FROM forgotten_sessions)
+          -- An AI job's scheduled prompt is not something the owner keeps asking for.
+          AND m.session_id NOT IN (SELECT session_id FROM agent_job_sessions)
           AND COALESCE(p.memory_disabled,0)=0 AND COALESCE(p.harness_disabled,0)=0
         ORDER BY m.created_at, m.id LIMIT ?
         """,

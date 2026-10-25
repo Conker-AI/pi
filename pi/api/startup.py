@@ -29,6 +29,7 @@ from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import OllamaProvider
 from pi.models.routing import Router
 from pi.schedule import proposals
+from pi.schedule.agent_jobs import AgentJobs
 from pi.schedule.job_execution import PublishedJobs
 from pi.schedule.job_worker import JobWorker
 from pi.turns import thinking as background_thinking
@@ -233,6 +234,8 @@ async def lifespan(app: FastAPI):
         toolgate=toolgate,
         memory=memory,
     )
+    if app.state.job_executor is not None:
+        app.state.job_executor = AgentJobs(store, app.state.loop, app.state.job_executor)
     scheduler = None
     if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
         if app.state.job_executor is None:
