@@ -318,3 +318,26 @@ def test_the_cli_never_edits_a_request():
     ):
         with pytest.raises(MutationError):
             apply_resource(config(), "requests", io.BytesIO(json.dumps(payload).encode()), None)
+
+
+def test_a_request_mixed_with_text_gets_one_more_try(store):
+    call = '{"tool": "conker.remember", "args": {"text": "The exam is on Thursday."}}'
+    loop, provider = build(store, ["Sure!\n" + call, call, "Approve it in your Inbox."], FakeGate())
+    result = loop.run_turn(store.create_session(), "Remember that the exam is on Thursday.")
+    assert result["message"]["content"] == "Approve it in your Inbox."
+    [request] = change_requests.listing(store)
+    assert request["payload"] == {"text": "The exam is on Thursday."}
+    retry = [m.content for m in provider.sent[1] if m.role == "system"][-1]
+    assert "mixed a tool request" in retry and "Sure!" not in json.dumps(
+        [m.content for m in provider.sent[1]]
+    )
+
+
+def test_a_second_mixed_reply_still_runs_nothing(store):
+    from pi.turns.failures import TurnFailed
+
+    call = 'Okay\n{"tool": "conker.remember", "args": {"text": "x"}}'
+    loop, _ = build(store, [call, call], FakeGate())
+    with pytest.raises(TurnFailed):
+        loop.run_turn(store.create_session(), "Remember x.")
+    assert change_requests.listing(store) == []

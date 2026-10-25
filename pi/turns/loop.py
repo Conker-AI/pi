@@ -351,7 +351,9 @@ class Loop(ModelCalls, History, Replies):
             elif execution.get("researchMode") == "deep":
                 limit = min(limit, research.plan(self.store, turn_id)["search_limit"])
             for step in range(max(0, limit - used)):
-                call = tool_protocol.parse(completion.text, allowed)
+                route, completion, call = self._requested(
+                    route, completion, history, ctx, execution, allowed
+                )
                 if call is None:
                     break
                 if web_research:
