@@ -14,6 +14,9 @@ be a decision with visible consequences.
 - The workflow builder waits up to 10 minutes for the model, past the answer role's
   120-second limit: on a CPU-only local model a whole draft takes minutes. Chat answers keep
   their own limit.
+- The owner-control credential may read `GET /plans/usage` (browser path
+  `/api/control/pi/plans/usage`), so the dashboard's Home can show plan allowance. Dismissing
+  a plan alert stays with the recovery credential.
 
 ## 0.6.0
 

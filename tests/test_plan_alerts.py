@@ -1,5 +1,6 @@
 """Plan usage alerts: raised once per window period at the owner's level, closed when it resets."""
 
+import hashlib
 import json
 from contextlib import closing
 from datetime import UTC, datetime
@@ -173,3 +174,22 @@ def test_plan_routes_need_the_admin_key(store):
     assert client.post("/plans/alerts/not-an-id/dismiss", headers=admin).status_code == 422
     dismissed = client.post(f"/plans/alerts/{raised['alertId']}/dismiss", headers=admin)
     assert dismissed.status_code == 200 and plan_alerts.needs_you(store) == []
+
+
+def test_the_owner_key_reads_usage_but_cannot_dismiss(store, monkeypatch):
+    [raised] = plan_alerts.record(store, plan(90), 80, now=NOW)
+    monkeypatch.setattr(server.app.state, "store", store, raising=False)
+    monkeypatch.setattr(server.app.state, "admin_key", "test-admin-key", raising=False)
+    monkeypatch.setattr(
+        server.app.state,
+        "owner_key_hash",
+        hashlib.sha256(b"test-owner-key").hexdigest(),
+        raising=False,
+    )
+    client = TestClient(server.app)
+    owner = {"X-Pi-Owner-Key": "test-owner-key"}
+    usage = client.get("/plans/usage", headers=owner)
+    assert usage.status_code == 200 and usage.json()["windows"][0]["usedPercent"] == 90
+    assert client.get("/plans/usage", headers={"X-Pi-Owner-Key": "wrong"}).status_code == 401
+    refused = client.post(f"/plans/alerts/{raised['alertId']}/dismiss", headers=owner)
+    assert refused.status_code == 403 and plan_alerts.needs_you(store) != []

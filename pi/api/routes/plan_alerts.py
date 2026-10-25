@@ -1,4 +1,8 @@
-"""Plan usage readings and alerts for the owner; reading changes nothing."""
+"""Plan usage readings and alerts for the owner; reading changes nothing.
+
+The owner-control credential may read `/plans/usage` only (see browser_contract); dismissing
+stays with the recovery credential.
+"""
 
 from fastapi import APIRouter, Depends, Path
 

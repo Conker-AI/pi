@@ -23,9 +23,11 @@ limits), as the subscription reports it. Pi never estimates prices or tokens.
 - [Inbox](inbox.md): an open alert is a **Needs you** item, `kind: "plan"`, for example "ChatGPT
   weekly limit 84% used" with `resetsAt`. A reset since the start of the owner's day is a
   **Handled** item, `kind: "plan-reset"`.
-- GET `/plans/usage` (admin) returns the latest reading of every window and the open alerts.
-- POST `/plans/alerts/{id}/dismiss` hides an alert until its window resets. Dismissing does not
-  stop a later period from alerting.
+- GET `/plans/usage` returns the latest reading of every window and the open alerts. The
+  owner-control credential may read it (browser path `/api/control/pi/plans/usage`, for the
+  dashboard's Home); the recovery credential may too.
+- POST `/plans/alerts/{id}/dismiss` (recovery credential only) hides an alert until its window
+  resets. Dismissing does not stop a later period from alerting.
 
 Window labels follow the runtimes' rule: letters, digits, spaces and `. ( ) + / : -`, up to 60
 characters. Readings that do not parse, or a runtime that is unreachable, are logged without content and

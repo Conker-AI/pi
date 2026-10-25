@@ -163,7 +163,7 @@ app.include_router(context_api.router(lambda: app.state.store, require_owner))
 app.include_router(definitions_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
-app.include_router(plan_alerts_api.router(lambda: app.state.store, require_admin))
+app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
 app.include_router(workflow_proposals_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
