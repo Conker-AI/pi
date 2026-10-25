@@ -26,3 +26,8 @@ owner's password-verified save in Tools already happened, so this records the id
 signed-in session), `POST .../decline` (signed-in session only).
 `GET /tools` lists Conker's own tools first, so the owner sees everything the AI can call. The Inbox
 lists open requests (`kind: "change-request"`). Forgetting a chat deletes its requests.
+
+CLI parity: `conker inspect change-requests` lists open requests; `conker apply requests FILE`
+takes `{"operation": "approve" | "decline", "id": "creq_..."}`, or
+`{"operation": "saved", "id": "creq_...", "draftId": "..."}` after saving the document with
+`conker apply tools`.
