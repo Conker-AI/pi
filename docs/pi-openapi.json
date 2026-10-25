@@ -2347,6 +2347,22 @@
         "operationId": "usage_plans_usage_get",
         "parameters": [
           {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
             "name": "X-Pi-Key",
             "in": "header",
             "required": false,
@@ -2360,22 +2376,6 @@
                 }
               ],
               "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
             }
           }
         ],
@@ -2418,6 +2418,22 @@
             }
           },
           {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
             "name": "X-Pi-Key",
             "in": "header",
             "required": false,
@@ -2431,22 +2447,6 @@
                 }
               ],
               "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
             }
           }
         ],

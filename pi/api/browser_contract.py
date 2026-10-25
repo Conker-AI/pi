@@ -135,6 +135,9 @@ OWNER_ROUTES = {
         r"/memory/corrections/pending",
         r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}",
+        # Read-only: plan usage in percent per window, for the dashboard's Home. Dismissing an
+        # alert stays with the recovery credential.
+        r"/plans/usage",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
