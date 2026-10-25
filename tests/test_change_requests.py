@@ -101,16 +101,18 @@ def test_bad_arguments_are_an_answer_not_a_request(store, args):
 
 def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
     document = {"name": "Group digest", "nodes": [], "edges": []}
-    monkeypatch.setattr(
-        workflow_drafts,
-        "draft",
-        lambda *_args, **_kwargs: {
+    given = []
+
+    def drafted(_store, providers, _body):
+        given.append(providers)
+        return {
             "ready": True,
             "document": document,
             "reply": "Summarizes the group chat.",
             "issues": [],
-        },
-    )
+        }
+
+    monkeypatch.setattr(workflow_drafts, "draft", drafted)
     loop, _ = build(store, [], FakeGate())
     result = native_tools.call(
         loop,
@@ -123,6 +125,8 @@ def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
     assert result.ok
     [request] = change_requests.listing(store)
     assert request["kind"] == "tool_draft" and request["payload"]["document"] == document
+    # The drafter gets the same adapters as the owner's draft route, local model included.
+    assert given == [loop.router.adapters()] and given[0]
     with pytest.raises(change_requests.ChangeRequestError) as unsaved:
         change_requests.approve(store, request["id"])
     assert unsaved.value.code == "draft_required"

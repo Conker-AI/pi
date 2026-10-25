@@ -150,15 +150,20 @@ def _timing(args) -> tuple[dict, bool, str]:
     raise ValueError("repeat must be hours, daily, weekly or webhook.")
 
 
-def _filed(request) -> ToolResult:
+def _filed(request, tool_id) -> ToolResult:
+    title = request["title"].rstrip(".")
     return ToolResult(
         ok=True,
         result={
             "status": "waiting_for_owner",
             "requestId": request["id"],
-            "message": f"Filed for the owner's approval in the Inbox: {request['title']}. Nothing exists until they approve it.",
+            "message": (
+                f"Not done yet: “{title}” is waiting in the owner's Inbox and exists only "
+                "if they approve it there. Tell them it is waiting for their approval; do not say "
+                "it is done."
+            ),
         },
-        tool_id=request["kind"],
+        tool_id=tool_id,
     )
 
 
@@ -188,7 +193,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
                 session_id=session_id,
                 turn_id=turn_id,
             )
-            return _filed(request)
+            return _filed(request, tool_id)
         if tool_id == DRAFT_TOOL:
             description = _text(args, "description", 4000)
             capabilities = [
@@ -212,7 +217,8 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
             ][:200]
             drafted = workflow_drafts.draft(
                 loop.store,
-                loop.router.providers,
+                # Every adapter the router has (local and hosted), as the owner's draft route uses.
+                loop.router.adapters(),
                 workflow_drafts.Request(description=description, capabilities=capabilities),
             )
             if not drafted["ready"] or drafted["document"] is None:
@@ -232,7 +238,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
                 session_id=session_id,
                 turn_id=turn_id,
             )
-            return _filed(request)
+            return _filed(request, tool_id)
         text = _text(args, "text", 2000)
         request = change_requests.file(
             loop.store,
@@ -243,7 +249,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
             session_id=session_id,
             turn_id=turn_id,
         )
-        return _filed(request)
+        return _filed(request, tool_id)
     except ValueError as invalid:
         return ToolResult(
             ok=False, result={"status": "invalid", "message": str(invalid)}, tool_id=tool_id
