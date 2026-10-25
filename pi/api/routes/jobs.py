@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
 from pi.core.models import Strict
-from pi.schedule import job_models, jobs
+from pi.schedule import agent_checks, job_models, jobs
 
 
 class RunRequest(Strict):
@@ -32,6 +32,21 @@ def router(store, authorize, executor=None):
             results=[jobs.browser_job(row) for row in rows[:limit]],
             nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None,
         )
+
+    @routes.post("/checks", status_code=201, response_model=job_models.JobView)
+    def create_check(body: job_models.CheckCreate):
+        """An AI check: its agent runs on a schedule in its own chat; tools still ask as in chat."""
+        return jobs.browser_job(call(agent_checks.create_check, body))
+
+    @routes.get("/checks/notes", response_model=job_models.CheckNoteCollection)
+    def check_notes():
+        """What AI checks found for the owner, newest first, until dismissed."""
+        return job_models.CheckNoteCollection(results=call(agent_checks.notes))
+
+    @routes.post("/checks/notes/{identity}/dismiss")
+    def dismiss_check_note(identity: Annotated[str, Path(pattern=agent_checks.NOTE_ID)]):
+        """Hide a note; the check's chat keeps the full reply."""
+        return call(agent_checks.dismiss, identity)
 
     @routes.get("/{identity}", response_model=job_models.JobView)
     def get(identity: JobPath):

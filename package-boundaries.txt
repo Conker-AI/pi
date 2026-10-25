@@ -81,9 +81,11 @@ models -> core
 models -> owner
 models -> turns
 owner -> core
+schedule -> conversation
 schedule -> core
 schedule -> models
 schedule -> owner
+schedule -> turns
 setup -> actions
 setup -> agents
 setup -> core

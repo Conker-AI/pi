@@ -1,0 +1,305 @@
+"""AI checks: a cron job that runs one turn by its agent in the job's own chat.
+
+At each slot outside the owner's quiet hours, Pi sends the job's instructions as one message
+in the job's chat and runs the turn exactly as a chat turn: the agent reads with any tool that
+needs no confirmation (get tools), and a tool that needs the owner's OK (set tools) parks the
+turn as an approval in the Inbox. Pi adds no authority of its own; ToolGate decides every call.
+
+When the reply has something for the owner, an Inbox note names it in one line and links to
+the chat. A reply of exactly NOTHING records the run and stays quiet.
+"""
+
+from __future__ import annotations
+
+import re
+import time
+import uuid
+from datetime import UTC, datetime
+
+from pi.conversation import submissions
+from pi.core.errors import ServiceError
+from pi.owner import preferences as prefs
+from pi.schedule import jobs
+from pi.schedule.job_models import AgentTarget, CheckCreate, Definition, Timing
+from pi.turns.failures import TurnFailed
+
+QUIET = "NOTHING"
+PREAMBLE = (
+    "This is a scheduled check, not a message typed by the owner. Use your tools to look at "
+    "what is new in the owner's services, chats and memory. Read freely; anything that would "
+    "change, send or create something needs the owner's approval, so ask for it through the "
+    f"tool and say why. If nothing needs the owner, reply with only {QUIET}. Otherwise start "
+    "with one short line saying what needs them, then the details and what you can do next."
+)
+MAX_TITLE = 160
+MAX_DETAIL = 400
+NOTE_ID = r"^note_[a-f0-9]{32}$"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS agent_check_sessions (
+ job_id TEXT PRIMARY KEY REFERENCES scheduled_jobs(id),
+ session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id)
+);
+CREATE TABLE IF NOT EXISTS agent_check_notes (
+ id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, job_id TEXT NOT NULL,
+ session_id TEXT NOT NULL, message_id TEXT, title TEXT NOT NULL, detail TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('open','dismissed')),
+ created_at REAL NOT NULL, dismissed_at REAL
+);
+CREATE INDEX IF NOT EXISTS agent_check_notes_open ON agent_check_notes(state, created_at);
+"""
+
+
+class CheckError(ServiceError):
+    pass
+
+
+def initialize(db):
+    db.executescript(SCHEMA)
+
+
+def is_check(definition) -> bool:
+    target = definition.get("target") if isinstance(definition, dict) else definition.target
+    kind = target.get("kind") if isinstance(target, dict) else target.kind
+    return kind == "agent"
+
+
+def quiet(store, instant: float) -> bool:
+    """The owner's quiet hours hold AI checks back, like every other proactive pass."""
+    preferences = prefs.OwnerPreferences.model_validate(prefs.load(store)["preferences"])
+    return prefs.quiet_now(preferences, datetime.fromtimestamp(instant, UTC))
+
+
+def create_check(store, body: CheckCreate, now=None):
+    """A new AI check and its own chat. The browser can create these, never raw tool jobs."""
+    body = CheckCreate.model_validate(body.model_dump())
+    definition = Definition(
+        name=body.name,
+        instructions=body.instructions,
+        agentId=body.agentId,
+        timing=Timing(kind="interval", time="00:00", day=0, hours=body.hours),
+        timeZone=body.timeZone,
+        enabled=body.enabled,
+        target=AgentTarget(kind="agent"),
+    )
+    job = jobs.create(store, definition, now=now)
+    session_id = store.create_session(title=body.name, agent_id=body.agentId)
+    with store._connect() as db:
+        db.execute("INSERT INTO agent_check_sessions VALUES (?,?)", (job["id"], session_id))
+    return jobs.get_job(store, job["id"])
+
+
+def session_for(store, job_id) -> str | None:
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT session_id FROM agent_check_sessions WHERE job_id=?", (job_id,)
+        ).fetchone()
+    return row["session_id"] if row else None
+
+
+def _open_session(store, job_id, definition) -> str:
+    """The job's chat; a forgotten or closed one is replaced, never reopened."""
+    session_id = session_for(store, job_id)
+    session = store.get_session(session_id) if session_id else None
+    if session is not None and session["status"] == "open":
+        return session_id
+    replacement = store.create_session(title=definition["name"], agent_id=definition["agentId"])
+    with store._connect() as db:
+        db.execute(
+            "INSERT INTO agent_check_sessions VALUES (?,?) "
+            "ON CONFLICT(job_id) DO UPDATE SET session_id=excluded.session_id",
+            (job_id, replacement),
+        )
+    return replacement
+
+
+def _text(content) -> str:
+    return content if isinstance(content, str) else ""
+
+
+def summarize(text: str) -> tuple[str, str] | None:
+    """The first line says what needs the owner; NOTHING (or an empty reply) stays quiet."""
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    if not lines or lines[0].strip(" .*_#`").upper() == QUIET:
+        return None
+    title = (
+        re.sub(r"^[#>*\-\s]+|[*_`]+", "", lines[0]).strip()[:MAX_TITLE]
+        or "Your AI check found something"
+    )
+    detail = " ".join(re.sub(r"[*_`#>]+", "", line) for line in lines[1:])[:MAX_DETAIL]
+    return title, detail
+
+
+def _note(store, run_id, job_id, session_id, message_id, title, detail, now):
+    with store._connect() as db:
+        db.execute(
+            "INSERT OR IGNORE INTO agent_check_notes VALUES (?,?,?,?,?,?,?,'open',?,NULL)",
+            (
+                "note_" + uuid.uuid4().hex,
+                run_id,
+                job_id,
+                session_id,
+                message_id,
+                title,
+                detail,
+                now,
+            ),
+        )
+
+
+class AgentChecks:
+    """Job executor: AI checks run a turn; every other target goes to ToolGate unchanged."""
+
+    def __init__(self, store, loop, published=None):
+        self.store, self.loop, self.published = store, loop, published
+
+    def __getattr__(self, name):
+        # Budget calls only exist for published targets.
+        if self.published is None:
+            raise AttributeError(name)
+        return getattr(self.published, name)
+
+    def __call__(self, target, *, action_id, agent_id, **approval):
+        if not (isinstance(target, dict) and target.get("kind") == "agent"):
+            if self.published is None:
+                return {
+                    "status": "failed",
+                    "reason": "No scoped execution credential for this agent.",
+                }
+            return self.published(target, action_id=action_id, agent_id=agent_id, **approval)
+        return self.run(action_id)
+
+    def run(self, run_id, now=None):
+        with self.store._connect() as db:
+            row = db.execute(
+                "SELECT job_id, definition FROM scheduled_runs WHERE id=?", (run_id,)
+            ).fetchone()
+        if row is None:
+            return {"status": "failed", "reason": "Run not found."}
+        definition = Definition.model_validate_json(row["definition"]).model_dump()
+        session_id = _open_session(self.store, row["job_id"], definition)
+        try:
+            # The run ID is the turn's request ID: a repeated dispatch replays, never re-runs.
+            result = self.loop.run_turn(
+                session_id, f"{PREAMBLE}\n\n{definition['instructions']}", request_id=run_id
+            )
+        except TurnFailed:
+            return {
+                "status": "failed",
+                "sessionId": session_id,
+                "reason": "The check did not finish; its chat shows what happened.",
+            }
+        status = result.get("status")
+        receipt = {
+            "sessionId": result.get("session_id") or session_id,
+            "turnId": result.get("turn_id"),
+        }
+        if status == "cancelled":
+            return {"status": "failed", **receipt, "reason": "The check was stopped."}
+        if status == "awaiting_approval":
+            # The approval sits in the Inbox like any chat's; approving continues that chat.
+            return {"status": "completed", **receipt, "waitingForApproval": True}
+        message = result.get("message") or {}
+        found = summarize(_text(message.get("content")))
+        if found:
+            _note(
+                self.store,
+                run_id,
+                row["job_id"],
+                receipt["sessionId"],
+                message.get("id"),
+                *found,
+                time.time() if now is None else now,
+            )
+        return {"status": "completed", **receipt, "noted": bool(found)}
+
+    def reconcile(self, target, *, action_id, agent_id):
+        """Read the turn's saved submission; a missing one is never permission to run again."""
+        if not (isinstance(target, dict) and target.get("kind") == "agent"):
+            if self.published is None:
+                return {"status": "outcome_unknown"}
+            return self.published.reconcile(target, action_id=action_id, agent_id=agent_id)
+        try:
+            saved = submissions.get(self.store, action_id)
+        except submissions.SubmissionError:
+            return {"status": "failed", "reason": "The check never started."}
+        if saved["status"] in ("complete", "acted_no_reply", "awaiting_approval"):
+            return {
+                "status": "completed",
+                "sessionId": saved["effective_session_id"],
+                "turnId": saved["turn_id"],
+            }
+        if saved["status"] in ("failed", "interrupted", "cancelled", "preparation_failed"):
+            return {
+                "status": "failed",
+                "sessionId": saved["effective_session_id"],
+                "reason": "The check did not finish.",
+            }
+        return {"status": "outcome_unknown"}
+
+
+def redact(db, session_ids: list[str]) -> None:
+    """Forget with the chat, inside the caller's forgetting transaction: a note quotes its reply.
+
+    The check itself stays; its next run starts a new chat.
+    """
+    if (
+        not session_ids
+        or not db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_check_notes'"
+        ).fetchone()
+    ):
+        return
+    values = [(value,) for value in session_ids]
+    db.executemany("DELETE FROM agent_check_notes WHERE session_id=?", values)
+    db.executemany("DELETE FROM agent_check_sessions WHERE session_id=?", values)
+
+
+def notes(store, limit=50):
+    with store._connect() as db:
+        rows = db.execute(
+            "SELECT n.*, s.status AS session_status FROM agent_check_notes n "
+            "JOIN sessions s ON s.id=n.session_id WHERE n.state='open' "
+            "AND s.status != 'forgotten' ORDER BY n.created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "jobId": row["job_id"],
+            "sessionId": row["session_id"],
+            "messageId": row["message_id"],
+            "title": row["title"],
+            "detail": row["detail"],
+            "createdAt": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def dismiss(store, identity, now=None):
+    if not re.fullmatch(NOTE_ID, identity or ""):
+        raise CheckError("not_found", "Note not found.", 404)
+    with store._connect() as db:
+        changed = db.execute(
+            "UPDATE agent_check_notes SET state='dismissed', dismissed_at=? WHERE id=? AND state='open'",
+            (time.time() if now is None else now, identity),
+        ).rowcount
+        exists = db.execute("SELECT 1 FROM agent_check_notes WHERE id=?", (identity,)).fetchone()
+    if not exists:
+        raise CheckError("not_found", "Note not found.", 404)
+    return {"id": identity, "dismissed": True, "changed": bool(changed)}
+
+
+def needs_you(store):
+    """Open notes for the Inbox: one line each, linking to the check's chat."""
+    return [
+        {
+            "kind": "check",
+            "id": note["id"],
+            "title": note["title"],
+            "since": note["createdAt"],
+            "source": {"kind": "agent-check", "noteId": note["id"], "sessionId": note["sessionId"]},
+        }
+        for note in notes(store)
+    ]

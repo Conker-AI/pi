@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **AI checks:** a cron job can run its agent on a schedule (`target.kind: "agent"`) in its own
+  chat, outside quiet hours. Tools behave exactly as in chat: get tools run on their own, set
+  tools wait for the owner's approval in the Inbox. A reply other than `NOTHING` adds an Inbox
+  note linking to the chat. New owner routes `POST /jobs/checks`, `GET /jobs/checks/notes` and
+  `POST /jobs/checks/notes/{id}/dismiss`; the browser can create checks only, never raw tool jobs.
+  Browser job views show an AI check as `target.kind: "agent"` with its chat. See docs/jobs.md.
+
 ## 0.6.1
 
 - Add the optional `drafting` model role. The workflow builder uses it when the owner

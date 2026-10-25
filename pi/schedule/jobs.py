@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from pi.core.errors import ServiceError
 from pi.schedule.job_models import (
+    AgentTargetSummary,
     BudgetBinding,
     Definition,
     DefinitionSummary,
@@ -67,8 +68,15 @@ def next_due(definition, after, *, anchor):
     raise JobError("No valid scheduled slot in the next fifteen days.")
 
 
+# An AI check's chat travels with its job row, for the browser view.
+_COLUMNS = (
+    "*, (SELECT session_id FROM agent_check_sessions c WHERE c.job_id=scheduled_jobs.id)"
+    " AS check_session_id"
+)
+
+
 def _row(db, identity):
-    row = db.execute("SELECT * FROM scheduled_jobs WHERE id=?", (identity,)).fetchone()
+    row = db.execute(f"SELECT {_COLUMNS} FROM scheduled_jobs WHERE id=?", (identity,)).fetchone()
     if row is None:
         raise JobError("Job not found.", 404)
     return row
@@ -91,7 +99,8 @@ def list_jobs(store, limit=None, cursor=None):
         return [
             _view(row)
             for row in db.execute(
-                f"SELECT * FROM scheduled_jobs {where} ORDER BY created_at,id{suffix}", values
+                f"SELECT {_COLUMNS} FROM scheduled_jobs {where} ORDER BY created_at,id{suffix}",
+                values,
             )
         ]
 
@@ -173,6 +182,16 @@ def claim_due(store, now=None, limit=20):
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Use a limit of 1-100 jobs.")
     claimed = []
+    from pi.schedule import agent_checks
+
+    # Owner preferences are read only when an AI check is due.
+    with store._connect() as db:
+        check_due = db.execute(
+            "SELECT 1 FROM scheduled_jobs WHERE next_at<=? "
+            "AND json_extract(definition,'$.target.kind')='agent' LIMIT 1",
+            (now,),
+        ).fetchone()
+    quiet_hours = bool(check_due) and agent_checks.quiet(store, now)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         rows = db.execute(
@@ -181,7 +200,8 @@ def claim_due(store, now=None, limit=20):
         ).fetchall()
         for row in rows:
             definition = Definition.model_validate_json(row["definition"])
-            if definition.enabled:
+            # AI checks skip slots in the owner's quiet hours instead of waking them at night.
+            if definition.enabled and not (definition.target.kind == "agent" and quiet_hours):
                 run = _claim(db, row, now)
                 if run:
                     claimed.append(run)
@@ -290,7 +310,9 @@ def browser_job(row):
             timeZone=definition.timeZone,
             enabled=definition.enabled,
             state="enabled" if definition.enabled else "paused",
-            target=TargetSummary(
+            target=AgentTargetSummary(kind="agent", sessionId=row.get("check_session_id"))
+            if target.kind == "agent"
+            else TargetSummary(
                 kind=target.kind,
                 id=target.id,
                 publishedVersion=target.publishedVersion,

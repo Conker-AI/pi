@@ -112,3 +112,25 @@ This operation withdraws Pi's dispatch only. It does not revoke a ToolGate appro
 or return a spending grant to a reusable pool. Saved approvals remain evidence;
 ToolGate authority outside this scheduler is administered separately. No browser
 response exposes the saved approval, receipt or budget identifier.
+
+
+## AI checks (2026-10-25)
+
+An AI check is a cron job whose target is `{"kind": "agent"}`: at each slot its agent runs one
+turn in the check's own chat, with the job's instructions after a fixed preamble. The turn is an
+ordinary chat turn, so ToolGate decides every tool call: tools that need no confirmation (get
+tools) run on their own, and a tool that needs the owner's OK (set tools) parks the turn as an
+Inbox approval. Pi grants nothing of its own (`pi/schedule/agent_checks.py`).
+
+- Slots inside the owner's quiet hours are skipped, not queued; the next slot runs as usual.
+- The run ID is the turn's request ID, so a repeated dispatch replays the saved turn instead of
+  running it twice. Reconcile reads the saved submission; a missing one is never permission to run.
+- A reply of exactly `NOTHING` stays quiet. Any other reply adds one Inbox note (`kind: "check"`):
+  its first line, up to 160 characters, and the next 400 characters, linking to the chat.
+- AI checks carry no job budget (`requireBudget` is refused); each tool keeps its own limits.
+- Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
+  something the owner keeps asking. Forgetting a check's chat deletes its notes; the next run
+  starts a new chat.
+- Owner routes: `POST /jobs/checks` creates one (name, instructions, `hours` 1-24, time zone;
+  never a raw tool target, and the gateway asks for the password), `GET /jobs/checks/notes` lists
+  open notes, `POST /jobs/checks/notes/{id}/dismiss` hides one (signed-in session only).
