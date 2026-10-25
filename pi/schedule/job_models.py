@@ -37,6 +37,8 @@ class AgentTarget(Strict):
     """An AI job: one turn by the job's agent in the job's own chat (see agent_jobs)."""
 
     kind: Literal["agent"]
+    # False: only its webhook, its watch or Run now start it, never its timing.
+    clock: bool = True
 
 
 class ToolWatch(Strict):
@@ -122,6 +124,8 @@ class AgentJobCreate(Strict):
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool = True
     watch: ToolWatch | None = None
+    # False: only a webhook or Run now start it (see AgentTarget.clock).
+    clock: bool = True
 
     @field_validator("name", "instructions", "agentId")
     @classmethod
@@ -154,6 +158,7 @@ class AgentTargetSummary(Strict):
     sessionId: str | None = Field(default=None, pattern=r"^ses_[a-f0-9]{16}$")
     # Whether a webhook can start it; the secret itself is shown once, when it is made.
     webhook: bool = False
+    clock: bool = True
 
 
 class WatchSummary(Strict):

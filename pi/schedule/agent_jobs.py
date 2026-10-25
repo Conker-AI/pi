@@ -77,7 +77,7 @@ def create(store, body: AgentJobCreate, now=None):
         timing=body.timing,
         timeZone=body.timeZone,
         enabled=body.enabled,
-        target=AgentTarget(kind="agent"),
+        target=AgentTarget(kind="agent", clock=body.clock),
         watch=body.watch,
     )
     job = jobs.create(store, definition, now=now)

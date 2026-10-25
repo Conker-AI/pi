@@ -160,6 +160,8 @@ Anything that can call a web address can start an AI job (`pi/schedule/agent_hoo
 `gateway/hook_routes.py`). The owner makes a webhook for one job (`POST /jobs/{id}/hook`, asks for
 the password) and sees its secret once; Pi keeps only its SHA-256 fingerprint. Making a new one
 replaces the old; `POST /jobs/{id}/hook/revoke` stops it.
+An AI job created with `clock: false` never starts from its timing: only its webhook, its watch
+or Run now start it.
 
 A caller sends `POST /hooks/{job_id}` to the gateway with the secret in the `X-Conker-Hook-Token`
 header (never the address or query, which the server logs) and at most 16 KB: JSON, or plain text

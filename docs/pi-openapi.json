@@ -21925,6 +21925,11 @@
                 "type": "null"
               }
             ]
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -22146,6 +22151,11 @@
             "type": "string",
             "const": "agent",
             "title": "Kind"
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -22179,6 +22189,11 @@
             "type": "boolean",
             "title": "Webhook",
             "default": false
+          },
+          "clock": {
+            "type": "boolean",
+            "title": "Clock",
+            "default": true
           }
         },
         "additionalProperties": false,

@@ -221,3 +221,13 @@ def test_the_gateway_forwards_only_well_formed_calls(tmp_path):
         and forwarded.headers["X-Conker-Hook-Token"] == token
     )
     assert b"Can you bring the slides?" in forwarded.content
+
+
+def test_a_clockless_job_starts_only_from_its_webhook(store):
+    job = ai_job(store, clock=False, timing=dict(kind="interval", time="00:00", day=0, hours=1))
+    with store._connect() as db:
+        db.execute("UPDATE scheduled_jobs SET next_at=? WHERE id=?", (NOON - 1, job["id"]))
+    assert jobs.claim_due(store, now=NOON) == []
+    assert jobs.browser_job(jobs.get_job(store, job["id"])).definition.target.clock is False
+    token = agent_hooks.issue(store, job["id"], now=NOON)["token"]
+    assert agent_hooks.receive(store, job["id"], token, {}, now=NOON)["started"] is True
