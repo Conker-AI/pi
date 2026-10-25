@@ -27,6 +27,8 @@ HELPERS = {
 # Identifiers, states, counts and costs: no text from a message.
 IDS_ONLY = {
     "activity_events",
+    # A fingerprint of a watched tool's answer and when it was read; never the answer.
+    "agent_job_watch",
     "attachment_removals",
     "attachment_reservations",
     "call_events",

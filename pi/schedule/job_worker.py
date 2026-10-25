@@ -20,6 +20,10 @@ class JobWorker:
         self._budget_cursor = ""
 
     def tick(self, now=None):
+        # Watches look first, so a change they find is dispatched in this same tick.
+        watch = getattr(self.adapter, "watch", None)
+        if watch is not None:
+            watch(now)
         claimed = jobs.claim_due(self.store, now=now)
         newly_held = {
             item["id"] for item in claimed if item["definition"].get("requireBudget", False)

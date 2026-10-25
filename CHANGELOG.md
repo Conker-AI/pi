@@ -12,6 +12,10 @@ be a decision with visible consequences.
   skip quiet hours. A reply other than `NOTHING` adds an Inbox note linking to the chat. New owner
   routes `POST /jobs/agent`, `GET /jobs/agent/notes` and `POST /jobs/agent/notes/{id}/dismiss`;
   the browser can create AI jobs only, never raw tool jobs. See docs/jobs.md.
+- **AI jobs that start from a tool:** with `watch`, an AI job starts when a get tool (any MCP or
+  other tool that needs no confirmation) has something new, checked every 5-1440 minutes. Pi
+  keeps only a fingerprint of the answer. A tool that needs approval each time stops the watch
+  with a plain reason. See docs/jobs.md § Starting from a tool.
 
 ## 0.6.1
 

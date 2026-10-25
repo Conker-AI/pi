@@ -20,6 +20,7 @@ from pi.schedule.job_models import (
     StateChange,
     TargetSummary,
     Update,
+    WatchSummary,
 )
 
 SCHEMA = """
@@ -71,7 +72,9 @@ def next_due(definition, after, *, anchor):
 # An AI job's chat travels with its job row, for the browser view.
 _COLUMNS = (
     "*, (SELECT session_id FROM agent_job_sessions c WHERE c.job_id=scheduled_jobs.id)"
-    " AS agent_session_id"
+    " AS agent_session_id,"
+    " (SELECT checked_at FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_checked_at,"
+    " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure"
 )
 
 
@@ -131,6 +134,8 @@ def update(store, identity, body, now=None):
         if old["revision"] != body.expected_revision:
             raise JobError("Job changed; reload before saving.")
         due = next_due(body.definition, now, anchor=old["created_at"])
+        if json.loads(old["definition"]).get("watch") != body.definition.model_dump().get("watch"):
+            db.execute("DELETE FROM agent_job_watch WHERE job_id=?", (identity,))
         db.execute(
             "UPDATE scheduled_jobs SET revision=revision+1,definition=?,next_at=? WHERE id=?",
             (body.definition.model_dump_json(), due, identity),
@@ -203,7 +208,8 @@ def claim_due(store, now=None, limit=20):
             definition = Definition.model_validate_json(row["definition"])
             # Repeating AI jobs skip quiet hours; one set for a time of day runs then.
             repeating = definition.target.kind == "agent" and definition.timing.kind == "interval"
-            if definition.enabled and not (repeating and quiet_hours):
+            # A watched job starts from its tool, never from the clock.
+            if definition.enabled and definition.watch is None and not (repeating and quiet_hours):
                 run = _claim(db, row, now)
                 if run:
                     claimed.append(run)
@@ -321,6 +327,15 @@ def browser_job(row):
                 digest=target.digest,
                 inputsConfigured=bool(target.args),
             ),
+            watch=WatchSummary(
+                toolId=definition.watch.toolId,
+                everyMinutes=definition.watch.everyMinutes,
+                inputsConfigured=bool(definition.watch.args),
+                lastCheckedAt=row.get("watch_checked_at"),
+                problem=row.get("watch_failure"),
+            )
+            if definition.watch
+            else None,
             overlap=definition.overlap,
             requireBudget=definition.requireBudget,
             budgetAllowanceConfigured=definition.budgetAllowanceId is not None,

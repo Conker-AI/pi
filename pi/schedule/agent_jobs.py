@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from pi.conversation import submissions
 from pi.core.errors import ServiceError
 from pi.owner import preferences as prefs
-from pi.schedule import jobs
+from pi.schedule import agent_triggers, jobs
 from pi.schedule.job_models import AgentJobCreate, AgentTarget, Definition
 from pi.turns.failures import TurnFailed
 
@@ -78,6 +78,7 @@ def create(store, body: AgentJobCreate, now=None):
         timeZone=body.timeZone,
         enabled=body.enabled,
         target=AgentTarget(kind="agent"),
+        watch=body.watch,
     )
     job = jobs.create(store, definition, now=now)
     session_id = store.create_session(title=body.name, agent_id=body.agentId)
@@ -162,16 +163,20 @@ class AgentJobs:
     def run(self, run_id, now=None):
         with self.store._connect() as db:
             row = db.execute(
-                "SELECT job_id, definition FROM scheduled_runs WHERE id=?", (run_id,)
+                "SELECT job_id, definition, request_id FROM scheduled_runs WHERE id=?", (run_id,)
             ).fetchone()
         if row is None:
             return {"status": "failed", "reason": "Run not found."}
         definition = Definition.model_validate_json(row["definition"]).model_dump()
         session_id = _open_session(self.store, row["job_id"], definition)
+        reason = ""
+        if agent_triggers.started_by_watch(row["request_id"]) and definition.get("watch"):
+            tool = definition["watch"]["toolId"]
+            reason = f"This run started because {tool} has something new since the last look; read it with that tool.\n\n"
         try:
             # The run ID is the turn's request ID: a repeated dispatch replays, never re-runs.
             result = self.loop.run_turn(
-                session_id, f"{PREAMBLE}\n\n{definition['instructions']}", request_id=run_id
+                session_id, f"{PREAMBLE}\n\n{reason}{definition['instructions']}", request_id=run_id
             )
         except TurnFailed:
             return {
@@ -203,6 +208,21 @@ class AgentJobs:
                 time.time() if now is None else now,
             )
         return {"status": "completed", **receipt, "noted": bool(found)}
+
+    def watch(self, now=None):
+        """Look at each due watch once; a change admits a run the worker dispatches next."""
+        now = time.time() if now is None else now
+        rows = agent_triggers.due(self.store, now)
+        if not rows:
+            return []
+        quiet_hours = quiet(self.store, now)
+        clients = getattr(self.published, "clients", {}) if self.published is not None else {}
+        return [
+            agent_triggers.check(
+                self.store, clients.get(row["definition"].agentId), row, now, quiet=quiet_hours
+            )
+            for row in rows
+        ]
 
     def reconcile(self, target, *, action_id, agent_id):
         """Read the turn's saved submission; a missing one is never permission to run again."""
