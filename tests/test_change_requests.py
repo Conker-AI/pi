@@ -211,7 +211,7 @@ def test_the_owner_routes_and_contract(store, monkeypatch):
     client = TestClient(api.app)
     owner = {"X-Pi-Owner-Key": OWNER}
     [filed] = client.get("/change-requests", headers=owner).json()["results"]
-    approved = client.post(f"/change-requests/{filed['id']}/approve", headers=owner)
+    approved = client.post(f"/change-requests/{filed['id']}/approve", headers=owner, json={})
     assert approved.status_code == 200 and approved.json()["state"] == "approved"
     listed = client.get("/tools", headers={"X-Pi-Key": "synthetic-admin"}).json()
     assert {"conker.schedule", "conker.draft_tool", "conker.remember"} <= {

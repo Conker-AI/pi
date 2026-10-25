@@ -51,6 +51,12 @@ class DraftSaved(Strict):
     draftId: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 
+class Approve(Strict):
+    """The approval body: empty, or the saved draft's id for a tool draft."""
+
+    draftId: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+
+
 class View(Strict):
     id: str = Field(pattern=REQUEST_ID)
     kind: Literal["ai_job", "tool_draft", "memory"]

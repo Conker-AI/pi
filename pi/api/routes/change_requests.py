@@ -26,10 +26,11 @@ def router(store, authorize, memory_writer=lambda: None):
     @routes.post("/{identity}/approve")
     def approve(
         identity: RequestPath,
-        body: Annotated[change_requests.DraftSaved | None, Body()] = None,
+        body: Annotated[change_requests.Approve | None, Body()] = None,
     ):
         """Make it real exactly as filed. A tool draft must already be saved in Tools."""
-        return change_requests.approve(store(), identity, draft=body, memory=memory_writer())
+        draft = change_requests.DraftSaved(draftId=body.draftId) if body and body.draftId else None
+        return change_requests.approve(store(), identity, draft=draft, memory=memory_writer())
 
     @routes.post("/{identity}/decline")
     def decline(identity: RequestPath):

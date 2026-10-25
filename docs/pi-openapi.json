@@ -2658,7 +2658,7 @@
               "schema": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/DraftSaved"
+                    "$ref": "#/components/schemas/Approve"
                   },
                   {
                     "type": "null"
@@ -22627,6 +22627,26 @@
         ],
         "title": "ApprovalInput"
       },
+      "Approve": {
+        "properties": {
+          "draftId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draftid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Approve",
+        "description": "The approval body: empty, or the saved draft's id for a tool draft."
+      },
       "ArchiveAgent": {
         "properties": {
           "expected_revision": {
@@ -25547,22 +25567,6 @@
           "refreshRequiresNewRequest"
         ],
         "title": "DirectoryView"
-      },
-      "DraftSaved": {
-        "properties": {
-          "draftId": {
-            "type": "string",
-            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-            "title": "Draftid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "draftId"
-        ],
-        "title": "DraftSaved",
-        "description": "The owner's browser saved the requested document in ToolGate's editor."
       },
       "Edge": {
         "properties": {
