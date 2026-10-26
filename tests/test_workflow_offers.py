@@ -66,20 +66,30 @@ def offers_in(store):
     return [item for item in inbox.inbox(store)["needsYou"] if item["kind"] == "workflow-offer"]
 
 
-def test_the_companion_mentions_the_offer_and_the_inbox_holds_it(tmp_path):
-    store, loop, provider = build(tmp_path, ["I put an offer in your Inbox.", "Sunny."])
-    session = store.create_session()
-    loop.run_turn(session, WEATHER)
-    note = [m.content for m in provider.sent[0] if m.role == "system" and "Inbox" in m.content]
-    assert len(note) == 1 and "Nothing is drafted" in note[0]
-    [item] = offers_in(store)
-    assert item["title"] == "Draft a workflow from your message? " + WEATHER
-    assert item["source"]["sessionId"] == session
+def test_conkers_own_tools_take_the_offers_place(tmp_path):
+    store, loop, provider = build(tmp_path, ["I can ask for that as a cron job."])
+    loop.run_turn(store.create_session(), WEATHER)
+    assert offers_in(store) == []
+    system = [m.content for m in provider.sent[0] if m.role == "system"]
+    assert not any("Nothing is drafted" in text for text in system)
+    assert any("conker.schedule" in text for text in system)
 
+
+def test_the_companion_mentions_an_open_offer_once(tmp_path):
+    store, loop, provider = build(tmp_path, ["Sunny.", "Sunny."])
+    session = store.create_session()
+    loop.run_turn(session, "Hello")
+    turn = latest_turn(store)
+    workflow_offers.consider(store, COMPANION, turn, WEATHER, tools=True)
+    [item] = offers_in(store)
+    assert item["title"] == "Draft a workflow from your message? Hello"
+    assert item["source"]["sessionId"] == session
     # An ordinary message neither adds an offer nor repeats the note.
     loop.run_turn(session, "Thanks, what is it like now?")
     assert len(offers_in(store)) == 1
-    assert not any("Inbox" in m.content for m in provider.sent[1] if m.role == "system")
+    assert not any(
+        "Nothing is drafted" in m.content for m in provider.sent[1] if m.role == "system"
+    )
 
 
 def test_no_offer_when_the_owner_has_no_tools(tmp_path):
@@ -95,21 +105,26 @@ def test_no_offer_when_the_owner_has_no_tools(tmp_path):
     loop.run_turn(store.create_session(), WEATHER)
     assert offers_in(store) == []
     assert not any(
-        "Inbox" in m.content for sent in provider.sent for m in sent if m.role == "system"
+        "Nothing is drafted" in m.content
+        for sent in provider.sent
+        for m in sent
+        if m.role == "system"
     )
 
 
-def test_the_companions_own_grants_do_not_matter(tmp_path):
-    # ToolGate grants the companion nothing, but the owner's tools can still run a workflow.
-    store, loop, _ = build(tmp_path, ["Sure."], FakeGate(unavailable=True))
-    loop.run_turn(store.create_session(), WEATHER)
-    assert len(offers_in(store)) == 1
+COMPANION = {"kind": "companion", "privacy": {"harnessDisabled": False}}
+
+
+def latest_turn(store):
+    with store._connect() as db:
+        return db.execute("SELECT id FROM turns ORDER BY rowid DESC LIMIT 1").fetchone()["id"]
 
 
 def offered(tmp_path):
     store, loop, _ = build(tmp_path, ["Noted."])
     session = store.create_session()
     loop.run_turn(session, WEATHER)
+    workflow_offers.consider(store, COMPANION, latest_turn(store), WEATHER, tools=True)
     [item] = offers_in(store)
     return store, session, item
 

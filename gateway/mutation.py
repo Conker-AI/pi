@@ -22,6 +22,7 @@ from gateway.mutation_models import (
     MEMORY_MUTATION,
     MUTATIONS,
     PROJECT_MUTATION,
+    REQUEST_MUTATION,
     TASK_MUTATION,
     TEAM_MUTATION,
     TOOL_MUTATION,
@@ -38,11 +39,13 @@ from gateway.mutation_models import (
     InventoryRequest,
     JobState,
     MemoryCorrect,
+    MemoryRemember,
     MemoryRetry,
     ProjectArchive,
     ProjectCreate,
     ProjectUpdate,
     ProposalDecision,
+    RequestSaved,
     SessionUpdate,
     TaskCreate,
     TeamArchive,
@@ -154,6 +157,13 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             ).model_dump()
             return Mutation("POST", f"/jobs/{value.id}/state", body)
         return Mutation("POST", f"/jobs/{value.id}/run", {"request_id": value.request_id})
+    if resource == "requests":
+        try:
+            value = REQUEST_MUTATION.validate_python(payload)
+        except ValidationError:
+            raise MutationError("Request apply has an unsupported shape.") from None
+        body = {"draftId": value.draftId} if isinstance(value, RequestSaved) else {}
+        return Mutation("POST", f"/change-requests/{value.id}/{value.operation}", body)
     if resource == "memory":
         try:
             value = MEMORY_MUTATION.validate_python(payload)
@@ -161,6 +171,8 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             raise MutationError("Memory apply request has an unsupported shape.") from None
         if isinstance(value, MemoryCorrect):
             return Mutation("POST", "/memory/corrections", value.model_dump(exclude={"operation"}))
+        if isinstance(value, MemoryRemember):
+            return Mutation("POST", "/memory/remember", value.model_dump(exclude={"operation"}))
         if isinstance(value, MemoryRetry):
             return Mutation(
                 "POST",

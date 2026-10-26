@@ -69,6 +69,9 @@ SESSION_ONLY_WRITES = (
     r"/models/auto-settings",
     # Deciding on a proposal records a preference; it grants and runs nothing.
     r"/proposals/[A-Za-z0-9_-]+/decision",
+    # Declining Conker's request creates nothing; reporting the Tools draft a tool request was
+    # saved as only records its id (the save itself was verified by the editor route).
+    r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved)",
     # Dismissing an AI job's note hides one line; the chat keeps the reply.
     r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
     # Browser calls use bounded transient audio or typed turns. Neither grants new
@@ -104,6 +107,8 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}",
         r"/jobs/job_[0-9a-f]{32}/runs",
         r"/jobs/agent/notes",
+        r"/change-requests",
+        r"/change-requests/creq_[a-f0-9]{32}",
         r"/projects",
         r"/projects/project_[0-9a-f]{32}",
         r"/agents",
@@ -157,6 +162,8 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}/(?:state|run)",
         # An AI job only, never a raw tool target; creating one asks for the password.
         r"/jobs/agent",
+        # Approving makes Conker's request real, so it asks for the password; declining doesn't.
+        r"/change-requests/creq_[a-f0-9]{32}/(?:approve|decline|saved)",
         # A webhook secret is shown once; making or stopping one asks for the password.
         r"/jobs/job_[0-9a-f]{32}/hook",
         r"/jobs/job_[0-9a-f]{32}/hook/revoke",
@@ -186,6 +193,7 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/proposals/passes",
         r"/memory/forget",
+        r"/memory/remember",
         r"/memory/corrections",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
     ),

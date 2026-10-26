@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
 from pi.conversation import live_stream
 from pi.models import roles as model_roles
@@ -11,9 +12,22 @@ from pi.models.routing import Reason, Route, Tier, TurnContext
 from pi.turns import control as turn_control
 from pi.turns import steering as turn_steering
 
+RETRY = (
+    "Your last reply was not used: {reason} Reply again with exactly one of these: only the JSON "
+    "tool request and nothing else, or only your answer to the owner with no JSON in it."
+)
+
 
 class ModelCalls:
     """Part of Loop: model calls. Uses the attributes Loop.__init__ sets."""
+
+    def _offers_tools(self) -> bool:
+        """ToolGate is set up and the owner did not leave tools out at setup."""
+        if self.toolgate is None:
+            return False
+        from pi.setup import choices as setup_choices
+
+        return setup_choices.current(self.store, "capabilities").choice != "skip"
 
     def _available_tools(self, execution=None):
         """What this key is scoped to right now, or nothing.
@@ -38,6 +52,19 @@ class ModelCalls:
             # Tools unavailable is not the turn failing. Conversation still
             # works, and the model is simply offered nothing.
             return []
+
+    def _requested(self, route, completion, history, ctx, execution, allowed):
+        """The model's tool request, if any. A request wrapped in prose gets one more try with the
+        rule spelled out; nothing from that reply runs or is kept, and a second invalid reply
+        fails the turn. Every other invalid output fails at once, as before."""
+        try:
+            return route, completion, tool_protocol.parse(completion.text, allowed)
+        except tool_protocol.InvalidToolOutput as exc:
+            if exc.reason != tool_protocol.MIXED:
+                raise
+            again = [*history, Message("system", RETRY.format(reason=exc.reason))]
+            route, completion, _ = self._call(again, ctx, execution)
+            return route, completion, tool_protocol.parse(completion.text, allowed)
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
         from pi.turns import foreground_inference

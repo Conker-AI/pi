@@ -1,10 +1,11 @@
-"""Memory delivery status and owner-reviewed forgetting of one memory."""
+"""Memory delivery status, owner-reviewed forgetting of one memory, and adding one by hand."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
 from pi.memory import forget as memory_forget
+from pi.memory import stated as stated_memory
 
 
 def router(app_state, require_key, require_owner):
@@ -24,6 +25,11 @@ def router(app_state, require_key, require_owner):
         return memory_forget.forget(
             app_state().store, getattr(app_state(), "memory_corrections", None), body
         )
+
+    @routes.post("/memory/remember", dependencies=[Depends(require_owner)])
+    def remember_memory(body: stated_memory.Remember):
+        """Add one memory in the owner's own words; the same request id never stores it twice."""
+        return stated_memory.remember(getattr(app_state(), "memory_corrections", None), body)
 
     @routes.get("/memory", dependencies=[Depends(require_key)])
     def memory_status():

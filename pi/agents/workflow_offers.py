@@ -6,6 +6,10 @@ owner accepts (`conker workflow accept`), which drafts from that message exactly
 does; nothing runs until they review and publish the draft. The check reads only the owner's
 message, never the model's reply, tool results or web pages, so injected text cannot make an
 offer. Pi keeps only the link and its state, and forgets it with the chat.
+
+Where Conker's own tools are offered (`pi/turns/native_tools.py`), Conker asks for the cron job or
+the tool itself as a change request, and no offer is made; offers already made stay until the owner
+accepts or dismisses them.
 """
 
 # The Russian patterns are Cyrillic on purpose; letters that look Latin are not a mistake.

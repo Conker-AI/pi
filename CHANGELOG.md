@@ -6,6 +6,15 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Conker prepares, the owner verifies:** three tools of Conker's own, `conker.schedule`,
+  `conker.draft_tool` and `conker.remember`, let a chat (or an AI job) ask for a cron job, a new
+  tool or a memory. Each only files a change request; nothing exists until the owner approves it
+  (`/change-requests`, approval password-verified). Tool drafts reach ToolGate only through the
+  owner's browser, whose verified save in Tools is then recorded (`.../saved`). Memories are
+  stored word for word through MemoryGate's correction capability (needs MemoryGate with
+  `/runtime/corrections/remember`). `GET /tools` lists Conker's own tools. See
+  docs/change-requests.md.
+
 - **AI jobs:** a cron job can have its agent carry out the owner's instructions with tools
   (`target.kind: "agent"`), on any cron timing, in its own chat. Tools behave exactly as in chat:
   get tools run on their own, set tools wait for the owner's approval in the Inbox. Repeating jobs

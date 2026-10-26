@@ -136,11 +136,37 @@ JobMutation = Annotated[
 JOB_MUTATION = TypeAdapter(JobMutation)
 
 
+class RequestDecision(Strict):
+    """Approve or decline one of Conker's requests exactly as filed."""
+
+    operation: Literal["approve", "decline"]
+    id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
+
+
+class RequestSaved(Strict):
+    """A tool request the owner saved in Tools (`conker apply tools`): record which draft."""
+
+    operation: Literal["saved"]
+    id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
+    draftId: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+
+
+REQUEST_MUTATION = TypeAdapter(
+    Annotated[RequestDecision | RequestSaved, Field(discriminator="operation")]
+)
+
+
 class MemoryForget(Strict):
     operation: Literal["forget"]
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
     expected_revision: int = Field(ge=1)
+
+
+class MemoryRemember(Strict):
+    operation: Literal["remember"]
+    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class MemoryCorrect(memory_edits.Apply):
@@ -153,7 +179,10 @@ class MemoryRetry(memory_edits.Retry):
 
 
 MEMORY_MUTATION = TypeAdapter(
-    Annotated[MemoryForget | MemoryCorrect | MemoryRetry, Field(discriminator="operation")]
+    Annotated[
+        MemoryForget | MemoryRemember | MemoryCorrect | MemoryRetry,
+        Field(discriminator="operation"),
+    ]
 )
 
 
@@ -404,6 +433,7 @@ MUTATIONS = frozenset(
         "models",
         "projects",
         "proposals",
+        "requests",
         "sessions",
         "tasks",
         "teams",

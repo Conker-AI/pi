@@ -26,6 +26,7 @@ from pi.api.routes import artifacts as artifacts_api
 from pi.api.routes import attachments as attachments_api
 from pi.api.routes import auto_settings as auto_settings_api
 from pi.api.routes import calls as calls_api
+from pi.api.routes import change_requests as change_requests_api
 from pi.api.routes import characters as characters_api
 from pi.api.routes import compaction as compaction_api
 from pi.api.routes import context as context_api
@@ -167,6 +168,13 @@ app.include_router(definitions_api.router(lambda: app.state.store, require_owner
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
+app.include_router(
+    change_requests_api.router(
+        lambda: app.state.store,
+        require_owner,
+        lambda: getattr(getattr(app.state, "memory_corrections", None), "remember", None),
+    )
+)
 app.include_router(workflow_proposals_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
@@ -382,15 +390,24 @@ app.include_router(proposals_api.router(lambda: app.state, require_key, require_
 @app.get("/tools", dependencies=[Depends(require_key)])
 def tools():
     """What Pi may currently do, as ToolGate sees it - not as Pi remembers."""
+    from pi.turns import native_tools
+
+    # Conker's own tools (they only file requests for the owner) are listed with the rest, so
+    # the owner sees everything the AI can call.
+    own = [
+        {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
+        for t in native_tools.CATALOG
+    ]
     if app.state.toolgate is None:
-        return {"status": "not_configured", "results": []}
+        return {"status": "not_configured", "results": own}
     try:
         found = app.state.toolgate.tools()
     except Exception as exc:
-        return {"status": "unavailable", "reason": type(exc).__name__, "results": []}
+        return {"status": "unavailable", "reason": type(exc).__name__, "results": own}
     return {
         "status": "ok",
-        "results": [
+        "results": own
+        + [
             {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
             for t in found
         ],

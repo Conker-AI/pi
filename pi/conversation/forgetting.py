@@ -18,7 +18,7 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from pi.agents import skills, workflow_offers, workflow_proposals
+from pi.agents import change_requests, skills, workflow_offers, workflow_proposals
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
 from pi.context import compaction, decisions
@@ -183,6 +183,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         agent_jobs.redact(db, plan["session_ids"])
         skills.redact(db, plan["session_ids"])
         workflow_proposals.redact(db, plan["session_ids"])
+        change_requests.redact(db, plan["session_ids"])
         workflow_offers.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])

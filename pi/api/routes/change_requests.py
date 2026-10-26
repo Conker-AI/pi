@@ -1,0 +1,41 @@
+"""The owner's side of change requests: see what Conker asked to create, then approve or decline."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Path
+
+from pi.agents import change_requests
+
+RequestPath = Annotated[str, Path(pattern=change_requests.REQUEST_ID[1:-1].join("^$"))]
+
+
+def router(store, authorize, memory_writer=lambda: None):
+    routes = APIRouter(prefix="/change-requests", dependencies=[Depends(authorize)])
+
+    @routes.get("")
+    def listing():
+        """Open requests, newest first."""
+        return {"schemaVersion": 1, "results": change_requests.listing(store())}
+
+    @routes.get("/{identity}")
+    def get(identity: RequestPath):
+        return change_requests.get(store(), identity)
+
+    @routes.post("/{identity}/approve")
+    def approve(identity: RequestPath):
+        """Make a cron job or memory real exactly as filed."""
+        return change_requests.approve(store(), identity, memory=memory_writer())
+
+    @routes.post("/{identity}/saved")
+    def saved(identity: RequestPath, body: change_requests.DraftSaved):
+        """The owner saved this tool request as a draft in Tools; recording it creates nothing."""
+        return change_requests.saved(store(), identity, body)
+
+    @routes.post("/{identity}/decline")
+    def decline(identity: RequestPath):
+        """Nothing is created; Conker is told it was declined if it asks again."""
+        return change_requests.decline(store(), identity)
+
+    return routes

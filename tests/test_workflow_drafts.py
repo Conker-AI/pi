@@ -306,3 +306,23 @@ def test_older_settings_gain_drafting_switched_off(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         model_roles.save(store, model_roles.Update(expected_revision=0, configuration=loaded))
         assert workflow_drafts.draft(store, {"one": adapter}, request())["modelId"] == "a"
+
+
+def test_an_unusable_reply_gets_one_more_try(tmp_path):
+    good = json.dumps({"reply": "Ready", "ready": True, "document": DOCUMENT})
+
+    class Twice(Recording):
+        replies = ['{"reply": "Ready", "ready": true, "document": {"name": "x"', good]
+
+        def complete_bounded(self, messages, *, model, timeout):
+            self.response = self.replies.pop(0)
+            self.seen = [*getattr(self, "seen", []), messages]
+            return super().complete_bounded(messages, model=model, timeout=timeout)
+
+    adapter = Twice("")
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = workflow_drafts.draft(store, {"one": adapter}, request())
+    assert result["ready"] and result["document"]["name"] == DOCUMENT["name"]
+    retry = adapter.seen[1][-1]
+    assert retry.role == "user" and "could not be used" in retry.content

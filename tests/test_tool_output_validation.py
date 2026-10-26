@@ -39,8 +39,28 @@ BAD_REQUESTS = [
     f"```json\n{CALL}\n```",
     CALL + "\n" + CALL,
     CALL + "\nI ran this.",
-    "Let me run this:\n" + CALL,
 ]
+# A request wrapped in prose is the one invalid output retried, once (see the test below).
+MIXED_REQUESTS = ["Let me run this:\n" + CALL, "Sure.\n" + CALL + "\nDone."]
+
+
+@pytest.mark.parametrize("output", MIXED_REQUESTS)
+def test_a_request_wrapped_in_prose_is_retried_once_and_never_run(store, output):
+    gate = FakeGate()
+    loop, provider = build(store, [output, output, "must not retry twice"], gate)
+    sid = store.create_session()
+
+    with pytest.raises(TurnFailed, match="not executed") as failed:
+        loop.run_turn(sid, "Reply with one short sentence.")
+
+    turn = store.get_turn(failed.value.turn_id)
+    assert turn["status"] == "failed" and turn["acted"] == 0 and output not in turn["detail"]
+    assert gate.invocations == [] and len(provider.sent) == 2
+    # The retry is told the rule and never sees the rejected reply.
+    assert all(output not in m.content for m in provider.sent[1])
+    assert [m["role"] for m in store.messages(sid)] == ["user"]
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM tool_actions").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize("output", BAD_REQUESTS)

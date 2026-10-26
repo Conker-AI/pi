@@ -263,6 +263,9 @@ def normalize(
     return result, issues
 
 
+RETRY = "Reply again with only the JSON object in the shape described, and nothing else."
+
+
 def draft(store, providers, body: Request) -> dict:
     """A proposed workflow for review; saves nothing."""
     saved = model_roles.load(store)
@@ -297,27 +300,38 @@ def draft(store, providers, body: Request) -> dict:
     # model while drafts use a stronger one; otherwise the talking model drafts.
     drafting = saved["configuration"]["roleSettings"]["roles"].get("drafting", {})
     role = "drafting" if drafting.get("enabled") and drafting.get("modelId") else "answer"
-    try:
-        decision = model_roles.dispatch(
-            saved["configuration"],
-            role,
-            messages,
-            providers,
-            minimum_timeout_ms=MODEL_WAIT_MS,
-        )
-    except (ValueError, TypeError, model_roles.SelectionError):
-        raise DraftError(
-            "unavailable", "The talking model did not answer. Try again.", 503
-        ) from None
-    try:
-        result = answer(decision["completion"].text)
-        document, issues = (
-            normalize(result["document"], body.capabilities, body.draftId)
-            if result["ready"]
-            else (None, [])
-        )
-    except (ValueError, TypeError) as exc:
-        raise DraftError("unusable", f"The draft could not be used: {exc}.", 502) from None
+    # A reply that is not usable JSON gets one more try with the error shown; small local
+    # models often slip once. A second unusable reply is reported as before.
+    for attempt in range(2):
+        try:
+            decision = model_roles.dispatch(
+                saved["configuration"],
+                role,
+                messages,
+                providers,
+                minimum_timeout_ms=MODEL_WAIT_MS,
+            )
+        except (ValueError, TypeError, model_roles.SelectionError):
+            raise DraftError(
+                "unavailable", "The talking model did not answer. Try again.", 503
+            ) from None
+        text = decision["completion"].text
+        try:
+            result = answer(text)
+            document, issues = (
+                normalize(result["document"], body.capabilities, body.draftId)
+                if result["ready"]
+                else (None, [])
+            )
+            break
+        except (ValueError, TypeError) as exc:
+            if attempt:
+                raise DraftError("unusable", f"The draft could not be used: {exc}.", 502) from None
+            messages = [
+                *messages,
+                Message("assistant", text[:DOCUMENT_LIMIT]),
+                Message("user", f"That reply could not be used: {exc}. {RETRY}"),
+            ]
     return {
         "reply": result["reply"],
         "ready": result["ready"],
