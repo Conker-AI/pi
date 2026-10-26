@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Agent identities:** Pi calls ToolGate as the running agent (`X-ToolGate-Agent`) after defining
+  that agent's toolkit there, so ToolGate enforces each agent's tools, not only Pi. The companion
+  keeps the key's full view. Approval resumes and action checks use the same agent, since ToolGate
+  binds approvals to it. An older ToolGate without identities keeps the key, and Pi's own filter.
+
 - **Access layers:** each action resolves from the owner's own settings, the more specific
   winning: this chat's switch (`settings.access`: default, ask, ai, full), the agent's
   `toolAccess`, the tool's own default. Guards: the agent's toolkit, ToolGate's floor (sensitive

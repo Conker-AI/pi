@@ -98,7 +98,8 @@ class Replies:
                         action["job_id"] = job_id
                     turn_control.guard(self.store, execution)
                     actions.state(self.store, action["id"], "dispatching")
-                    outcome = self.toolgate.invoke(
+                    # The same agent that asked: ToolGate binds the approval to that actor.
+                    outcome = self._gate(execution).invoke(
                         action["tool_id"],
                         action["args"],
                         approval_request_id=turn["approval_request_id"],
@@ -106,7 +107,7 @@ class Replies:
                         job_id=action["job_id"],
                     )
                 else:
-                    outcome = self.toolgate.check_action(action["id"], action["tool_id"])
+                    outcome = self._gate(execution).check_action(action["id"], action["tool_id"])
             except ProviderUnavailable as exc:
                 self.store.finish_turn(
                     turn_id,

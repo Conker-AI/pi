@@ -425,7 +425,7 @@ class Loop(ModelCalls, History, Replies):
                             if choice
                             else {}
                         )
-                        outcome = self.toolgate.invoke(
+                        outcome = self._gate(execution).invoke(
                             call.tool_id,
                             call.args,
                             action_id=action["id"],

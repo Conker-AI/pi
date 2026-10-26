@@ -15,6 +15,16 @@ from pi.models.providers import ProviderUnavailable
 from pi.turns.failures import TurnFailed
 
 
+@pytest.fixture(autouse=True)
+def toolgate_holds_agent_toolkits(monkeypatch):
+    """Stands in for ToolGate accepting each agent's toolkit before Pi calls as that agent."""
+    monkeypatch.setattr(
+        httpx,
+        "put",
+        lambda url, **_: httpx.Response(200, json={}, request=httpx.Request("PUT", url)),
+    )
+
+
 def test_id_is_committed_before_dispatch_and_reused_with_owner_job(tmp_path, monkeypatch):
     store = Store(tmp_path / "pi.db")
     sent = []

@@ -18,6 +18,20 @@ RETRY = (
 )
 
 
+def identity_scopes(tool_ids):
+    """An agent's toolkit as ToolGate scopes: tools by id, published workflows by their root.
+    Conker's own tools live in Pi and need none."""
+    scopes = []
+    for tool_id in tool_ids:
+        if tool_id.startswith("conker."):
+            continue
+        if tool_id.startswith("workflow:"):
+            scopes.append("automation:" + tool_id.split(":")[1])
+        else:
+            scopes.append(tool_id)
+    return scopes
+
+
 class ModelCalls:
     """Part of Loop: model calls. Uses the attributes Loop.__init__ sets."""
 
@@ -28,6 +42,17 @@ class ModelCalls:
         from pi.setup import choices as setup_choices
 
         return setup_choices.current(self.store, "capabilities").choice != "skip"
+
+    def _gate(self, execution=None):
+        """ToolGate as the running agent, so its toolkit is enforced there and not only by Pi."""
+        execution = execution or {}
+        agent = execution.get("agentId") or "companion"
+        if execution.get("kind", "companion") == "companion":
+            scopes = ["*"]
+        else:
+            scopes = identity_scopes(execution["configuration"]["toolIds"])
+        acting = getattr(self.toolgate, "acting_as", None)
+        return acting(agent, scopes) if acting else self.toolgate
 
     def _available_tools(self, execution=None):
         """What this key is scoped to right now, or nothing.
@@ -43,7 +68,7 @@ class ModelCalls:
         if setup_choices.current(self.store, "capabilities").choice == "skip":
             return []
         try:
-            tools = self.toolgate.tools()
+            tools = self._gate(execution).tools()
             if execution and execution["kind"] != "companion":
                 selected = execution["configuration"]["toolIds"]
                 tools = [tool for tool in tools if tool.id in selected]

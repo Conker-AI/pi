@@ -92,8 +92,11 @@ CASES = [
     (
         "F2b-unknown-redispatches",
         "pi/turns/replies.py",
-        'outcome = self.toolgate.check_action(action["id"], action["tool_id"])',
-        'outcome = self.toolgate.invoke(action["tool_id"], action["args"], action_id=action["id"])',
+        'outcome = self._gate(execution).check_action(action["id"], action["tool_id"])',
+        (
+            "outcome = self._gate(execution).invoke("
+            'action["tool_id"], action["args"], action_id=action["id"])'
+        ),
         EXEC,
     ),
     (
