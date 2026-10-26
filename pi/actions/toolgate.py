@@ -18,6 +18,7 @@ story that is not true.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -101,9 +102,46 @@ class ToolGateClient:
         self.base_url = base_url.rstrip("/")
         self.execution_key = execution_key
         self.timeout = timeout
+        # The agent this client acts as in ToolGate (None: the key itself), and the toolkits
+        # already defined there, shared by every client made from this one.
+        self.agent: str | None = None
+        self._identities: dict = {"supported": True, "defined": {}}
 
     def _headers(self) -> dict[str, str]:
-        return {"X-ToolGate-Execution-Key": self.execution_key}
+        headers = {"X-ToolGate-Execution-Key": self.execution_key}
+        if self.agent is not None:
+            headers["X-ToolGate-Agent"] = self.agent
+        return headers
+
+    def acting_as(self, agent_id: str, scopes: list[str]) -> ToolGateClient:
+        """This client acting as one agent, after ToolGate holds the agent's toolkit, so ToolGate
+        enforces it (it only narrows the key). An older ToolGate without identities keeps the key
+        itself, where Pi's own toolkit filter still applies."""
+        if self.agent is not None or not self._identities["supported"]:
+            return self
+        wanted = sorted(set(scopes))
+        if self._identities["defined"].get(agent_id) != wanted:
+            try:
+                response = httpx.put(
+                    f"{self.base_url}/v2/agent/identities/{agent_id}",
+                    verify=verification(self.base_url),
+                    json={"scopes": wanted},
+                    headers=self._headers(),
+                    timeout=self.timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+            except Exception as exc:
+                raise ToolGateUnavailable(type(exc).__name__) from exc
+            if response.status_code in (404, 405):
+                self._identities["supported"] = False
+                return self
+            if response.status_code != 200:
+                raise ToolGateUnavailable(f"identity_{response.status_code}")
+            self._identities["defined"][agent_id] = wanted
+        clone = copy.copy(self)
+        clone.agent = agent_id
+        return clone
 
     @staticmethod
     def _detail(response: httpx.Response) -> dict:
