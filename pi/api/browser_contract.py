@@ -193,6 +193,7 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         r"/proposals/passes",
         r"/memory/forget",
+        r"/memory/remember",
         r"/memory/corrections",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
     ),

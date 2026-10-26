@@ -163,6 +163,12 @@ class MemoryForget(Strict):
     expected_revision: int = Field(ge=1)
 
 
+class MemoryRemember(Strict):
+    operation: Literal["remember"]
+    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
+    text: str = Field(min_length=1, max_length=2000)
+
+
 class MemoryCorrect(memory_edits.Apply):
     operation: Literal["correct"]
 
@@ -173,7 +179,10 @@ class MemoryRetry(memory_edits.Retry):
 
 
 MEMORY_MUTATION = TypeAdapter(
-    Annotated[MemoryForget | MemoryCorrect | MemoryRetry, Field(discriminator="operation")]
+    Annotated[
+        MemoryForget | MemoryRemember | MemoryCorrect | MemoryRetry,
+        Field(discriminator="operation"),
+    ]
 )
 
 

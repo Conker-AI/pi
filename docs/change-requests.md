@@ -31,3 +31,7 @@ CLI parity: `conker inspect change-requests` lists open requests; `conker apply 
 takes `{"operation": "approve" | "decline", "id": "creq_..."}`, or
 `{"operation": "saved", "id": "creq_...", "draftId": "..."}` after saving the document with
 `conker apply tools`.
+
+By hand: the owner adds a memory with `POST /memory/remember` (`{"request_id", "text"}`, password
+verified in the browser; `conker apply memory` with `"operation": "remember"`), which uses the same
+MemoryGate route, so a memory added by hand and one approved from a request are stored the same way.

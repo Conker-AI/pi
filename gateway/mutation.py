@@ -39,6 +39,7 @@ from gateway.mutation_models import (
     InventoryRequest,
     JobState,
     MemoryCorrect,
+    MemoryRemember,
     MemoryRetry,
     ProjectArchive,
     ProjectCreate,
@@ -170,6 +171,8 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             raise MutationError("Memory apply request has an unsupported shape.") from None
         if isinstance(value, MemoryCorrect):
             return Mutation("POST", "/memory/corrections", value.model_dump(exclude={"operation"}))
+        if isinstance(value, MemoryRemember):
+            return Mutation("POST", "/memory/remember", value.model_dump(exclude={"operation"}))
         if isinstance(value, MemoryRetry):
             return Mutation(
                 "POST",

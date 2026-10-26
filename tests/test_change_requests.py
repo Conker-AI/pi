@@ -345,3 +345,48 @@ def test_a_second_mixed_reply_still_runs_nothing(store):
     with pytest.raises(TurnFailed):
         loop.run_turn(store.create_session(), "Remember x.")
     assert change_requests.listing(store) == []
+
+
+def test_the_owner_adds_a_memory_by_hand_through_the_same_route(monkeypatch):
+    import io
+
+    import httpx
+
+    from gateway.mutation import apply_resource
+    from pi.memory import stated
+    from tests.test_gateway_mutation import config
+
+    calls = []
+
+    class Memory:
+        def remember(self, identity, text):
+            calls.append((identity, text))
+            return {"memoryId": "m1", "status": "remembered"}
+
+    body = stated.Remember(request_id="r" * 16, text="My exam is on Thursday.")
+    assert stated.remember(Memory(), body) == {"memoryId": "m1", "status": "remembered"}
+    assert calls == [("r" * 16, "My exam is on Thursday.")]
+    with pytest.raises(stated.RememberError) as missing:
+        stated.remember(None, body)
+    assert missing.value.status == 503
+    for text in ("", "   ", "a\x00b", "x" * 2001):
+        with pytest.raises(ValueError):
+            stated.Remember(request_id="r" * 16, text=text)
+    assert owner_allowed("POST", "/memory/remember")
+    assert not session_only_write("POST", "/memory/remember")  # asks for the password
+
+    seen = []
+
+    def upstream(request):
+        seen.append(request)
+        return httpx.Response(200, json={"memoryId": "m1", "status": "remembered"})
+
+    payload = {"operation": "remember", "request_id": "r" * 16, "text": "My exam is on Thursday."}
+    with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
+        apply_resource(config(), "memory", io.BytesIO(json.dumps(payload).encode()), client)
+    [request] = seen
+    assert request.url.path == "/memory/remember"
+    assert json.loads(request.content) == {
+        "request_id": "r" * 16,
+        "text": "My exam is on Thursday.",
+    }
