@@ -45,6 +45,10 @@ class ToolCall:
     args: dict
 
 
+# The one invalid output the turn retries once: a request wrapped in prose (small models do this).
+MIXED = "The model mixed a tool request with other text. This request was not executed."
+
+
 class InvalidToolOutput(RuntimeError):
     """A model request was not executable and must not be saved as an answer."""
 
@@ -183,9 +187,7 @@ def _request(text: str) -> dict | None:
                 and line.lstrip().startswith(("{", "["))
                 and _REQUEST_FIELD.search(line)
             ):
-                raise InvalidToolOutput(
-                    "The model mixed a tool request with other text. This request was not executed."
-                )
+                raise InvalidToolOutput(MIXED)
         return None
     malformed = False
 

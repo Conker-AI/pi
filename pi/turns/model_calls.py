@@ -54,12 +54,14 @@ class ModelCalls:
             return []
 
     def _requested(self, route, completion, history, ctx, execution, allowed):
-        """The model's tool request, if any. A reply that breaks the tool format gets one more
-        try with the rule spelled out; nothing from the broken reply runs or is kept, and a second
-        broken reply fails the turn as before."""
+        """The model's tool request, if any. A request wrapped in prose gets one more try with the
+        rule spelled out; nothing from that reply runs or is kept, and a second invalid reply
+        fails the turn. Every other invalid output fails at once, as before."""
         try:
             return route, completion, tool_protocol.parse(completion.text, allowed)
         except tool_protocol.InvalidToolOutput as exc:
+            if exc.reason != tool_protocol.MIXED:
+                raise
             again = [*history, Message("system", RETRY.format(reason=exc.reason))]
             route, completion, _ = self._call(again, ctx, execution)
             return route, completion, tool_protocol.parse(completion.text, allowed)
