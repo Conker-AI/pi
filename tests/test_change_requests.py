@@ -189,16 +189,18 @@ def test_remembering_files_a_request_and_saves_only_on_approval(store):
     assert done["result"] == {"memoryId": "m1"}
 
 
-def test_a_chat_turn_can_ask_for_a_cron_job(store):
+def test_a_chat_turn_can_make_a_cron_job(store):
+    # Scheduling is Keep: allowed by default, made at once and recorded as an approved request.
     call = '{"tool": "conker.schedule", "args": {"name": "Morning check", "instructions": "Tell me what needs me today.", "repeat": "daily", "time": "08:00"}}'
-    loop, provider = build(store, [call, "I filed it; approve it in your Inbox."], FakeGate())
+    loop, provider = build(store, [call, "It is set up."], FakeGate())
     session = store.create_session()
     result = loop.run_turn(session, "Every morning at 8, check what needs me.")
-    assert result["message"]["content"] == "I filed it; approve it in your Inbox."
-    [request] = change_requests.listing(store)
-    assert request["sessionId"] == session and request["payload"]["timing"]["kind"] == "daily"
+    assert result["message"]["content"] == "It is set up."
+    assert change_requests.listing(store) == []
+    [made] = change_requests.listing(store, state="approved")
+    assert made["sessionId"] == session and made["payload"]["timing"]["kind"] == "daily"
     assert any("conker.schedule" in message.content for message in provider.sent[0])
-    assert jobs.list_jobs(store) == []
+    assert jobs.list_jobs(store)[0]["id"] == made["result"]["jobId"]
 
 
 def test_other_agents_get_conkers_tools_only_when_selected():

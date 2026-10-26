@@ -39,6 +39,7 @@ from pi.conversation.store import Store
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.schedule import tasks
+from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
@@ -184,6 +185,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         skills.redact(db, plan["session_ids"])
         workflow_proposals.redact(db, plan["session_ids"])
         change_requests.redact(db, plan["session_ids"])
+        turn_access.redact(db, plan["session_ids"])
         workflow_offers.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])

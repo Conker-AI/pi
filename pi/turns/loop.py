@@ -32,6 +32,7 @@ from pi.actions.toolgate import (
     ToolGateUnavailable,
     ToolPending,
     ToolRefused,
+    ToolResult,
 )
 from pi.agents import workflow_offers
 from pi.context import controls as context_controls
@@ -44,8 +45,8 @@ from pi.memory.service import Memory
 from pi.models.providers import ProviderUnavailable
 from pi.models.routing import Router, TurnContext, history_size
 from pi.schedule import tasks
+from pi.turns import access, native_tools
 from pi.turns import control as turn_control
-from pi.turns import native_tools
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 from pi.turns.failures import ActedWithoutReply, TurnFailed
@@ -78,6 +79,8 @@ class Loop(ModelCalls, History, Replies):
         self.system_prompt = system_prompt
         self.fork_threshold_chars = fork_threshold_chars
         self.toolgate = toolgate
+        # Stores an approved memory word for word (MemoryGate statement route), when connected.
+        self.remember = None
         # A ceiling on how many times one turn may act. Not a safety boundary -
         # ToolGate is that - but a model looping on a failing tool would
         # otherwise spend indefinitely without ever answering.
@@ -295,6 +298,16 @@ class Loop(ModelCalls, History, Replies):
         own = native_tools.catalog(execution) if self._offers_tools() else []
         available = research.tools(execution, published + own)
         allowed = {t.id for t in available}
+        catalog = {t.id: t for t in available}
+        delegation = []
+
+        def delegate():
+            # Asked once per turn, only when a ToolGate tool is about to run.
+            if not delegation:
+                check = getattr(self.toolgate, "delegate", None)
+                delegation.append(bool(check and check()))
+            return delegation[0]
+
         if not continued:
             from pi.setup import choices as setup_choices
 
@@ -373,7 +386,24 @@ class Loop(ModelCalls, History, Replies):
                     raise
                 try:
                     turn_control.guard(self.store, execution)
-                    if native_tools.owns(call.tool_id):
+                    tool = catalog.get(call.tool_id)
+                    native = native_tools.owns(call.tool_id)
+                    # His access layers decide run or ask; ToolGate enforces the floor again.
+                    choice, decided_by, why = (
+                        access.decide(
+                            self,
+                            tool,
+                            call.args,
+                            execution=execution,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            native=native_tools.owns,
+                            delegate=delegate,
+                        )
+                        if tool is not None
+                        else (None, "tool_default", "")
+                    )
+                    if native:
                         outcome = native_tools.call(
                             self,
                             call.tool_id,
@@ -381,10 +411,42 @@ class Loop(ModelCalls, History, Replies):
                             session_id=session_id,
                             turn_id=turn_id,
                             execution=execution,
+                            run=choice == "run",
                         )
                     else:
+                        decision = (
+                            {
+                                "decision": {
+                                    "outcome": choice,
+                                    "decided_by": decided_by,
+                                    "reason": why,
+                                }
+                            }
+                            if choice
+                            else {}
+                        )
                         outcome = self.toolgate.invoke(
-                            call.tool_id, call.args, action_id=action["id"], job_id=action["job_id"]
+                            call.tool_id,
+                            call.args,
+                            action_id=action["id"],
+                            job_id=action["job_id"],
+                            **decision,
+                        )
+                    ran_alone = (
+                        choice == "run"
+                        and isinstance(outcome, ToolResult)
+                        and (not native or outcome.result.get("status") == "done")
+                        and access.loosened(tool, decided_by, native)
+                    )
+                    if ran_alone:
+                        access.record(
+                            self.store,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            action_id=action["id"],
+                            tool_id=call.tool_id,
+                            decided_by=decided_by,
+                            reason=why,
                         )
                 except ToolRefused as refusal:
                     if refusal.code == "BUDGET_DENIED":

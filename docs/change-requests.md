@@ -1,5 +1,9 @@
 # Change requests: Conker prepares, the owner verifies (2026-10-25)
 
+> Since 2026-10-26 Conker's own tools follow the access layers (docs/access.md): remembering and
+> scheduling are Keep and happen at once (still recorded as approved requests, listed in Handled);
+> a tool draft, and anything his settings say to ask about, waits as below.
+
 Conker can prepare anything the owner could make by hand, but never make it real on its own.
 Three of its own tools (`pi/turns/native_tools.py`) are offered to the companion next to the owner's
 published tools, and to other agents when selected for them, whenever ToolGate is set up and the

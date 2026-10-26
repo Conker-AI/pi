@@ -234,6 +234,7 @@ async def lifespan(app: FastAPI):
         toolgate=toolgate,
         memory=memory,
     )
+    app.state.loop.remember = correction.remember if correction is not None else None
     if app.state.job_executor is not None:
         app.state.job_executor = AgentJobs(store, app.state.loop, app.state.job_executor)
     scheduler = None

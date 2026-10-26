@@ -108,6 +108,7 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}/runs",
         r"/jobs/agent/notes",
         r"/change-requests",
+        r"/access/handled",
         r"/change-requests/creq_[a-f0-9]{32}",
         r"/projects",
         r"/projects/project_[0-9a-f]{32}",

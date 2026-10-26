@@ -344,6 +344,7 @@ def test_session_apply_uses_revision_checked_owner_settings_operation():
             "projectId": None,
             "projectSources": [],
             "presentationMode": "focus",
+            "access": "default",
         },
     }
     seen = []

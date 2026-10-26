@@ -20,6 +20,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from pi.api.browser_contract import runtime_allowed
+from pi.api.routes import access as access_api
 from pi.api.routes import activity as activity_api
 from pi.api.routes import agents as agents_api
 from pi.api.routes import artifacts as artifacts_api
@@ -175,6 +176,7 @@ app.include_router(
         lambda: getattr(getattr(app.state, "memory_corrections", None), "remember", None),
     )
 )
+app.include_router(access_api.router(lambda: app.state.store, require_owner))
 app.include_router(workflow_proposals_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
@@ -392,12 +394,19 @@ def tools():
     """What Pi may currently do, as ToolGate sees it - not as Pi remembers."""
     from pi.turns import native_tools
 
-    # Conker's own tools (they only file requests for the owner) are listed with the rest, so
-    # the owner sees everything the AI can call.
-    own = [
-        {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
-        for t in native_tools.CATALOG
-    ]
+    # Conker's own tools are listed with the rest, so the owner sees everything the AI can call,
+    # with each tool's default access and whether it is on his floor (always asks).
+    def view(t):
+        return {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "inputs": t.inputs,
+            "authorization": t.authorization,
+            "sensitive": t.sensitive,
+        }
+
+    own = [view(t) for t in native_tools.CATALOG]
     if app.state.toolgate is None:
         return {"status": "not_configured", "results": own}
     try:
@@ -406,11 +415,7 @@ def tools():
         return {"status": "unavailable", "reason": type(exc).__name__, "results": own}
     return {
         "status": "ok",
-        "results": own
-        + [
-            {"id": t.id, "name": t.name, "description": t.description, "inputs": t.inputs}
-            for t in found
-        ],
+        "results": own + [view(t) for t in found],
     }
 
 

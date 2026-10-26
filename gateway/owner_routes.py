@@ -9,6 +9,8 @@ from fastapi import APIRouter, Request
 from .operations import json_body
 from .store import AuthError
 
+ACCESS_TOOL_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
+
 
 def router(app, session, forward, admit_write):
     routes = APIRouter()
@@ -45,6 +47,43 @@ def router(app, session, forward, admit_write):
             request.method,
             app.state.config.toolgate_url.rstrip("/")
             + request.url.path.replace("/api/owner/mcp/", "/v2/owner/mcp/", 1),
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            b"",
+            extra,
+        )
+
+    @routes.get("/api/owner/access")
+    @routes.post("/api/owner/access/delegate")
+    @routes.post("/api/owner/tools/{identity}/sensitive")
+    async def access_control(request: Request, identity: str | None = None):
+        """Whether Conker decides by his access settings, and the tools that always ask him."""
+        from starlette.concurrency import run_in_threadpool
+
+        session(request)
+        if request.scope["query_string"] or (
+            identity is not None and not re.fullmatch(ACCESS_TOOL_ID, identity)
+        ):
+            raise AuthError("Select a tool without query parameters.", 422)
+        body = await json_body(request) if request.method == "POST" else None
+        if body is not None:
+            field = "sensitive" if identity is not None else "enabled"
+            if set(body) != {field} or not isinstance(body[field], bool):
+                raise AuthError(f"Send only {field}: true or false.", 422)
+            admit_write(request, body)
+        extra = None
+        if identity is None:
+            # The delegate is the chat's own scoped key; the owner key alone cannot name it.
+            key = app.state.config.toolgate_execution_key
+            if not key:
+                raise AuthError("The scoped chat execution credential is not configured.", 503)
+            extra = {"X-ToolGate-Execution-Key": key}
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/")
+            + request.url.path.replace("/api/owner/", "/v2/owner/", 1),
             "X-ToolGate-Owner-Key",
             app.state.config.owner_key,
             body,

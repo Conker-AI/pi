@@ -81,6 +81,8 @@ def fingerprint(method: str, path: str, body: dict) -> str:
             or re.fullmatch(r"/api/owner/requests/[A-Za-z0-9_-]+/decision", path)
             or path in {"/api/owner/mcp/discover", "/api/owner/mcp/import"}
             or re.fullmatch(rf"/api/owner/mcp/tools/{TOOL_ID}/(?:state|access)", path)
+            or path == "/api/owner/access/delegate"
+            or re.fullmatch(r"/api/owner/tools/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}/sensitive", path)
             or re.fullmatch(
                 r"/api/owner/editor-drafts/[A-Za-z][A-Za-z0-9_-]{0,63}(?:/(?:publish|access|runs))?",
                 path,

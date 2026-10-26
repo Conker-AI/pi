@@ -22,6 +22,8 @@ class Settings(Strict):
     projectId: projects.ProjectId | None = None
     projectSources: list[projects.Reference] = Field(default_factory=list, max_length=20)
     presentationMode: Literal["focus", "character"] | None = None
+    # This chat's switch over the agent and tool layers (see pi.turns.access).
+    access: Literal["default", "ask", "ai", "full"] = "default"
 
     @model_validator(mode="after")
     def project_sources(self):
