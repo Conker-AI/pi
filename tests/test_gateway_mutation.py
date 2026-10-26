@@ -32,6 +32,7 @@ def agent_configuration():
         "instructions": "Research carefully.",
         "modelId": None,
         "toolIds": [],
+        "toolAccess": {},
         "memory": {"scope": "conversation", "memoryIds": []},
     }
 

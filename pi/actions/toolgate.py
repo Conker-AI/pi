@@ -38,6 +38,9 @@ class Tool:
     name: str
     description: str
     inputs: list[dict]
+    # ToolGate's default for this tool, and whether it is on the owner's floor (always asks).
+    authorization: str = "owner_confirmation"
+    sensitive: bool = False
 
 
 @dataclass(frozen=True)
@@ -154,9 +157,28 @@ class ToolGateClient:
                 name=row.get("name", row["id"]),
                 description=row.get("description", ""),
                 inputs=row.get("inputs", []),
+                authorization=str(row.get("authorization", "owner_confirmation")),
+                sensitive=row.get("sensitive") is True,
             )
             for row in rows
         ]
+
+    def delegate(self) -> bool:
+        """Whether the owner lets this key's "run" decisions skip his confirmation (never on the
+        floor). Unknown counts as no: Pi then leaves every tool to its own authorization."""
+        try:
+            response = httpx.get(
+                f"{self.base_url}/v2/agent/status",
+                verify=verification(self.base_url),
+                headers=self._headers(),
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+            response.raise_for_status()
+            return response.json().get("policyDelegate") is True
+        except Exception:
+            return False
 
     def policy_summary(self) -> dict:
         """Secret-free evidence of the exact capability policy effective for Pi."""
@@ -205,6 +227,7 @@ class ToolGateClient:
         *,
         action_id: str,
         job_id: str | None = None,
+        decision: dict | None = None,
     ) -> ToolResult | ApprovalRequired | ToolPending:
         """Run a tool, or come back asking for the owner.
 
@@ -222,6 +245,9 @@ class ToolGateClient:
             payload.update(published_version=int(version), expected_publication_digest=digest)
         if approval_request_id:
             payload["approval_request_id"] = approval_request_id
+        if decision and not workflow:
+            # The owner's resolved policy; ToolGate honours "run" only from a delegate key.
+            payload["decision"] = decision
         try:
             response = httpx.post(
                 f"{self.base_url}{path}",

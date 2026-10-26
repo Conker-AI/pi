@@ -42,6 +42,10 @@ class AgentInput(Strict):
     instructions: str = Field(min_length=1, max_length=8000)
     modelId: str | None = Field(max_length=200)
     toolIds: list[str] = Field(max_length=1000)
+    # This agent's access per tool, over the tool's own default (see pi.turns.access).
+    toolAccess: dict[str, Literal["allow", "ai", "ask"]] = Field(
+        default_factory=dict, max_length=1000
+    )
     memory: MemorySelection
 
     @field_validator("name", "role", "instructions")
@@ -62,6 +66,12 @@ class AgentInput(Strict):
     @classmethod
     def tools(cls, values):
         return references(values)
+
+    @field_validator("toolAccess")
+    @classmethod
+    def access(cls, values):
+        references(list(values))
+        return values
 
 
 class AgentProfile(Strict):

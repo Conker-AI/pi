@@ -6,6 +6,20 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Access layers:** each action resolves from the owner's own settings, the more specific
+  winning: this chat's switch (`settings.access`: default, ask, ai, full), the agent's
+  `toolAccess`, the tool's own default. Guards: the agent's toolkit, ToolGate's floor (sensitive
+  tools always ask) and outside content (one step stricter; his words stop counting; Conker's own
+  Keep actions go to the reviewer). AI decides is Pi's reviewer (unsure means ask); his own typed
+  request counts as approval when it asks for exactly this action. Pi sends ToolGate the outcome,
+  honoured only for a policy-delegate key and never on the floor. Conker's remembering and
+  scheduling now happen at once. Actions that ran without asking are listed at `/access/handled`.
+  See docs/access.md.
+- `GET /tools` lists each tool's default access (`authorization`) and whether it is on the owner's
+  floor (`sensitive`). The gateway forwards ToolGate's owner access routes: `GET /api/owner/access`,
+  `POST /api/owner/access/delegate` (the chat's own key) and `POST /api/owner/tools/{id}/sensitive`,
+  both writes password-verified.
+
 - **Conker prepares, the owner verifies:** three tools of Conker's own, `conker.schedule`,
   `conker.draft_tool` and `conker.remember`, let a chat (or an AI job) ask for a cron job, a new
   tool or a memory. Each only files a change request; nothing exists until the owner approves it

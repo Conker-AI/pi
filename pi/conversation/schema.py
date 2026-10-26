@@ -52,6 +52,7 @@ from pi.setup import model_probes as setup_model_probes
 from pi.setup import protection as setup_protection
 from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
+from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
 from pi.turns import queue as turn_queue
@@ -97,6 +98,7 @@ def install(db):
     agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
     change_requests.initialize(db)
+    turn_access.initialize(db)
     workflow_offers.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)

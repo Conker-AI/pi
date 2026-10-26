@@ -1,10 +1,11 @@
-"""Conker's own tools: it prepares a cron job, a tool or a memory, and the owner verifies each.
+"""Conker's own tools: a cron job, a tool draft or a memory, under the owner's access layers.
 
-They are offered next to the owner's published tools. Calling one files a change request (see
-`pi.agents.change_requests`) and answers at once; nothing is created until the owner approves it in
-the Inbox, so a prompt attack can at worst leave a request the owner declines. Nothing here acts
-outside Pi's own store (ADR-0005). The companion gets them all; another agent gets those selected
-for it, like any tool.
+They are offered next to the owner's published tools and follow the same layers (chat > agent >
+tool default, see `pi.turns.access`). Remembering and scheduling are Keep: allowed by default, done
+at once and listed in Inbox Handled. A tool draft, and anything his settings say to ask about, is
+filed as a change request (`pi.agents.change_requests`) that he approves in the Inbox. Every one is
+recorded as a request either way. Nothing here acts outside Pi's own store and memory (ADR-0005).
+The companion gets them all; another agent gets those selected for it, like any tool.
 """
 
 from __future__ import annotations
@@ -24,8 +25,9 @@ CATALOG = (
     Tool(
         SCHEDULE,
         "Schedule an AI job",
-        "Ask the owner to create a cron job: an AI job that carries out instructions with tools on a "
-        "schedule or when its webhook is called. The owner must approve it in the Inbox before it exists.",
+        "Create a cron job: an AI job that carries out instructions with tools on a schedule or when "
+        "its webhook is called. Depending on the owner's settings it is created at once or waits for "
+        "his approval; the result says which.",
         [
             {
                 "name": "name",
@@ -64,6 +66,7 @@ CATALOG = (
                 "description": "For weekly: sunday to saturday",
             },
         ],
+        "auto",
     ),
     Tool(
         DRAFT_TOOL,
@@ -78,11 +81,13 @@ CATALOG = (
                 "description": "What the new tool should do",
             }
         ],
+        "owner_confirmation",
     ),
     Tool(
         REMEMBER,
         "Remember something",
-        "Ask the owner to save one fact to memory, in a full sentence. The owner approves it in the Inbox.",
+        "Save one fact to memory, in a full sentence. Depending on the owner's settings it is saved at "
+        "once or waits for his approval; the result says which.",
         [
             {
                 "name": "text",
@@ -91,6 +96,7 @@ CATALOG = (
                 "description": "The fact to remember, e.g. The owner's physics exam is on Thursday 30 October",
             }
         ],
+        "auto",
     ),
 )
 IDS = {tool.id for tool in CATALOG}
@@ -150,6 +156,30 @@ def _timing(args) -> tuple[dict, bool, str]:
     raise ValueError("repeat must be hours, daily, weekly or webhook.")
 
 
+def _done(loop, request, tool_id) -> ToolResult:
+    """Make the request real now; if that cannot happen (memory not connected), it waits."""
+    try:
+        decided = change_requests.approve(loop.store, request["id"], memory=loop.remember)
+    except change_requests.ChangeRequestError:
+        return _filed(request, tool_id)
+    if decided["state"] != "approved":
+        return _filed(request, tool_id)
+    title = request["title"].rstrip(".")
+    return ToolResult(
+        ok=True,
+        result={
+            "status": "done",
+            "requestId": request["id"],
+            "made": decided["result"],
+            "message": (
+                f"Done: \u201c{title}\u201d. It is listed in the owner's Inbox under Handled, "
+                "where he can undo it."
+            ),
+        },
+        tool_id=tool_id,
+    )
+
+
 def _filed(request, tool_id) -> ToolResult:
     title = request["title"].rstrip(".")
     return ToolResult(
@@ -167,8 +197,9 @@ def _filed(request, tool_id) -> ToolResult:
     )
 
 
-def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
-    """Validate the arguments and file one change request; a bad argument is an answer, not a failure."""
+def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> ToolResult:
+    """Validate the arguments and file one change request, made real at once when `run` (his
+    access layers allow it). A bad argument is an answer, not a failure."""
     try:
         if tool_id == SCHEDULE:
             name = _text(args, "name", 80)
@@ -193,7 +224,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
                 session_id=session_id,
                 turn_id=turn_id,
             )
-            return _filed(request, tool_id)
+            return _done(loop, request, tool_id) if run else _filed(request, tool_id)
         if tool_id == DRAFT_TOOL:
             description = _text(args, "description", 4000)
             capabilities = [
@@ -249,7 +280,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution) -> ToolResult:
             session_id=session_id,
             turn_id=turn_id,
         )
-        return _filed(request, tool_id)
+        return _done(loop, request, tool_id) if run else _filed(request, tool_id)
     except ValueError as invalid:
         return ToolResult(
             ok=False, result={"status": "invalid", "message": str(invalid)}, tool_id=tool_id

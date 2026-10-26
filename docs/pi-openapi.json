@@ -2826,6 +2826,67 @@
         }
       }
     },
+    "/access/handled": {
+      "get": {
+        "summary": "Handled",
+        "description": "The last week of actions that ran without asking him, newest first, with who decided.",
+        "operationId": "handled_access_handled_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflow-proposals": {
       "post": {
         "summary": "Record",
@@ -22290,6 +22351,19 @@
             "maxItems": 1000,
             "title": "Toolids"
           },
+          "toolAccess": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "ai",
+                "ask"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 1000,
+            "title": "Toolaccess"
+          },
           "memory": {
             "$ref": "#/components/schemas/MemorySelection"
           }
@@ -31645,6 +31719,17 @@
               }
             ],
             "title": "Presentationmode"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "default",
+              "ask",
+              "ai",
+              "full"
+            ],
+            "title": "Access",
+            "default": "default"
           }
         },
         "additionalProperties": false,
