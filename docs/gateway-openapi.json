@@ -1059,10 +1059,98 @@
         }
       }
     },
+    "/api/owner/tools/{identity}/access": {
+      "post": {
+        "summary": "Access Control",
+        "description": "Whether Conker decides by his access settings, the tools that always ask him, and\nwhich tools Conker may use at all.",
+        "operationId": "access_control_api_owner_tools__identity__access_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Access Control",
+        "description": "Whether Conker decides by his access settings, the tools that always ask him, and\nwhich tools Conker may use at all.",
+        "operationId": "access_control_api_owner_tools__identity__access_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/owner/tools/{identity}/sensitive": {
       "post": {
         "summary": "Access Control",
-        "description": "Whether Conker decides by his access settings, and the tools that always ask him.",
+        "description": "Whether Conker decides by his access settings, the tools that always ask him, and\nwhich tools Conker may use at all.",
         "operationId": "access_control_api_owner_tools__identity__sensitive_post",
         "parameters": [
           {
@@ -1107,7 +1195,7 @@
     "/api/owner/access/delegate": {
       "post": {
         "summary": "Access Control",
-        "description": "Whether Conker decides by his access settings, and the tools that always ask him.",
+        "description": "Whether Conker decides by his access settings, the tools that always ask him, and\nwhich tools Conker may use at all.",
         "operationId": "access_control_api_owner_access_delegate_post",
         "parameters": [
           {
@@ -1152,7 +1240,7 @@
     "/api/owner/access": {
       "get": {
         "summary": "Access Control",
-        "description": "Whether Conker decides by his access settings, and the tools that always ask him.",
+        "description": "Whether Conker decides by his access settings, the tools that always ask him, and\nwhich tools Conker may use at all.",
         "operationId": "access_control_api_owner_access_get",
         "parameters": [
           {

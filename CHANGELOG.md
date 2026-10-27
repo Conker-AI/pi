@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Gateway: `GET`/`POST /api/owner/tools/{id}/access` shows and switches whether Conker may use a
+  tool at all (ToolGate's owner tool access, on the chat's own key). Writes need the password
+  proof, like the other owner access switches.
+
 ## 0.7.0
 
 - **Agent identities:** Pi calls ToolGate as the running agent (`X-ToolGate-Agent`) after defining
