@@ -57,24 +57,34 @@ def router(app, session, forward, admit_write):
     @routes.get("/api/owner/access")
     @routes.post("/api/owner/access/delegate")
     @routes.post("/api/owner/tools/{identity}/sensitive")
+    @routes.get("/api/owner/tools/{identity}/access")
+    @routes.post("/api/owner/tools/{identity}/access")
     async def access_control(request: Request, identity: str | None = None):
-        """Whether Conker decides by his access settings, and the tools that always ask him."""
+        """Whether Conker decides by his access settings, the tools that always ask him, and
+        which tools Conker may use at all."""
         from starlette.concurrency import run_in_threadpool
 
+        from .mcp_control import validate_body
+
         session(request)
+        tool_access = identity is not None and request.url.path.endswith("/access")
         if request.scope["query_string"] or (
             identity is not None and not re.fullmatch(ACCESS_TOOL_ID, identity)
         ):
             raise AuthError("Select a tool without query parameters.", 422)
         body = await json_body(request) if request.method == "POST" else None
         if body is not None:
-            field = "sensitive" if identity is not None else "enabled"
-            if set(body) != {field} or not isinstance(body[field], bool):
-                raise AuthError(f"Send only {field}: true or false.", 422)
+            if tool_access:
+                validate_body("access", body)
+            else:
+                field = "sensitive" if identity is not None else "enabled"
+                if set(body) != {field} or not isinstance(body[field], bool):
+                    raise AuthError(f"Send only {field}: true or false.", 422)
             admit_write(request, body)
         extra = None
-        if identity is None:
-            # The delegate is the chat's own scoped key; the owner key alone cannot name it.
+        if identity is None or tool_access:
+            # The delegate and the tool grants are the chat's own scoped key; the owner key alone
+            # cannot name it.
             key = app.state.config.toolgate_execution_key
             if not key:
                 raise AuthError("The scoped chat execution credential is not configured.", 503)
