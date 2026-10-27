@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.7.0
+
 - **Agent identities:** Pi calls ToolGate as the running agent (`X-ToolGate-Agent`) after defining
   that agent's toolkit there, so ToolGate enforces each agent's tools, not only Pi. The companion
   keeps the key's full view. Approval resumes and action checks use the same agent, since ToolGate
