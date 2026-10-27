@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.8.0
+
 - Gateway: `GET`/`POST /api/owner/tools/{id}/access` shows and switches whether Conker may use a
   tool at all (ToolGate's owner tool access, on the chat's own key). Writes need the password
   proof, like the other owner access switches.
