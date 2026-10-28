@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.9.0
+
 - **His Inbox answer continues the work.** After ToolGate records his decision, the gateway calls
   `POST /approvals/{id}/decided` (from the Inbox and `conker apply approvals`). Do it resumes the
   parked turn at once. Don't ends it `cancelled` and the chat takes messages again. A note with a
