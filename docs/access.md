@@ -26,6 +26,15 @@ Guards no layer removes:
 **His words count:** when an action would ask, is not on the floor and no outside content is in the
 chat, the reviewer checks whether his own message asks for exactly this action; if so it runs.
 
+**The reviewer** (`pi/turns/reviewer.py`) runs on its own model role, `reviewer`, when he set one
+up (otherwise the answer model). In AI decides it also answers two questions: does the action reach
+a real person (send, reply, post, invite, share), and can it not be undone (delete for good, pay,
+buy, submit, cancel, publish)? A yes, or anything but a clear no, means ask him, whatever its
+verdict; Pi enforces that from the two answers, so a reviewer talked into approving cannot let such
+an action through. His own typed words and Full access are his choices and are not overruled
+(mark a tool "always ask" for that); the floor and outside content still apply. The reviewer is
+told when the run has read outside content.
+
 **Enforcement:** Pi tells ToolGate the outcome (`decision`), and ToolGate honours "run" only when the
 owner made Pi's key a policy delegate (`GET /v2/agent/status` reports it; Pi asks once per turn and
 decides nothing for ToolGate tools otherwise) and never on the floor.
