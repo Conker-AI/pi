@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.10.0
+
 - **A separate, stronger reviewer.** The check before an action runs without the owner has its own
   model role, `reviewer` (older settings gain it switched off; until he picks a model, the answer
   model reviews). In AI decides it never lets an action that reaches a real person or cannot be
