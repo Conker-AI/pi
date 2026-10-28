@@ -3,6 +3,7 @@
 <p align="center"><b>Conker's runtime: conversations, model choice, tool calls and an append-only record of every turn.</b></p>
 <p align="center">
   <a href="https://github.com/Conker-AI/pi/actions/workflows/ci.yml"><img src="https://github.com/Conker-AI/pi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Conker-AI/pi/tags"><img src="https://img.shields.io/github/v/tag/Conker-AI/pi?sort=semver&label=release" alt="Latest release" /></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB" alt="Python 3.12" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 license" /></a>
   <a href="https://github.com/Conker-AI/conker"><img src="https://img.shields.io/badge/part%20of-Conker-e36b2c" alt="Part of Conker" /></a>
@@ -12,6 +13,23 @@ Pi runs each conversation turn: it gathers memory, picks a model, lets the model
 ToolGate, and records what happened. The same image ships the **Gateway**, the only thing a browser
 ever talks to. Part of [Conker](https://github.com/Conker-AI/conker), a personal AI companion you
 host yourself.
+
+## What it does
+
+- **Conversations.** Chats and drafts, stop, steer and queue, regenerate and branch, search, and
+  long chats that continue in a linked child instead of losing their start.
+- **Models by job.** The answer, thinking, reviewer and helper roles each get their own model:
+  local through Ollama, or hosted through OpenRouter, OpenAI or Anthropic. Auto picks among the
+  eligible ones; paid models stay off until the owner allows them.
+- **Access by the owner's settings.** Every action resolves through the chat, then the agent, then
+  the tool's default. "AI decides" goes to the reviewer role, and anything that reaches a real
+  person or cannot be undone still asks the owner. ([access](docs/access.md))
+- **One Inbox.** Approvals, Conker's own requests (a cron job, a tool, a memory) and ideas wait in
+  one place; answering one continues the work in its chat. ([Inbox answers](docs/inbox-answers.md))
+- **Work on its own.** AI jobs run on a schedule, on an event or from a webhook, inside the
+  owner's budgets. ([jobs](docs/jobs.md))
+- **The owner's settings.** One revision-checked settings document and the owner's preferences,
+  read and changed through the gateway. ([owner settings](docs/owner-settings.md))
 
 ## Where it fits
 
@@ -56,7 +74,7 @@ turn needing approval *parks*, and resuming replays the exact stored action the 
 
 ## Quick start
 
-Requires Docker with Compose.
+Requires Docker with Compose. Published image: `ghcr.io/conker-ai/pi` (Pi and the Gateway).
 
 ```bash
 cp .env.example .env
@@ -101,6 +119,9 @@ Every variable is in [`.env.example`](.env.example).
 | `GET /approvals` · `POST /turns/{id}/resume` | Turns waiting on the owner, and continuing them. |
 | `GET /turns/unreplied` | Turns that acted but never reported back. |
 | `GET /models` | Models Pi can route to now, free and paid. |
+| `GET /inbox` · `GET /asks` · `GET /change-requests` | What waits for the owner, Conker's questions and its requests. |
+| `GET /jobs` · `POST /jobs/{id}/run` | AI jobs and their runs, schedules and webhooks. |
+| `GET /owner/settings` · `POST /owner/settings` | The owner's settings document, revision-checked. |
 | `GET /setup/status` | Owner-only, versioned first-run setup evidence. |
 | `GET /agents` · `POST /agents/{id}/update` | Owner-only durable agent and Companion profiles. |
 | `GET /projects` · `POST /projects/{id}/link` | Owner-only projects and canonical source links. |
