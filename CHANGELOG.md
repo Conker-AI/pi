@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.11.0
+
 - **Owner settings document:** `GET`/`POST /owner/settings` keeps every registry setting that has
   no other home, by its id, revision-checked and shape-checked (docs/owner-settings.md). Saving
   needs only the signed-in session: it holds preferences, never authority.
