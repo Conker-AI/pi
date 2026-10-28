@@ -113,6 +113,15 @@ def decide(
 
 SEND = Tool("mail.send", "Send email", "Sends an email", [], "owner_confirmation")
 APPROVE = json.dumps({"verdict": "approve", "reason": "He asked for exactly this."})
+# AI decides also needs the reviewer's clear no to "reaches a person" and "can't be undone".
+SAFE = json.dumps(
+    {
+        "verdict": "approve",
+        "reachesPerson": False,
+        "irreversible": False,
+        "reason": "Fits his request.",
+    }
+)
 
 
 def test_nothing_is_decided_for_toolgate_while_pi_is_not_a_delegate(store):
@@ -133,7 +142,7 @@ def test_his_words_do_not_count_after_outside_content(store):
 
 
 def test_ai_decides_and_unsure_means_ask(store):
-    (choice, by, _), _ = decide(store, [APPROVE], SEND, chat="ai")
+    (choice, by, _), _ = decide(store, [SAFE], SEND, chat="ai")
     assert (choice, by) == ("run", "ai_reviewer")
     (choice, _, why), _ = decide(store, ["not json"], SEND, chat="ai")
     assert choice == "ask" and why == "The reviewer gave no clear answer."

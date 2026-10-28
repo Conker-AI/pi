@@ -19,6 +19,12 @@ the answer role otherwise, so chat can stay on a small local model while drafts 
 one. Older saved settings gain it disabled. It runs only when the owner asks for a draft, with
 the builder's 10-minute wait, and sees only the request and the capability list.
 
+The `reviewer` role checks an action before it runs without the owner (AI decides, and whether
+his own words ask for exactly this; see access.md). When it is enabled with a model, the reviewer
+uses it, so he can make it stronger than the model doing the work (for example Jev); otherwise,
+and in a chat with no harness, the answer model reviews. Older saved settings gain it disabled.
+A reviewer that fails or answers unclearly means the action asks him.
+
 The development search API has a separate optional `search-ranking` role,
 migrated disabled with a 2,000ms transport timeout. It does not reuse memory
 ranking or conversation context selection. Owner search settings must explicitly

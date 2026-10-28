@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A separate, stronger reviewer.** The check before an action runs without the owner has its own
+  model role, `reviewer` (older settings gain it switched off; until he picks a model, the answer
+  model reviews). In AI decides it never lets an action that reaches a real person or cannot be
+  undone through without him: the reviewer answers both questions and Pi asks him on anything but
+  a clear no, whatever the verdict. His own words and Full access are unchanged. The reviewer is
+  told when the run read outside content. See docs/access.md.
+
 ## 0.9.0
 
 - **His Inbox answer continues the work.** After ToolGate records his decision, the gateway calls

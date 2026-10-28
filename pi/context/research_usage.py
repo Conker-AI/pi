@@ -19,6 +19,7 @@ ROLES = {
     "memory-ranking",
     "search-ranking",
     "proposals",
+    "reviewer",
 }
 EXTRA_COLUMNS = {
     "lane": "TEXT NOT NULL DEFAULT 'foreground'",
