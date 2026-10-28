@@ -112,6 +112,7 @@ def test_model_apply_uses_fixed_owner_route_and_exact_json():
         "agents",
         "approvals",
         "artifacts",
+        "asks",
         "calls",
         "character",
         "files",

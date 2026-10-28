@@ -1,11 +1,13 @@
-"""Conker's own tools: a cron job, a tool draft or a memory, under the owner's access layers.
+"""Conker's own tools: a cron job, a tool draft, a memory or a question, under his access layers.
 
 They are offered next to the owner's published tools and follow the same layers (chat > agent >
 tool default, see `pi.turns.access`). Remembering and scheduling are Keep: allowed by default, done
 at once and listed in Inbox Handled. A tool draft, and anything his settings say to ask about, is
 filed as a change request (`pi.agents.change_requests`) that he approves in the Inbox. Every one is
 recorded as a request either way. Nothing here acts outside Pi's own store and memory (ADR-0005).
-The companion gets them all; another agent gets those selected for it, like any tool.
+The companion gets them all; another agent gets those selected for it, like any tool. A question
+(`conker.ask`) is always allowed: it goes to his Inbox and his answer comes back to the chat as his
+next message (`pi.agents.asks`).
 """
 
 from __future__ import annotations
@@ -13,12 +15,13 @@ from __future__ import annotations
 import re
 
 from pi.actions.toolgate import Tool, ToolResult
-from pi.agents import change_requests, workflow_drafts
+from pi.agents import asks, change_requests, workflow_drafts
 from pi.schedule import agent_jobs
 
 SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
 REMEMBER = "conker.remember"
+ASK = "conker.ask"
 DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
 
 CATALOG = (
@@ -95,6 +98,28 @@ CATALOG = (
                 "required": True,
                 "description": "The fact to remember, e.g. The owner's physics exam is on Thursday 30 October",
             }
+        ],
+        "auto",
+    ),
+    Tool(
+        ASK,
+        "Ask the owner",
+        "Ask the owner a question when you are unsure he wants something done. It waits in his "
+        "Inbox; his answer arrives later as his next message in this chat. Give 2 to 4 short "
+        "options he can tap; he can always write his own answer instead.",
+        [
+            {
+                "name": "question",
+                "type": "string",
+                "required": True,
+                "description": "One clear question, e.g. Your server app's login bothers you. Fix it today?",
+            },
+            {
+                "name": "options",
+                "type": "array",
+                "required": False,
+                "description": '2 to 4 short answers he can tap, e.g. ["Yes, fix it", "Not now"]',
+            },
         ],
         "auto",
     ),
@@ -201,6 +226,24 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     """Validate the arguments and file one change request, made real at once when `run` (his
     access layers allow it). A bad argument is an answer, not a failure."""
     try:
+        if tool_id == ASK:
+            asked = asks.file(
+                loop.store, session_id, turn_id, args.get("question"), args.get("options")
+            )
+            return ToolResult(
+                ok=True,
+                result={
+                    "status": "asked",
+                    "askId": asked["id"],
+                    "options": asked["options"],
+                    "message": (
+                        "Asked. The question waits in the owner's Inbox; his answer will arrive "
+                        "as his next message in this chat. Tell him in one line that you asked, "
+                        "and do not act on it until he answers."
+                    ),
+                },
+                tool_id=tool_id,
+            )
         if tool_id == SCHEDULE:
             name = _text(args, "name", 80)
             instructions = _text(args, "instructions", 4000)

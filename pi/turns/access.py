@@ -16,6 +16,7 @@ import json
 import time
 import uuid
 
+from pi.agents import asks
 from pi.models.providers import Message
 from pi.models.routing import TurnContext
 
@@ -26,6 +27,8 @@ TOOL_DEFAULT = {"auto": "allow", "ai_review": "ai", "owner_confirmation": "ask"}
 CHAT_LEVELS = ("default", "ask", "ai", "full")
 # Wrapped by Pi around a webhook's payload; a run that carries one has read outside content.
 WEBHOOK_MARK = "<webhook>"
+# Conker's question to him (`pi.turns.native_tools.ASK`).
+native_ask = "conker.ask"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -96,9 +99,13 @@ def outside_content(store, session_id, owner_text, native):
     for row in rows:
         try:
             # Stored as the JSON of the observation text, which is itself JSON.
-            tool = json.loads(_text(row["content"])).get("tool")
+            observation = json.loads(_text(row["content"]))
+            tool = observation.get("tool")
         except (ValueError, AttributeError):
             return True
+        # Pi's own note that he said no (beside the tool id, where tool output cannot reach).
+        if "declined" in observation and "result" not in observation:
+            continue
         if not native(str(tool)):
             return True
     return False
@@ -113,8 +120,14 @@ def _text(raw):
 
 
 def owner_text(store, turn_id):
-    """The owner's own message that started this turn (a cron job's instructions in a job run)."""
+    """The owner's own message that started this turn (a cron job's instructions in a job run).
+
+    For his answer to one of Conker's questions, only the words he typed: an option he tapped
+    was written by the AI, so it is no request of his."""
     with store._connect() as db:
+        words = asks.answer_words(db, turn_id)
+        if words is not None:
+            return words
         row = db.execute(
             "SELECT m.content FROM turn_messages t JOIN messages m ON m.id=t.message_id "
             "WHERE t.turn_id=? AND t.purpose='input' AND m.role='user'",
@@ -204,6 +217,9 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     """("run" | "ask" | None, decided_by, reason) for one action. None: let the tool's own
     authorization apply (blocked, or a ToolGate tool while Pi's key is not a policy delegate, so
     nothing Pi decides would be honoured; Conker's own tools are always Pi's to decide)."""
+    if tool.id == native_ask:
+        # Asking him is the safe path: it changes nothing and his answer comes back as his words.
+        return "run", "tool_default", REASONS["tool_default"]
     if not native(tool.id) and not delegate():
         return None, "tool_default", ""
     settings = (execution or {}).get("settings") or {}
@@ -239,7 +255,10 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
 
 
 def loosened(tool, decided_by, native):
-    """Whether this run went ahead without him where the tool alone would not have: Handled."""
+    """Whether this run went ahead without him where the tool alone would not have: Handled. A
+    question to him is not: it waits in his Inbox."""
+    if tool.id == native_ask:
+        return False
     return native or (
         TOOL_DEFAULT.get(tool.authorization) != "allow" and decided_by != "tool_default"
     )

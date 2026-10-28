@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pi.actions import identities as actions
 from pi.agents import (
+    asks,
     change_requests,
     characters,
     continuity,
@@ -98,6 +99,7 @@ def install(db):
     agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
     change_requests.initialize(db)
+    asks.initialize(db)
     turn_access.initialize(db)
     workflow_offers.initialize(db)
     agents.initialize(db)
