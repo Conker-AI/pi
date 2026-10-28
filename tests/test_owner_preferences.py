@@ -138,7 +138,8 @@ def test_urgency_budget_and_stale_usage():
         prefs.admission_reasons(value, instant, **{**kwargs, "usage_day": "2026-01-01"})
 
 
-def test_admin_only_http_and_failed_save_atomic(tmp_path, monkeypatch):
+def test_owner_only_http_and_failed_save_atomic(tmp_path, monkeypatch):
+    owner = "owner-preferences-owner-key-" + "o" * 32
     with closing(Store(tmp_path / "test.db")) as store:
         monkeypatch.setattr(api.app.state, "store", store, raising=False)
         monkeypatch.setattr(api.app.state, "admin_key", "owner_admin_test_key", raising=False)
@@ -148,22 +149,25 @@ def test_admin_only_http_and_failed_save_atomic(tmp_path, monkeypatch):
             hashlib.sha256(b"runtime_test_key").hexdigest(),
             raising=False,
         )
+        monkeypatch.setattr(
+            api.app.state,
+            "owner_key_hash",
+            hashlib.sha256(owner.encode()).hexdigest(),
+            raising=False,
+        )
         client = TestClient(api.app)
         route = "/owner/preferences"
         body = {"expected_revision": 1, "preferences": prefs.DEFAULT}
         for method in ("get", "post"):
             args = {"json": body} if method == "post" else {}
-            assert getattr(client, method)(route, **args).status_code == 401
-            assert (
-                getattr(client, method)(
-                    route, headers={"X-Pi-Gateway-Key": "runtime_test_key"}, **args
-                ).status_code
-                == 403
-            )
+            # Neither nothing nor the chat's runtime key reads or changes his preferences.
+            for headers in ({}, {"X-Pi-Gateway-Key": "runtime_test_key"}):
+                assert getattr(client, method)(route, headers=headers, **args).status_code == 401
+        # The Settings screen uses the owner credential; the CLI uses the recovery key.
+        assert client.get(route, headers={"X-Pi-Owner-Key": owner}).json()["revision"] == 1
         headers = {"X-Pi-Key": "owner_admin_test_key"}
-        assert client.get(route, headers=headers).json()["revision"] == 1
         assert client.post(route, headers=headers, json=body).json()["revision"] == 2
-        conflict = client.post(route, headers=headers, json=body)
+        conflict = client.post(route, headers={"X-Pi-Owner-Key": owner}, json=body)
         assert conflict.status_code == 409 and conflict.json()["detail"]["current_revision"] == 2
         assert (
             client.post(

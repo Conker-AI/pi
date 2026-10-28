@@ -74,6 +74,9 @@ SESSION_ONLY_WRITES = (
     r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved)",
     # Dismissing an AI job's note hides one line; the chat keeps the reply.
     r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
+    # The owner's settings document holds preferences only (look, wording, defaults): what Conker
+    # may do lives in ToolGate and in documents that keep asking for the password.
+    r"/owner/settings",
     # Answering Conker's question sends his message to that chat, like typing it there; any action
     # that follows passes his access layers. Dismissing sends nothing.
     r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
@@ -154,6 +157,9 @@ OWNER_ROUTES = {
         # Read-only: plan usage in percent per window, for the dashboard's Home. Dismissing an
         # alert stays with the recovery credential.
         r"/plans/usage",
+        # The Settings screen: the owner's settings document and his preferences.
+        r"/owner/settings",
+        r"/owner/preferences",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
@@ -205,6 +211,9 @@ OWNER_ROUTES = {
         r"/memory/remember",
         r"/memory/corrections",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
+        r"/owner/settings",
+        # Quiet hours, proactivity, daily budgets: saving asks for the password.
+        r"/owner/preferences",
     ),
 }
 

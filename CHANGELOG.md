@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Owner settings document:** `GET`/`POST /owner/settings` keeps every registry setting that has
+  no other home, by its id, revision-checked and shape-checked (docs/owner-settings.md). Saving
+  needs only the signed-in session: it holds preferences, never authority.
+- **Contract change:** `/owner/preferences` now takes the owner credential as well as the
+  recovery key, so the Settings screen can show quiet hours, proactivity, budgets, plan alerts and
+  the idle timeout. Saving through the gateway asks for the password.
+
 ## 0.10.0
 
 - **A separate, stronger reviewer.** The check before an action runs without the owner has its own

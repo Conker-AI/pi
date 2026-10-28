@@ -84,6 +84,8 @@ OWNER_CONFIGURATION = {
     "new_conversation_draft",
     "owner_preferences",
     "owner_search_settings",
+    # Settings by registry id (look, defaults, limits): chosen by the owner, never chat text.
+    "owner_settings",
     "projects",
     "scheduled_jobs",
     "scheduled_runs",

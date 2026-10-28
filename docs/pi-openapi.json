@@ -16781,11 +16781,27 @@
         }
       }
     },
-    "/owner/preferences": {
+    "/owner/settings": {
       "get": {
-        "summary": "Get Owner Preferences",
-        "operationId": "get_owner_preferences_owner_preferences_get",
+        "summary": "Get Owner Settings",
+        "operationId": "get_owner_settings_owner_settings_get",
         "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
           {
             "name": "X-Pi-Key",
             "in": "header",
@@ -16801,9 +16817,35 @@
               ],
               "title": "X-Pi-Key"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Save Owner Settings",
+        "operationId": "save_owner_settings_owner_settings_post",
+        "parameters": [
           {
-            "name": "X-Pi-Gateway-Key",
+            "name": "X-Pi-Owner-Key",
             "in": "header",
             "required": false,
             "schema": {
@@ -16815,7 +16857,93 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Pi-Gateway-Key"
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pi__owner__settings__Update"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/owner/preferences": {
+      "get": {
+        "summary": "Get Owner Preferences",
+        "operationId": "get_owner_preferences_owner_preferences_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
             }
           }
         ],
@@ -16845,6 +16973,22 @@
         "operationId": "save_owner_preferences_owner_preferences_post",
         "parameters": [
           {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
             "name": "X-Pi-Key",
             "in": "header",
             "required": false,
@@ -16858,22 +17002,6 @@
                 }
               ],
               "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
             }
           }
         ],
@@ -32542,6 +32670,27 @@
         "required": [
           "expected_revision",
           "configuration"
+        ],
+        "title": "Update"
+      },
+      "pi__owner__settings__Update": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "values"
         ],
         "title": "Update"
       },
