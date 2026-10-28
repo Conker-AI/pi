@@ -6,7 +6,8 @@ from contextlib import closing
 import pytest
 from test_tool_turns import CALL, FakeGate, build
 
-from pi.actions.tools import InvalidToolOutput, describe, parse, validate_answer
+from pi.actions.toolgate import Tool
+from pi.actions.tools import InvalidToolOutput, bare_arguments, describe, parse, validate_answer
 from pi.conversation.store import Store
 from pi.turns.failures import ActedWithoutReply, TurnFailed
 
@@ -20,8 +21,6 @@ def store(tmp_path):
 BAD_REQUESTS = [
     '{"tool":"None needed","args":{}}',
     '{"tool":"local_companion","args":{"scope":"conversation","query":"hello"}}',
-    '{"tool":"t_echo","args":',
-    "{'tool':'t_echo','args':{}}",
     '{"tool":"t_echo"}',
     '{"tool":"t_echo","args":null}',
     '{"tool":"t_echo","args":"hi"}',
@@ -34,18 +33,26 @@ BAD_REQUESTS = [
     '{"tool":"t_echo","args":{"number":1e999}}',
     '{"tool_calls":[{"function":{"name":"t_echo","arguments":"{}"}}]}',
     '{"type":"tool_use","name":"t_echo","input":{}}',
-    '{"type":"tool_use","name":"t_echo","input":',
     f"[{CALL}]",
     f"```json\n{CALL}\n```",
+]
+# What small models get wrong is asked for again, once (see the tests below): a request wrapped
+# in prose, request JSON that does not parse, and a tool's arguments without the request.
+RETRIED_REQUESTS = [
+    "Let me run this:\n" + CALL,
+    "Sure.\n" + CALL + "\nDone.",
+    '{"tool":"t_echo","args":',
+    "{'tool':'t_echo','args':{}}",
+    '{"type":"tool_use","name":"t_echo","input":',
     CALL + "\n" + CALL,
     CALL + "\nI ran this.",
+    '{"text": "hi"}',
+    '```json\n{"text": "hi"}\n```',
 ]
-# A request wrapped in prose is the one invalid output retried, once (see the test below).
-MIXED_REQUESTS = ["Let me run this:\n" + CALL, "Sure.\n" + CALL + "\nDone."]
 
 
-@pytest.mark.parametrize("output", MIXED_REQUESTS)
-def test_a_request_wrapped_in_prose_is_retried_once_and_never_run(store, output):
+@pytest.mark.parametrize("output", RETRIED_REQUESTS)
+def test_a_small_model_mistake_is_retried_once_and_never_run(store, output):
     gate = FakeGate()
     loop, provider = build(store, [output, output, "must not retry twice"], gate)
     sid = store.create_session()
@@ -61,6 +68,50 @@ def test_a_request_wrapped_in_prose_is_retried_once_and_never_run(store, output)
     assert [m["role"] for m in store.messages(sid)] == ["user"]
     with store._connect() as db:
         assert db.execute("SELECT COUNT(*) FROM tool_actions").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("output", RETRIED_REQUESTS)
+def test_the_retry_runs_only_its_own_valid_request(store, output):
+    gate = FakeGate()
+    loop, provider = build(store, [output, CALL, "It said hi."], gate)
+    sid = store.create_session()
+
+    result = loop.run_turn(sid, "Echo hi.")
+
+    assert result["message"]["content"] == "It said hi."
+    assert gate.invocations == [("t_echo", {"text": "hi"}, None)] and len(provider.sent) == 3
+    assert "Reply again" in provider.sent[1][-1].content
+
+
+def test_bare_arguments_count_only_as_an_exact_fit():
+    remember = Tool(
+        "conker.remember", "Remember", "", [{"name": "text", "type": "string", "required": True}]
+    )
+    schedule = Tool(
+        "conker.schedule",
+        "Schedule",
+        "",
+        [
+            {"name": "name", "type": "string", "required": True},
+            {"name": "repeat", "type": "string", "required": True},
+            {"name": "time", "type": "string"},
+        ],
+    )
+    tools = [remember, schedule]
+    assert bare_arguments('{"text": "The exam is on Thursday."}', tools)
+    assert bare_arguments('{"name": "Plan", "repeat": "weekly", "time": "08:00"}', tools)
+    assert bare_arguments('```json\n{"name": "Plan", "repeat": "weekly"}\n```', tools)
+    for answer in [
+        "Plain words.",
+        "{}",
+        '{"name": "Plan"}',
+        '{"name": "Plan", "repeat": "weekly", "day": "monday"}',
+        '{"answer": "Yes", "count": 1}',
+        '[{"text": "a list"}]',
+        CALL,
+        '{"text": "broken"',
+    ]:
+        assert not bare_arguments(answer, tools), answer
 
 
 @pytest.mark.parametrize("output", BAD_REQUESTS)
