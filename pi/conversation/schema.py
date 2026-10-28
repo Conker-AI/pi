@@ -39,6 +39,7 @@ from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
+from pi.owner import settings as owner_settings
 from pi.schedule import (
     agent_hooks,
     agent_jobs,
@@ -92,6 +93,7 @@ def install(db):
     db.executescript(universal_search.SCHEMA)
     db.executescript(message_citations.SCHEMA)
     owner_preferences.initialize(db)
+    owner_settings.initialize(db)
     db.executescript(proactive_budget.SCHEMA)
     plan_alerts.initialize(db)
     agent_jobs.initialize(db)

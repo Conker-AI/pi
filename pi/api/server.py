@@ -319,7 +319,7 @@ app.include_router(
 )
 
 
-app.include_router(owner_preferences_api.router(lambda: app.state, require_admin))
+app.include_router(owner_preferences_api.router(lambda: app.state, require_owner))
 
 
 app.include_router(agents_api.router(lambda: app.state, require_owner))
