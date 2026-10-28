@@ -14,7 +14,8 @@ from pi.turns import steering as turn_steering
 
 RETRY = (
     "Your last reply was not used: {reason} Reply again with exactly one of these: only the JSON "
-    "tool request and nothing else, or only your answer to the owner with no JSON in it."
+    'tool request and nothing else, as valid JSON in the form {{"tool": "<exact listed tool ID>", '
+    '"args": {{...}}}}, or only your answer to the owner with no JSON in it.'
 )
 
 
@@ -78,18 +79,26 @@ class ModelCalls:
             # works, and the model is simply offered nothing.
             return []
 
-    def _requested(self, route, completion, history, ctx, execution, allowed):
-        """The model's tool request, if any. A request wrapped in prose gets one more try with the
-        rule spelled out; nothing from that reply runs or is kept, and a second invalid reply
-        fails the turn. Every other invalid output fails at once, as before."""
+    def _requested(self, route, completion, history, ctx, execution, allowed, tools=()):
+        """The model's tool request, if any. The invalid outputs small models make (a request
+        wrapped in prose, request JSON that does not parse, a tool's bare arguments) get one more
+        try with the rule spelled out; nothing from that reply runs or is kept, and a second
+        invalid reply fails the turn. Every other invalid output fails at once, as before."""
         try:
-            return route, completion, tool_protocol.parse(completion.text, allowed)
+            return route, completion, self._request(completion.text, allowed, tools)
         except tool_protocol.InvalidToolOutput as exc:
-            if exc.reason != tool_protocol.MIXED:
+            if exc.reason not in tool_protocol.RETRIED:
                 raise
             again = [*history, Message("system", RETRY.format(reason=exc.reason))]
             route, completion, _ = self._call(again, ctx, execution)
-            return route, completion, tool_protocol.parse(completion.text, allowed)
+            return route, completion, self._request(completion.text, allowed, tools)
+
+    @staticmethod
+    def _request(text, allowed, tools):
+        call = tool_protocol.parse(text, allowed)
+        if call is None and tool_protocol.bare_arguments(text, list(tools)):
+            raise tool_protocol.InvalidToolOutput(tool_protocol.BARE)
+        return call
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
         from pi.turns import foreground_inference

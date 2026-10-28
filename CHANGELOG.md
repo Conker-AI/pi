@@ -6,6 +6,16 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.11.1
+
+- **Small models get a second try at a tool request.** Besides a request wrapped in prose, two more
+  mistakes small local models make are asked for again once, with the exact format spelled out:
+  request JSON that does not parse (often unescaped quotes), and a tool's arguments sent without
+  `{"tool": ..., "args": ...}` around them, which until now reached the owner as raw JSON. Only
+  an exact fit counts as bare arguments: every key is an input of one offered tool and its
+  required inputs are there. Nothing from a rejected reply runs or is kept, the retry never sees
+  it, and a second invalid reply fails the turn as before.
+
 ## 0.11.0
 
 - **Owner settings document:** `GET`/`POST /owner/settings` keeps every registry setting that has

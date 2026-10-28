@@ -45,8 +45,15 @@ class ToolCall:
     args: dict
 
 
-# The one invalid output the turn retries once: a request wrapped in prose (small models do this).
+# The invalid outputs the turn asks for again, once, because small models make them: a request
+# wrapped in prose, request JSON that does not parse, and a tool's arguments without the request.
 MIXED = "The model mixed a tool request with other text. This request was not executed."
+MALFORMED = "The model returned malformed or oversized tool JSON. This request was not executed."
+BARE = (
+    "The model sent a tool's arguments without the tool request around them. "
+    "This request was not executed."
+)
+RETRIED = (MIXED, MALFORMED, BARE)
 
 
 class InvalidToolOutput(RuntimeError):
@@ -133,7 +140,8 @@ def parse(text: str, allowed: set[str]) -> ToolCall | None:
     """Decode one exact request, distinguish prose, and refuse broken protocol.
 
     `allowed` is the current ToolGate scope, not model-supplied authority. An
-    invalid request never reaches ToolGate and is never repaired or retried.
+    invalid request never reaches ToolGate and is never repaired; the turn may ask
+    the model once more for the kinds in RETRIED (see ModelCalls._requested).
     Ordinary prose (including quoted examples) and non-protocol JSON are answers.
     """
     payload = _request(text)
@@ -150,6 +158,33 @@ def parse(text: str, allowed: set[str]) -> ToolCall | None:
             "The model requested an unavailable tool. This request was not executed."
         )
     return ToolCall(tool_id=tool_id, args=payload["args"])
+
+
+def bare_arguments(text: str, tools: list[Tool]) -> bool:
+    """The whole reply is one listed tool's arguments, without the tool request around them.
+
+    Shown as the answer it would be raw JSON, so the turn asks again instead. Only an exact fit
+    counts: every key is an input of one listed tool and every required input is there. Nothing
+    in it is ever run.
+    """
+    candidate = (text or "").strip()
+    fenced = _FENCE.fullmatch(candidate)
+    if fenced:
+        candidate = fenced.group(1).strip()
+    if not candidate.startswith("{") or len(candidate) > MAX_TOOL_REQUEST_CHARS:
+        return False
+    try:
+        value = json.loads(candidate)
+    except (ValueError, RecursionError):
+        return False
+    if not isinstance(value, dict) or not value or _request_shape(value):
+        return False
+    for tool in tools:
+        names = {field.get("name") for field in tool.inputs}
+        required = {field.get("name") for field in tool.inputs if field.get("required") is True}
+        if value.keys() <= names and required <= value.keys():
+            return True
+    return False
 
 
 def validate_answer(text: str) -> None:
@@ -216,9 +251,7 @@ def _request(text: str) -> dict | None:
     except (ValueError, RecursionError):
         if not _REQUEST_FIELD.search(candidate):
             return None
-        raise InvalidToolOutput(
-            "The model returned malformed or oversized tool JSON. This request was not executed."
-        ) from None
+        raise InvalidToolOutput(MALFORMED) from None
     if not _request_shape(value):
         return None
     if fenced or malformed or not isinstance(value, dict):

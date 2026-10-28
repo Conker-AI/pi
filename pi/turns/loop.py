@@ -365,7 +365,7 @@ class Loop(ModelCalls, History, Replies):
                 limit = min(limit, research.plan(self.store, turn_id)["search_limit"])
             for step in range(max(0, limit - used)):
                 route, completion, call = self._requested(
-                    route, completion, history, ctx, execution, allowed
+                    route, completion, history, ctx, execution, allowed, available
                 )
                 if call is None:
                     break
