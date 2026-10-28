@@ -137,10 +137,29 @@ JOB_MUTATION = TypeAdapter(JobMutation)
 
 
 class RequestDecision(Strict):
-    """Approve or decline one of Conker's requests exactly as filed."""
+    """Approve or decline one of Conker's requests exactly as filed. A reply with a decline goes
+    to that chat as his next message (Change)."""
 
     operation: Literal["approve", "decline"]
     id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
+    reply: str | None = Field(default=None, min_length=1, max_length=4000)
+
+
+class AskAnswer(Strict):
+    """Answer one of Conker's questions; it goes to that chat as his next message."""
+
+    operation: Literal["answer"]
+    id: str = Field(pattern=r"^ask_[a-f0-9]{32}$")
+    text: str = Field(min_length=1, max_length=4000)
+    chosen: bool = False
+
+
+class AskDismiss(Strict):
+    operation: Literal["dismiss"]
+    id: str = Field(pattern=r"^ask_[a-f0-9]{32}$")
+
+
+ASK_MUTATION = TypeAdapter(Annotated[AskAnswer | AskDismiss, Field(discriminator="operation")])
 
 
 class RequestSaved(Strict):
@@ -424,6 +443,7 @@ MUTATIONS = frozenset(
         "agents",
         "approvals",
         "artifacts",
+        "asks",
         "calls",
         "character",
         "files",

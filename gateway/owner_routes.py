@@ -6,10 +6,13 @@ import re
 
 from fastapi import APIRouter, Request
 
+from .answers import continue_after
 from .operations import json_body
 from .store import AuthError
 
 ACCESS_TOOL_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
+# The Inbox button templates ToolGate knows (toolgate/core/ask_cards.py).
+CARD_TEMPLATES = ("do", "send", "publish", "ship", "run", "delete", "pay", "save")
 
 
 def router(app, session, forward, admit_write):
@@ -57,17 +60,19 @@ def router(app, session, forward, admit_write):
     @routes.get("/api/owner/access")
     @routes.post("/api/owner/access/delegate")
     @routes.post("/api/owner/tools/{identity}/sensitive")
+    @routes.post("/api/owner/tools/{identity}/card")
     @routes.get("/api/owner/tools/{identity}/access")
     @routes.post("/api/owner/tools/{identity}/access")
     async def access_control(request: Request, identity: str | None = None):
-        """Whether Conker decides by his access settings, the tools that always ask him, and
-        which tools Conker may use at all."""
+        """Whether Conker decides by his access settings, the tools that always ask him, the
+        buttons his Inbox shows for a tool, and which tools Conker may use at all."""
         from starlette.concurrency import run_in_threadpool
 
         from .mcp_control import validate_body
 
         session(request)
         tool_access = identity is not None and request.url.path.endswith("/access")
+        card = identity is not None and request.url.path.endswith("/card")
         if request.scope["query_string"] or (
             identity is not None and not re.fullmatch(ACCESS_TOOL_ID, identity)
         ):
@@ -76,6 +81,9 @@ def router(app, session, forward, admit_write):
         if body is not None:
             if tool_access:
                 validate_body("access", body)
+            elif card:
+                if set(body) != {"template"} or body["template"] not in CARD_TEMPLATES:
+                    raise AuthError("Send only template: one of " + ", ".join(CARD_TEMPLATES), 422)
             else:
                 field = "sensitive" if identity is not None else "enabled"
                 if set(body) != {field} or not isinstance(body[field], bool):
@@ -345,7 +353,7 @@ def router(app, session, forward, admit_write):
         from starlette.concurrency import run_in_threadpool
 
         admit_write(request, body)
-        return await run_in_threadpool(
+        decided = await run_in_threadpool(
             forward,
             "POST",
             app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}/decision",
@@ -354,5 +362,11 @@ def router(app, session, forward, admit_write):
             body,
             b"",
         )
+        if decided.status_code == 200:
+            # His decision continues the work: Do it runs now; a no closes and passes his words.
+            await run_in_threadpool(
+                continue_after, app.state.client, app.state.config, identity, body
+            )
+        return decided
 
     return routes

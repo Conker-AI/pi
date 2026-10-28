@@ -23,6 +23,7 @@ from pi.api.browser_contract import runtime_allowed
 from pi.api.routes import access as access_api
 from pi.api.routes import activity as activity_api
 from pi.api.routes import agents as agents_api
+from pi.api.routes import answers as answers_api
 from pi.api.routes import artifacts as artifacts_api
 from pi.api.routes import attachments as attachments_api
 from pi.api.routes import auto_settings as auto_settings_api
@@ -174,6 +175,7 @@ app.include_router(
         lambda: app.state.store,
         require_owner,
         lambda: getattr(getattr(app.state, "memory_corrections", None), "remember", None),
+        lambda: app.state.loop,
     )
 )
 app.include_router(access_api.router(lambda: app.state.store, require_owner))
@@ -305,6 +307,14 @@ def receive_hook(
 app.include_router(
     jobs_api.router(
         lambda: app.state.store, require_owner, lambda: getattr(app.state, "job_executor", None)
+    )
+)
+app.include_router(
+    answers_api.router(
+        lambda: app.state.store,
+        lambda: app.state.loop,
+        require_owner,
+        lambda: getattr(app.state, "job_executor", None),
     )
 )
 

@@ -33,6 +33,7 @@ INSPECTIONS = {
     "agents": Inspection("owner", "/agents"),
     "approvals": Inspection("toolgate-owner", "/v2/owner/requests"),
     "artifacts": Inspection("owner", "/artifacts"),
+    "asks": Inspection("owner", "/asks"),
     "boundaries": Inspection("owner", "/setup/boundaries"),
     "change-requests": Inspection("owner", "/change-requests"),
     "character": Inspection("owner", "/characters/companion"),

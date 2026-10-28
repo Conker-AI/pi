@@ -14,6 +14,7 @@ from pydantic import (
 from gateway.mutation_models import (
     AGENT_MUTATION,
     ARTIFACT_MUTATION,
+    ASK_MUTATION,
     CALL_MUTATION,
     CHARACTER_MUTATION,
     FILE_MUTATION,
@@ -33,6 +34,7 @@ from gateway.mutation_models import (
     ArtifactAppend,
     ArtifactCreate,
     ArtifactFromMessage,
+    AskAnswer,
     CallStart,
     CallTurn,
     FileListingRequest,
@@ -45,6 +47,7 @@ from gateway.mutation_models import (
     ProjectCreate,
     ProjectUpdate,
     ProposalDecision,
+    RequestDecision,
     RequestSaved,
     SessionUpdate,
     TaskCreate,
@@ -162,8 +165,23 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             value = REQUEST_MUTATION.validate_python(payload)
         except ValidationError:
             raise MutationError("Request apply has an unsupported shape.") from None
-        body = {"draftId": value.draftId} if isinstance(value, RequestSaved) else {}
+        body = (
+            {"draftId": value.draftId}
+            if isinstance(value, RequestSaved)
+            else {"reply": value.reply}
+            if value.reply and value.operation == "decline"
+            else {}
+        )
+        if isinstance(value, RequestDecision) and value.reply and value.operation != "decline":
+            raise MutationError("Only a decline carries a reply.")
         return Mutation("POST", f"/change-requests/{value.id}/{value.operation}", body)
+    if resource == "asks":
+        try:
+            value = ASK_MUTATION.validate_python(payload)
+        except ValidationError:
+            raise MutationError("Answer apply request has an unsupported shape.") from None
+        body = value.model_dump(exclude={"operation", "id"}) if isinstance(value, AskAnswer) else {}
+        return Mutation("POST", f"/asks/{value.id}/{value.operation}", body)
     if resource == "memory":
         try:
             value = MEMORY_MUTATION.validate_python(payload)
@@ -404,4 +422,9 @@ def apply_resource(
         raise MutationError(f"{service} returned invalid mutation JSON.") from None
     if not isinstance(value, dict):
         raise MutationError(f"{service} returned an unsupported mutation response.")
+    if resource == "approvals":
+        # As in the Inbox: his decision continues the work once ToolGate recorded it.
+        from .answers import continue_after
+
+        continue_after(client, config, payload["id"], operation.payload or {})
     return value

@@ -74,6 +74,9 @@ SESSION_ONLY_WRITES = (
     r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved)",
     # Dismissing an AI job's note hides one line; the chat keeps the reply.
     r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
+    # Answering Conker's question sends his message to that chat, like typing it there; any action
+    # that follows passes his access layers. Dismissing sends nothing.
+    r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
     # Browser calls use bounded transient audio or typed turns. Neither grants new
     # authority, and any external effect still requires ToolGate approval.
     r"/calls/browser",
@@ -108,6 +111,8 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}/runs",
         r"/jobs/agent/notes",
         r"/change-requests",
+        r"/asks",
+        r"/asks/ask_[a-f0-9]{32}",
         r"/access/handled",
         r"/change-requests/creq_[a-f0-9]{32}",
         r"/projects",
@@ -169,6 +174,9 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}/hook",
         r"/jobs/job_[0-9a-f]{32}/hook/revoke",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
+        r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
+        # The gateway, after ToolGate recorded his decision: run it, or close it. Pi grants nothing.
+        r"/approvals/[A-Za-z0-9_-]{1,128}/decided",
         r"/jobs/runs/scheduled_[0-9a-f]{32}/(?:budget|provision-budget|cancel|resume|reconcile)",
         r"/projects",
         r"/projects/project_[0-9a-f]{32}/(?:update|archive|link|unlink)",

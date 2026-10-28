@@ -6,6 +6,20 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **His Inbox answer continues the work.** After ToolGate records his decision, the gateway calls
+  `POST /approvals/{id}/decided` (from the Inbox and `conker apply approvals`). Do it resumes the
+  parked turn at once. Don't ends it `cancelled` and the chat takes messages again. A note with a
+  no (Change) becomes his next message in that chat. Before, the action waited until he opened
+  the chat, and a no left the chat stuck. See docs/inbox-answers.md.
+- **`conker.ask`:** Conker asks him a question with 2-4 options it writes. The question waits in
+  the Inbox (`GET /asks`, `needsYou` kind `ask`); the chat is never held. His answer arrives as
+  his message in that chat (`POST /asks/{id}/answer`, `/dismiss`; CLI `apply asks`). A tapped
+  option never counts as his own words for the access layers. At most 3 open per chat, 20 in all.
+- `POST /change-requests/{id}/decline` takes an optional `reply`, sent to that chat as his next
+  message.
+- Gateway: `POST /api/owner/tools/{id}/card` picks a tool's Inbox buttons (ToolGate's fixed
+  templates); needs the password proof.
+
 ## 0.8.0
 
 - Gateway: `GET`/`POST /api/owner/tools/{id}/access` shows and switches whether Conker may use a
