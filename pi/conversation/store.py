@@ -37,6 +37,7 @@ from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.message_view import MESSAGE_LOOKUP, _message_with_attachments
 from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
 from pi.turns import control as turn_control
+from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 
 
@@ -335,6 +336,7 @@ class Store:
             fields = turn_steering.account(db, turn_id, fields)
             if not self._finish_turn(db, turn_id, "complete", **fields):
                 raise RuntimeError("Turn is no longer claimed by this caller")
+            turn_restart.release(db, turn_id)
             retry = db.execute(
                 "SELECT source_message_id FROM response_retries WHERE turn_id=?", (turn_id,)
             ).fetchone()
@@ -448,7 +450,14 @@ class Store:
     def mark_interrupted_turns(self) -> int:
         """Called at startup. A turn that was running when the process died did
         not finish, and saying nothing about it is the one answer that is wrong -
-        the owner would see a request that simply vanished."""
+        the owner would see a request that simply vanished.
+
+        What Pi can still settle from its own records goes first, without running
+        anything again: an answer already produced is saved, and Conker's own
+        tool calls cut off mid-way are recorded as filed or not (`turns.restart`).
+        """
+        turn_restart.recover(self)
+        turn_restart.settle_own_tools(self)
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             preparing = submissions.recover_preparations(db)
@@ -461,11 +470,19 @@ class Store:
                 "THEN 'cancelled' "
                 "ELSE 'interrupted' END, ended_at=?,"
                 # An interrupted turn that had already acted is not the same event
-                # as one that had not, and that difference is the only thing the
-                # owner actually needs from this row.
-                " detail=CASE WHEN acted=1"
-                "   THEN 'the process stopped after this turn acted, before it replied'"
-                "   ELSE 'the process stopped while this turn was running' END"
+                # as one that had not, and that difference is what the owner needs
+                # from this row: in plain words, in the order of the status above,
+                # with what they can do now.
+                " detail=CASE WHEN EXISTS(SELECT 1 FROM tool_actions a WHERE a.turn_id=turns.id"
+                " AND a.state IN ('dispatching','action_in_progress','outcome_unknown'))"
+                "   THEN 'Pi restarted while a tool action was running. Check its outcome "
+                "before sending this again; it will not run twice.'"
+                "   WHEN acted=1 THEN 'Pi restarted after the action ran, before the reply. "
+                "Ask for the reply; the action will not run again.'"
+                "   WHEN EXISTS(SELECT 1 FROM turn_cancellations c WHERE c.turn_id=turns.id)"
+                "   THEN 'Pi restarted while this turn was stopping. Your message is kept.'"
+                "   ELSE 'Pi restarted before the answer was finished. Your message is kept; "
+                "send it again to retry.' END"
                 # Only 'running'. A turn parked on the owner is not interrupted -
                 # it is waiting, and a restart does not withdraw the question.
                 " WHERE status='running'"
