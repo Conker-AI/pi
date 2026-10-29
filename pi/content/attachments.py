@@ -14,6 +14,7 @@ from typing import Annotated
 from pydantic import Field, StringConstraints, field_validator
 
 from pi.content import attachment_files, attachment_passages, document_text, image_input, pdf_text
+from pi.conversation import chat_preferences
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -157,6 +158,22 @@ class AttachmentError(ServiceError):
     pass
 
 
+def upload_limit(store):
+    """Largest upload in bytes from Settings, or None: no limit unless the owner chose one."""
+    with store._connect() as db:
+        return chat_preferences.upload_limit(db)
+
+
+def check_size(limit, size):
+    if limit is not None and size > limit:
+        raise AttachmentError(
+            "upload_limit",
+            f"Files can be at most {limit // chat_preferences.MIB} MB. "
+            "Raise Largest upload in Settings to attach this one.",
+            413,
+        )
+
+
 def initialize(db):
     """Initialize the attachments schema and add storage column if missing."""
     db.executescript(SCHEMA)
@@ -295,6 +312,7 @@ def _extract(raw, media_type):
 def upload_file(store, session_id, metadata: Metadata, incoming_path, size, sha256, resolve=None):
     """Upload a file that has been written to disk."""
     metadata = Metadata.model_validate(metadata.model_dump())
+    check_size(upload_limit(store), size)  # the caller discards the incoming file on refusal
 
     if size <= EXTRACT_MAX_BYTES:
         try:

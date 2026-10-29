@@ -29,8 +29,8 @@ from pi.actions import identities as actions
 from pi.agents import profiles as agents
 from pi.calls import call_turns
 from pi.context import research_usage
+from pi.conversation import chat_preferences, schema, submissions
 from pi.conversation import citations as message_citations
-from pi.conversation import schema, submissions
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.conversation.access import MaintenanceRequired, acquire
@@ -158,6 +158,11 @@ class Store:
             ).fetchone()
             if choice is not None:
                 initial_settings["privacy"]["memoryDisabled"] = choice[0] == "skip"
+            # The owner's defaults for new chats only add privacy; a choice made for this
+            # chat still wins. Saved with the chat, so changing them leaves chats unchanged.
+            defaults = chat_preferences.new_chat_privacy(db)
+            for flag, restricted in defaults.items():
+                initial_settings["privacy"][flag] |= restricted
             if privacy:
                 initial_settings["privacy"].update(privacy)
             if agent_id is not None:
@@ -165,7 +170,7 @@ class Store:
                 if selected["archived_at"] is not None:
                     raise agents.AgentError("agent_archived", "Select an active agent.")
                 initial_settings["agentId"] = selected["id"]
-            elif choice is None and not privacy:
+            elif choice is None and not privacy and not any(defaults.values()):
                 initial_settings = None
         db.execute(
             "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"

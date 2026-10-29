@@ -33,6 +33,8 @@ def router(store, authorize, resolve=None):
         except ValueError as exc:
             raise HTTPException(422, "Invalid attachment metadata.") from exc
         declared = request.headers.get("content-length")
+        # Largest upload from Settings; None (the default) is no size cap.
+        limit = await run_in_threadpool(attachments.upload_limit, store())
         if declared is not None:
             try:
                 size = int(declared)
@@ -40,12 +42,14 @@ def router(store, authorize, resolve=None):
                 raise HTTPException(400, "Invalid content length.") from exc
             if size < 0:
                 raise HTTPException(400, "Invalid content length.")
+            attachments.check_size(limit, size)
 
-        # Chunks go straight to disk, off the event loop; no size cap.
+        # Chunks go straight to disk, off the event loop, and stop once past the limit.
         incoming = attachment_files.Incoming(store())
         try:
             async for chunk in request.stream():
                 await run_in_threadpool(incoming.write, chunk)
+                attachments.check_size(limit, incoming.size)
             incoming_path, size, sha256 = await run_in_threadpool(incoming.close)
             if declared is not None and size != int(declared):
                 incoming.discard()
