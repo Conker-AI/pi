@@ -526,3 +526,55 @@ def test_ollama_applies_the_requested_output_and_nothing_otherwise(monkeypatch, 
     assert "format" not in limited and "think" not in limited
     assert limited["options"] == {"num_predict": 32}
     assert providers._output.get() is None
+
+
+def start(monkeypatch, tmp_path, keys):
+    import asyncio
+    import os
+
+    import httpx
+
+    from pi.api import startup
+
+    for name in list(os.environ):
+        if name.startswith("PI_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("PI_ADMIN_KEY", "synthetic-admin-key-only")
+    monkeypatch.setenv("PI_OWNER_KEY_SHA256", digest(OWNER))
+    monkeypatch.setenv("PI_DB_PATH", str(tmp_path / "startup.db"))
+    monkeypatch.setenv("PI_SERVICE_KEYS_SHA256", keys)
+
+    def no_network(*args, **kwargs):
+        pytest.fail("Startup must not contact external services")
+
+    monkeypatch.setattr(httpx, "post", no_network)
+    monkeypatch.setattr(httpx, "get", no_network)
+    seen = {}
+
+    async def run():
+        async with startup.lifespan(api.app):
+            seen.update(api.app.state.service_key_hashes)
+
+    asyncio.run(run())
+    return seen
+
+
+def test_startup_reads_the_service_keys(monkeypatch, tmp_path):
+    keys = {"memorygate": digest(MEMORYGATE), "toolgate": digest(TOOLGATE)}
+    assert start(monkeypatch, tmp_path, json.dumps(keys)) == keys
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        "not json",
+        json.dumps({"systemgate": digest(MEMORYGATE)}),
+        json.dumps({"memorygate": digest(OWNER)}),
+        json.dumps({"toolgate": digest("synthetic-admin-key-only")}),
+    ],
+)
+def test_startup_refuses_bad_or_reused_service_keys(monkeypatch, tmp_path, keys):
+    with pytest.raises(RuntimeError):
+        start(monkeypatch, tmp_path, keys)
+    # Refused before anything was opened.
+    assert not (tmp_path / "startup.db").exists()
