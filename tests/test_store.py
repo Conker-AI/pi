@@ -72,7 +72,7 @@ def test_a_turn_running_when_the_process_died_is_marked_interrupted(store):
     turn = store.turns(s)[0]
     assert turn["status"] == "interrupted"
     assert turn["ended_at"] is not None
-    assert "stopped" in turn["detail"]
+    assert "Pi restarted" in turn["detail"]
     # and the message the owner sent is still there
     assert store.messages(s)[0]["content"] == "did this go through?"
 

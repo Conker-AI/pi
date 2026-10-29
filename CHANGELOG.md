@@ -25,6 +25,13 @@ be a decision with visible consequences.
   30. Memories whose text repeats an earlier one (ignoring case and spacing) are dropped before
   the model reads them, the first kept, and counted in the package's
   `retrieval.pi_duplicate_memories` receipt. Search still shows every record.
+- **An answer survives a restart.** Pi holds each answer (new table `held_answers`, forgotten with
+  its chat) before the final commit, so an answer produced just before Pi stopped is saved at the
+  next start instead of lost; a stop or steer the owner sent still refuses it, as it would live.
+  One of Conker's own tool calls (`conker.*`) cut off mid-way is settled from Pi's records instead
+  of leaving the chat waiting forever on ToolGate, which never saw it: filed means the chat waits
+  only for its reply, not filed means nothing was done and the result says so. Nothing runs twice.
+  A turn cut off by a restart now says in plain words what happened and what to do next.
 
 ## 0.12.0
 

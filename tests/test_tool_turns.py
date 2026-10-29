@@ -368,9 +368,9 @@ def test_a_crash_between_acting_and_replying_says_which_it_was(store):
 
     store.mark_interrupted_turns()
 
-    assert "after this turn acted" in store.get_turn(acted_turn)["detail"]
+    assert "after the action ran" in store.get_turn(acted_turn)["detail"]
     assert store.get_turn(acted_turn)["acted"] == 1
-    assert "while this turn was running" in store.get_turn(quiet_turn)["detail"]
+    assert "before the answer was finished" in store.get_turn(quiet_turn)["detail"]
 
 
 def test_a_stale_approval_reparks_the_turn_on_the_new_request(store):

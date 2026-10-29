@@ -40,6 +40,21 @@ with the reason. Saying nothing would leave the owner looking at a request that 
 A turn that had already **acted** before the process died says so — it is not the same event as one
 that died before touching anything, and one message for both would describe the wrong one.
 
+### What a restart does at each point of a turn
+
+Pi never runs a model call or an action again on its own after a restart. The receipt by request id
+(`GET /turn-submissions/{id}`) shows the outcome, and sending the same request id again only reads it.
+
+| Pi stopped | After the restart |
+| --- | --- |
+| After the request was admitted, before its turn began | `preparation_interrupted`; the text is kept for the composer and no model was called. |
+| During a model call | `interrupted`: "Pi restarted before the answer was finished. Your message is kept; send it again to retry." |
+| After the answer was produced, before it was saved | The turn is completed with that answer. Pi holds each answer (`held_answers`) before the final commit; a stop or steer the owner sent still refuses it, as it would live. |
+| After the answer was saved, before the browser heard | `complete`; the receipt points at the saved answer. |
+| While a ToolGate action was in flight | `outcome_unknown`; resuming asks ToolGate about the same action id and never dispatches it again. |
+| While one of Conker's own tools (`conker.*`) was in flight | Settled from Pi's records: if it filed its Inbox request or question, `acted_no_reply` (ask for the reply); if not, `interrupted` with a result saying nothing was done. |
+| After an action's result was recorded, before the reply | `acted_no_reply`; resuming asks only for the reply. |
+
 ## Status vocabulary
 
 `/health` reports `ok`, `degraded`, `unavailable`, `not_configured` or `unknown` per check.
