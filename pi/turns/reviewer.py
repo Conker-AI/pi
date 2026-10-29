@@ -5,12 +5,15 @@ asked?) and his own words (does his message ask for exactly this?). It runs on i
 `reviewer`, so the owner can make it a stronger model than the one doing the work; until he picks
 one, or in a chat with no harness, the answer model reviews, as before.
 
-In AI decides it also says whether the action reaches a real person (sends, posts, replies,
-invites, calls, shares with someone) and whether it cannot be undone (deletes, pays, buys,
-publishes, submits, cancels). Either one means ask him, whatever its verdict. Pi enforces that
-here, from the two answers, so a reviewer talked into approving still cannot let such an action
-through. A missing or unclear answer counts as yes. His own typed words are his approval and Full
-access is his choice, so neither is overruled here; the floor and outside content still apply.
+In AI decides the hard stop comes first and from what the owner set, not from any model: a tool
+whose Inbox card he set to send, publish, ship, delete or pay (ToolGate's card template) always
+asks him, and no model is called for it. The reviewer's own answers to "does it reach a real
+person?" and "can it not be undone?" are only one more reason to ask: a yes, or anything but a
+clear no, asks him; a no never lets through a tool his card says asks. The verdict and those
+answers come from one model call, so text that steers one can steer the others. A tool from an
+external MCP server reaches the reviewer by its id and name only: its description came from that
+server. His own typed words are his approval and Full access is his choice, so neither is
+overruled here; the floor and outside content still apply.
 """
 
 from __future__ import annotations
@@ -56,6 +59,8 @@ FORMAT = {
 UNCLEAR = "The reviewer gave no clear answer."
 PERSON = "It reaches a real person, so you decide."
 FINAL = "It can't be undone, so you decide."
+# The card templates that say a tool sends, publishes, ships, deletes or pays: the owner's facts.
+HARD_STOP = {"send": PERSON, "publish": PERSON, "ship": FINAL, "delete": FINAL, "pay": FINAL}
 
 
 def role(execution) -> str:
@@ -74,14 +79,20 @@ def _no(value) -> bool:
     return value is False or (isinstance(value, str) and value.strip().lower() in {"false", "no"})
 
 
+def hard_stop(tool) -> str | None:
+    """Why AI decides never lets this tool through without him, from his own card choice."""
+    return HARD_STOP.get(getattr(tool, "card", "do"))
+
+
 def review(loop, execution, mode, request, tool, args, *, outside=False):
     """(approved, reason). Anything unreadable or unsure means ask."""
-    action = {
-        "tool": tool.id,
-        "name": tool.name,
-        "description": (tool.description or "")[:500],
-        "args": args,
-    }
+    stop = hard_stop(tool) if mode == "ai" else None
+    if stop:
+        return False, stop
+    action = {"tool": tool.id, "name": tool.name, "args": args}
+    if not getattr(tool, "external", False):
+        # An MCP server writes its own tools' descriptions: never let it argue for them here.
+        action["description"] = (tool.description or "")[:500]
     data = {"ownerRequest": request[:4000], "action": action}
     if outside:
         data["runReadOutsideContent"] = True

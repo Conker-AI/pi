@@ -88,9 +88,16 @@ class Client:
             json={"memory_id": memory_id, "expected_revision": revision},
         )
 
-    def remember(self, identity, text):
-        """Store one owner-approved statement word for word; replaying the identity is safe."""
-        result = self._request("PUT", "remember/" + quote(identity, safe=""), json={"text": text})
+    def remember(self, identity, text, origin="owner"):
+        """Store one statement word for word; replaying the identity is safe.
+
+        `origin` says who wrote the words: "owner" (he typed or approved this exact text; the field
+        is left out, as before) or "conker" (the model wrote them, as in a Keep result of
+        conker.remember), which MemoryGate keeps as an assistant statement, not his."""
+        if origin not in ("owner", "conker"):
+            raise ValueError("Say who wrote the memory: owner or conker.")
+        body = {"text": text} if origin == "owner" else {"text": text, "origin": origin}
+        result = self._request("PUT", "remember/" + quote(identity, safe=""), json=body)
         if not isinstance(result.get("memory_id"), str) or result.get("status") not in (
             "remembered",
             "already_remembered",

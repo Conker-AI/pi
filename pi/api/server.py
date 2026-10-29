@@ -382,6 +382,12 @@ def health():
             if app.state.toolgate
             else {"status": "not_configured", "reason": "no execution key"}
         ),
+        # Approvals and Keep memories a forgotten chat left behind, still to be removed.
+        "forget_followups": (
+            app.state.forget_followups.status()
+            if getattr(app.state, "forget_followups", None) is not None
+            else {"status": "not_configured", "reason": "Pi's follow-up worker is not running"}
+        ),
     }
     degraded = sorted(name for name, c in checks.items() if c["status"] not in HEALTHY)
     result = {

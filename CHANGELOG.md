@@ -6,6 +6,23 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Conker's own actions need the owner (security review 2026-10-29, F-20 to F-27, F-29).**
+  `conker.schedule` asks by default (his settings for an agent or a chat can still loosen it;
+  his own words no longer make a job), jobs record `createdBy`, and a job Conker made on its own
+  reserves from the daily proactive budget before each run and never counts as his words; no
+  AI-job run may schedule or draft a tool; Conker's requests make no job while 20 AI jobs are on
+  and at most 3 a day on its own. A private chat is never offered `conker.remember` or
+  `conker.schedule`, and a job approved from one gets a private chat. Outside content now also
+  covers recalled memories, attachments, project sources and answers to Conker's questions, and
+  a webhook payload marks its whole chat (new table `outside_sessions`; none of that chat's
+  messages goes to memory). In AI decides the hard stop is the owner's Inbox card template
+  (send, publish, ship, delete, pay; read from ToolGate's tool list when it lists `card`), not the
+  reviewer's own answers, and an MCP server's descriptions never reach the reviewer. Keep
+  memories go to MemoryGate with `origin: "conker"`; Keep results are linked to their chat
+  (`keep_results`), and forgetting a chat turns off its Keep jobs, forgets its Keep memories and
+  withdraws its parked turns' ToolGate approval requests once Pi runs again
+  (`approval_withdrawals`, health check `forget_followups`). At most 3 of Conker's requests wait
+  per chat and 20 in all. `memory.across_chats` is on only when unset or exactly true.
 - **Small models' tool requests get through more often.** One narrow repair, approved by the
   owner: a whole reply that fails to decode only because of backslashes that start no JSON escape
   (`\$` in `echo exit=\$?`) is decoded again without just those backslashes, and the result goes

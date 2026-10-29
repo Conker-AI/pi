@@ -26326,6 +26326,37 @@
               }
             ],
             "title": "Budgetallowanceid"
+          },
+          "createdBy": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "conker"
+            ],
+            "title": "Createdby",
+            "default": "owner"
+          },
+          "privacy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobPrivacy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turnedOff": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "chat_forgotten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnedoff"
           }
         },
         "additionalProperties": false,
@@ -26421,6 +26452,27 @@
           "budgetAllowanceConfigured": {
             "type": "boolean",
             "title": "Budgetallowanceconfigured"
+          },
+          "createdBy": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "conker"
+            ],
+            "title": "Createdby",
+            "default": "owner"
+          },
+          "turnedOff": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "chat_forgotten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnedoff"
           }
         },
         "additionalProperties": false,
@@ -27632,6 +27684,24 @@
           "results"
         ],
         "title": "JobCollection"
+      },
+      "JobPrivacy": {
+        "properties": {
+          "memoryDisabled": {
+            "type": "boolean",
+            "title": "Memorydisabled",
+            "default": false
+          },
+          "harnessDisabled": {
+            "type": "boolean",
+            "title": "Harnessdisabled",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "JobPrivacy",
+        "description": "The chat an AI job was asked for in was private, so the job's own chat is too."
       },
       "JobView": {
         "properties": {
