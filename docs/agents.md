@@ -31,8 +31,11 @@ Names, roles and instructions are required, trimmed text with limits of 80, 160
 and 8000 characters. Names are case-insensitively unique across active and archived
 profiles, including the Companion. Model IDs may be null. Reference IDs must be
 nonempty, unpadded strings up to 200 characters; tool and memory lists allow up to
-1000 unique IDs. Memory scopes are `none`, `conversation`, and `selected`; only
-`selected` permits and requires record IDs. Extra fields and type coercion are
+1000 unique IDs. Memory scopes are `none`, `conversation`, `selected` and, for the
+Companion only, `owner` (every chat's memory); only `selected` permits and requires
+record IDs. The Companion starts on `owner`; the owner setting `memory.across_chats`
+set to `false` narrows it to the current chat for every chat, and a team role may
+read the current chat where its agent reads every chat. Extra fields and type coercion are
 rejected with 422. Missing profiles/versions return 404; stale revisions, duplicate
 names, Companion archive attempts and edits to archived profiles return 409.
 

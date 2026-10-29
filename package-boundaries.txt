@@ -73,6 +73,7 @@ memory -> context
 memory -> conversation
 memory -> core
 memory -> models
+memory -> owner
 memory -> turns
 models -> actions
 models -> agents

@@ -48,15 +48,15 @@ def test_owner_memory_scope_requires_the_singular_companion(store):
         )
     assert agents.get(store, custom["id"])["revision"] == 1
     companion = agents.get(store, "companion")
-    assert companion["configuration"]["memory"]["scope"] == "conversation"
-    scoped.name = companion["configuration"]["name"]
+    assert companion["configuration"]["memory"]["scope"] == "owner"
+    narrowed = configuration(memory={"scope": "conversation", "memoryIds": []})
+    narrowed.name = scoped.name = companion["configuration"]["name"]
+    saved = agents.update(
+        store, "companion", agents.UpdateAgent(expected_revision=1, configuration=narrowed)
+    )
+    assert saved["configuration"]["memory"]["scope"] == "conversation"
     accepted = agents.update(
-        store,
-        "companion",
-        agents.UpdateAgent(
-            expected_revision=companion["revision"],
-            configuration=scoped,
-        ),
+        store, "companion", agents.UpdateAgent(expected_revision=2, configuration=scoped)
     )
     assert accepted["configuration"]["memory"]["scope"] == "owner"
 

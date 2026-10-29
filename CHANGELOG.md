@@ -6,6 +6,16 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.12.0
+
+- **Conker remembers across chats by default.** The Companion's memory scope starts on `owner`
+  (every chat's memory). An install whose Companion was never edited moves to it once, as a recorded
+  `updated` revision; a profile the owner saved keeps his choice. The owner setting
+  `memory.across_chats` (Settings, Memory, Remember across chats) set to `false` keeps every chat to
+  itself. Saving a chat's settings no longer changes what it recalls: before, a chat whose settings
+  were never saved read every chat and one whose settings were saved read only itself.
+- A team role may read the current chat where its agent reads every chat (narrower is allowed).
+
 ## 0.11.1
 
 - **Small models get a second try at a tool request.** Besides a request wrapped in prose, two more
