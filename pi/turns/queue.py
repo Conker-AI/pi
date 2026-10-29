@@ -10,8 +10,8 @@ from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.content import attachment_turns, attachments
+from pi.conversation import chat_preferences, submissions
 from pi.conversation import settings as session_settings
-from pi.conversation import submissions
 from pi.core.models import Strict
 from pi.schedule import tasks
 
@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS queued_turns (
 );
 CREATE INDEX IF NOT EXISTS queued_turn_order ON queued_turns(session_id,created_at,id);
 """
+
+
+# The Queued messages setting picks 1 to 5; refusals say the number in words.
+COUNTS = {
+    1: "one message",
+    2: "two messages",
+    3: "three messages",
+    4: "four messages",
+    5: "five messages",
+}
 
 
 class Enqueue(Strict):
@@ -199,13 +209,20 @@ def enqueue(store, sid, body):
                     "request_conflict", "Queue request identity was already used."
                 )
             return _view(prior)
+        # Settings > Chats: Queue messages and Queued messages. Turning the queue off or down
+        # stops new messages only; what already waits keeps its place and still runs.
+        if not chat_preferences.queue_on(db):
+            raise tasks.TaskError(
+                "queue_off", "Queue messages is off in Settings. Send this after the answer."
+            )
+        limit = chat_preferences.queue_max(db)
         count = db.execute(
             "SELECT COUNT(*) FROM queued_turns WHERE session_id=? "
             "AND state IN ('waiting','claimed','failed')",
             (sid,),
         ).fetchone()[0]
-        if count >= 5:
-            raise tasks.TaskError("queue_full", "Queue at most five messages.")
+        if count >= limit:
+            raise tasks.TaskError("queue_full", f"Queue at most {COUNTS[limit]}.")
         snapshot = _snapshot(db, sid)
         _files(db, sid, payload, snapshot)
         now = time.time()
