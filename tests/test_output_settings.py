@@ -41,10 +41,15 @@ class TestOutputSettings:
         assert result["revision"] == 0
         assert result["output"] == {"format": "auto", "length": "auto", "language": "auto"}
 
-        # Snapshot should be None for all auto values
+        # The snapshot carries only the owner's interactive answers choice (Auto by default)
         with store._connect() as db:
             snapshot = output_settings.snapshot(db, session_id)
-            assert snapshot is None
+            assert snapshot == {**output_settings.AUTO, "interactive": "auto"}
+            db.execute(
+                "UPDATE owner_settings SET vals=? WHERE singleton=1",
+                ('{"chats.interactive_answers": "off"}',),
+            )
+            assert output_settings.snapshot(db, session_id) is None
 
         # Messages should be empty for auto values
         messages = output_settings.messages({})
@@ -221,12 +226,21 @@ class TestOutputSettings:
 
         execution = session_settings.execution(store, session_id)
 
-        # Should have output in execution
-        assert execution["output"] == {"format": "table", "length": "short", "language": "ru"}
+        # Should have output in execution, with the owner's interactive answers choice
+        assert execution["output"] == {
+            "format": "table",
+            "length": "short",
+            "language": "ru",
+            "interactive": "auto",
+        }
 
-        # Test with all auto - should be None
+        # Test with all auto and interactive answers off - should be None
         with store._connect() as db:
             db.execute("DELETE FROM session_output WHERE session_id = ?", (session_id,))
+            db.execute(
+                "UPDATE owner_settings SET vals=? WHERE singleton=1",
+                ('{"chats.interactive_answers": "off"}',),
+            )
 
         execution = session_settings.execution(store, session_id)
         assert execution.get("output") is None
