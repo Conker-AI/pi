@@ -154,17 +154,22 @@ def test_pause_before_send_and_microphone_keyboard_independence(store):
 def test_pause_during_actual_provider_blocks_answer_tools_and_speech(store):
     from test_tool_turns import FakeGate
 
-    entered, release = Event(), Event()
+    # The events alone order the pause before the answer returns. Timeouts only end
+    # a hang: a provider that stopped waiting on its own would answer before the pause.
+    entered, release, released = Event(), Event(), []
     call = start(store)
-    provider = Provider(lambda: (entered.set(), release.wait(5)))
+    provider = Provider(lambda: (entered.set(), released.append(release.wait(60))))
     speech, gate = Speech(), FakeGate()
     loop, _ = runtime(store, provider, gate)
     with ThreadPoolExecutor(1) as pool:
         future = pool.submit(send, store, loop, call, speech=speech)
-        assert entered.wait(5)
-        c.update(store, call["id"], call_models.Update(expected_revision=1, paused=True))
-        release.set()
-        result = future.result(timeout=5)
+        try:
+            assert entered.wait(60)
+            c.update(store, call["id"], call_models.Update(expected_revision=1, paused=True))
+        finally:
+            release.set()
+        result = future.result(timeout=60)
+    assert released == [True]
     assert result["audio"] is None and speech.tts == 0 and not gate.invocations
     assert [m["role"] for m in store.messages(call["sessionId"])] == ["user"]
     assert result["call"]["requests"][0]["state"] == "failed"
