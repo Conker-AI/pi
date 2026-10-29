@@ -100,6 +100,12 @@ def save(store, request: Update) -> dict:
     return {"schemaVersion": 1, "revision": revision + 1, "values": values}
 
 
+def read(db) -> dict:
+    """The stored values inside the caller's transaction, as a turn snapshot reads them."""
+    row = db.execute("SELECT vals FROM owner_settings WHERE singleton=1").fetchone()
+    return json.loads(row[0]) if row else {}
+
+
 def value(store, setting_id: str, default=None):
     """One stored value for a feature that reads it; the default when the owner never set it."""
     return load(store)["values"].get(setting_id, default)

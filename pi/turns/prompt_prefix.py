@@ -1,11 +1,11 @@
-"""The system prefix of every turn: base prompt, agent, character, project, session, skills, tools."""
+"""A turn's system prefix: base prompt, agent, owner, character, project, session, skills, tools."""
 
 from pi.actions import tools as tool_protocol
 from pi.agents import character_context, skills
 from pi.agents import profiles as agents
 from pi.content import attachments
 from pi.context import decisions, project_context
-from pi.conversation import output_settings
+from pi.conversation import output_settings, owner_profile
 from pi.models.providers import Message
 
 
@@ -17,6 +17,9 @@ def system_messages(store, system_prompt, execution, policy, tools) -> list[Mess
     configuration = execution.get("configuration")
     if configuration is not None:
         messages.append(Message("system", configuration["instructions"]))
+    # The owner's own instructions and profile, after the agent's and before the more
+    # specific project, chat and output settings.
+    messages.extend(owner_profile.messages(execution))
     messages.extend(character_context.messages(execution))
     project = execution.get("project")
     if project and project["instructions"].strip():
