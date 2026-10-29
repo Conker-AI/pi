@@ -6,6 +6,32 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Small models' tool requests get through more often.** One narrow repair, approved by the
+  owner: a whole reply that fails to decode only because of backslashes that start no JSON escape
+  (`\$` in `echo exit=\$?`) is decoded again without just those backslashes, and the result goes
+  through every normal check (offered tool, exact `{"tool", "args"}` shape, the owner's access
+  layers, ToolGate). Nothing else is ever repaired. The tool list shows each tool's inputs as a
+  JSON template (`args: {"description": "<text>"}`) instead of `args: description: string`,
+  which small models copied as a `"description: "` key.
+- **The retry note names the mistake**: an invalid escape or the decoder's own words for broken
+  JSON, text before or after the request, an input name with something added (named from the
+  tool list, e.g. `"description"`), or a request narrated and quoted in a code block. The last
+  is new: prose that says the model is about to act ("I'll use...", "Let me run...") around
+  exactly one quoted request for an offered tool is retried once like a request wrapped in prose
+  and never run; an explanation that only shows the format is still an answer. A second invalid
+  reply fails the turn, as before.
+- **Memories per answer** (`memory.per_answer`, 1 to 50, default 8) now sets how many memories an
+  answer asks MemoryGate for; MemoryGate takes at most 30 per request, so a larger value asks for
+  30. Memories whose text repeats an earlier one (ignoring case and spacing) are dropped before
+  the model reads them, the first kept, and counted in the package's
+  `retrieval.pi_duplicate_memories` receipt. Search still shows every record.
+- **An answer survives a restart.** Pi holds each answer (new table `held_answers`, forgotten with
+  its chat) before the final commit, so an answer produced just before Pi stopped is saved at the
+  next start instead of lost; a stop or steer the owner sent still refuses it, as it would live.
+  One of Conker's own tool calls (`conker.*`) cut off mid-way is settled from Pi's records instead
+  of leaving the chat waiting forever on ToolGate, which never saw it: filed means the chat waits
+  only for its reply, not filed means nothing was done and the result says so. Nothing runs twice.
+  A turn cut off by a restart now says in plain words what happened and what to do next.
 - **Conker drafts tools in the background.** `conker.draft_tool` files the tool request at once
   (payload status `drafting`) and the chat answers right away; no model call or reviewer waits in
   the turn. A drafting worker drafts one request at a time with the `drafting` role (the answer

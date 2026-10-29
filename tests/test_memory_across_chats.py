@@ -14,7 +14,8 @@ from pi.memory import service
 from pi.memory import store as memory_store
 from pi.owner import settings as owner_settings
 
-EVERY_CHAT = {"scope": "all", "session_id": None, "memory_ids": []}
+RECALL = {"max_items": 8, "distinct": True}
+EVERY_CHAT = {"scope": "all", "session_id": None, "memory_ids": [], **RECALL}
 
 
 class Client:
@@ -72,7 +73,7 @@ def test_his_switch_keeps_each_chat_to_itself(store, monkeypatch, value, across)
         store, owner_settings.Update(expected_revision=0, values={service.ACROSS_CHATS: value})
     )
     sid = store.create_session()
-    this_chat = {"scope": "conversation", "session_id": sid, "memory_ids": []}
+    this_chat = {"scope": "conversation", "session_id": sid, "memory_ids": [], **RECALL}
     assert recall(store, monkeypatch, sid) == [EVERY_CHAT if across else this_chat]
 
 

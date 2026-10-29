@@ -13,6 +13,7 @@ from pi.conversation import settings as session_settings
 from pi.models.providers import ProviderUnavailable
 from pi.models.routing import TurnContext, history_size
 from pi.turns import control as turn_control
+from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 from pi.turns.failures import ActedWithoutReply, TurnFailed
 
@@ -282,10 +283,18 @@ class Replies:
         }
 
     def _complete_turn(self, turn_id, text, **fields):
-        """A stop racing final persistence must leave a truthful terminal turn."""
+        """A stop racing final persistence must leave a truthful terminal turn.
+
+        The answer is held first: if Pi stops before the final commit, the next
+        start saves it instead of losing it (`turns.restart`).
+        """
+        turn_restart.hold(self.store, turn_id, text, fields)
         try:
             return self.store.complete_turn(turn_id, text, **fields)
         except turn_steering.Pending:
+            # Stale after the steer: the next attempt answers again, and a restart
+            # before it does must not save this one.
+            turn_restart.drop(self.store, turn_id)
             from pi.models.providers import Completion
 
             turn_steering.discarded(
@@ -303,6 +312,7 @@ class Replies:
             )
             raise
         except ProviderUnavailable as exc:
+            turn_restart.drop(self.store, turn_id)
             acted = bool((self.store.get_turn(turn_id) or {}).get("acted"))
             self.store.finish_turn(
                 turn_id,
