@@ -32,6 +32,14 @@ be a decision with visible consequences.
   of leaving the chat waiting forever on ToolGate, which never saw it: filed means the chat waits
   only for its reply, not filed means nothing was done and the result says so. Nothing runs twice.
   A turn cut off by a restart now says in plain words what happened and what to do next.
+- **MemoryGate and ToolGate use the owner's model roles.** `POST /inference` (service key in
+  `X-Pi-Service-Key`, hashes in `PI_SERVICE_KEYS_SHA256`) answers one prompt for the calling
+  service's own role, `memory-sorting` or `tool-text`, through Pi's normal role call. Until the owner
+  picks a model for one, it uses the local model: nothing leaves the server on upgrade. Each call's
+  usage is recorded without its text; `GET /inference/usage` lists it. See docs/inference.md.
+- A model role may wait up to 10 minutes (was 2). Saved settings keep their wait; when nothing was
+  saved, a role whose model is local waits up to 5 minutes, and background thinking honors its
+  role's wait instead of stopping at 2 minutes.
 
 ## 0.12.0
 

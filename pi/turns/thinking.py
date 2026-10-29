@@ -4,6 +4,7 @@ import json
 import threading
 import time
 
+from pi.models import roles as model_roles
 from pi.models.providers import Message
 from pi.turns import inference_control
 
@@ -318,7 +319,10 @@ class Thinking:
                             .get("roles", {})
                             .get("thinking", {})
                         )
-                        timeout = min(120.0, assignment.get("timeoutMs", 120000) / 1000)
+                        timeout = (
+                            min(model_roles.MAX_TIMEOUT_MS, assignment.get("timeoutMs", 120000))
+                            / 1000
+                        )
                         # Provider read timeouts reset as data arrives. This
                         # separate wall deadline also stops never-ending streams.
                         with control.token.deadline(timeout):

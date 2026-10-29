@@ -244,3 +244,35 @@ def test_decision_route_must_match_assigned_helper_role():
     value["roleSettings"]["roles"]["summarization"].update(eligibleModelIds=["ranker"])
     with pytest.raises(ValidationError, match="summarization role"):
         r.Update(expected_revision=0, configuration=value)
+
+
+def test_service_roles_are_added_to_older_settings_with_the_local_wait():
+    value = config()
+    for role in r.LOCAL_ROLES:
+        del value["roleSettings"]["roles"][role]
+    roles = r.Configuration.model_validate(value).roleSettings.roles
+    for role in ("memory-sorting", "tool-text"):
+        assert role in r.ROLES and role in r.LATER_ROLES
+        assert not roles[role].enabled and roles[role].modelId is None
+        assert roles[role].timeoutMs == r.LOCAL_TIMEOUT_MS == 300000
+    # Roles already saved keep their own wait.
+    assert roles["summarization"].timeoutMs == 1000
+
+
+def test_role_waits_go_up_to_ten_minutes():
+    value = config()
+    value["roleSettings"]["roles"]["answer"]["timeoutMs"] = 600000
+    r.Configuration.model_validate(value)
+    adapter = Adapter()
+    r.dispatch(value, "answer", [], {"one": adapter})
+    assert adapter.calls == [("actual-a", 600.0)]
+    value["roleSettings"]["roles"]["answer"]["timeoutMs"] = 600001
+    with pytest.raises(ValidationError):
+        r.Configuration.model_validate(value)
+
+
+def test_default_waits_when_nothing_was_saved():
+    assert r.default_timeout_ms("memory-ranking") == 2000
+    assert r.default_timeout_ms("answer") == 120000
+    assert r.default_timeout_ms("answer", local=True) == 300000
+    assert r.default_timeout_ms("tool-text") == r.default_timeout_ms("memory-sorting") == 300000

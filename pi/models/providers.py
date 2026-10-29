@@ -13,8 +13,9 @@ that only ever saw one provider would grow assumptions about it.
 
 from __future__ import annotations
 
+import contextvars
 import json
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -90,6 +91,29 @@ class Completion:
             raise ProviderUnavailable("provider returned invalid citation metadata") from exc
 
 
+@dataclass(frozen=True)
+class Output:
+    """What a caller asks of the answer: JSON only, at most this many tokens, no thinking."""
+
+    json: bool = False
+    max_tokens: int | None = None
+    think: bool | None = None
+
+
+_output: contextvars.ContextVar[Output | None] = contextvars.ContextVar("output", default=None)
+
+
+@contextmanager
+def output(value: Output):
+    """Ask every call in this block for this output. Each adapter applies what its provider
+    supports (Ollama: all three) and leaves the rest; nothing else changes."""
+    saved = _output.set(value)
+    try:
+        yield
+    finally:
+        _output.reset(saved)
+
+
 class ProviderUnavailable(RuntimeError):
     """The provider could not answer. The caller degrades; it never invents."""
 
@@ -158,6 +182,14 @@ class OllamaProvider:
             ],
             "stream": live_stream.active() or inference_control.current() is not None,
         }
+        wanted = _output.get()
+        if wanted is not None:
+            if wanted.json:
+                payload["format"] = "json"
+            if wanted.max_tokens is not None:
+                payload["options"] = {"num_predict": wanted.max_tokens}
+            if wanted.think is not None:
+                payload["think"] = wanted.think
         try:
             with inference_control.local_capacity(self.local_capacity_key, timeout):
                 if payload["stream"]:
