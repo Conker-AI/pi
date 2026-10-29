@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from pi.actions.toolgate import ToolGateClient
-from pi.agents import team_execution
+from pi.agents import team_execution, tool_drafts
 from pi.calls import runtime as calls
 from pi.calls import speech
 from pi.context import retrieval as context_retrieval
@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
     background_thinking.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
+    tool_drafts.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
     memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)
@@ -287,9 +288,12 @@ async def lifespan(app: FastAPI):
             store, plan_readers, check_seconds=_seconds("PI_PLAN_CHECK_SECONDS", 900)
         )
         plan_worker.start()
+    # Conker's tool requests are drafted in the background, one at a time.
+    app.state.loop.drafts.start()
     try:
         yield
     finally:
+        app.state.loop.drafts.close()
         app.state.loop.thinking.close()
         if plan_worker:
             plan_worker.close()

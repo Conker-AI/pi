@@ -4,12 +4,13 @@ Conker can prepare anything the owner could make by hand (a cron job, a tool dra
 never make it real on its own. It files a request with the exact thing to create; the Inbox shows
 it, and only the owner's approval creates it, through the same paths the owner's own screens use.
 A request is never edited after it is filed: what the owner approves is exactly what Conker asked.
+The one exception is a tool request, whose draft Pi fills in after filing (`pi.agents.tool_drafts`).
 
 - `ai_job`: approving creates the AI job in Pi (`agent_jobs.create`), so the owner's password
   verification on the approval is the only way it starts to run.
-- `tool_draft`: Pi holds no ToolGate authority. The owner's browser saves the document as a draft
-  in ToolGate's editor (password verified there) and reports the draft's id here (`saved`), which
-  creates nothing; the owner then publishes it there.
+- `tool_draft`: Pi holds no ToolGate authority. Once the draft is ready, the owner's browser saves
+  the document as a draft in ToolGate's editor (password verified there) and reports the draft's
+  id here (`saved`), which creates nothing; the owner then publishes it there.
 - `memory`: approving stores the exact text through MemoryGate's correction capability, keyed by
   the request id, so a retry after a lost answer never stores it twice.
 """
@@ -85,29 +86,39 @@ def _view(row) -> dict:
     ).model_dump()
 
 
-def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None, now=None) -> dict:
-    """Record one request exactly as Conker asked; nothing is created yet."""
-    if kind not in KINDS:
-        raise ValueError("Unknown change request kind.")
+def encode(payload) -> str:
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False)
     if len(encoded) > MAX_PAYLOAD:
         raise ChangeRequestError("too_large", "This request is too large to review.", 422)
-    identity = "creq_" + uuid.uuid4().hex
+    return encoded
+
+
+def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None, now=None) -> dict:
+    """Record one request exactly as Conker asked; nothing is created yet."""
     with store._connect() as db:
-        db.execute(
-            "INSERT INTO change_requests VALUES (?,?,?,?,?,?,?,'open',NULL,?,NULL)",
-            (
-                identity,
-                kind,
-                title[:160] or "Conker's request",
-                summary[:600],
-                encoded,
-                session_id,
-                turn_id,
-                time.time() if now is None else now,
-            ),
-        )
-        return _view(db.execute("SELECT * FROM change_requests WHERE id=?", (identity,)).fetchone())
+        return file_in(db, kind, title, summary, payload, session_id, turn_id, now)
+
+
+def file_in(db, kind, title, summary, payload, session_id=None, turn_id=None, now=None) -> dict:
+    """`file` inside the caller's transaction."""
+    if kind not in KINDS:
+        raise ValueError("Unknown change request kind.")
+    encoded = encode(payload)
+    identity = "creq_" + uuid.uuid4().hex
+    db.execute(
+        "INSERT INTO change_requests VALUES (?,?,?,?,?,?,?,'open',NULL,?,NULL)",
+        (
+            identity,
+            kind,
+            title[:160] or "Conker's request",
+            summary[:600],
+            encoded,
+            session_id,
+            turn_id,
+            time.time() if now is None else now,
+        ),
+    )
+    return _view(db.execute("SELECT * FROM change_requests WHERE id=?", (identity,)).fetchone())
 
 
 def get(store, identity) -> dict:
@@ -164,6 +175,9 @@ def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
         job = agent_jobs.create(store, body, now=now)
         return _close(store, identity, "approved", {"jobId": job["id"]}, now)
     if request["kind"] == "tool_draft":
+        # A request filed before drafting moved to the background has no status: it is ready.
+        if request["payload"].get("status", "ready") != "ready":
+            raise ChangeRequestError("not_ready", "This tool is not drafted yet.", 409)
         if draft is None:
             raise ChangeRequestError(
                 "draft_required", "Save the draft in Tools first; then report its id.", 422

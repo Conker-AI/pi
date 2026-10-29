@@ -70,8 +70,11 @@ SESSION_ONLY_WRITES = (
     # Deciding on a proposal records a preference; it grants and runs nothing.
     r"/proposals/[A-Za-z0-9_-]+/decision",
     # Declining Conker's request creates nothing; reporting the Tools draft a tool request was
-    # saved as only records its id (the save itself was verified by the editor route).
-    r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved)",
+    # saved as only records its id (the save itself was verified by the editor route). Drafting a
+    # tool, again or from a description, only fills a card for review, and reporting it published
+    # only records it (publishing was verified by ToolGate's route): none of them makes anything.
+    r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved|retry|published)",
+    r"/tool-drafts",
     # Dismissing an AI job's note hides one line; the chat keeps the reply.
     r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
     # The owner's settings document holds preferences only (look, wording, defaults): what Conker
@@ -177,7 +180,9 @@ OWNER_ROUTES = {
         # An AI job only, never a raw tool target; creating one asks for the password.
         r"/jobs/agent",
         # Approving makes Conker's request real, so it asks for the password; declining doesn't.
-        r"/change-requests/creq_[a-f0-9]{32}/(?:approve|decline|saved)",
+        r"/change-requests/creq_[a-f0-9]{32}/(?:approve|decline|saved|retry|published)",
+        # A tool request without a chat: it is drafted for review and makes nothing.
+        r"/tool-drafts",
         # A webhook secret is shown once; making or stopping one asks for the password.
         r"/jobs/job_[0-9a-f]{32}/hook",
         r"/jobs/job_[0-9a-f]{32}/hook/revoke",

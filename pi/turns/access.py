@@ -28,8 +28,9 @@ TOOL_DEFAULT = {"auto": "allow", "ai_review": "ai", "owner_confirmation": "ask"}
 CHAT_LEVELS = ("default", "ask", "ai", "full")
 # Wrapped by Pi around a webhook's payload; a run that carries one has read outside content.
 WEBHOOK_MARK = "<webhook>"
-# Conker's question to him (`pi.turns.native_tools.ASK`).
+# Conker's question to him (`pi.turns.native_tools.ASK`) and a tool draft (`DRAFT_TOOL`).
 native_ask = "conker.ask"
+native_draft = "conker.draft_tool"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -175,6 +176,10 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     if tool.id == native_ask:
         # Asking him is the safe path: it changes nothing and his answer comes back as his words.
         return "run", "tool_default", REASONS["tool_default"]
+    if tool.id == native_draft:
+        # A draft only puts a card in his Inbox; nothing exists until he publishes it, so there is
+        # nothing to review now, and the chat does not wait for a reviewer's model call.
+        return "ask", "tool_default", ""
     if not native(tool.id) and not delegate():
         return None, "tool_default", ""
     settings = (execution or {}).get("settings") or {}

@@ -1,14 +1,16 @@
-"""Workflow drafts: the talking model drafts an editor workflow from the owner's words; nothing is saved.
+"""Workflow drafts: the drafting model drafts an editor workflow from the owner's words; nothing is saved.
 
 Pi only thinks here. The owner stores the draft in ToolGate, where the editor validates it, and
-publishes it there. The model sees the owner's description and the capability list the owner
-supplied: no credentials, memories or chats.
+publishes it there. The model sees the owner's description and the capability list it is given:
+no credentials, memories or chats. Tool requests (`pi.agents.tool_drafts`) draft through here in
+the background; `POST /workflow-drafts/draft` is the command line's older way in.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from functools import partial
 from typing import Literal
 
 from pydantic import Field, JsonValue, model_validator
@@ -37,9 +39,9 @@ NODE_TYPES = {
 FIELD_TYPES = {"string", "number", "boolean", "array", "object"}
 EFFECTS = {"read", "prepare", "write"}
 BUDGETS = {"maxSteps": (2, 200, 50), "maxLoopItems": (1, 50, 20), "timeoutMs": (100, 30000, 15000)}
-# The owner starts a draft and waits for it, and the model writes a whole document: on a
+# The command line's draft route waits for the model, which writes a whole document: on a
 # CPU-only local model that takes minutes, past the answer role's limit (at most 120 s).
-# Under the command line's own 11-minute wait.
+# Under the command line's own 11-minute wait. Background drafts use the role's own limit.
 MODEL_WAIT_MS = 600_000
 
 INSTRUCTIONS = """You draft one workflow for ToolGate's visual editor from the owner's description.
@@ -266,8 +268,31 @@ def normalize(
 RETRY = "Reply again with only the JSON object in the shape described, and nothing else."
 
 
-def draft(store, providers, body: Request) -> dict:
-    """A proposed workflow for review; saves nothing."""
+def attempt_seconds(configuration, role, minimum_timeout_ms=None) -> float:
+    """The longest one model call may take: the role's limit for each model it may try, and the
+    routing model's when the answer role picks one."""
+    roles = configuration["roleSettings"]["roles"]
+    chosen = roles[role]
+    each = max(chosen["timeoutMs"], minimum_timeout_ms or 0) / 1000
+    total = each * (2 if chosen["failure"] == "fallback" else 1)
+    if role == "answer" and configuration["roleSettings"]["answerMode"] == "router":
+        total += roles["routing"]["timeoutMs"] / 1000
+    return total
+
+
+def _now(seconds, call):
+    return call()
+
+
+def draft(
+    store, providers, body: Request, *, minimum_timeout_ms=MODEL_WAIT_MS, attempt=_now, known=None
+) -> dict:
+    """A proposed workflow for review; saves nothing.
+
+    `minimum_timeout_ms` lets each model call wait longer than its role's limit; None keeps the
+    role's own. `attempt(seconds, call)` runs each model call, so a caller can bound and cancel
+    it. `known` are the capabilities a step may use when they are more than the model was shown.
+    """
     saved = model_roles.load(store)
     if saved["configuration"] is None:
         raise DraftError(
@@ -302,14 +327,18 @@ def draft(store, providers, body: Request) -> dict:
     role = "drafting" if drafting.get("enabled") and drafting.get("modelId") else "answer"
     # A reply that is not usable JSON gets one more try with the error shown; small local
     # models often slip once. A second unusable reply is reported as before.
-    for attempt in range(2):
+    for tries in range(2):
         try:
-            decision = model_roles.dispatch(
-                saved["configuration"],
-                role,
-                messages,
-                providers,
-                minimum_timeout_ms=MODEL_WAIT_MS,
+            decision = attempt(
+                attempt_seconds(saved["configuration"], role, minimum_timeout_ms),
+                partial(
+                    model_roles.dispatch,
+                    saved["configuration"],
+                    role,
+                    list(messages),
+                    providers,
+                    minimum_timeout_ms=minimum_timeout_ms,
+                ),
             )
         except (ValueError, TypeError, model_roles.SelectionError):
             raise DraftError(
@@ -319,13 +348,13 @@ def draft(store, providers, body: Request) -> dict:
         try:
             result = answer(text)
             document, issues = (
-                normalize(result["document"], body.capabilities, body.draftId)
+                normalize(result["document"], known or body.capabilities, body.draftId)
                 if result["ready"]
                 else (None, [])
             )
             break
         except (ValueError, TypeError) as exc:
-            if attempt:
+            if tries:
                 raise DraftError("unusable", f"The draft could not be used: {exc}.", 502) from None
             messages = [
                 *messages,

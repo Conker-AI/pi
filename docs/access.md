@@ -40,7 +40,8 @@ owner made Pi's key a policy delegate (`GET /v2/agent/status` reports it; Pi ask
 decides nothing for ToolGate tools otherwise) and never on the floor.
 
 **Conker's own tools** follow the same layers: remembering and scheduling are Keep (allowed by
-default, done at once), a tool draft asks. Every one is still recorded as a change request.
+default, done at once), a tool draft always waits for him in the Inbox (no reviewer is asked: it
+makes nothing until he publishes it). Every one is still recorded as a change request.
 
 **Handled:** every action that ran without asking him where the tool alone would have asked (and
 every Keep action of Conker's) is recorded; `GET /access/handled` (owner) lists the last week with

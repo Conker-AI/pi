@@ -10,6 +10,7 @@ from pi.agents import (
     continuity,
     skills,
     team_execution,
+    tool_drafts,
     workflow_offers,
     workflow_proposals,
 )
@@ -104,6 +105,7 @@ def install(db):
     agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
     change_requests.initialize(db)
+    tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
     workflow_offers.initialize(db)
