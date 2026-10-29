@@ -54,6 +54,12 @@ def test_fresh_setup_discovers_and_selects_the_live_local_model(tmp_path):
         answer = saved["configuration"]["roleSettings"]["roles"]["answer"]
         assert answer["enabled"] and answer["modelId"] == "local-answer"
         assert set(saved["configuration"]["roleSettings"]["roles"]) == set(model_roles.ROLES)
+        # Nothing was saved before: a local model gets the wait a cold start needs.
+        roles = saved["configuration"]["roleSettings"]["roles"]
+        assert answer["timeoutMs"] == 300000
+        assert roles["memory-sorting"]["timeoutMs"] == roles["tool-text"]["timeoutMs"] == 300000
+        assert roles["summarization"]["timeoutMs"] == 120000
+        assert roles["memory-ranking"]["timeoutMs"] == 2000
 
 
 def test_selection_refuses_unhealthy_or_stale_candidates(tmp_path):
@@ -81,6 +87,7 @@ def test_existing_advanced_roles_survive_answer_selection(tmp_path):
         )
         configuration = model_roles.load(store)["configuration"]
         configuration["roleSettings"]["roles"]["proposals"]["timeoutMs"] = 54321
+        configuration["roleSettings"]["roles"]["answer"]["timeoutMs"] = 120000
         model_roles.save(
             store,
             model_roles.Update(expected_revision=1, configuration=configuration),
@@ -95,6 +102,8 @@ def test_existing_advanced_roles_survive_answer_selection(tmp_path):
         )
 
         assert saved["configuration"]["roleSettings"]["roles"]["proposals"]["timeoutMs"] == 54321
+        # A saved wait is kept when another local model is chosen.
+        assert saved["configuration"]["roleSettings"]["roles"]["answer"]["timeoutMs"] == 120000
         assert (
             saved["configuration"]["roleSettings"]["roles"]["answer"]["modelId"] == new_candidate.id
         )

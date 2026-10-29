@@ -24,11 +24,35 @@ ROLES = (
     "proposals",
     "drafting",
     "reviewer",
+    "memory-sorting",
+    "tool-text",
 )
 # Roles added after configurations were first saved. Older saved settings gain them
 # disabled: a new background use of the owner's conversations is never switched on
 # by an upgrade.
-LATER_ROLES = ("memory-ranking", "proposals", "search-ranking", "thinking", "drafting", "reviewer")
+LATER_ROLES = (
+    "memory-ranking",
+    "proposals",
+    "search-ranking",
+    "thinking",
+    "drafting",
+    "reviewer",
+    "memory-sorting",
+    "tool-text",
+)
+# Roles Conker's services call (see service_inference.py). Until the owner picks a model for
+# one, it uses the local model the services used before, so nothing leaves the server.
+LOCAL_ROLES = ("memory-sorting", "tool-text")
+# A cold local model on a small server can take minutes to answer its first prompt.
+LOCAL_TIMEOUT_MS = 300_000
+MAX_TIMEOUT_MS = 600_000
+
+
+def default_timeout_ms(role: str, *, local: bool = False) -> int:
+    """The wait a role gets when nothing was saved; saved settings keep their own."""
+    if role == "memory-ranking":
+        return 2000
+    return LOCAL_TIMEOUT_MS if local or role in LOCAL_ROLES else 120000
 
 
 class Provider(Strict):
@@ -50,14 +74,16 @@ class Assignment(Strict):
     enabled: bool
     eligibleModelIds: list[str] = Field(max_length=200)
     modelId: str | None
-    timeoutMs: int = Field(ge=100, le=120000)
+    timeoutMs: int = Field(ge=100, le=MAX_TIMEOUT_MS)
     failure: Literal["stop", "fallback"]
     fallbackModelId: str | None
 
 
 class Roles(Strict):
     answerMode: Literal["manual", "router"]
-    roles: dict[str, Assignment]
+    roles: dict[str, Assignment] = Field(
+        description="One assignment for each model role: " + ", ".join(ROLES) + "."
+    )
 
 
 class Configuration(Strict):
@@ -86,7 +112,7 @@ class Configuration(Strict):
                                     enabled=False,
                                     eligibleModelIds=[],
                                     modelId=None,
-                                    timeoutMs=2000 if role == "memory-ranking" else 120000,
+                                    timeoutMs=default_timeout_ms(role),
                                     failure="stop",
                                     fallbackModelId=None,
                                 )

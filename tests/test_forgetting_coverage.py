@@ -55,6 +55,8 @@ IDS_ONLY = {
     "response_retries",
     "response_versions",
     "scheduled_run_budgets",
+    # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
+    "service_model_calls",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",

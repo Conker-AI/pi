@@ -38,6 +38,7 @@ from pi.api.routes import definitions as definitions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import inbox as inbox_api
+from pi.api.routes import inference as inference_api
 from pi.api.routes import jobs as jobs_api
 from pi.api.routes import memory as memory_api
 from pi.api.routes import memory_edits as memory_edits_api
@@ -243,6 +244,7 @@ app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
+app.include_router(inference_api.router(lambda: app.state, require_owner))
 app.include_router(model_profiles_api.router(lambda: app.state.store, require_admin))
 app.include_router(
     auto_settings_api.router(

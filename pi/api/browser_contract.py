@@ -160,6 +160,8 @@ OWNER_ROUTES = {
         # Read-only: plan usage in percent per window, for the dashboard's Home. Dismissing an
         # alert stays with the recovery credential.
         r"/plans/usage",
+        # Read-only: which services called a model role and what it used; never any text.
+        r"/inference/usage",
         # The Settings screen: the owner's settings document and his preferences.
         r"/owner/settings",
         r"/owner/preferences",
