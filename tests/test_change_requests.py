@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from test_tool_turns import FakeGate, build
 
-from pi.agents import change_requests, workflow_drafts
+from pi.agents import change_requests, tool_drafts
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, session_only_write
 from pi.conversation.store import Store
@@ -99,21 +99,8 @@ def test_bad_arguments_are_an_answer_not_a_request(store, args):
     assert change_requests.listing(store) == []
 
 
-def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
-    document = {"name": "Group digest", "nodes": [], "edges": []}
-    given = []
-
-    def drafted(_store, providers, _body):
-        given.append(providers)
-        return {
-            "ready": True,
-            "document": document,
-            "reply": "Summarizes the group chat.",
-            "issues": [],
-        }
-
-    monkeypatch.setattr(workflow_drafts, "draft", drafted)
-    loop, _ = build(store, [], FakeGate())
+def test_a_tool_draft_waits_for_the_owner_to_save_it(store):
+    loop, provider = build(store, [], FakeGate())
     result = native_tools.call(
         loop,
         native_tools.DRAFT_TOOL,
@@ -122,11 +109,18 @@ def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
         turn_id=None,
         execution={"kind": "companion", "agentId": "companion"},
     )
-    assert result.ok
+    # Filed at once, drafted later in the background: no model was asked in the turn.
+    assert result.ok and result.result["status"] == "drafting" and provider.sent == []
     [request] = change_requests.listing(store)
-    assert request["kind"] == "tool_draft" and request["payload"]["document"] == document
-    # The drafter gets the same adapters as the owner's draft route, local model included.
-    assert given == [loop.router.adapters()] and given[0]
+    assert request["kind"] == "tool_draft"
+    assert request["payload"] == {
+        "description": "Summarize my study group chat",
+        "status": "drafting",
+    }
+    assert result.result["requestId"] == request["id"]
+    document = {"name": "Group digest", "nodes": [], "edges": []}
+    drafted = {**request["payload"], "status": "ready", "document": document, "issues": []}
+    assert tool_drafts.finish(store, request, drafted)
     with pytest.raises(change_requests.ChangeRequestError) as unsaved:
         change_requests.approve(store, request["id"])
     assert unsaved.value.code == "draft_required"
@@ -136,25 +130,17 @@ def test_a_tool_draft_waits_for_the_owner_to_save_it(store, monkeypatch):
     assert done["result"] == {"draftId": "group-digest"}
 
 
-def test_a_draft_that_needs_detail_asks_instead_of_filing(store, monkeypatch):
-    monkeypatch.setattr(
-        workflow_drafts,
-        "draft",
-        lambda *_a, **_k: {"ready": False, "document": None, "reply": "Which chat?", "issues": []},
-    )
+def test_a_tool_draft_needs_a_description(store):
     loop, _ = build(store, [], FakeGate())
     result = native_tools.call(
         loop,
         native_tools.DRAFT_TOOL,
-        {"description": "Summarize my chat"},
+        {"description": "  "},
         session_id=None,
         turn_id=None,
         execution={"kind": "companion", "agentId": "companion"},
     )
-    assert (
-        result.result == {"status": "needs_detail", "message": "Which chat?"}
-        and change_requests.listing(store) == []
-    )
+    assert result.result["status"] == "invalid" and change_requests.listing(store) == []
 
 
 def test_remembering_files_a_request_and_saves_only_on_approval(store):

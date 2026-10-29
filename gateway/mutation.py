@@ -48,6 +48,8 @@ from gateway.mutation_models import (
     ProjectUpdate,
     ProposalDecision,
     RequestDecision,
+    RequestPublished,
+    RequestRetry,
     RequestSaved,
     SessionUpdate,
     TaskCreate,
@@ -165,15 +167,14 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             value = REQUEST_MUTATION.validate_python(payload)
         except ValidationError:
             raise MutationError("Request apply has an unsupported shape.") from None
-        body = (
-            {"draftId": value.draftId}
-            if isinstance(value, RequestSaved)
-            else {"reply": value.reply}
-            if value.reply and value.operation == "decline"
-            else {}
-        )
         if isinstance(value, RequestDecision) and value.reply and value.operation != "decline":
             raise MutationError("Only a decline carries a reply.")
+        if isinstance(value, RequestSaved):
+            body = {"draftId": value.draftId}
+        elif isinstance(value, (RequestRetry, RequestPublished)):
+            body = value.model_dump(exclude={"operation", "id"}, exclude_none=True)
+        else:
+            body = {"reply": value.reply} if value.reply and value.operation == "decline" else {}
         return Mutation("POST", f"/change-requests/{value.id}/{value.operation}", body)
     if resource == "asks":
         try:
@@ -321,7 +322,10 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             authority = "toolgate-owner"
         elif isinstance(value, ToolPublish):
             path = f"/v2/owner/editor-drafts/{value.id}/publish"
-            authority = "toolgate-owner"
+            # Granting Conker's key needs that key; the owner key alone cannot name it.
+            authority = "toolgate-owner-execution" if value.conkerMayUse else "toolgate-owner"
+            if not value.conkerMayUse:
+                body.pop("conkerMayUse")
         else:
             suffix = "access" if isinstance(value, ToolAccess) else "runs"
             path = f"/v2/owner/editor-drafts/{value.id}/{suffix}"

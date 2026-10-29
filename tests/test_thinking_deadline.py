@@ -238,6 +238,27 @@ def test_queue_wait_does_not_consume_frozen_thinking_deadline(tmp_path, monkeypa
         assert background_thinking.list_for_session(store, session)[0]["status"] == "completed"
 
 
+def test_thinking_waits_as_long_as_its_role_allows(tmp_path, monkeypatch):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        loop, provider = setup(store)
+        configure_timeout(store, milliseconds=300000)
+        deadlines = []
+
+        @contextmanager
+        def observed(token, seconds):
+            deadlines.append(seconds)
+            yield
+
+        monkeypatch.setattr(inference_control.Token, "deadline", observed)
+        provider.release.set()
+        session = store.create_session()
+        loop.run_turn(session, "Explicit analysis", think=True)
+        join_workers(loop)
+        # Before roles could wait ten minutes, thinking stopped at two.
+        assert deadlines == [300.0]
+        assert background_thinking.list_for_session(store, session)[0]["status"] == "completed"
+
+
 @pytest.mark.parametrize("outcome", ["success", "error", "owner", "timer_start_error"])
 def test_deadline_timer_is_disposed_and_stale_fire_cannot_cancel(outcome, monkeypatch):
     timers = []

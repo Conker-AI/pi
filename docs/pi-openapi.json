@@ -2755,6 +2755,175 @@
         }
       }
     },
+    "/change-requests/{identity}/retry": {
+      "post": {
+        "summary": "Retry",
+        "description": "Draft this tool request again, from a new description when one is given.",
+        "operationId": "retry_change_requests__identity__retry_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^creq_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/pi__agents__tool_drafts__Retry"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/change-requests/{identity}/published": {
+      "post": {
+        "summary": "Published",
+        "description": "The owner published this request's tool. The first time, Conker says in the chat that\nasked that it is live (a stored message, not a model call).",
+        "operationId": "published_change_requests__identity__published_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^creq_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pi__agents__tool_drafts__Published"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/change-requests/{identity}/decline": {
       "post": {
         "summary": "Decline",
@@ -2817,6 +2986,77 @@
                   }
                 ],
                 "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tool-drafts": {
+      "post": {
+        "summary": "New",
+        "description": "File a tool request without a chat; drafting starts at once and the answer does not\nwait for it. The same request_id gives back the same request.",
+        "operationId": "new_tool_drafts_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDraft"
               }
             }
           }
@@ -3281,7 +3521,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Published"
+                "$ref": "#/components/schemas/pi__agents__workflow_proposals__Published"
               }
             }
           }
@@ -10853,6 +11093,145 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inference": {
+      "post": {
+        "summary": "Infer",
+        "description": "One prompt for one of the calling service's model roles.",
+        "operationId": "infer_inference_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Service-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InferenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InferenceAnswer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid service key"
+          },
+          "403": {
+            "description": "The role is not this service's"
+          },
+          "503": {
+            "description": "`no_model` or `unavailable`: the caller falls back"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inference/usage": {
+      "get": {
+        "summary": "Usage",
+        "description": "Recent service calls and the last day's totals; no prompt or answer text.",
+        "operationId": "usage_inference_usage_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -23951,7 +24330,7 @@
           },
           "timeoutMs": {
             "type": "integer",
-            "maximum": 120000.0,
+            "maximum": 600000.0,
             "minimum": 100.0,
             "title": "Timeoutms"
           },
@@ -26906,6 +27285,79 @@
         ],
         "title": "Import"
       },
+      "InferenceAnswer": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "model",
+          "provider"
+        ],
+        "title": "InferenceAnswer"
+      },
+      "InferenceRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Role",
+            "description": "memory-sorting (MemoryGate) or tool-text (ToolGate): the caller's own role."
+          },
+          "system": {
+            "type": "string",
+            "maxLength": 16000,
+            "title": "System"
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 64000,
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 8.0,
+            "title": "Max Tokens"
+          },
+          "json": {
+            "type": "boolean",
+            "title": "Json",
+            "description": "Ask the model for JSON where it can.",
+            "default": false
+          },
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{16,128}$",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "system",
+          "prompt",
+          "max_tokens",
+          "request_id"
+        ],
+        "title": "InferenceRequest"
+      },
       "Instantiate": {
         "properties": {
           "expected_revision": {
@@ -27593,6 +28045,29 @@
           "privateOrigin"
         ],
         "title": "NativeExport"
+      },
+      "NewDraft": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{16,128}$",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "request_id"
+        ],
+        "title": "NewDraft",
+        "description": "A tool request made without a chat; the same request_id gives back the same request."
       },
       "NewSave": {
         "properties": {
@@ -28746,21 +29221,6 @@
         ],
         "title": "Provider"
       },
-      "Published": {
-        "properties": {
-          "draftId": {
-            "type": "string",
-            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-            "title": "Draftid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "draftId"
-        ],
-        "title": "Published"
-      },
       "QueueRevision": {
         "properties": {
           "expected_revision": {
@@ -29245,7 +29705,8 @@
               "$ref": "#/components/schemas/Assignment"
             },
             "type": "object",
-            "title": "Roles"
+            "title": "Roles",
+            "description": "One assignment for each model role: answer, thinking, routing, context-selection, summarization, memory-ranking, search-ranking, proposals, drafting, reviewer, memory-sorting, tool-text."
           }
         },
         "additionalProperties": false,
@@ -31597,6 +32058,50 @@
         ],
         "title": "Start"
       },
+      "pi__agents__tool_drafts__Published": {
+        "properties": {
+          "toolId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
+            "title": "Toolid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "toolId",
+          "name"
+        ],
+        "title": "Published",
+        "description": "The owner published the drafted tool; `toolId` is the id Conker sees in its tool list."
+      },
+      "pi__agents__tool_drafts__Retry": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Retry",
+        "description": "Draft it again, from a new description when one is given."
+      },
       "pi__agents__workflow_drafts__Request": {
         "properties": {
           "description": {
@@ -31662,6 +32167,21 @@
           "description"
         ],
         "title": "Request"
+      },
+      "pi__agents__workflow_proposals__Published": {
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "title": "Draftid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draftId"
+        ],
+        "title": "Published"
       },
       "pi__calls__call_models__Privacy": {
         "properties": {

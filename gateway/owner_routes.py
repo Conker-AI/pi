@@ -274,18 +274,30 @@ def router(app, session, forward, admit_write):
             raise AuthError("Invalid editor draft identity.", 422)
         operation = request.url.path.rsplit("/", 1)[-1]
         body = await json_body(request) if request.method == "POST" else None
+        extra = None
         if body is not None:
+            required = {"expected_revision", "expected_publication_version", "authorization"}
             if (
-                set(body) != {"expected_revision", "expected_publication_version", "authorization"}
+                not required <= set(body)
+                or set(body) - required - {"conkerMayUse"}
                 or type(body.get("expected_revision")) is not int
                 or body["expected_revision"] < 1
                 or type(body.get("expected_publication_version")) is not int
                 or body["expected_publication_version"] < 0
                 or body.get("authorization") not in {"auto", "owner_confirmation"}
+                or type(body.get("conkerMayUse", False)) is not bool
             ):
                 raise AuthError(
                     "Select the saved draft, publication version and authorization.", 422
                 )
+            if body.get("conkerMayUse"):
+                # Letting Conker use it grants the chat's own scoped key, which the owner key
+                # alone cannot name (as the tool access switch does).
+                key = app.state.config.toolgate_execution_key
+                if not key:
+                    raise AuthError("The scoped chat execution credential is not configured.", 503)
+                extra = {"X-ToolGate-Execution-Key": key}
+            # The password proof covers conkerMayUse with the rest of the body.
             admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
 
@@ -298,6 +310,7 @@ def router(app, session, forward, admit_write):
             app.state.config.owner_key,
             body,
             b"",
+            extra,
         )
 
     @routes.get("/api/owner/requests")

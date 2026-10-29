@@ -151,12 +151,12 @@ def options(store, router) -> Options:
     return Options(revision=saved["revision"], candidates=values)
 
 
-def _disabled(role: str) -> dict:
+def _disabled(role: str, *, local: bool = False) -> dict:
     return {
         "enabled": False,
         "eligibleModelIds": [],
         "modelId": None,
-        "timeoutMs": 2000 if role == "memory-ranking" else 120000,
+        "timeoutMs": model_roles.default_timeout_ms(role, local=local),
         "failure": "stop",
         "fallbackModelId": None,
     }
@@ -178,8 +178,9 @@ def _selection(store, router, body: Selection) -> model_roles.Update:
     configuration = saved["configuration"]
     if configuration is None:
         roles = {role: _disabled(role) for role in model_roles.ROLES}
+        # Nothing was saved yet: a local talking model gets the longer wait a cold start needs.
         roles["answer"] = {
-            **_disabled("answer"),
+            **_disabled("answer", local=candidate.execution == "local"),
             "enabled": True,
             "eligibleModelIds": [candidate.id],
             "modelId": candidate.id,

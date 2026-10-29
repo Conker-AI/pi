@@ -2,9 +2,11 @@
 
 They are offered next to the owner's published tools and follow the same layers (chat > agent >
 tool default, see `pi.turns.access`). Remembering and scheduling are Keep: allowed by default, done
-at once and listed in Inbox Handled. A tool draft, and anything his settings say to ask about, is
-filed as a change request (`pi.agents.change_requests`) that he approves in the Inbox. Every one is
-recorded as a request either way. Nothing here acts outside Pi's own store and memory (ADR-0005).
+at once and listed in Inbox Handled. Anything his settings say to ask about is filed as a change
+request (`pi.agents.change_requests`) that he approves in the Inbox. A tool draft is always filed:
+the request is made at once and Pi drafts it in the background (`pi.turns.tool_drafting`), so the
+chat answers without waiting. Every one is recorded as a request either way. Nothing here acts
+outside Pi's own store and memory (ADR-0005).
 The companion gets them all; another agent gets those selected for it, like any tool. A question
 (`conker.ask`) is always allowed: it goes to his Inbox and his answer comes back to the chat as his
 next message (`pi.agents.asks`).
@@ -15,7 +17,7 @@ from __future__ import annotations
 import re
 
 from pi.actions.toolgate import Tool, ToolResult
-from pi.agents import asks, change_requests, workflow_drafts
+from pi.agents import asks, change_requests, tool_drafts
 from pi.schedule import agent_jobs
 
 SCHEDULE = "conker.schedule"
@@ -74,14 +76,16 @@ CATALOG = (
     Tool(
         DRAFT_TOOL,
         "Draft a new tool",
-        "Ask the owner to add a new tool: Conker drafts a workflow built from the existing tools, and the "
-        "owner reviews, saves and publishes it. Describe what the tool should do.",
+        "Use this whenever the owner asks for a new tool, an automation or a workflow, instead of "
+        "doing the job yourself. Pi drafts it from the existing tools in the background and puts "
+        "the draft in the owner's Inbox, where they review and publish it. Describe what the tool "
+        "should do, in the owner's words.",
         [
             {
                 "name": "description",
                 "type": "string",
                 "required": True,
-                "description": "What the new tool should do",
+                "description": "What the new tool should do, in the owner's words",
             }
         ],
         "owner_confirmation",
@@ -270,49 +274,27 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             return _done(loop, request, tool_id) if run else _filed(request, tool_id)
         if tool_id == DRAFT_TOOL:
             description = _text(args, "description", 4000)
-            capabilities = [
-                {
-                    "id": tool.id,
-                    "kind": "workflow" if tool.id.startswith("workflow:") else "tool",
-                    "name": tool.name[:160],
-                    "description": (tool.description or "")[:800],
-                    "inputs": [
-                        {
-                            "name": str(field.get("name", "input"))[:200],
-                            "type": str(field.get("type", "string"))[:40],
-                            "required": field.get("required") is True,
-                            "description": str(field.get("description") or "")[:500],
-                        }
-                        for field in tool.inputs[:100]
-                    ],
-                }
-                for tool in loop._available_tools(execution)
-                if not owns(tool.id) and not tool.id.startswith("workflow:")
-            ][:200]
-            drafted = workflow_drafts.draft(
-                loop.store,
-                # Every adapter the router has (local and hosted), as the owner's draft route uses.
-                loop.router.adapters(),
-                workflow_drafts.Request(description=description, capabilities=capabilities),
+            request = tool_drafts.file(
+                loop.store, description, session_id=session_id, turn_id=turn_id
             )
-            if not drafted["ready"] or drafted["document"] is None:
-                # The builder needs more: its question goes back to the conversation.
-                return ToolResult(
-                    ok=True,
-                    result={"status": "needs_detail", "message": drafted["reply"]},
-                    tool_id=DRAFT_TOOL,
-                )
-            document = drafted["document"]
-            request = change_requests.file(
-                loop.store,
-                "tool_draft",
-                f"Add the tool “{document['name']}”",
-                drafted["reply"][:600],
-                {"document": document, "issues": drafted["issues"], "description": description},
-                session_id=session_id,
-                turn_id=turn_id,
+            drafts = getattr(loop, "drafts", None)
+            if drafts is not None:
+                drafts.kick()
+            return ToolResult(
+                ok=True,
+                result={
+                    "status": "drafting",
+                    "requestId": request["id"],
+                    "message": (
+                        "Drafting has started in the background. The draft will be in the "
+                        "owner's Inbox in a few minutes, where they review it; nothing exists "
+                        "or runs until they publish it. Tell them in one short sentence that "
+                        "you are drafting it and it will be in their Inbox. Do not do the job "
+                        "yourself and do not say the tool is ready."
+                    ),
+                },
+                tool_id=tool_id,
             )
-            return _filed(request, tool_id)
         text = _text(args, "text", 2000)
         request = change_requests.file(
             loop.store,
@@ -327,8 +309,4 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     except ValueError as invalid:
         return ToolResult(
             ok=False, result={"status": "invalid", "message": str(invalid)}, tool_id=tool_id
-        )
-    except workflow_drafts.DraftError as failure:
-        return ToolResult(
-            ok=False, result={"status": "unavailable", "message": failure.message}, tool_id=tool_id
         )

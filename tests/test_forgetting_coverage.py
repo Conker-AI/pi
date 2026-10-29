@@ -55,6 +55,8 @@ IDS_ONLY = {
     "response_retries",
     "response_versions",
     "scheduled_run_budgets",
+    # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
+    "service_model_calls",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",
@@ -62,6 +64,9 @@ IDS_ONLY = {
     "system_inventory_reads",
     "task_runs",
     "team_model_calls",
+    # A tool request made without a chat: its request_id, the change request it made and a
+    # fingerprint of the description; never the description.
+    "tool_draft_submissions",
     "turn_cancellations",
     "turn_messages",
     "turn_reply_recoveries",

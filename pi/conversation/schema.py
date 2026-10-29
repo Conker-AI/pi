@@ -10,6 +10,7 @@ from pi.agents import (
     continuity,
     skills,
     team_execution,
+    tool_drafts,
     workflow_offers,
     workflow_proposals,
 )
@@ -37,6 +38,7 @@ from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
+from pi.models import service_inference
 from pi.owner import plan_alerts
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
@@ -58,6 +60,7 @@ from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
 from pi.turns import queue as turn_queue
+from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 
@@ -88,6 +91,7 @@ def install(db):
     db.executescript(judgements.SCHEMA)
     db.executescript(fact_checks.SCHEMA)
     db.executescript(turn_steering.SCHEMA)
+    db.executescript(turn_restart.SCHEMA)
     db.executescript(research_usage.SCHEMA)
     research_usage.migrate(db)
     db.executescript(universal_search.SCHEMA)
@@ -101,6 +105,7 @@ def install(db):
     agent_hooks.initialize(db)
     workflow_proposals.initialize(db)
     change_requests.initialize(db)
+    tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
     workflow_offers.initialize(db)
@@ -115,6 +120,7 @@ def install(db):
     db.executescript(team_execution.SCHEMA)
     db.executescript(artifacts.SCHEMA)
     db.executescript(model_roles.SCHEMA)
+    db.executescript(service_inference.SCHEMA)
     db.executescript(background_thinking.SCHEMA)
     db.executescript(jobs.SCHEMA)
     continuity.initialize(db)

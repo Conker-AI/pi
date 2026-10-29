@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from pi.actions.toolgate import ToolGateClient
-from pi.agents import team_execution
+from pi.agents import team_execution, tool_drafts
 from pi.calls import runtime as calls
 from pi.calls import speech
 from pi.context import retrieval as context_retrieval
@@ -24,6 +24,7 @@ from pi.memory import proposals as memory_proposals
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
 from pi.models import secrets as provider_secrets
+from pi.models import service_inference
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import OllamaProvider
@@ -57,6 +58,16 @@ async def lifespan(app: FastAPI):
             "Set PI_GATEWAY_KEY_SHA256 to the gateway credential's SHA-256 hex digest, "
             "then restart Pi."
         )
+    try:
+        service_keys = service_inference.key_hashes(os.environ.get("PI_SERVICE_KEYS_SHA256", ""))
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from None
+    if set(service_keys.values()) & {
+        runtime_hash,
+        owner_hash,
+        hashlib.sha256(admin_key.encode()).hexdigest(),
+    }:
+        raise RuntimeError("Each service key must differ from Pi's other credentials.")
     # Secure by default, or refuse to start. Never fall back to open - the rule
     # has a scar behind it, see ADR-0005.
     if len(admin_key) < 16:
@@ -88,6 +99,7 @@ async def lifespan(app: FastAPI):
     background_thinking.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
+    tool_drafts.recover_interrupted(store)
     memory_proposals.recover_interrupted(store)
     memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)
@@ -201,6 +213,7 @@ async def lifespan(app: FastAPI):
     app.state.admin_key = admin_key
     app.state.gateway_key_hash = runtime_hash
     app.state.owner_key_hash = owner_hash
+    app.state.service_key_hashes = service_keys
     app.state.store = store
     app.state.local = local
     app.state.hosted = hosted
@@ -275,9 +288,12 @@ async def lifespan(app: FastAPI):
             store, plan_readers, check_seconds=_seconds("PI_PLAN_CHECK_SECONDS", 900)
         )
         plan_worker.start()
+    # Conker's tool requests are drafted in the background, one at a time.
+    app.state.loop.drafts.start()
     try:
         yield
     finally:
+        app.state.loop.drafts.close()
         app.state.loop.thinking.close()
         if plan_worker:
             plan_worker.close()

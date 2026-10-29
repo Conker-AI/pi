@@ -25,6 +25,16 @@ uses it, so he can make it stronger than the model doing the work (for example J
 and in a chat with no harness, the answer model reviews. Older saved settings gain it disabled.
 A reviewer that fails or answers unclearly means the action asks him.
 
+`memory-sorting` sorts what MemoryGate hears into memory candidates, and `tool-text` writes the
+text a ToolGate tool step asks a model for. Those services call them through `POST /inference`
+(see inference.md). Until the owner picks a model for one, or while it is switched off, it uses
+the local model, so nothing leaves the server; older saved settings gain them disabled with a
+300-second wait.
+
+A role may wait up to 600,000 ms (10 minutes) for its model. Saved settings keep their wait; when
+nothing was saved, a role whose model is local gets 300,000 ms (a cold local model can take
+minutes) and the others keep their old defaults.
+
 The development search API has a separate optional `search-ranking` role,
 migrated disabled with a 2,000ms transport timeout. It does not reuse memory
 ranking or conversation context selection. Owner search settings must explicitly
