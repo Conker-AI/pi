@@ -28379,6 +28379,17 @@
           },
           "planAlerts": {
             "$ref": "#/components/schemas/PlanAlerts"
+          },
+          "newChatAccess": {
+            "type": "string",
+            "enum": [
+              "default",
+              "ask",
+              "ai",
+              "full"
+            ],
+            "title": "Newchataccess",
+            "default": "default"
           }
         },
         "additionalProperties": false,

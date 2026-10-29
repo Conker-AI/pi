@@ -6,6 +6,21 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Sign out when idle is enforced** (`session.idle_timeout_minutes`). The gateway learns the
+  owner's `idleTimeoutMinutes` from every preferences document it relays (a read, or a
+  password-verified save) and keeps it in its own database, so a restart or Pi being down never
+  loosens it. A browser stays unlocked that long after the password was last entered; every
+  signed-in browser follows at once. `GATEWAY_IDLE_TIMEOUT_SECONDS` (default 30 minutes) is the
+  host's ceiling: a longer choice, and 0, mean the host's limit, which also applies until the
+  gateway has seen a document. A save always wins; an older read may only shorten the window.
+- **The access a new chat starts with** has a password-checked home: `newChatAccess`
+  (`default`, `ask`, `ai` or `full`, default `default`) in the owner preferences, which the
+  gateway saves only with a fresh password proof. `pi.owner.preferences.new_chat_access(db)`
+  reads it inside the transaction that creates a chat the owner starts; chats that exist, AI
+  job chats and forks keep their own switch. Creating chats does not call it yet.
+- The dashboard may be installed as an app: its pages allow the web app manifest
+  (`manifest-src 'self'`). Built files under `assets/` whose names carry a content hash are
+  cached for a year (`immutable`); everything else stays `no-store`.
 - **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
   (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
   Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
