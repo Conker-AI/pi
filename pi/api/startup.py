@@ -116,6 +116,7 @@ async def lifespan(app: FastAPI):
         os.environ.get("PI_OLLAMA_URL", "http://ollama:11434"),
         timeout=_seconds("PI_LOCAL_TIMEOUT_S", 600.0),
         model=os.environ.get("PI_MODEL", "qwen3:4b"),
+        store=store,
     )
 
     # Free by default: a fresh install works with no payment and no key. The

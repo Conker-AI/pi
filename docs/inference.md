@@ -19,6 +19,8 @@ the local model Pi runs (`PI_MODEL` on `PI_OLLAMA_URL`; on a standard install, t
 model the services used before). Nothing leaves the server until the owner chooses a hosted model. That local default waits up to
 300 s, because a cold local model on a small server can take minutes; a wait saved in the role's
 settings is kept. Each service may use only its own role; this is fixed in code.
+The owner's local model settings (keep loaded, context size, CPU threads; see
+[routing](routing.md#local-model-settings)) apply to these calls as to any other local request.
 
 ## Authentication
 

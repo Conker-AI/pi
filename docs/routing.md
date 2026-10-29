@@ -45,3 +45,26 @@ and walking the catalogue would be slow and would blame the models.
 The catalogue assigns answer generation, model routing, context selection, summarization and memory ranking independently. Memory ranking replaces the legacy PI_MEMORY_RERANK_ENABLED switch and migrates disabled. Enable it explicitly in Conker Settings. The optional decision-service adapter accepts `model-routing` and `memory-ranking` routes; general completion adapters can also implement the ranking JSON contract. Provider transports and credentials remain server-owned.
 
 Memory ranking only reorders authorized candidates; it preserves originals and source links. Invalid or unavailable results keep retrieval order. No-memory skips retrieval; no-harness skips ranking. See [decision-service setup](https://github.com/Conker-AI/conker/blob/main/services/decisions/README.md).
+
+## Local model settings
+
+Three of the owner's settings (`pi.owner.settings`, read by `pi/models/local_settings.py`) shape
+every request Pi sends Ollama: chats, helper roles and the services' `/inference` calls alike.
+Hosted providers never read them. Each is read on every request, so a change applies to the next
+one. A value of the wrong type counts as unset; an unset one sends nothing, so Ollama's own setting
+applies.
+
+| Setting | Sent as | Range |
+|---|---|---|
+| `models.local.keep_loaded` | `keep_alive` | Minutes after the last use, kept to 5..1440 (a number or a string of digits); `"until_restart"` sends `-1`. Unset: the server's `OLLAMA_KEEP_ALIVE` (24h on a standard install). |
+| `models.local.context` | `options.num_ctx` | Tokens, kept to 2048..32768 and never above the server's context length. Unset: the server's `OLLAMA_CONTEXT_LENGTH`. |
+| `models.local.threads` | `options.num_thread` | 1 to the host's processor threads; 0 or unset leaves Ollama's own choice. |
+
+Pi knows the server's context length from `PI_OLLAMA_CONTEXT_LENGTH`, or `OLLAMA_CONTEXT_LENGTH`
+when it shares Ollama's environment; the installer sizes that to the machine, so the owner's
+setting can only lower it. Ollama's API does not report the server's length (and Ollama already
+keeps a request to the model's own trained length). When Pi does not know it, a context too large
+for the machine's memory makes local answers fail: Ollama refuses to load the model, or its
+container runs out of memory and restarts. Pi reports that as an unavailable model, as it does any
+Ollama failure, and never crashes; a smaller setting recovers. A changed context or thread count
+makes Ollama load the model again once, so the next local answer waits for the load.
