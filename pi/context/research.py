@@ -2,13 +2,28 @@
 
 import contextlib
 import json
+import math
 import re
 
 from pi.models.providers import Message
+from pi.owner import settings as owner_settings
 from pi.schedule import tasks
 
 WEB_TOOL = "research.web"
 FETCH_TOOL = "research.fetch"
+# The fixed limits a research turn keeps: actions in one deep research, results in one search,
+# a search's age in days, and the text of one page read (Pi's own cap; ToolGate keeps its own).
+MAX_DEEP_SEARCHES = 4
+MAX_RESULTS = 8
+MAX_RECENCY_DAYS = 3650
+MIN_PAGE_CHARS, MAX_PAGE_CHARS = 1000, 12000
+# The owner's research settings (Conker's settings registry). They only ever lower the limits
+# above: a value over a limit counts as the limit, and an unset or malformed one changes nothing.
+DEEP_SEARCHES = "research.deep_searches"
+RESULTS = "tools.web.results"
+RECENT = "research.recent"
+PAGE_LIMIT = "context.web_page_limit"
+RECENT_DAYS = {"any": None, "year": 365, "month": 30}
 
 
 def validate(mode, snapshot=None):
@@ -88,7 +103,35 @@ def instructions(execution, search_started=False, remaining=None):
     ]
 
 
+def _owner_number(store, setting_id, low, high):
+    """An owner number kept to low..high, or None when it is unset or not a number."""
+    value = owner_settings.value(store, setting_id)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return min(high, max(low, int(value)))
+
+
+def _lower(args, name, most):
+    """Hold one argument to the owner's most: a smaller choice stays, a larger or missing one
+    becomes the most (a missing one would get ToolGate's default, which can be larger)."""
+    if most is not None:
+        args[name] = min(args.get(name, most), most)
+
+
+def deep_search_limit(store, limit):
+    """The most actions one deep research takes: the turn's step limit, at most 4, and at most
+    the owner's Searches in deep research. Saved with the plan, so the turn keeps it."""
+    owner = _owner_number(store, DEEP_SEARCHES, 1, MAX_DEEP_SEARCHES)
+    return min(MAX_DEEP_SEARCHES, limit, owner or MAX_DEEP_SEARCHES)
+
+
 def validate_call(call, store=None, turn_id=None):
+    """Refuse a research call outside its bounded contract.
+
+    With the store, a valid call is also held to the owner's settings: Results per search and
+    Prefer recent for a search, Web page size for a page read. Its arguments are lowered in
+    place, never raised, so the action Pi records and ToolGate runs is the held one.
+    """
     if call and call.tool_id == FETCH_TOOL and store and turn_id:
         args = call.args
         identity = args.get("result_id")
@@ -97,13 +140,14 @@ def validate_call(call, store=None, turn_id=None):
             or not isinstance(identity, str)
             or not 20 <= len(identity) <= 48
             or not re.fullmatch(r"rr_[A-Za-z0-9_-]+", identity)
-            or type(args.get("max_chars", 12000)) is not int
-            or not 1000 <= args.get("max_chars", 12000) <= 12000
+            or type(args.get("max_chars", MAX_PAGE_CHARS)) is not int
+            or not MIN_PAGE_CHARS <= args.get("max_chars", MAX_PAGE_CHARS) <= MAX_PAGE_CHARS
             or identity not in source_handles(store, turn_id)
         ):
             raise RuntimeError(
                 "Source read requires a bounded result ID from this turn's successful searches."
             )
+        _lower(args, "max_chars", _owner_number(store, PAGE_LIMIT, MIN_PAGE_CHARS, MAX_PAGE_CHARS))
         return
     if call is None or call.tool_id != WEB_TOOL:
         raise RuntimeError(
@@ -116,14 +160,18 @@ def validate_call(call, store=None, turn_id=None):
         or not isinstance(query, str)
         or not 3 <= len(query.strip()) <= 240
         or any(ord(c) < 32 for c in query)
-        or type(args.get("max_results", 8)) is not int
-        or not 1 <= args.get("max_results", 8) <= 8
+        or type(args.get("max_results", MAX_RESULTS)) is not int
+        or not 1 <= args.get("max_results", MAX_RESULTS) <= MAX_RESULTS
         or type(args.get("recency_days", 30)) is not int
-        or not 1 <= args.get("recency_days", 30) <= 3650
+        or not 1 <= args.get("recency_days", 30) <= MAX_RECENCY_DAYS
     ):
         raise RuntimeError(
             "Web research query exceeds its bounded input contract; no search was executed."
         )
+    if store is not None:
+        _lower(args, "max_results", _owner_number(store, RESULTS, 1, MAX_RESULTS))
+        recent = owner_settings.value(store, RECENT)
+        _lower(args, "recency_days", RECENT_DAYS.get(recent) if isinstance(recent, str) else None)
 
 
 def source_handles(store, turn_id):
@@ -216,6 +264,7 @@ def save_plan(store, turn_id, text, limit):
         raise RuntimeError(
             "Research planner returned an invalid public plan; no search ran."
         ) from None
+    search_limit = deep_search_limit(store, limit)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         turn_steering.guard_db(db, turn_id)
@@ -229,7 +278,7 @@ def save_plan(store, turn_id, text, limit):
             db,
             turn["session_id"],
             "assistant",
-            {"kind": "research_plan", "questions": questions, "search_limit": min(4, limit)},
+            {"kind": "research_plan", "questions": questions, "search_limit": search_limit},
             turn_id=turn_id,
             purpose="intermediate",
         )
