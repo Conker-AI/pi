@@ -6,6 +6,18 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
+  (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
+  Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
+  add privacy, are saved with the chat when it starts (existing chats and forks keep theirs), and
+  a choice sent for that chat still wins. Name chats automatically (`chats.names.auto`) off stops
+  the name after the first answer (asking for one still works); Name style (`chats.names.style`:
+  short, descriptive, emoji) sets the naming rule. Queue messages (`chats.queue`) off refuses new
+  queued messages with `queue_off`; Queued messages (`chats.queue_max`, 1 to 5, default 5) sets
+  how many wait. Messages already queued stay and run. Largest upload (`files.upload_limit`, 1 to
+  500 MB) refuses a bigger file with 413 `upload_limit`, before streaming when its length is
+  declared; with no value set there is still no limit (the 2026-10-18 decision). A value of the
+  wrong type or out of range counts as the default.
 - **Small models' tool requests get through more often.** One narrow repair, approved by the
   owner: a whole reply that fails to decode only because of backslashes that start no JSON escape
   (`\$` in `echo exit=\$?`) is decoded again without just those backslashes, and the result goes
