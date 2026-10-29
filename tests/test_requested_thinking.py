@@ -28,6 +28,25 @@ def store(tmp_path):
         yield value
 
 
+def setup_held(store):
+    """`setup` with the longest thinking budget a role allows.
+
+    These tests hold the thinker open across foreground work and then check how it
+    ended. Its deadline is a wall-clock timer: on a loaded machine the fixture's
+    10 s ran out first and the thinker ended at its time limit instead.
+    """
+    loop, provider = setup(store)
+    saved = model_roles.load(store)
+    saved["configuration"]["roleSettings"]["roles"]["thinking"]["timeoutMs"] = 120000
+    model_roles.save(
+        store,
+        model_roles.Update(
+            expected_revision=saved["revision"], configuration=saved["configuration"]
+        ),
+    )
+    return loop, provider
+
+
 def test_default_and_explicit_false_do_not_start_thinking(store):
     loop, provider = setup(store)
     sid = store.create_session()
@@ -170,7 +189,7 @@ class Stoppable:
 
 
 def test_cancel_closes_actual_inference_and_releases_slot_without_publishing(store):
-    loop, _ = setup(store)
+    loop, _ = setup_held(store)
     provider = Stoppable()
     loop.router.local = provider
     sid = store.create_session()
@@ -218,7 +237,7 @@ def test_queue_freezes_think_and_rejects_changed_admission(store):
 
 
 def test_queued_cancel_and_restart_stop_owned_workers_without_replaying(store):
-    loop, _ = setup(store)
+    loop, _ = setup_held(store)
     provider = Stoppable()
     loop.router.local = provider
     loop.thinking.slots = threading.BoundedSemaphore(1)
@@ -245,7 +264,7 @@ def test_queued_cancel_and_restart_stop_owned_workers_without_replaying(store):
 
 
 def test_stopping_running_submission_also_stops_its_thinker(store):
-    loop, _ = setup(store)
+    loop, _ = setup_held(store)
     provider = Stoppable()
     original = provider.complete_bounded
     talking, release_talking = threading.Event(), threading.Event()
@@ -316,7 +335,7 @@ def test_retrying_final_answer_does_not_restart_frozen_thinking_request(store):
 
 
 def test_ordinary_followup_keeps_requested_findings_anchored_to_original_input(store):
-    loop, provider = setup(store)
+    loop, provider = setup_held(store)
     sid = store.create_session()
     original = loop.run_turn(sid, "Analyze this original question", think=True)
     assert provider.started.wait(30)
@@ -344,7 +363,7 @@ def test_worker_start_failure_leaves_talking_available(store, monkeypatch):
 
 
 def test_shutdown_serializes_worker_admission_and_never_joins_unstarted_thread(store, monkeypatch):
-    loop, _ = setup(store)
+    loop, _ = setup_held(store)
     loop.router.local = Stoppable()
     admitted, release, closing_started, closed = (threading.Event() for _ in range(4))
     constructor = background_thinking._Control
@@ -385,4 +404,10 @@ def test_shutdown_serializes_worker_admission_and_never_joins_unstarted_thread(s
     shutdown.join(30)
     assert not request.is_alive() and not shutdown.is_alive() and not errors
     assert background_thinking.list_for_session(store, sid)[0]["status"] == "interrupted"
+    # close() waits only 1 s per worker; a loaded machine can take longer to unwind one.
+    with loop.thinking.lock:
+        workers = list(loop.thinking.threads)
+    for worker in workers:
+        worker.join(30)
+        assert not worker.is_alive()
     assert loop.thinking.closed and not loop.thinking.threads
