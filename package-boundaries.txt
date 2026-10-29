@@ -30,6 +30,7 @@ calls -> context
 calls -> conversation
 calls -> core
 calls -> models
+calls -> owner
 content -> conversation
 content -> core
 content -> models
@@ -38,6 +39,7 @@ context -> content
 context -> conversation
 context -> core
 context -> models
+context -> owner
 context -> schedule
 context -> turns
 conversation -> actions

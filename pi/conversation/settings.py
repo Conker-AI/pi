@@ -7,7 +7,7 @@ from pydantic import Field, model_validator
 
 from pi.agents import profiles as agents
 from pi.context import decisions, projects
-from pi.conversation import output_settings
+from pi.conversation import output_settings, owner_profile
 from pi.core.models import Strict
 
 
@@ -211,6 +211,8 @@ def _snapshot(db, identity):
         "SELECT revision,configuration FROM model_role_settings WHERE singleton=1"
     ).fetchone()
     project = _project(db, value["settings"].get("projectId"))
+    # The owner's settings, read once here and frozen with the turn (see owner_profile).
+    owner = owner_profile.snapshot(db)
     snapshot = {
         **value,
         "agentId": agent["id"],
@@ -226,8 +228,15 @@ def _snapshot(db, identity):
         "privacy": value["settings"]["privacy"],
         "project": project,
         "authority": "none",
-        "projectContext": project_context.capture(db, identity, value["settings"]),
+        "projectContext": (
+            []
+            if owner_profile.sources_off(owner)
+            else project_context.capture(db, identity, value["settings"])
+        ),
     }
+    # Only when set, so a snapshot taken before this existed still matches (queued messages).
+    if owner:
+        snapshot["owner"] = owner
     snapshot = calls.execution_snapshot(db, identity, snapshot)
     require_inherited_privacy(db, identity, snapshot)
     return snapshot

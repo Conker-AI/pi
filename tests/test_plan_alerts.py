@@ -14,10 +14,12 @@ from pi.api import server
 from pi.conversation.store import Store
 from pi.models.chatgpt import ChatGPTProvider
 from pi.owner import plan_alerts, preferences
+from pi.owner import settings as owner_settings
 
 NOW = datetime(2026, 10, 21, 12, tzinfo=UTC).timestamp()
 FRIDAY = "2026-10-23T09:00:00Z"
 NEXT_FRIDAY = "2026-10-30T09:00:00Z"
+LATER = "2100-01-01T00:00:00Z"
 
 
 def plan(used, resets=FRIDAY, provider="chatgpt", available=True):
@@ -193,3 +195,73 @@ def test_the_owner_key_reads_usage_but_cannot_dismiss(store, monkeypatch):
     assert client.get("/plans/usage", headers={"X-Pi-Owner-Key": "wrong"}).status_code == 401
     refused = client.post(f"/plans/alerts/{raised['alertId']}/dismiss", headers=owner)
     assert refused.status_code == 403 and plan_alerts.needs_you(store) != []
+
+
+def windows(*readings):
+    """A plan whose windows are labelled as the runtimes label them: (label, used percent). They
+    reset long after the real clock the worker reads, so a second check is the same period."""
+    value = plan(0)
+    value["windows"] = [
+        {"id": f"default:{index}", "label": label, "usedPercent": used, "resetsAt": LATER}
+        for index, (label, used) in enumerate(readings)
+    ]
+    return value
+
+
+def watch(store, value):
+    current = owner_settings.load(store)
+    owner_settings.save(
+        store,
+        owner_settings.Update(
+            expected_revision=current["revision"], values={plan_alerts.WINDOWS: value}
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "watched"),
+    [
+        (None, {"five_hour", "weekly"}),
+        (["weekly"], {"weekly"}),
+        (["five_hour", "five_hour"], {"five_hour"}),
+        ([], set()),
+        (["weekly", "daily"], {"five_hour", "weekly"}),
+        (["weekly", ["five_hour"]], {"five_hour", "weekly"}),
+        ("weekly", {"five_hour", "weekly"}),
+        ({"weekly": True}, {"five_hour", "weekly"}),
+    ],
+)
+def test_windows_to_watch_is_checked_and_falls_back_to_both(store, value, watched):
+    if value is not None:
+        watch(store, value)
+    assert plan_alerts.watched(store) == watched
+
+
+def test_only_watched_windows_raise_alerts_and_other_spans_always_count(store):
+    watch(store, ["weekly"])
+    reading = windows(
+        ("5-hour", 95), ("weekly", 90), ("Codex weekly", 91), ("weekly Opus", 92), ("3-day", 93)
+    )
+    worker = plan_alerts.PlanAlertWorker(store, lambda: [lambda: reading])
+    assert [change["change"] for change in worker.tick()] == ["raised"] * 4
+    titles = {item["title"] for item in plan_alerts.needs_you(store)}
+    assert titles == {
+        "ChatGPT weekly limit 90% used",
+        "ChatGPT Codex weekly limit 91% used",
+        "ChatGPT weekly Opus limit 92% used",
+        "ChatGPT 3-day limit 93% used",
+    }
+    assert len(plan_alerts.overview(store)["windows"]) == 5
+    watch(store, ["five_hour"])
+    assert [change["change"] for change in worker.tick()] == ["raised"]
+    assert "ChatGPT 5-hour limit 95% used" in {i["title"] for i in plan_alerts.needs_you(store)}
+
+
+def test_an_open_alert_still_resets_after_its_window_is_unwatched(store):
+    [raised] = plan_alerts.record(store, plan(85), 80, now=NOW)
+    friday = datetime(2026, 10, 23, 9, 30, tzinfo=UTC).timestamp()
+    changes = plan_alerts.record(
+        store, plan(90, NEXT_FRIDAY), 80, now=friday, windows=frozenset({"five_hour"})
+    )
+    assert changes == [{"change": "reset", "alertId": raised["alertId"]}]
+    assert plan_alerts.needs_you(store) == []
