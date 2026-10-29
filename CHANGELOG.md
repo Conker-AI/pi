@@ -6,6 +6,26 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Small models' tool requests get through more often.** One narrow repair, approved by the
+  owner: a whole reply that fails to decode only because of backslashes that start no JSON escape
+  (`\$` in `echo exit=\$?`) is decoded again without just those backslashes, and the result goes
+  through every normal check (offered tool, exact `{"tool", "args"}` shape, the owner's access
+  layers, ToolGate). Nothing else is ever repaired. The tool list shows each tool's inputs as a
+  JSON template (`args: {"description": "<text>"}`) instead of `args: description: string`,
+  which small models copied as a `"description: "` key.
+- **The retry note names the mistake**: an invalid escape or the decoder's own words for broken
+  JSON, text before or after the request, an input name with something added (named from the
+  tool list, e.g. `"description"`), or a request narrated and quoted in a code block. The last
+  is new: prose that says the model is about to act ("I'll use...", "Let me run...") around
+  exactly one quoted request for an offered tool is retried once like a request wrapped in prose
+  and never run; an explanation that only shows the format is still an answer. A second invalid
+  reply fails the turn, as before.
+- **Memories per answer** (`memory.per_answer`, 1 to 50, default 8) now sets how many memories an
+  answer asks MemoryGate for; MemoryGate takes at most 30 per request, so a larger value asks for
+  30. Memories whose text repeats an earlier one (ignoring case and spacing) are dropped before
+  the model reads them, the first kept, and counted in the package's
+  `retrieval.pi_duplicate_memories` receipt. Search still shows every record.
+
 ## 0.12.0
 
 - **Conker remembers across chats by default.** The Companion's memory scope starts on `owner`
