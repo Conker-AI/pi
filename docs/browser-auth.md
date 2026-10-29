@@ -66,10 +66,16 @@ must handle 401 by showing sign-in, 403 by reloading request verification state,
 429 by waiting, and 502/503 as explicit dependency failures. Memory notices pass
 through unchanged; they must not depend on the model's reply.
 
-Sessions lock 30 minutes after the last successful password login or verification,
-or expire after 24 hours absolute, whichever comes first. `GATEWAY_IDLE_TIMEOUT_SECONDS`
-configures this unlock window (integer 60–86400 seconds; default 1800). This is a
-conservative password-verified window, not a claim that the server can observe human
+Sessions lock a set time after the last successful password login or verification,
+or expire after 24 hours absolute, whichever comes first. The owner picks that unlock window
+in Settings (`idleTimeoutMinutes` in Pi's [owner preferences](owner-preferences.md): 5, 15, 30
+or 60 minutes, or 0 for the host's limit). `GATEWAY_IDLE_TIMEOUT_SECONDS` is the host's
+ceiling (integer 60–86400 seconds; default 1800): no choice can make the window longer. The
+gateway learns the choice from every preferences document it relays to the browser (a read or
+a password-verified save) and keeps the last one in its database, so a restart or Pi being down
+never loosens it; until it has seen one, the ceiling applies. A save always wins; a read older
+than the one kept may only shorten the window. A new choice applies at once to every signed-in
+browser. This is a conservative password-verified window, not a claim that the server can observe human
 presence. Polling, reads, writes and client activity claims never extend it. The
 frontend may additionally lock earlier on local inactivity using logout. Login
 and verification responses expose the deadline in epoch seconds so the UI can hide

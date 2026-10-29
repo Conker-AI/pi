@@ -97,6 +97,44 @@ def test_ui_policy_accepts_bundled_inline_fonts_without_widening_api_or_scripts(
         assert "data:" not in API_CSP
 
 
+def test_phones_may_install_the_app_and_only_hashed_assets_are_kept(tmp_path, dist):
+    (dist / "manifest.webmanifest").write_text('{"name": "Conker"}', encoding="utf-8")
+    (dist / "assets" / "index-BxK3z9aQ.js").write_bytes(b"hashed bundle")
+    (dist / "assets" / "KaTeX_Size3-Regular-DgQh1ApA.woff2").write_bytes(b"hashed font")
+    with TestClient(app_for(tmp_path, dist), base_url=ORIGIN) as client:
+        shell = client.get("/", headers={"Accept": "text/html"})
+        policy = {
+            parts[0]: parts[1:]
+            for directive in shell.headers["content-security-policy"].split(";")
+            if (parts := directive.split())
+        }
+        assert policy["manifest-src"] == ["'self'"]
+        assert policy["default-src"] == ["'none'"]
+        manifest = client.get("/manifest.webmanifest")
+        assert manifest.status_code == 200
+        assert manifest.headers["content-type"].startswith("application/manifest+json")
+        assert manifest.headers["content-security-policy"] == UI_CSP
+        assert "manifest-src" not in API_CSP
+        for path in ("/assets/index-BxK3z9aQ.js", "/assets/KaTeX_Size3-Regular-DgQh1ApA.woff2"):
+            for method in (client.get, client.head):
+                result = method(path)
+                assert result.status_code == 200
+                assert result.headers["cache-control"] == "public, max-age=31536000, immutable"
+        # Unhashed names, the shell, the manifest, misses and the API are never kept.
+        for path, accept in (
+            ("/assets/app.js", "*/*"),
+            ("/portrait.png", "*/*"),
+            ("/manifest.webmanifest", "*/*"),
+            ("/", "text/html"),
+            ("/chat/index-BxK3z9aQ", "text/html"),
+            ("/assets/missing-BxK3z9aQ.js", "*/*"),
+            ("/auth/session", "*/*"),
+        ):
+            assert client.get(path, headers={"Accept": accept}).headers["cache-control"] == (
+                "no-store"
+            )
+
+
 @pytest.mark.parametrize(
     "path",
     [
