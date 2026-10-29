@@ -25,6 +25,14 @@ be a decision with visible consequences.
   30. Memories whose text repeats an earlier one (ignoring case and spacing) are dropped before
   the model reads them, the first kept, and counted in the package's
   `retrieval.pi_duplicate_memories` receipt. Search still shows every record.
+- **Research, plan alert and speaking speed settings are read.** Each only lowers a fixed limit
+  and changes nothing while unset: `research.deep_searches` (a deep research's actions, at most
+  4, saved with its plan), `tools.web.results` (results per search, at most 8),
+  `research.recent` (a search's age: a year or a month), `context.web_page_limit` (Pi's cap on a
+  page read, at most 12000 characters) in research turns; `money.plan_windows` (the 5-hour and
+  weekly windows, matched by the runtimes' labels; other windows always count) for new plan
+  alerts; `voice.speed` (50 to 200 percent, sent as the speech server's `speed`) for spoken
+  answers in calls.
 - **An answer survives a restart.** Pi holds each answer (new table `held_answers`, forgotten with
   its chat) before the final commit, so an answer produced just before Pi stopped is saved at the
   next start instead of lost; a stop or steer the owner sent still refuses it, as it would live.

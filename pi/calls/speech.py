@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from pi.core.errors import ServiceError
+from pi.owner import settings as owner_settings
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_SECONDS = 120
@@ -18,6 +19,10 @@ MAX_TEXT_CHARACTERS = 4000
 MAX_TRANSCRIPT_CHARACTERS = 16000
 MAX_TRANSCRIPT_BYTES = 256 * 1024
 WAV_TYPES = {"audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave"}
+# Settings, Voice, Speaking speed (Conker's settings registry): 50 to 200 percent, 100 unless the
+# owner changes it. Sent as the speech API's speed (0.5 to 2); the normal speed sends nothing.
+SPEED = "voice.speed"
+MIN_SPEED, MAX_SPEED = 0.5, 2.0
 
 
 class SpeechError(ServiceError, RuntimeError):
@@ -73,6 +78,16 @@ def validate_wav(audio, mime):
     if duration > MAX_AUDIO_SECONDS:
         _fail("audio_too_long", 413, "Audio exceeds the 120 second limit.")
     return {"mime": "audio/wav", "duration_seconds": duration}
+
+
+def owner_speed(store):
+    """How fast Conker speaks, as the speech API's speed, or None at the normal speed. A value
+    that is not a number counts as the normal speed; one outside 50..200 percent is kept to it."""
+    value = owner_settings.value(store, SPEED, 100)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    percent = min(MAX_SPEED * 100, max(MIN_SPEED * 100, value))
+    return None if percent == 100 else percent / 100
 
 
 def _label(value):
@@ -464,8 +479,12 @@ class SpeechClient:
             "x_vector_only_mode": not bool(transcript),
         }
 
-    def synthesize(self, text: str, *, presentation=None, reference=None):
+    def synthesize(self, text: str, *, presentation=None, reference=None, speed=None):
         self._configured("tts")
+        if speed is not None and (
+            type(speed) not in (int, float) or not MIN_SPEED <= speed <= MAX_SPEED
+        ):
+            _fail("invalid_speech_speed", 422, "Speech speed must be between 0.5 and 2.")
         if not isinstance(text, str) or not text.strip() or "\x00" in text:
             _fail("invalid_speech_text", 422, "Provide nonblank speech text without NUL.")
         if len(text) > MAX_TEXT_CHARACTERS:
@@ -482,6 +501,8 @@ class SpeechClient:
             "input": text,
             "response_format": "wav",
         }
+        if speed is not None and speed != 1:
+            payload["speed"] = speed
         if presentation is not None:
             payload.update(
                 self._reference(presentation, reference)

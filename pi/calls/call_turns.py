@@ -7,6 +7,7 @@ import time
 
 from pi.calls.call_models import Send
 from pi.calls.call_records import CallError, _digest, _live, _row, _view, get
+from pi.calls.speech import owner_speed
 from pi.conversation import settings as session_settings
 from pi.models.providers import Message, ProviderUnavailable
 
@@ -193,14 +194,17 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             else:
                 try:
                     _stage(store, identity, body.request_id, generation, "synthesizing")
+                    # The owner's speaking speed; nothing is added at the normal speed.
+                    pace = owner_speed(store)
+                    options = {} if pace is None else {"speed": pace}
                     if accepted["character"] is None:
-                        output = speech.synthesize(message["content"])
+                        output = speech.synthesize(message["content"], **options)
                     else:
                         extra = (
                             {"reference": voice_reference} if voice_reference is not None else {}
                         )
                         output = speech.synthesize(
-                            message["content"], presentation=accepted, **extra
+                            message["content"], presentation=accepted, **extra, **options
                         )
                     guard(store, {"callExecution": {"id": identity, "generation": generation}})
                     speech_status = "generated-transient"
