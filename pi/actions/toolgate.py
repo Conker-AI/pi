@@ -255,6 +255,46 @@ class ToolGateClient:
         except Exception as exc:
             raise ToolGateUnavailable(type(exc).__name__) from exc
 
+    def check_document(self, document: dict) -> dict:
+        """ToolGate's read-only check of an editor document: its shape, its graph rules, and that
+        every tool and workflow it calls exists. Saves, grants and runs nothing.
+
+        `{"valid": bool, "issues": [{"code", "message", "nodeId"}]}`; a document of the wrong
+        shape is invalid with its issues. Unreachable, refusing, or a ToolGate without the check
+        (404) raises ToolGateUnavailable: the caller then goes on without it."""
+        try:
+            response = httpx.post(
+                f"{self.base_url}/v2/editor/check",
+                verify=verification(self.base_url),
+                json={"document": document},
+                headers=self._headers(),
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+        except Exception as exc:
+            raise ToolGateUnavailable(type(exc).__name__) from exc
+        if response.status_code != 200:
+            raise ToolGateUnavailable(f"check_{response.status_code}")
+        try:
+            body = response.json()
+            issues = body["issues"]
+            if type(body["valid"]) is not bool or not isinstance(issues, list):
+                raise ValueError("Invalid document check")
+            return {
+                "valid": body["valid"],
+                "issues": [
+                    {
+                        "code": str(issue.get("code") or "invalid")[:80],
+                        "message": str(issue.get("message") or "")[:300],
+                        "nodeId": str(issue["nodeId"])[:64] if issue.get("nodeId") else None,
+                    }
+                    for issue in issues[:50]
+                ],
+            }
+        except Exception as exc:
+            raise ToolGateUnavailable("check_unreadable") from exc
+
     # --- acting ----------------------------------------------------------
 
     def invoke(

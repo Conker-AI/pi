@@ -175,7 +175,12 @@ app.include_router(
         lambda: app.state.store,
         require_owner,
         lambda: getattr(getattr(app.state, "memory_corrections", None), "remember", None),
-        lambda: app.state.loop,
+        lambda: getattr(app.state, "loop", None),
+    )
+)
+app.include_router(
+    change_requests_api.drafts_router(
+        lambda: app.state.store, require_owner, lambda: getattr(app.state, "loop", None)
     )
 )
 app.include_router(access_api.router(lambda: app.state.store, require_owner))
