@@ -295,8 +295,13 @@ class Loop(ModelCalls, History, Replies):
 
         published = self._available_tools(execution)
         # Conker's own tools only file requests for the owner's approval (see native_tools).
-        # They follow the owner's tool choice: offered when ToolGate is set up and not skipped.
-        own = native_tools.catalog(execution) if self._offers_tools() else []
+        # They follow the owner's tool choice: offered when ToolGate is set up and not skipped,
+        # and never what this turn may not use (a private chat, an AI job's run).
+        own = (
+            native_tools.offered(self, execution, session_id, turn_id)
+            if self._offers_tools()
+            else []
+        )
         available = research.tools(execution, published + own)
         allowed = {t.id for t in available}
         catalog = {t.id: t for t in available}

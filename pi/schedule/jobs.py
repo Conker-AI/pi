@@ -14,6 +14,7 @@ from pi.schedule.job_models import (
     BudgetBinding,
     Definition,
     DefinitionSummary,
+    JobPrivacy,
     JobView,
     RunActionView,
     RunView,
@@ -126,6 +127,25 @@ def create(store, definition, now=None):
         return _view(_row(db, identity))
 
 
+def _carried(previous: Definition, definition: Definition) -> Definition:
+    """What an edit keeps: who made the job and its chat's privacy, which only ever tightens.
+    Turning it back on clears why Pi turned it off."""
+    privacy = None
+    if previous.privacy or definition.privacy:
+        before, after = previous.privacy or JobPrivacy(), definition.privacy or JobPrivacy()
+        privacy = JobPrivacy(
+            memoryDisabled=before.memoryDisabled or after.memoryDisabled,
+            harnessDisabled=before.harnessDisabled or after.harnessDisabled,
+        )
+    return definition.model_copy(
+        update={
+            "createdBy": previous.createdBy,
+            "privacy": privacy,
+            "turnedOff": None if definition.enabled else previous.turnedOff,
+        }
+    )
+
+
 def update(store, identity, body, now=None):
     body = Update.model_validate(body.model_dump())
     now = time.time() if now is None else now
@@ -134,6 +154,11 @@ def update(store, identity, body, now=None):
         old = _row(db, identity)
         if old["revision"] != body.expected_revision:
             raise JobError("Job changed; reload before saving.")
+        body.definition = Definition.model_validate(
+            _carried(
+                Definition.model_validate_json(old["definition"]), body.definition
+            ).model_dump()
+        )
         due = next_due(body.definition, now, anchor=old["created_at"])
         if json.loads(old["definition"]).get("watch") != body.definition.model_dump().get("watch"):
             db.execute("DELETE FROM agent_job_watch WHERE job_id=?", (identity,))
@@ -351,6 +376,8 @@ def browser_job(row):
             overlap=definition.overlap,
             requireBudget=definition.requireBudget,
             budgetAllowanceConfigured=definition.budgetAllowanceId is not None,
+            createdBy=definition.createdBy,
+            turnedOff=definition.turnedOff,
         ),
         createdAt=row["created_at"],
         nextAt=row["next_at"],

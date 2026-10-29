@@ -21,6 +21,23 @@ be a decision with visible consequences.
 - The dashboard may be installed as an app: its pages allow the web app manifest
   (`manifest-src 'self'`). Built files under `assets/` whose names carry a content hash are
   cached for a year (`immutable`); everything else stays `no-store`.
+- **Conker's own actions need the owner (security review 2026-10-29, F-20 to F-27, F-29).**
+  `conker.schedule` asks by default (his settings for an agent or a chat can still loosen it;
+  his own words no longer make a job), jobs record `createdBy`, and a job Conker made on its own
+  reserves from the daily proactive budget before each run and never counts as his words; no
+  AI-job run may schedule or draft a tool; Conker's requests make no job while 20 AI jobs are on
+  and at most 3 a day on its own. A private chat is never offered `conker.remember` or
+  `conker.schedule`, and a job approved from one gets a private chat. Outside content now also
+  covers recalled memories, attachments, project sources and answers to Conker's questions, and
+  a webhook payload marks its whole chat (new table `outside_sessions`; none of that chat's
+  messages goes to memory). In AI decides the hard stop is the owner's Inbox card template
+  (send, publish, ship, delete, pay; read from ToolGate's tool list when it lists `card`), not the
+  reviewer's own answers, and an MCP server's descriptions never reach the reviewer. Keep
+  memories go to MemoryGate with `origin: "conker"`; Keep results are linked to their chat
+  (`keep_results`), and forgetting a chat turns off its Keep jobs, forgets its Keep memories and
+  withdraws its parked turns' ToolGate approval requests once Pi runs again
+  (`approval_withdrawals`, health check `forget_followups`). At most 3 of Conker's requests wait
+  per chat and 20 in all. `memory.across_chats` is on only when unset or exactly true.
 - **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
   (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
   Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
