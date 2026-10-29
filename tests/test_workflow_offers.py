@@ -1,5 +1,7 @@
-"""Asked in chat for something recurring, Pi offers a workflow draft in the Inbox; nothing more."""
+"""Offers Pi made before Conker drafted tools itself stay until accepted or dismissed; no new ones."""
 
+import time
+import uuid
 from contextlib import closing
 
 import pytest
@@ -10,45 +12,10 @@ from pi.api import server
 from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.models.routing import Router
-from pi.setup import choices as setup_choices
 from pi.turns.loop import Loop
 from tests.test_tool_turns import FakeGate, Scripted
 
 WEATHER = "Every morning tell me the weather in Tel Aviv"
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        WEATHER,
-        "Remind me every Monday to water the plants",
-        "please send me a summary of my inbox each evening",
-        "Can you check the server every 2 hours and let me know if it is down",
-        "Make me a workflow that backs up my notes",
-        "Каждое утро присылай мне погоду",
-        "Напоминай мне ежедневно пить воду",
-        "Создай мне автоматизацию для резервных копий",
-    ],
-)
-def test_requests_for_something_recurring_are_offered(text):
-    assert workflow_offers.asks_for_workflow(text)
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "I go to the gym every morning",
-        "Why do I wake up every night?",
-        "Why does my phone send me alerts every morning?",
-        "What is a workflow?",
-        "Tell me the weather in Tel Aviv",
-        "Every morning I feel tired",
-        "Как погода каждое утро?",
-        "",
-    ],
-)
-def test_everything_else_is_left_alone(text):
-    assert not workflow_offers.asks_for_workflow(text)
 
 
 def build(tmp_path, replies, gate=None):
@@ -66,65 +33,35 @@ def offers_in(store):
     return [item for item in inbox.inbox(store)["needsYou"] if item["kind"] == "workflow-offer"]
 
 
-def test_conkers_own_tools_take_the_offers_place(tmp_path):
+@pytest.mark.parametrize("tools", [True, False])
+def test_pi_makes_no_new_offers(tmp_path, tools):
     store, loop, provider = build(tmp_path, ["I can ask for that as a cron job."])
+    if not tools:
+        loop.toolgate = None
     loop.run_turn(store.create_session(), WEATHER)
     assert offers_in(store) == []
     system = [m.content for m in provider.sent[0] if m.role == "system"]
     assert not any("Nothing is drafted" in text for text in system)
-    assert any("conker.schedule" in text for text in system)
 
 
-def test_the_companion_mentions_an_open_offer_once(tmp_path):
-    store, loop, provider = build(tmp_path, ["Sunny.", "Sunny."])
-    session = store.create_session()
-    loop.run_turn(session, "Hello")
-    turn = latest_turn(store)
-    workflow_offers.consider(store, COMPANION, turn, WEATHER, tools=True)
-    [item] = offers_in(store)
-    assert item["title"] == "Draft a workflow from your message? Hello"
-    assert item["source"]["sessionId"] == session
-    # An ordinary message neither adds an offer nor repeats the note.
-    loop.run_turn(session, "Thanks, what is it like now?")
-    assert len(offers_in(store)) == 1
-    assert not any(
-        "Nothing is drafted" in m.content for m in provider.sent[1] if m.role == "system"
-    )
-
-
-def test_no_offer_when_the_owner_has_no_tools(tmp_path):
-    store, loop, provider = build(tmp_path, ["Sure.", "Sure."])
-    loop.toolgate = None
-    loop.run_turn(store.create_session(), WEATHER)
-    loop.toolgate = FakeGate()
-    setup_choices.record(
-        store,
-        "capabilities",
-        setup_choices.ChoiceInput(requestId="skip-tools", choice="skip", expectedRevision=0),
-    )
-    loop.run_turn(store.create_session(), WEATHER)
-    assert offers_in(store) == []
-    assert not any(
-        "Nothing is drafted" in m.content
-        for sent in provider.sent
-        for m in sent
-        if m.role == "system"
-    )
-
-
-COMPANION = {"kind": "companion", "privacy": {"harnessDisabled": False}}
-
-
-def latest_turn(store):
+def offer(store, session):
+    """An offer as Pi used to make them, for the latest message in this chat."""
     with store._connect() as db:
-        return db.execute("SELECT id FROM turns ORDER BY rowid DESC LIMIT 1").fetchone()["id"]
+        message = db.execute(
+            "SELECT id FROM messages WHERE session_id=? AND role='user' ORDER BY seq DESC",
+            (session,),
+        ).fetchone()["id"]
+        db.execute(
+            "INSERT INTO workflow_offers VALUES (?,?,?,'open',?,NULL)",
+            ("wfo_" + uuid.uuid4().hex, session, message, time.time()),
+        )
 
 
 def offered(tmp_path):
     store, loop, _ = build(tmp_path, ["Noted."])
     session = store.create_session()
     loop.run_turn(session, WEATHER)
-    workflow_offers.consider(store, COMPANION, latest_turn(store), WEATHER, tools=True)
+    offer(store, session)
     [item] = offers_in(store)
     return store, session, item
 
@@ -187,20 +124,3 @@ def test_routes_need_the_admin_key(tmp_path):
     assert client.get("/workflow-proposals/offers/x", headers=admin).status_code == 422
     done = client.post(f"/workflow-proposals/offers/{item['id']}/dismiss", headers=admin)
     assert done.json()["state"] == "dismissed"
-
-
-@pytest.mark.parametrize(
-    "execution",
-    [
-        {"kind": "agent", "privacy": {"harnessDisabled": False}},
-        {"kind": "companion", "privacy": {"harnessDisabled": True}},
-    ],
-)
-def test_only_the_companions_own_chats_with_the_harness_on(tmp_path, execution):
-    store, loop, _ = build(tmp_path, ["Hello."])
-    loop.run_turn(store.create_session(), "Hello")
-    with store._connect() as db:
-        turn = db.execute("SELECT id FROM turns").fetchone()["id"]
-    assert workflow_offers.consider(store, execution, turn, WEATHER, tools=True) is None
-    companion = {"kind": "companion", "privacy": {"harnessDisabled": False}}
-    assert workflow_offers.consider(store, companion, turn, WEATHER, tools=True)["state"] == "open"

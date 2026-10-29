@@ -40,6 +40,20 @@ be a decision with visible consequences.
 - A model role may wait up to 10 minutes (was 2). Saved settings keep their wait; when nothing was
   saved, a role whose model is local waits up to 5 minutes, and background thinking honors its
   role's wait instead of stopping at 2 minutes.
+- **Conker drafts tools in the background.** `conker.draft_tool` files the tool request at once
+  (payload status `drafting`) and the chat answers right away; no model call or reviewer waits in
+  the turn. A drafting worker drafts one request at a time with the `drafting` role (the answer
+  role until one is picked), each call within its role's time limit and cancelled when Pi stops,
+  from the at most 8 capabilities that match the description (published workflows included). It
+  checks the draft with ToolGate's `POST /v2/editor/check` and repairs it up to twice; the ready
+  payload adds `steps` in plain words. A draft running when Pi stopped is failed on start.
+- New owner routes: `POST /tool-drafts` (idempotent on `request_id`), `POST
+  /change-requests/{id}/retry` and `POST /change-requests/{id}/published`, which stores Conker's
+  "“<name>” is live. Want me to run it now?" in the chat that asked. The gateway proxies all three
+  for the signed-in owner without a password, and passes `conkerMayUse` on the ToolGate publish
+  route (password verified, with Conker's key when true).
+- Pi no longer makes workflow offers in chat or tells the companion it cannot draft; offers already
+  made stay until accepted or dismissed.
 
 ## 0.12.0
 

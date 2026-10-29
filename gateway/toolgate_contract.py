@@ -28,7 +28,10 @@ def owner_editor_allowed(method: str, path: str, *, execution: bool = False) -> 
     """Return whether one fixed editor route belongs to the requested channel."""
 
     if execution:
-        return method in {"GET", "POST"} and _DRAFT_EXECUTION.fullmatch(path) is not None
+        # Publishing with "Let Conker use this tool" names the chat's key as well.
+        return (method in {"GET", "POST"} and _DRAFT_EXECUTION.fullmatch(path) is not None) or (
+            method == "POST" and _DRAFT_PUBLISH.fullmatch(path) is not None
+        )
     if method == "GET":
         return (
             path in {"/v2/owner/editor-capabilities", "/v2/owner/editor-drafts"}

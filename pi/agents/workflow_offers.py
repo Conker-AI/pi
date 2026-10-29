@@ -1,26 +1,16 @@
-"""Offers to draft a workflow, made when the owner asks in chat for something to run by itself.
+"""Offers to draft a workflow that Pi made in chat before Conker drafted tools itself.
 
-When the owner's own message asks for something recurring ("every morning tell me the weather"),
-Pi puts an offer in the Inbox and tells the companion to mention it. Nothing is drafted until the
-owner accepts (`conker workflow accept`), which drafts from that message exactly as `from-chat`
-does; nothing runs until they review and publish the draft. The check reads only the owner's
-message, never the model's reply, tool results or web pages, so injected text cannot make an
-offer. Pi keeps only the link and its state, and forgets it with the chat.
-
-Where Conker's own tools are offered (`pi/turns/native_tools.py`), Conker asks for the cron job or
-the tool itself as a change request, and no offer is made; offers already made stay until the owner
-accepts or dismisses them.
+Pi used to put an offer in the Inbox when the owner's own message asked for something recurring.
+Conker now drafts tools itself (`conker.draft_tool`, `pi.agents.tool_drafts`), so Pi makes no new
+offers. The ones already made stay until the owner accepts (`conker workflow accept`, which drafts
+from that message as `from-chat` does) or dismisses them. Pi keeps only the link and its state, and
+forgets it with the chat.
 """
-
-# The Russian patterns are Cyrillic on purpose; letters that look Latin are not a mistake.
-# ruff: noqa: RUF001
 
 from __future__ import annotations
 
-import re
 import time
 import unicodedata
-import uuid
 
 from pi.core.errors import ServiceError
 
@@ -36,32 +26,6 @@ CREATE TABLE IF NOT EXISTS workflow_offers (
 CREATE INDEX IF NOT EXISTS workflow_offers_open ON workflow_offers(state, created_at);
 """
 
-_UNIT = (
-    r"(?:morning|evening|night|day|weekday|weekend|week|month|year|hour|minute"
-    r"|monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?"
-)
-# Something that should happen again and again...
-_RECURRING = re.compile(
-    r"\b(?:every|each)\s+(?:other\s+|single\s+)?(?:" + _UNIT + r"|\d+\s*" + _UNIT + r")\b"
-    r"|\b(?:daily|weekly|hourly|monthly|on a schedule)\b"
-    r"|\bкажд(?:ое|ый|ую|ые|ой)\s+\w+"
-    r"|\b(?:ежедневно|еженедельно|ежечасно|ежемесячно)\b"
-)
-# ...asked of the companion, not just told about.
-_REQUEST = re.compile(
-    r"\b(?:remind|tell|send|check|notify|text|email|message|give|show|summari[sz]e|fetch|post"
-    r"|watch|track|alert|let me know|run|make|create|build|draft|set up|can you|could you"
-    r"|would you|will you|i want you to|i'd like you to)\b"
-    r"|\b(?:напоминай|напомни|присылай|пришли|отправляй|отправь|проверяй|проверь|сообщай|сообщи"
-    r"|рассказывай|расскажи|скажи|говори|делай|сделай|создай|настрой|можешь|сможешь)\b"
-)
-# Asking for a workflow by name is enough on its own.
-_NAMED = re.compile(
-    r"\b(?:make|create|build|draft|set up)\s+(?:me\s+)?(?:a|an)\s+(?:workflow|automation)\b"
-    r"|\b(?:сделай|создай|настрой)\s+(?:мне\s+)?(?:воркфлоу|автоматизацию)\b"
-)
-# A question about something ("why do I wake up every night?") is not a request for it.
-_QUESTION = re.compile(r"\A\s*(?:why|what|how|when|who|which|почему|зачем|что|как|когда|кто)\b")
 EXCERPT = 80
 
 
@@ -71,70 +35,6 @@ class OfferError(ServiceError):
 
 def initialize(db):
     db.executescript(SCHEMA)
-
-
-def asks_for_workflow(text: str) -> bool:
-    """True when the owner's message asks for something recurring, or for a workflow by name."""
-    normalized = unicodedata.normalize("NFKC", text or "").casefold()
-    if _NAMED.search(normalized):
-        return True
-    return (
-        not _QUESTION.match(normalized)
-        and bool(_RECURRING.search(normalized))
-        and bool(_REQUEST.search(normalized))
-    )
-
-
-def consider(store, execution, turn_id: str, text: str, *, tools: bool) -> dict | None:
-    """Offer a draft for this turn's owner message when it asks for one; at most once per message.
-
-    Only in the companion's own chats, only while the owner has tools at all (ToolGate is there
-    and tools were not left out at setup), and never in a chat whose harness is off.
-    """
-    if (
-        not tools
-        or execution.get("kind") != "companion"
-        or execution.get("privacy", {}).get("harnessDisabled")
-        or not asks_for_workflow(text)
-    ):
-        return None
-    with store._connect() as db:
-        row = db.execute(
-            "SELECT t.message_id, m.session_id FROM turn_messages t JOIN messages m "
-            "ON m.id=t.message_id WHERE t.turn_id=? AND t.purpose='input' AND m.role='user'",
-            (turn_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        db.execute(
-            "INSERT OR IGNORE INTO workflow_offers VALUES (?,?,?,'open',?,NULL)",
-            ("wfo_" + uuid.uuid4().hex, row["session_id"], row["message_id"], time.time()),
-        )
-        db.commit()
-        offer = db.execute(
-            "SELECT * FROM workflow_offers WHERE message_id=?", (row["message_id"],)
-        ).fetchone()
-    return _view(offer)
-
-
-def note(store, turn_id: str) -> str | None:
-    """What the companion is told when this turn's message has an open offer."""
-    with store._connect() as db:
-        offer = db.execute(
-            "SELECT o.id FROM workflow_offers o JOIN turn_messages t ON t.message_id=o.message_id "
-            "WHERE t.turn_id=? AND t.purpose='input' AND o.state='open'",
-            (turn_id,),
-        ).fetchone()
-    if offer is None:
-        return None
-    return (
-        "The owner's latest message asks for something to happen by itself. Pi has put an offer "
-        "in the owner's Inbox to draft a workflow from that message. Nothing is drafted, saved "
-        "or run until the owner accepts the offer there, reviews the draft and publishes it. "
-        "You cannot do anything on a schedule yourself, so never promise to do it every morning "
-        "or at all. Answer what you can now, and add one short sentence saying the offer to "
-        "draft a workflow is in their Inbox."
-    )
 
 
 def _view(row) -> dict:

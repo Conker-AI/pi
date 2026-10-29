@@ -12,19 +12,74 @@ owner did not leave tools out at setup:
 | Tool | What it files | What approving does |
 |---|---|---|
 | `conker.schedule` | an AI job: name, instructions, repeat (hours, daily, weekly, webhook) | creates the AI job (`agent_jobs.create`) in the owner's time zone |
-| `conker.draft_tool` | a workflow drafted by the drafting model from the owner's existing tools | the owner's browser saves it in ToolGate's editor and reports the draft id; the owner publishes it there |
+| `conker.draft_tool` | a tool request, drafted in the background from the tools Conker can use (see below) | once it is ready, the owner's browser saves it in ToolGate's editor and reports the draft id; the owner publishes it there |
 | `conker.remember` | one stated fact | stores the exact text through MemoryGate's correction capability (`PUT /runtime/corrections/remember/{request id}`), so a retry never stores it twice; if memory is not connected or does not answer, the request stays open (503) |
 
 Calling one only records a change request (`pi/agents/change_requests.py`) and answers at once with
-"waiting for the owner". A request is never edited after it is filed: what the owner approves is
-exactly what Conker asked for. Bad arguments are an answer to the model, not a request. A draft
-that needs more detail returns the builder's question instead of filing.
+"waiting for the owner" (a tool request: "drafting"). A request is never edited after it is filed:
+what the owner approves is exactly what Conker asked for. The one exception is a tool request,
+whose draft Pi fills in after filing. Bad arguments are an answer to the model, not a request.
 
 Nothing here acts outside Pi's own store (ADR-0005), and Pi holds no ToolGate authority: tool drafts
 reach ToolGate only through the owner's browser. A prompt attack on Conker can therefore at worst
 leave a request the owner declines. Conker's own tools do not count as tool use for model routing.
 
-Owner routes: `GET /change-requests`, `GET /change-requests/{id}`, `POST .../approve` (password
+## Tool requests (2026-10-29)
+
+When the owner asks for a new tool, Conker calls `conker.draft_tool` and the chat answers at once:
+it is drafting, and the draft will be in the Inbox. No model call waits in the turn, and the
+reviewer is not asked (the request makes nothing; it only fills a card). The same request is made
+without a chat by `POST /tool-drafts` (the Tools screen's "Describe a new tool", and the command
+line). One drafter serves all three (`pi/agents/tool_drafts.py`, worker `pi/turns/tool_drafting.py`).
+
+The request's `state` stays `open` throughout; its payload says how far drafting got:
+
+| `payload.status` | payload | card |
+|---|---|---|
+| `drafting` | `{"description", "status"}` | Drafting... |
+| `ready` | `{"description", "status", "document", "issues", "steps", "checked"}`, plus `"note"` when `checked` is false | Ready to review |
+| `failed` | `{"description", "status", "error"}` | Couldn't draft: `error` |
+
+A request filed before this has no `status` and counts as `ready`. `steps` are plain-word lines,
+one per step in the order they run ("Search the web for the topic (uses Web search)"), which Pi
+reads off the document itself; no model writes them. While drafting the title is "Draft a tool:
+<description>"; when ready it is "Add the tool “<name>”" and the summary is what the drafter says
+the tool does. `saved` and `approve` refuse a request that is not ready (409 `not_ready`).
+
+How it drafts, in the background, one request at a time:
+
+1. The tools Conker can use, as ToolGate lists them for its key, published workflows included as
+   building blocks; Conker's own tools are left out. Only those that share words with the
+   description reach the model: at most 8, words few tools have counting more, each described in a
+   few words (when none match, all are sent).
+2. The `drafting` model role drafts, or the answer role until the owner picks a drafting model
+   (Settings > Models). Each model call gets its role's own time limit, gives way to a chat reply on
+   a shared local model and then goes on, and is cancelled when Pi stops.
+3. ToolGate's read-only check (`POST /v2/editor/check`: shape, graph rules, every called tool and
+   workflow exists) reads the document; the model repairs it at most twice from what it found.
+   When ToolGate does not answer, or is older and lacks the check (404), the draft is ready with
+   Pi's own issues, `checked: false` and a note that Tools checks it again when opened.
+4. A question from the drafter ("which chat?") fails the card with its words, so the owner can
+   change the description and try again. A request still drafting when Pi stopped is failed when
+   Pi starts: "Pi restarted while drafting. Try again."
+
+Routes, all owner (`require_owner`; the browser's signed-in session, no password: they make
+nothing real):
+
+- `POST /tool-drafts` `{"description": str 1..4000, "request_id": str 16..128 [A-Za-z0-9_.:-]}`:
+  the new request (its view, as `GET /change-requests/{id}`), drafting. The same `request_id`
+  gives back the same request; with another description it is 409 `request_reused`.
+- `POST /change-requests/{id}/retry` with an empty body or `{"description": str 1..4000}`: back to
+  drafting, from the new description if given. 409 `drafting` while it drafts, `decided` once it
+  is no longer open, `not_a_tool_draft` for other requests.
+- `POST /change-requests/{id}/published` `{"toolId": str, "name": str 1..160}`: the owner
+  published the tool (`toolId` is the id ToolGate's publish answer gives, the one Conker sees).
+  Recorded as `result.published = {"toolId", "name", "publishedAt"}` and the request counts as
+  approved. The first time, if the request came from a chat, Conker's message is stored there (no
+  model call): "“<name>” is live. Want me to run it now?" It goes to the chat the conversation
+  continues in after a fork, waits while the chat is answering, and is not repeated.
+
+Other owner routes: `GET /change-requests`, `GET /change-requests/{id}`, `POST .../approve` (password
 verified; jobs and memories), `POST .../saved` with `{"draftId": ...}` (tool requests only; the
 owner's password-verified save in Tools already happened, so this records the id and needs only the
 signed-in session), `POST .../decline` (signed-in session only).
@@ -32,9 +87,11 @@ signed-in session), `POST .../decline` (signed-in session only).
 lists open requests (`kind: "change-request"`). Forgetting a chat deletes its requests.
 
 CLI parity: `conker inspect change-requests` lists open requests; `conker apply requests FILE`
-takes `{"operation": "approve" | "decline", "id": "creq_..."}`, or
+takes `{"operation": "approve" | "decline", "id": "creq_..."}`,
 `{"operation": "saved", "id": "creq_...", "draftId": "..."}` after saving the document with
-`conker apply tools`.
+`conker apply tools`, `{"operation": "retry", "id": "creq_...", "description"?: "..."}`, and
+`{"operation": "published", "id": "creq_...", "toolId": "...", "name": "..."}`. Publishing with
+`conker apply tools` takes `"conkerMayUse": true` to let Conker use the tool.
 
 By hand: the owner adds a memory with `POST /memory/remember` (`{"request_id", "text"}`, password
 verified in the browser; `conker apply memory` with `"operation": "remember"`), which uses the same

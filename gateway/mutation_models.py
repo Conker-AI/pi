@@ -170,8 +170,28 @@ class RequestSaved(Strict):
     draftId: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 
+class RequestRetry(Strict):
+    """Draft a tool request again, from a new description when one is given."""
+
+    operation: Literal["retry"]
+    id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
+    description: str | None = Field(default=None, min_length=1, max_length=4000)
+
+
+class RequestPublished(Strict):
+    """A tool request's tool was published (`conker apply tools`): Conker tells its chat."""
+
+    operation: Literal["published"]
+    id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
+    toolId: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$")
+    name: str = Field(min_length=1, max_length=160)
+
+
 REQUEST_MUTATION = TypeAdapter(
-    Annotated[RequestDecision | RequestSaved, Field(discriminator="operation")]
+    Annotated[
+        RequestDecision | RequestSaved | RequestRetry | RequestPublished,
+        Field(discriminator="operation"),
+    ]
 )
 
 
@@ -401,6 +421,8 @@ class ToolPublish(Strict):
     expected_revision: int = Field(ge=1)
     expected_publication_version: int = Field(ge=0)
     authorization: Literal["auto", "owner_confirmation"]
+    # Let Conker use it: ToolGate shows it to agents and grants the chat's key in the same step.
+    conkerMayUse: bool = False
 
 
 class ToolAccess(Strict):
