@@ -10,6 +10,7 @@ import httpx
 from pi.conversation import settings as session_settings
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
+from pi.owner import settings as owner_settings
 
 log = logging.getLogger("pi.memory.service")
 
@@ -19,6 +20,9 @@ CONTEXT_LIMIT_BYTES = 32768
 CONTEXT_RESPONSE_BYTES = 2 * 1024 * 1024
 CONTEXT_GROUPS = ("memories", "entities", "episodes", "evidence")
 BUDGET_RECEIPT = "pi_context_budget"
+# Settings, Memory, Remember across chats (Conker's settings registry): on unless he turns it off.
+ACROSS_CHATS = "memory.across_chats"
+COMPANION_MEMORY = {"scope": "owner", "memoryIds": []}
 
 
 def _context_size(package):
@@ -243,32 +247,24 @@ class Memory:
             state = "unavailable"
         elif client:
             try:
-                # Legacy Companion behavior remains unchanged unless settings were explicitly saved.
-                if (
-                    selected.get("revision", 0) == 0
-                    and selected["kind"] == "companion"
-                    and selected.get("agentVersion", 1) == 1
-                ):
-                    package = client.retrieve(query)
-                else:
-                    configuration = selected["configuration"]
-                    scope = configuration["memory"]["scope"]
-                    if scope == "owner":
-                        if selected["kind"] != "companion" or selected["agentId"] != "companion":
-                            raise ValueError("Owner memory is restricted to Companion.")
-                        # The configured read credential still limits the namespace;
-                        # this is not an administrative or cross-agent read.
-                        scope = "all"
-                    package = client.retrieve(
-                        query,
-                        scope=scope,
-                        session_id=(team_source or turn["session_id"])
-                        if scope == "conversation"
-                        else None,
-                        memory_ids=configuration["memory"]["memoryIds"]
-                        if scope == "selected"
-                        else [],
-                    )
+                # Turns from before agent profiles carry no configuration: the companion's default.
+                memory = (selected.get("configuration") or {}).get("memory") or COMPANION_MEMORY
+                scope = memory["scope"]
+                if scope == "owner":
+                    if selected["kind"] != "companion" or selected["agentId"] != "companion":
+                        raise ValueError("Owner memory is restricted to Companion.")
+                    # The configured read credential still limits the namespace; this is not an
+                    # administrative or cross-agent read. His switch keeps every chat to itself.
+                    across = owner_settings.value(self.store, ACROSS_CHATS, True) is not False
+                    scope = "all" if across else "conversation"
+                package = client.retrieve(
+                    query,
+                    scope=scope,
+                    session_id=(team_source or turn["session_id"])
+                    if scope == "conversation"
+                    else None,
+                    memory_ids=memory["memoryIds"] if scope == "selected" else [],
+                )
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):

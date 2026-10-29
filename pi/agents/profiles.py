@@ -156,10 +156,24 @@ def initialize(db):
             instructions="Act as the owner's daily companion.",
             modelId=None,
             toolIds=[],
-            memory=MemorySelection(scope="conversation", memoryIds=[]),
+            memory=MemorySelection(scope="owner", memoryIds=[]),
         )
         _insert(db, "companion", "companion", configuration, time.time())
+    else:
+        _remember_across_chats(db)
     db.commit()
+
+
+def _remember_across_chats(db):
+    """Before 0.12 the companion was created reading only the current chat. One the owner never
+    edited moves to the new default once, as a recorded update; a profile he saved keeps his choice.
+    Settings, Memory, Remember across chats still turns it off for every chat."""
+    current = _get(db, "companion")
+    if current["revision"] == 1 and current["configuration"]["memory"]["scope"] == "conversation":
+        configuration = AgentInput.model_validate(
+            {**current["configuration"], "memory": {"scope": "owner", "memoryIds": []}}
+        )
+        _append(db, current, configuration, current["archived_at"], "updated")
 
 
 def _insert(db, identity, kind, configuration, now):

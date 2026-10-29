@@ -126,7 +126,12 @@ def test_authored_companion_profile_applies_even_to_legacy_chat(tmp_path):
     seen = []
     with closing(Store(tmp_path / "test.db")) as store:
         sid = store.create_session()
-        profile = agents.AgentInput.model_validate(agents.get(store, "companion")["configuration"])
+        profile = agents.AgentInput.model_validate(
+            {
+                **agents.get(store, "companion")["configuration"],
+                "memory": {"scope": "conversation", "memoryIds": []},
+            }
+        )
         agents.update(
             store, "companion", agents.UpdateAgent(expected_revision=1, configuration=profile)
         )

@@ -269,8 +269,11 @@ def _team_agents(db, definition):
         base = agent["configuration"]
         if not set(role.toolIds).issubset(base["toolIds"]):
             raise agents.AgentError("selection_widening", "Role tools exceed the agent selection.")
-        if role.memory.scope != "none" and (
-            role.memory.scope != base["memory"]["scope"]
+        scope, agent_scope = role.memory.scope, base["memory"]["scope"]
+        # A role may read less than its agent: nothing, or this chat where the agent reads them all.
+        narrower = scope == "conversation" and agent_scope == "owner"
+        if scope != "none" and (
+            (scope != agent_scope and not narrower)
             or not set(role.memory.memoryIds).issubset(base["memory"]["memoryIds"])
         ):
             raise agents.AgentError(

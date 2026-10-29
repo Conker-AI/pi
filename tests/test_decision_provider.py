@@ -303,8 +303,9 @@ def test_memory_no_harness_never_calls_ranker(monkeypatch):
     monkeypatch.setattr(memory_store, "recall_held", lambda *args: 0)
     saved = []
     monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args))
+    monkeypatch.setattr(memory.owner_settings, "value", lambda store, key, default: default)
     package = {"memories": [], "retrieval": {"semantic": {"status": "ok"}}}
-    client = SimpleNamespace(retrieve=lambda query: package)
+    client = SimpleNamespace(retrieve=lambda query, **options: package)
 
     def prohibited(*args):
         pytest.fail("No-harness context reached the decision service")
