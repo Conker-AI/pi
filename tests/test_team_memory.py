@@ -57,7 +57,17 @@ def test_team_reads_source_conversation_without_ingesting_team_messages(tmp_path
             ),
         )
         assert client.calls == (
-            [] if disabled else [{"scope": "conversation", "session_id": sid, "memory_ids": []}]
+            []
+            if disabled
+            else [
+                {
+                    "scope": "conversation",
+                    "session_id": sid,
+                    "memory_ids": [],
+                    "max_items": 8,
+                    "distinct": True,
+                }
+            ]
         )
         with store._connect() as db:
             assert (

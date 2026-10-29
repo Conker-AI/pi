@@ -13,7 +13,8 @@ from pi.turns import control as turn_control
 from pi.turns import steering as turn_steering
 
 RETRY = (
-    "Your last reply was not used: {reason} Reply again with exactly one of these: only the JSON "
+    "Your last reply was not used: {reason} What was wrong: {mistake} "
+    "Reply again with exactly one of these: only the JSON "
     'tool request and nothing else, as valid JSON in the form {{"tool": "<exact listed tool ID>", '
     '"args": {{...}}}}, or only your answer to the owner with no JSON in it.'
 )
@@ -81,16 +82,17 @@ class ModelCalls:
 
     def _requested(self, route, completion, history, ctx, execution, allowed, tools=()):
         """The model's tool request, if any. The invalid outputs small models make (a request
-        wrapped in prose, request JSON that does not parse, a tool's bare arguments) get one more
-        try with the rule spelled out; nothing from that reply runs or is kept, and a second
-        invalid reply fails the turn. Every other invalid output fails at once, as before."""
+        wrapped in prose or narrated and quoted in a code block, request JSON that does not parse,
+        a tool's bare arguments, an input name with something added) get one more try with the
+        rule spelled out and the mistake named; nothing from that reply runs or is kept, and a
+        second invalid reply fails the turn. Every other invalid output fails at once, as before."""
         try:
             return route, completion, self._request(completion.text, allowed, tools)
         except tool_protocol.InvalidToolOutput as exc:
             if exc.reason not in tool_protocol.RETRIED:
                 raise
-            again = [*history, Message("system", RETRY.format(reason=exc.reason))]
-            route, completion, _ = self._call(again, ctx, execution)
+            note = RETRY.format(reason=exc.reason, mistake=exc.mistake)
+            route, completion, _ = self._call([*history, Message("system", note)], ctx, execution)
             return route, completion, self._request(completion.text, allowed, tools)
 
     @staticmethod
@@ -98,6 +100,8 @@ class ModelCalls:
         call = tool_protocol.parse(text, allowed)
         if call is None and tool_protocol.bare_arguments(text, list(tools)):
             raise tool_protocol.InvalidToolOutput(tool_protocol.BARE)
+        if call is not None:
+            tool_protocol.misnamed_inputs(call, list(tools))
         return call
 
     def _call(self, messages: list[Message], ctx: TurnContext, execution=None, role="answer"):
