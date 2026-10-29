@@ -11,7 +11,7 @@ queueing a message) reads the document in the same snapshot as the rest of its w
 
 from __future__ import annotations
 
-import json
+from pi.owner import settings as owner_settings
 
 INCOGNITO = "chats.default_incognito"
 HELPERS = "privacy.helpers"
@@ -29,8 +29,7 @@ MIB = 1024 * 1024
 
 def _value(db, setting_id):
     """One stored value, or None when the owner never set it."""
-    row = db.execute("SELECT vals FROM owner_settings WHERE singleton=1").fetchone()
-    return json.loads(row[0]).get(setting_id) if row else None
+    return owner_settings.read(db).get(setting_id)
 
 
 def _whole(value, low, high):
