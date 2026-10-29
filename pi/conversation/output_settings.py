@@ -121,16 +121,15 @@ def save(store, session_id, body: Update) -> dict:
 
 
 def snapshot(db, session_id) -> dict | None:
-    """The chat's saved output for a turn snapshot, with the owner's interactive answers choice.
+    """The chat's saved output for a turn snapshot; None when unsaved or all Auto.
 
-    None when everything is Auto and interactive answers are off. Read once per turn, so a change
-    applies from the next message and a retry keeps the choice it started with.
+    It also carries the owner's interactive answers choice when it is On or Off. Auto, the default,
+    adds nothing, so a snapshot taken before the setting existed (a queued message) still matches.
+    Read once per turn: a change applies from the next message and a retry keeps its choice.
     """
     _, output = _stored(db, session_id)
     interactive = owner_settings.value_in(db, INTERACTIVE_SETTING, "auto")
-    if interactive not in INTERACTIVE:
-        interactive = "auto"
-    if interactive != "off":
+    if interactive in INTERACTIVE and interactive != "auto":
         output = {**output, "interactive": interactive}
     return None if output == AUTO else output
 
@@ -178,17 +177,17 @@ def interactive(execution) -> bool:
     Never in a call (the answer is spoken) or when the owner asked for JSON only.
     """
     output = execution.get("output") or {}
-    choice = output.get("interactive", "off")
+    choice = output.get("interactive", "auto")
     if choice == "off" or execution.get("callExecution") or output.get("format") == "json":
         return False
     return choice == "on" or _hosted_only(execution)
 
 
 def messages(execution) -> list[Message]:
+    catalog = [Message("system", CATALOG)] if interactive(execution) else []
     output = execution.get("output")
     if not output:
-        return []
-    catalog = [Message("system", CATALOG)] if interactive(execution) else []
+        return catalog
     parts = []
     if output.get("format", "auto") != "auto":
         parts.append(f"Answer format: {FORMATS[output['format']]}.")

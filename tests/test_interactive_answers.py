@@ -133,7 +133,15 @@ def test_auto_with_a_router_needs_every_possible_answer_model_hosted():
 def test_on_and_off_ignore_the_model(models):
     assert taught(execution("on", models))
     assert not taught(execution("off", models))
-    assert not taught({"output": dict(output_settings.AUTO), "modelConfiguration": models})
+
+
+def test_a_snapshot_without_the_choice_is_auto():
+    hosted = configuration(model="claude")
+    assert taught({"output": None, "modelConfiguration": hosted})
+    assert taught(
+        {"output": {**output_settings.AUTO, "format": "table"}, "modelConfiguration": hosted}
+    )
+    assert not taught({"output": None, "modelConfiguration": None})
 
 
 def test_calls_and_json_answers_are_never_taught():
@@ -171,13 +179,14 @@ def owner_choice(store, choice):
 
 def test_each_turn_snapshot_carries_the_owners_choice(store):
     session = store.create_session()
-    assert session_settings.execution(store, session)["output"]["interactive"] == "auto"
+    # Auto, the default, adds nothing: snapshots from before the setting still match.
+    assert session_settings.execution(store, session).get("output") is None
     owner_choice(store, "on")
     assert session_settings.execution(store, session)["output"]["interactive"] == "on"
     owner_choice(store, "off")
-    assert session_settings.execution(store, session).get("output") is None
+    assert session_settings.execution(store, session)["output"]["interactive"] == "off"
     owner_choice(store, "sometimes")
-    assert session_settings.execution(store, session)["output"]["interactive"] == "auto"
+    assert session_settings.execution(store, session).get("output") is None
 
 
 def test_the_turn_prefix_teaches_the_catalog_and_history_keeps_the_raw_answer(store):
