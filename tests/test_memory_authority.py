@@ -4,6 +4,7 @@ import pytest
 
 from pi.conversation import settings as session_settings
 from pi.memory import authority as memory_authority
+from pi.memory import service
 from pi.memory import store as memory_store
 from pi.memory.service import Memory
 
@@ -61,6 +62,8 @@ def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(
     monkeypatch.setattr(memory_store, "pending_deletions", lambda *args: False)
     monkeypatch.setattr(memory_store, "recall_held", lambda *args: 0)
     monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args[2]))
+    # This stand-in store holds no owner settings: the default number of memories.
+    monkeypatch.setattr(service, "per_answer", lambda store: 8)
     companion, specialist = Client(), Client()
     memory = Memory(Store(), companion)
     memory.prepare("turn", "query")
@@ -68,7 +71,13 @@ def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(
     memory.read_clients["agent_a"] = specialist
     memory.prepare("turn", "query")
     assert specialist.calls == [
-        {"scope": "selected", "session_id": None, "memory_ids": ["memory_a"]}
+        {
+            "scope": "selected",
+            "session_id": None,
+            "memory_ids": ["memory_a"],
+            "max_items": 8,
+            "distinct": True,
+        }
     ]
     assert saved[-1] == expected_status and not companion.calls
     selected["privacy"]["memoryDisabled"] = True

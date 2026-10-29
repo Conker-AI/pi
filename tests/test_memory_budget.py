@@ -23,7 +23,7 @@ def package(text_size=4000, count=8, character="x"):
         "memories": [
             {
                 "id": f"memory-{index}",
-                "text": character * text_size,
+                "text": f"{index} " + character * text_size,
                 "summary": "s" * 280,
                 "source_type": "stated",
                 "confidence": "medium",

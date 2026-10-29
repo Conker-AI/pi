@@ -22,7 +22,46 @@ CONTEXT_GROUPS = ("memories", "entities", "episodes", "evidence")
 BUDGET_RECEIPT = "pi_context_budget"
 # Settings, Memory, Remember across chats (Conker's settings registry): on unless he turns it off.
 ACROSS_CHATS = "memory.across_chats"
+# Settings, Memory, Memories per answer: 1 to 50, 8 unless he changes it. MemoryGate's
+# /runtime/context takes at most 30 per request, so more than that asks for 30.
+PER_ANSWER = "memory.per_answer"
+MEMORYGATE_MAX_ITEMS = 30
+# How many recalled memories repeated an earlier one's text and were dropped (local, like the budget).
+DUPLICATE_RECEIPT = "pi_duplicate_memories"
 COMPANION_MEMORY = {"scope": "owner", "memoryIds": []}
+
+
+def per_answer(store):
+    """How many memories one answer asks MemoryGate for: his setting, kept to 1..50 and to
+    what MemoryGate takes. A value of the wrong type counts as the default."""
+    value = owner_settings.value(store, PER_ANSWER, 8)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 8
+    return min(max(1, min(50, int(value))), MEMORYGATE_MAX_ITEMS)
+
+
+def _distinct(package):
+    """Drop each memory whose text, ignoring case and spacing, repeats an earlier one's.
+
+    The first keeps its place; what was dropped is counted in the retrieval metadata. Memories
+    without text are kept as they are, and the package's shape is checked later, not here.
+    """
+    seen, kept = set(), []
+    for item in package["memories"]:
+        text = item.get("text") if isinstance(item, dict) else None
+        key = " ".join(text.split()).casefold() if isinstance(text, str) else ""
+        if key and key in seen:
+            continue
+        seen.add(key)
+        kept.append(item)
+    dropped = len(package["memories"]) - len(kept)
+    if not dropped:
+        return package
+    return {
+        **package,
+        "memories": kept,
+        "retrieval": {**package["retrieval"], DUPLICATE_RECEIPT: {"dropped": dropped}},
+    }
 
 
 def _context_size(package):
@@ -157,8 +196,12 @@ class MemoryClient:
             "destination": memory_delivery.destination_digest(self.http.base_url),
         }
 
-    def retrieve(self, query, *, scope="all", session_id=None, memory_ids=None):
-        payload = {"query": query[:16000], "max_items": 8, "include_evidence": False}
+    def retrieve(
+        self, query, *, scope="all", session_id=None, memory_ids=None, max_items=8, distinct=False
+    ):
+        """One recall package. `distinct` (what an answer reads) drops repeated memories first,
+        so they take no room in the size budget; search shows every record and leaves it off."""
+        payload = {"query": query[:16000], "max_items": max_items, "include_evidence": False}
         if scope != "all":
             payload.update(scope=scope, memory_ids=memory_ids or [], session_id=session_id)
         with self.http.stream(
@@ -182,8 +225,10 @@ class MemoryClient:
             or not isinstance(package.get("retrieval"), dict)
         ):
             raise ValueError("Invalid context package")
-        if BUDGET_RECEIPT in package["retrieval"]:
+        if BUDGET_RECEIPT in package["retrieval"] or DUPLICATE_RECEIPT in package["retrieval"]:
             raise ValueError("MemoryGate supplied reserved local receipt metadata")
+        if distinct:
+            package = _distinct(package)
         # Store exactly what reaches the model. Omitted complete records are
         # counted in the local receipt; their text is never silently shortened.
         return _budget_context(package)
@@ -264,6 +309,8 @@ class Memory:
                     if scope == "conversation"
                     else None,
                     memory_ids=memory["memoryIds"] if scope == "selected" else [],
+                    max_items=per_answer(self.store),
+                    distinct=True,
                 )
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
