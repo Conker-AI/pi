@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pi.core.errors import ServiceError
 from pi.owner import preferences
+from pi.owner import settings as owner_settings
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS plan_alerts_one_open
 """
 NAMES = {"chatgpt": "ChatGPT", "claude": "Claude"}
 JITTER_SECONDS = 60  # a reset time that moves less than this is the same period
+# Settings, Money, Windows to watch (Conker's settings registry): which plan windows can raise an
+# alert, both unless the owner changes it. The runtimes name a window's span in its label
+# ("5-hour", "weekly", "<limit> weekly", "weekly <model>"); a window of another span always counts.
+WINDOWS = "money.plan_windows"
+SPANS = {"five_hour": "5-hour", "weekly": "weekly"}
 
 
 class Reading(BaseModel):
@@ -87,8 +93,31 @@ def _moment(value: str | None) -> float | None:
         return None
 
 
-def record(store, plan: dict, threshold: int, *, now: float | None = None) -> list[dict]:
-    """Keep one plan's readings; raise or close alerts. Returns what changed."""
+def watched(store) -> frozenset[str]:
+    """The window spans the owner watches. A value that is not a list of known spans counts as
+    the default, both; an empty list watches neither."""
+    value = owner_settings.value(store, WINDOWS, list(SPANS))
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or item not in SPANS for item in value
+    ):
+        return frozenset(SPANS)
+    return frozenset(value)
+
+
+def _counts(label: str, windows) -> bool:
+    """Whether a window can raise an alert: one the setting names only while it is watched."""
+    words = label.split()
+    kind = next((kind for kind, span in SPANS.items() if span in words), None)
+    return kind is None or kind in windows
+
+
+def record(
+    store, plan: dict, threshold: int, *, now: float | None = None, windows=frozenset(SPANS)
+) -> list[dict]:
+    """Keep one plan's readings; raise or close alerts. Returns what changed.
+
+    Every reading is kept and an open alert still closes when its window resets; only a window
+    the owner does not watch raises no new alert."""
     now = time.time() if now is None else now
     plan = Plan.model_validate(plan)
     if not plan.available:
@@ -122,7 +151,7 @@ def record(store, plan: dict, threshold: int, *, now: float | None = None) -> li
                     db.execute("UPDATE plan_alerts SET reset_at=? WHERE id=?", (now, alert["id"]))
                     changes.append({"change": "reset", "alertId": alert["id"]})
                     alert = None
-            if alert is None and window.usedPercent >= threshold:
+            if alert is None and window.usedPercent >= threshold and _counts(window.label, windows):
                 identity = "plan_" + uuid.uuid4().hex
                 db.execute(
                     "INSERT INTO plan_alerts VALUES (?,?,?,?,?,?,?,?,NULL,NULL)",
@@ -242,10 +271,10 @@ class PlanAlertWorker:
         settings = preferences.load(self.store)["preferences"]["planAlerts"]
         if not settings["enabled"]:
             return []
-        changes = []
+        changes, windows = [], watched(self.store)
         for read in self.readers():
             try:
-                changes.extend(record(self.store, read(), settings["percent"]))
+                changes.extend(record(self.store, read(), settings["percent"], windows=windows))
             except Exception:
                 log.warning("A plan usage reading failed; the next check retries.")
         return changes
