@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi import Request
@@ -13,8 +14,14 @@ UI_CSP = (
     # Bundlers inline small local fonts (for example KaTeX Size3) as data URLs.
     "font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; "
     "media-src 'self' blob:; object-src 'none'; frame-src 'none'; "
+    # The web app manifest, so a phone can install Conker as an app.
+    "manifest-src 'self'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
+# The bundler names each built file under assets/ after a hash of its bytes, so a name never
+# points at other content and the browser may keep it. Everything else stays no-store.
+HASHED_ASSET = re.compile(r"assets/[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+")
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 # Only public build formats. In particular: no source maps, HTML applications,
 # databases, configuration/credential files, Python, or arbitrary unknown files.
@@ -144,6 +151,8 @@ class DashboardAssets:
             asset = self.files["index.html"]
         content, media_type = asset
         request.state.dashboard_response = True
+        if HASHED_ASSET.fullmatch(path):
+            request.state.dashboard_cache = IMMUTABLE
         return Response(
             content=b"" if request.method == "HEAD" else content,
             media_type=media_type,
