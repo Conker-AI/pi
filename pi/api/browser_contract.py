@@ -88,6 +88,9 @@ SESSION_ONLY_WRITES = (
     r"/calls/browser",
     r"/calls/browser/call_[a-f0-9]{32}/(?:update|interrupt|end|turns)",
     r"/calls/browser/call_[a-f0-9]{32}/audio",
+    # Previewing a ChatGPT or Claude export reads the file and saves nothing; the import itself
+    # (named by the previewed file's digest) keeps asking for the password.
+    r"/imports/(?:chatgpt|claude)/preview",
 )
 
 
@@ -236,9 +239,10 @@ def owner_allowed(method: str, path: str) -> bool:
     return any(re.fullmatch(pattern, path) for pattern in OWNER_ROUTES.get(method, ()))
 
 
-# Files the owner-control credential may download straight from Pi (the host CLI does). They
-# stay out of OWNER_ROUTES because the gateway's control relay forwards JSON only: a browser
-# download needs its own relay that passes the file, its type and its name through unchanged.
+# Files the owner-control credential may download from Pi. They stay out of OWNER_ROUTES because
+# the gateway's control relay forwards JSON only: the browser gets them through the gateway's file
+# relay (gateway/file_routes.py), which streams the file with its checked type and name; the host
+# CLI fetches them straight from Pi.
 OWNER_DOWNLOADS = (
     r"/artifacts/artifact_[0-9a-f]{32}/download",
     r"/sessions/ses_[0-9a-f]{16}/messages/msg_[0-9a-f]{16}/download",

@@ -50,7 +50,8 @@ unpaired surrogates become U+FFFD.
 ## Routes
 
 All are owner routes: the owner credential (`X-Pi-Owner-Key`, on the owner allowlist) or the
-recovery key. The gateway does not expose them yet.
+recovery key. The browser reaches them through the gateway ([browser-auth.md](browser-auth.md)):
+a preview with the owner's session, an import with the password.
 
 | Route | Does |
 |---|---|

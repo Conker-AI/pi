@@ -6,6 +6,22 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The browser gateway reaches owner files, imports, server actions, tool settings and
+  lockdown** (`gateway/relay.py`, `file_routes.py`, `host_ops.py`; contract in
+  `docs/browser-auth.md`). One streaming file relay serves downloads
+  (`GET /api/control/pi/artifacts/{id}/download?format=docx|pdf|pptx|xlsx|csv|json` and the chat
+  answer download; session; only the asked type, a checked attachment name, at most 16 MB,
+  no-store, nosniff; Pi's refusal JSON passes through) and imports
+  (`POST /api/control/pi/imports/{chatgpt|claude}/preview` with the session,
+  `.../{digest}` with the password; raw `conversations.json` up to 128 MB, a body with another
+  digest refused before Pi has all of it). `GET /api/host/ops`, `GET /api/host/ops/{id}`,
+  `POST /api/host/read` (session; `services.status`, `backup.list`) and `POST /api/host/ops`
+  (password bound to the body; `backup.verify`, `services.restart`, `backup.run`) go to the host
+  helper over the provider-control socket, its receipts and refusals unchanged.
+  `GET`/`PUT /api/owner/tool-settings` (PUT with the password) and `GET`/`POST
+  /api/owner/lockdown` (on with the session, off with the password) go to ToolGate's owner
+  routes. Browser contract: an import preview is a session-only write.
+
 ## 0.13.0
 
 - **A cron job's page can show what it does and who does it.** The owner's job view

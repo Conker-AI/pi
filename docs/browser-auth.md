@@ -40,7 +40,7 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | --- | --- |
 | `GET /auth/session` | Creates an anonymous cookie if necessary; returns `authenticated`, `csrf_token`, `session_id`, absolute `expires_at`, `unlock_expires_at` (null when anonymous), `setup_required`. |
 | `POST /auth/login` | JSON `{"password":"..."}`; rotates the cookie and CSRF token on success. |
-| `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}`; returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
+| `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}` (`PUT` only for `/api/owner/tool-settings`); returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
 | `POST /auth/logout` | Revokes the current session and clears its cookie. |
 | `GET /auth/sessions` | Lists session IDs and timestamps, never bearer tokens. |
 | `POST /auth/sessions/{id}/revoke` | Empty JSON object and exact one-use password proof; revokes one session. |
@@ -145,6 +145,61 @@ password hashes run one at a time to bound memory. Session bearer tokens are ran
 256-bit values; only SHA-256 hashes are stored. Password reset and session rotation
 are transactional. A reset racing a slow password check cannot mint a stale session.
 Backups remain sensitive: they include the password verifier and service secrets.
+
+## Files, imports, server actions, tool settings and lockdown
+
+These routes follow the rules above (session cookie; CSRF and exact Origin on writes; the
+one-use password proof where the table says so). Upstream headers never reach the browser.
+
+| Route | Needs | Goes to |
+| --- | --- | --- |
+| `GET /api/control/pi/artifacts/{id}/download?format=docx\|pdf\|pptx\|xlsx\|csv\|json` | session | Pi's artifact download (`csv`, `json`: the native export of a table or a chart, diagram or media) |
+| `GET /api/control/pi/sessions/{sid}/messages/{mid}/download?format=docx\|pdf\|pptx\|xlsx` | session | Pi's chat answer download |
+| `POST /api/control/pi/imports/{chatgpt\|claude}/preview` | session | Pi's import preview; raw body is `conversations.json` |
+| `POST /api/control/pi/imports/{chatgpt\|claude}/{digest}` | password | Pi's import of the previewed file |
+| `GET /api/control/pi/imports`, `/imports/chats`, `/imports/chats/{id}` | session | the JSON control relay |
+| `GET /api/control/pi/inference/usage?limit=` | session | the JSON control relay (read-only) |
+| `GET /api/host/ops`, `GET /api/host/ops/{id}` | session | the host helper's receipts |
+| `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list` |
+| `POST /api/host/ops` `{"id","operation","arguments"}` | password | the helper's actions: `backup.verify`, `services.restart`, `backup.run` |
+| `GET /api/owner/tool-settings` | session | ToolGate `GET /v2/owner/settings` |
+| `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | password (bound as `PUT`) | ToolGate `PUT /v2/owner/settings` |
+| `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |
+| `POST /api/owner/lockdown` `{"enabled": true}` | session | ToolGate `POST /v2/owner/lockdown` |
+| `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` |
+
+**Files** go through one streaming relay (`gateway/relay.py`), the only routes that carry bytes
+rather than a JSON object. A download needs exactly one `format`. The relay asks Pi for no
+transfer encoding, follows no redirect, and passes the file only when Pi's Content-Type is the
+asked format's (an artifact whose native export is another kind is refused as
+`unsupported_format`, 422), its Content-Length is at most 16 MB (else `too_large`, 413), and its
+Content-Disposition is an attachment with a plain file name ending in that format's extension;
+the header is rebuilt from those checked parts. The browser gets the bytes, that Content-Type,
+Content-Disposition and Content-Length, `no-store` and `nosniff`. Any other answer from Pi is
+passed back as Pi's own JSON refusal; an unreadable one is 502, Pi unreachable is 503.
+
+**Imports** stream the raw `conversations.json` (`Content-Type: application/json`) on to Pi,
+up to 128 MB (`too_large`, 413, declared or counted); every other route keeps its own small body
+limit. A preview saves nothing, so the session is enough (it is listed in `SESSION_ONLY_WRITES`).
+An import saves chats, so it asks for the password: verify the operation
+`{"method": "POST", "path": "/api/control/pi/imports/{source}/{digest}", "body": {}}`, the
+digest in the path naming the previewed file. The proof is spent when the import is admitted;
+the gateway then hashes the body as it streams and holds back its last chunk until the hash
+matches, so a different file under that digest is refused (`file_changed`, 409) before Pi has all
+of it. Pi checks the digest again.
+
+**Server actions** reach the host helper (ADR-0014) over the private provider-control socket
+(`GATEWAY_PROVIDER_CONTROL_SOCKET`, or the loopback transport). The gateway admits only the
+operations above, each with exactly its typed arguments (`services.restart` a service name,
+`backup.verify` a snapshot name, `backup.run` none; reads none), and an action's proof covers its
+whole body: id, operation and arguments. The helper's receipts and refusals
+(`{"error", "message"}`) pass back unchanged after a size cap and a check that they answer this
+request; when the helper cannot be reached, or an answer fails those checks, the gateway answers
+in the same shape, `{"error": "host_unavailable", ...}` with 503. A refusal of the browser's own
+request is `invalid_host_operation` (422).
+
+**ToolGate settings and lockdown** use the gateway's ToolGate owner key. ToolGate's answers and
+refusals (a stale revision is 409) pass through as its JSON.
 
 ## Running and recovery
 

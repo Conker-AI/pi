@@ -184,7 +184,9 @@ def test_the_owner_allowlist_is_exact():
     for path in ("/imports/chatgpt/preview", f"/imports/claude/{digest}"):
         assert browser_contract.owner_allowed("POST", path)
         assert not browser_contract.runtime_allowed("POST", path)
-        assert not browser_contract.session_only_write("POST", path)
+    # A preview saves nothing, so the browser's session is enough; an import asks for the password.
+    assert browser_contract.session_only_write("POST", "/imports/chatgpt/preview")
+    assert not browser_contract.session_only_write("POST", f"/imports/claude/{digest}")
     for method, path in (
         ("POST", "/imports/gemini/preview"),
         ("POST", "/imports/chatgpt/" + "A" * 64),

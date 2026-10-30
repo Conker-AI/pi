@@ -100,9 +100,10 @@ or source text. This library does not enforce memory/harness privacy in executio
 
 Downloads (`GET /artifacts/{id}/download` and the chat answer download below) are not in
 the browser allowlist `OWNER_ROUTES`: the gateway's control relay forwards JSON only and
-cannot carry a file, its type and its name. They are listed in `OWNER_DOWNLOADS`, so the
-owner-control key (the host CLI) and the recovery key fetch them straight from Pi; a browser
-download needs a gateway relay of its own. No upload, arbitrary filesystem path,
+cannot carry a file, its type and its name. They are listed in `OWNER_DOWNLOADS`: the
+owner-control key (the host CLI) and the recovery key fetch them straight from Pi, and the
+browser through the gateway's file relay (`gateway/file_routes.py`, see
+[browser-auth.md](browser-auth.md)), which checks the file's type, size and name on the way. No upload, arbitrary filesystem path,
 deployment, external fetch, or execution is included.
 
 ## Evidence

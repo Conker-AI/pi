@@ -94,10 +94,15 @@ def fingerprint(method: str, path: str, body: dict) -> str:
             or path == "/api/host/providers"
             or path == "/api/host/chatgpt"
             or path == "/api/host/claude"
+            or path == "/api/host/ops"
+            or path == "/api/owner/lockdown"
             or native_stop
             or path == "/auth/revoke-all"
             or re.fullmatch(r"/auth/sessions/[A-Za-z0-9_-]{16,128}/revoke", path)
         )
+    ) or (
+        # Saving ToolGate's tool settings replaces its whole document, so it is a PUT.
+        method == "PUT" and path == "/api/owner/tool-settings"
     )
     if not allowed or not isinstance(body, dict):
         raise AuthError("This operation is not available for password verification.", 422)
