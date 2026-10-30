@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.14.0
+
 - **An AI job's opening message stays out of memory.** Each run's first message (the preamble,
   the run's date and time, why it started, any webhook payload and the job's instructions,
   which for a job Conker made the model wrote) is no longer queued for MemoryGate as if the owner
