@@ -14,6 +14,14 @@ be a decision with visible consequences.
   writes came from runs given `--basetemp=.test-tmp/...` and from the three mutation drills, which
   now keep their copies in the OS temp directory (the audit drill also puts `--basetemp` beside
   its copy, since the copy brings the guard along).
+- **A failed answer save no longer leaves the chat running until a restart**
+  (`pi/turns/restart.py`). A database error at the final commit is tried again three times
+  (0.25, 1, 3 s). If it still fails, the request says the answer is kept and a small settle,
+  running only while an answer waits, tries again every 15 s and saves it once the database works,
+  with no restart and no new model call. A stop or steer sent meanwhile ends the turn as the
+  startup settle would; a save the database refuses, or one still failing after 40 tries while
+  other writes work, ends the turn `failed` (or `acted_no_reply`) in plain words. A try that
+  committed but lost its reply is recognised, so nothing is saved twice.
 - **Local model settings are read** (`pi/models/local_settings.py`), on every Ollama request:
   chats, helper roles and `/inference` alike; hosted providers are unchanged. Keep loaded
   (`models.local.keep_loaded`, minutes kept to 5..1440, or `"until_restart"`) is sent as
