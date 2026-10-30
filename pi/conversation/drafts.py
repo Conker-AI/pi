@@ -255,7 +255,11 @@ def start(store, body):
         if not current["text"].strip():
             raise DraftError("Write a message before starting a chat.", "draft_empty", 422)
         sid = store._create_session(
-            db, title=current["title"], agent_id=current["agent_id"], privacy=current["privacy"]
+            db,
+            title=current["title"],
+            agent_id=current["agent_id"],
+            privacy=current["privacy"],
+            owner_chat=True,
         )
         _write(
             db,
