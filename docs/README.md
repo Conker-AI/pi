@@ -38,6 +38,7 @@ What works end to end in a real deployment is tracked in Conker's
 |---|---|
 | [Conversation memory](memory.md) | The outbox to MemoryGate, and visible gaps |
 | [Forgetting a conversation](forgetting.md) · [Forgetting a memory](memory-forget.md) | Removal with receipts |
+| [Importing from ChatGPT and Claude](imports.md) | Exports kept as read-only chats; your words offered to memory as outside content |
 | [Memory corrections](memory-proposals.md) · [Specialist memory](specialist-memory.md) | Reviewed changes and scoped reads |
 
 ## Doing things
