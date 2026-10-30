@@ -6,10 +6,15 @@ own default (ToolGate `authorization`). The guards: a tool the agent cannot see 
 it (ToolGate scope and the agent's toolkit); the floor (sensitive tools) always asks; a run that has
 read outside content cannot use a loosening below the tool's own default one step further. His own
 typed message counts as approval when it asks for exactly this action. The reviewer
-(`pi.turns.reviewer`) checks both, and in AI decides it never lets an action that reaches a real
-person or cannot be undone through without him. ToolGate enforces the floor
-again and accepts "run" only from a key he made a policy delegate. See
-context/design/automation-and-access.md.
+(`pi.turns.reviewer`) checks both; in AI decides a tool whose Inbox card he set to send, publish,
+ship, delete or pay always asks him, and the reviewer's own "reaches a person" or "can't be undone"
+is one more reason to ask, never a reason to run. ToolGate enforces the floor again and accepts
+"run" only from a key he made a policy delegate. See context/design/automation-and-access.md.
+
+Outside content is any text in the turn the owner did not write: a result from a tool that is not
+Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_outside`), memories
+recalled for this turn, an attachment or a project source, or his answer to Conker's question
+(the question and its options were written by the AI).
 """
 
 from __future__ import annotations
@@ -19,6 +24,8 @@ import time
 import uuid
 
 from pi.agents import asks
+from pi.memory import store as memory_store
+from pi.schedule import agent_jobs
 from pi.turns import reviewer
 
 LEVELS = ("allow", "ai", "ask")
@@ -31,6 +38,7 @@ WEBHOOK_MARK = "<webhook>"
 # Conker's question to him (`pi.turns.native_tools.ASK`) and a tool draft (`DRAFT_TOOL`).
 native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
+native_schedule = "conker.schedule"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -71,15 +79,54 @@ def resolve(*, authorization, sensitive, agent_level, chat, outside):
     return level, by
 
 
-def outside_content(store, session_id, owner_text, native):
-    """True once this chat holds outside content: a result from a tool that is not Conker's own,
-    or a webhook payload Pi wrapped into the message."""
-    if WEBHOOK_MARK in (owner_text or ""):
+def mark_outside(store, session_id, reason="webhook"):
+    """From now on this chat holds someone else's text: every turn in it (and in its forks) counts
+    as having read outside content, and none of its messages is sent to memory."""
+    with store._connect() as db:
+        db.execute(
+            "INSERT OR IGNORE INTO outside_sessions VALUES (?,?,?)",
+            (session_id, reason, time.time()),
+        )
+
+
+# The chat's own messages and those it inherited from another chat (a reviewed fork).
+_IN_CHAT = (
+    "(m.session_id=? OR m.id IN "
+    "(SELECT message_id FROM context_inherited_messages WHERE session_id=?))"
+)
+
+
+def outside_content(store, session_id, owner_text, native, *, turn_id=None, execution=None):
+    """True once this turn can read text the owner did not write (see the module notes)."""
+    if WEBHOOK_MARK in (owner_text or "") or (execution or {}).get("projectContext"):
         return True
     with store._connect() as db:
+        if turn_id and asks.answer_words(db, turn_id) is not None:
+            return True
+        chat = (session_id, session_id)
+        if db.execute(
+            "SELECT 1 FROM outside_sessions WHERE session_id=? OR session_id IN (SELECT "
+            "m.session_id FROM messages m JOIN context_inherited_messages i ON i.message_id=m.id "
+            "WHERE i.session_id=?)",
+            chat,
+        ).fetchone():
+            return True
+        if db.execute(
+            f"SELECT 1 FROM messages m WHERE {_IN_CHAT} AND m.role='user' AND m.content LIKE ?",
+            (*chat, f"%{WEBHOOK_MARK}%"),
+        ).fetchone():
+            return True
+        if db.execute(
+            "SELECT 1 FROM message_attachments a JOIN messages m ON m.id=a.message_id "
+            f"WHERE {_IN_CHAT}",
+            chat,
+        ).fetchone():
+            return True
         rows = db.execute(
-            "SELECT content FROM messages WHERE session_id=? AND role='tool'", (session_id,)
+            f"SELECT m.content FROM messages m WHERE {_IN_CHAT} AND m.role='tool'", chat
         ).fetchall()
+    if turn_id and memory_store.recalled(memory_store.context(store, turn_id)["package"]):
+        return True
     for row in rows:
         try:
             # Stored as the JSON of the observation text, which is itself JSON.
@@ -107,11 +154,14 @@ def owner_text(store, turn_id):
     """The owner's own message that started this turn (a cron job's instructions in a job run).
 
     For his answer to one of Conker's questions, only the words he typed: an option he tapped
-    was written by the AI, so it is no request of his."""
+    was written by the AI, so it is no request of his. Nothing in a run of a job Conker made on
+    its own: the model wrote those instructions, and no owner approved them."""
     with store._connect() as db:
         words = asks.answer_words(db, turn_id)
         if words is not None:
             return words
+        if agent_jobs.made_by(db, turn_id) == "conker":
+            return ""
         row = db.execute(
             "SELECT m.content FROM turn_messages t JOIN messages m ON m.id=t.message_id "
             "WHERE t.turn_id=? AND t.purpose='input' AND m.role='user'",
@@ -188,7 +238,9 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
         tool.id
     )
     request = owner_text(loop.store, turn_id)
-    outside = outside_content(loop.store, session_id, request, native)
+    outside = outside_content(
+        loop.store, session_id, request, native, turn_id=turn_id, execution=execution
+    )
     level, by = resolve(
         authorization=tool.authorization,
         sensitive=tool.sensitive,
@@ -207,7 +259,11 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     if level == "ai":
         approved, why = reviewer.review(loop, execution, "ai", request, tool, args, outside=outside)
         return ("run", "ai_reviewer", why) if approved else ("ask", by, why)
-    if not outside and not tool.sensitive:
+    if tool.id == native_schedule:
+        # A recurring job made from his words would still run instructions the model wrote:
+        # unless his settings loosened it, it waits for his approval like a tool draft.
+        return "ask", by, ""
+    if request.strip() and not outside and not tool.sensitive:
         approved, why = reviewer.review(loop, execution, "request", request, tool, args)
         if approved:
             return "run", "owner_request", why

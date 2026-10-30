@@ -213,11 +213,43 @@ def test_a_full_access_chat_runs_and_lists_it_in_handled(store):
     assert handled["toolId"] == "t_echo" and handled["decidedBy"] == "chat"
 
 
-def test_conker_schedules_at_once_and_lists_it_in_handled(store):
-    call = '{"tool": "conker.schedule", "args": {"name": "Morning check", "instructions": "Tell me what needs me today.", "repeat": "daily", "time": "08:00"}}'
-    loop, _ = build(store, [call, "It is set up."], FakeGate())
+def full_access(store):
+    from pi.conversation import settings as session_settings
+
+    session = store.create_session()
+    session_settings.save(
+        store,
+        session,
+        session_settings.Update(
+            expected_revision=0,
+            settings=session_settings.Settings(
+                agentId="companion",
+                privacy=session_settings.Privacy(memoryDisabled=False, harnessDisabled=False),
+                access="full",
+            ),
+        ),
+    )
+    return session
+
+
+SCHEDULE = '{"tool": "conker.schedule", "args": {"name": "Morning check", "instructions": "Tell me what needs me today.", "repeat": "daily", "time": "08:00"}}'
+
+
+def test_conker_asks_before_scheduling_by_default(store):
+    # His own words do not make a recurring job: its instructions are the model's.
+    loop, provider = build(store, [SCHEDULE, "It waits in your Inbox."], FakeGate())
     loop.run_turn(store.create_session(), "Every morning at 8, check what needs me.")
-    assert [job["definition"]["name"] for job in jobs.list_jobs(store)] == ["Morning check"]
+    assert jobs.list_jobs(store) == [] and access.handled(store, 0) == []
+    [request] = change_requests.listing(store)
+    assert request["kind"] == "ai_job" and len(provider.sent) == 2  # no reviewer was asked
+
+
+def test_conker_schedules_at_once_where_he_loosened_it_and_lists_it_in_handled(store):
+    loop, _ = build(store, [SCHEDULE, "It is set up."], FakeGate())
+    loop.run_turn(full_access(store), "Every morning at 8, check what needs me.")
+    [job] = jobs.list_jobs(store)
+    assert job["definition"]["name"] == "Morning check"
+    assert job["definition"]["createdBy"] == "conker"
     assert change_requests.listing(store) == []
     [handled] = access.handled(store, 0)
     assert handled["toolId"] == "conker.schedule"
@@ -235,11 +267,14 @@ def test_a_memory_is_saved_at_once_when_memory_is_connected(store):
     call = '{"tool": "conker.remember", "args": {"text": "The exam is on Thursday."}}'
     loop, _ = build(store, [call, "Remembered."], FakeGate())
     saved = []
-    loop.remember = lambda identity, text: (
-        saved.append(text) or {"memoryId": "m1", "status": "remembered"}
+    loop.remember = lambda identity, text, origin="owner": (
+        saved.append((identity, text, origin)) or {"memoryId": "m1", "status": "remembered"}
     )
     loop.run_turn(store.create_session(), "Remember the exam is on Thursday.")
-    assert saved == ["The exam is on Thursday."] and change_requests.listing(store) == []
+    [made] = change_requests.listing(store, state="approved")
+    # Conker wrote these words: stored as its own, under a key apart from his approval's.
+    assert saved == [(made["id"] + "-conker", "The exam is on Thursday.", "conker")]
+    assert change_requests.listing(store) == []
 
 
 def test_an_agent_can_make_conker_ask_first(store):

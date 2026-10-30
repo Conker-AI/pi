@@ -67,7 +67,11 @@ def test_saving_a_chat_setting_keeps_recall_across_chats(store, monkeypatch):
     assert recall(store, monkeypatch, sid) == [EVERY_CHAT]
 
 
-@pytest.mark.parametrize("value,across", [(False, False), (True, True), ("off", True)])
+# On only when he never set it or set it to exactly true: a broken value keeps chats apart.
+@pytest.mark.parametrize(
+    "value,across",
+    [(False, False), (True, True), ("off", False), ("true", False), (1, False), (None, False)],
+)
 def test_his_switch_keeps_each_chat_to_itself(store, monkeypatch, value, across):
     owner_settings.save(
         store, owner_settings.Update(expected_revision=0, values={service.ACROSS_CHATS: value})

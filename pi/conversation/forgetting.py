@@ -18,7 +18,8 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from pi.agents import asks, change_requests, skills, workflow_offers, workflow_proposals
+from pi.actions import withdrawals
+from pi.agents import asks, change_requests, keep, skills, workflow_offers, workflow_proposals
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
 from pi.context import compaction, decisions
@@ -114,6 +115,9 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
         "message_ids": [],
         "turn_ids": [],
         "memory_effect": "queue source deletions and clear all cached turn context packages",
+        # Done by Pi once it runs again (pi.conversation.forget_followups); never blocks this.
+        "followup_effect": "withdraw the listed approval requests in ToolGate, forget the "
+        "memories Conker kept from these chats on its own, turn off the AI jobs it made",
     }
     for sid in sessions:
         for table, field in (("messages", "message_ids"), ("turns", "turn_ids")):
@@ -136,6 +140,7 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
                 )
             )
         plan["submission_ids"] = sorted(identities)
+    plan["approval_request_ids"] = sorted({ids[0] for ids in withdrawals.waiting(db, sessions)})
     plan["confirmation"] = hashlib.sha256(
         json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -179,6 +184,10 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         from pi.context import controls as context_controls
         from pi.schedule import agent_hooks, agent_jobs, proposals
 
+        # Before anything changes a turn: the approvals its parked turns wait on, to withdraw.
+        withdrawals.queue(db, plan["session_ids"], now=when)
+        # What Conker made on its own here: memories to forget, AI jobs to turn off (kept).
+        keep.forget_chats(db, plan["session_ids"])
         context_controls.redact(db, plan["session_ids"])
         # Hooks first: their payloads are found through the job's chat, which agent_jobs drops.
         agent_hooks.redact(db, plan["session_ids"])
@@ -265,6 +274,8 @@ def forget(path: Path | str, session_id: str, confirmation: str) -> dict:
         db.executescript(FORGETTING_SCHEMA)
         db.executescript(session_settings.SCHEMA)
         db.executescript(memory_store.SCHEMA)
+        # A database Pi has not opened since this table arrived still gets its withdrawals.
+        db.executescript(withdrawals.SCHEMA)
         db.execute("PRAGMA secure_delete=ON")
         db.execute("BEGIN IMMEDIATE")
         try:

@@ -56,6 +56,13 @@ class ToolWatch(Strict):
         return value
 
 
+class JobPrivacy(Strict):
+    """The chat an AI job was asked for in was private, so the job's own chat is too."""
+
+    memoryDisabled: bool = False
+    harnessDisabled: bool = False
+
+
 class Definition(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructions: str = Field(min_length=1, max_length=4000)
@@ -69,11 +76,21 @@ class Definition(Strict):
     overlap: Literal["skip"] = "skip"
     requireBudget: bool = False
     budgetAllowanceId: str | None = Field(default=None, pattern=r"^allowance_[a-f0-9]{32}$")
+    # Who made it: the owner (by hand, or by approving Conker's request in the Inbox) or Conker on
+    # its own, when his access settings let conker.schedule run without asking (see agent_jobs).
+    createdBy: Literal["owner", "conker"] = "owner"
+    privacy: JobPrivacy | None = None
+    # Pi turned it off because the chat Conker made it in was forgotten; he can turn it back on.
+    turnedOff: Literal["chat_forgotten"] | None = None
 
     @model_validator(mode="after")
     def allowance_requires_budget(self):
         if self.budgetAllowanceId and not self.requireBudget:
             raise ValueError("A recurring allowance requires budgeted execution.")
+        if self.target.kind != "agent" and (
+            self.createdBy != "owner" or self.privacy is not None or self.turnedOff is not None
+        ):
+            raise ValueError("Only AI jobs are made by Conker or carry a chat's privacy.")
         # An AI job spends through the tools it calls, each with ToolGate's own limits.
         if self.target.kind == "agent" and self.requireBudget:
             raise ValueError("AI jobs use each tool's own budget, not a job budget.")
@@ -182,6 +199,8 @@ class DefinitionSummary(Strict):
     overlap: Literal["skip"]
     requireBudget: bool
     budgetAllowanceConfigured: bool
+    createdBy: Literal["owner", "conker"] = "owner"
+    turnedOff: Literal["chat_forgotten"] | None = None
 
 
 class JobView(Strict):

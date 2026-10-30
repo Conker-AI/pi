@@ -7,8 +7,11 @@ the address, because request paths are written to the server's access log.
 
 Each call admits at most one run, at most one every 30 seconds per job, and never while the job
 is still running. What the caller sent waits for that run and is handed to the agent as
-information from outside Conker, never as instructions; it is deleted when the run takes it.
-Tools still ask exactly as in chat, so a webhook can never change anything without the owner.
+information from outside Conker, never as instructions. Its waiting copy here is deleted when the
+run takes it; the text itself stays in the run's message in the job's chat until that chat is
+forgotten. From then on the whole chat counts as holding outside content (`pi.turns.access`) and
+none of its messages is sent to memory. Tools still ask exactly as in chat, so a webhook can never
+change anything without the owner.
 """
 
 from __future__ import annotations
@@ -132,7 +135,8 @@ def started_by_hook(request_id: str | None) -> bool:
 
 
 def take(store, run_id) -> str | None:
-    """The caller's payload for this run, once; it is deleted as it is read."""
+    """The caller's payload for this run, once: this waiting copy is deleted as it is read (the
+    run's message keeps the text in the job's chat)."""
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute(

@@ -2,7 +2,12 @@
 
 Budget checks consume caller-supplied, same-local-day usage. They are not an atomic
 reservation ledger. A scheduler must supply authoritative usage and reserve work
-before dispatch. Idle timeout is stored here; gateway enforcement is separate.
+before dispatch. The gateway enforces the idle timeout from the documents it relays
+(`gateway/store.py`), never past the host's GATEWAY_IDLE_TIMEOUT_SECONDS.
+
+Saving asks for the password at the gateway, so these preferences may also hold a setting
+that lets Conker do more: the access a chat the owner starts begins with (`new_chat_access`).
+It changes no chat that exists and grants nothing by itself.
 """
 
 from __future__ import annotations
@@ -52,13 +57,21 @@ class PlanAlerts(Strict):
     percent: int = Field(ge=50, le=100)
 
 
+# A chat's access switch (`pi.turns.access.CHAT_LEVELS`): the agent's setting, ask me, AI decides,
+# full access.
+CHAT_ACCESS = ("default", "ask", "ai", "full")
+
+
 class OwnerPreferences(Strict):
     quietHours: QuietHours
     urgency: Literal["meaningful", "urgent_only", "off"]
     dailyBudget: DailyBudget
+    # Minutes a browser stays signed in after the password; 0 keeps the host's limit.
     idleTimeoutMinutes: int
     # Added 2026-10-21; preferences saved before then read the default.
     planAlerts: PlanAlerts = Field(default_factory=lambda: PlanAlerts(enabled=True, percent=80))
+    # Added 2026-10-29: the access switch a chat the owner starts begins with.
+    newChatAccess: Literal["default", "ask", "ai", "full"] = "default"
 
     @field_validator("idleTimeoutMinutes")
     @classmethod
@@ -85,6 +98,7 @@ DEFAULT = {
     "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
     "idleTimeoutMinutes": 15,
     "planAlerts": {"enabled": True, "percent": 80},
+    "newChatAccess": "default",
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owner_preferences (
@@ -136,6 +150,22 @@ def save(store, request: UpdatePreferences):
         )
         db.commit()
     return {"revision": revision + 1, "preferences": payload}
+
+
+def new_chat_access(db) -> str:
+    """The access switch a chat the owner starts begins with, read in the caller's transaction.
+
+    For a new chat he starts only (the chat route, a draft started as a chat), never an AI job's
+    chat or a fork, which copies its parent. Saved with the chat, so a later change leaves chats
+    that exist as they are. Anything missing or unreadable starts at "default", which loosens
+    nothing.
+    """
+    row = db.execute("SELECT preferences FROM owner_preferences WHERE singleton=1").fetchone()
+    try:
+        value = json.loads(row[0]).get("newChatAccess") if row else None
+    except (TypeError, ValueError, AttributeError):
+        return "default"
+    return value if isinstance(value, str) and value in CHAT_ACCESS else "default"
 
 
 def local_day(preferences: OwnerPreferences, instant: datetime) -> str:

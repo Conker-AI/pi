@@ -20,7 +20,8 @@ CONTEXT_LIMIT_BYTES = 32768
 CONTEXT_RESPONSE_BYTES = 2 * 1024 * 1024
 CONTEXT_GROUPS = ("memories", "entities", "episodes", "evidence")
 BUDGET_RECEIPT = "pi_context_budget"
-# Settings, Memory, Remember across chats (Conker's settings registry): on unless he turns it off.
+# Settings, Memory, Remember across chats (Conker's settings registry): on when he has not set it
+# or set it to exactly true; anything else (false, "false", 0, a broken value) keeps chats apart.
 ACROSS_CHATS = "memory.across_chats"
 # Settings, Memory, Memories per answer: 1 to 50, 8 unless he changes it. MemoryGate's
 # /runtime/context takes at most 30 per request, so more than that asks for 30.
@@ -300,7 +301,7 @@ class Memory:
                         raise ValueError("Owner memory is restricted to Companion.")
                     # The configured read credential still limits the namespace; this is not an
                     # administrative or cross-agent read. His switch keeps every chat to itself.
-                    across = owner_settings.value(self.store, ACROSS_CHATS, True) is not False
+                    across = owner_settings.value(self.store, ACROSS_CHATS, True) is True
                     scope = "all" if across else "conversation"
                 package = client.retrieve(
                     query,
