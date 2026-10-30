@@ -165,6 +165,10 @@ OWNER_ROUTES = {
         # The Settings screen: the owner's settings document and his preferences.
         r"/owner/settings",
         r"/owner/preferences",
+        # Read-only: imports from ChatGPT and Claude and the archived chats they made.
+        r"/imports",
+        r"/imports/chats",
+        r"/imports/chats/imp_[0-9a-f]{32}",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
@@ -221,6 +225,9 @@ OWNER_ROUTES = {
         r"/owner/settings",
         # Quiet hours, proactivity, daily budgets: saving asks for the password.
         r"/owner/preferences",
+        # A ChatGPT or Claude export: a preview saves nothing; an import (named by the previewed
+        # file's digest) saves read-only chats and offers his words to memory as outside content.
+        r"/imports/(?:chatgpt|claude)/(?:preview|[0-9a-f]{64})",
     ),
 }
 

@@ -36,6 +36,7 @@ from pi.host import actions as system_actions
 from pi.host import filesystem_reads
 from pi.host import inventory as system_inventory
 from pi.memory import edits as memory_edits
+from pi.memory import imports as assistant_imports
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
@@ -79,6 +80,7 @@ def install(db):
     db.executescript(memory_store.SCHEMA)
     db.executescript(memory_edits.SCHEMA)
     db.executescript(memory_proposals.SCHEMA)
+    db.executescript(assistant_imports.SCHEMA)
     db.executescript(proposals.SCHEMA)
     memory_store.migrate(db)
     db.executescript(actions.SCHEMA)
