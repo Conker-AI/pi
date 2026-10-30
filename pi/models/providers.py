@@ -23,6 +23,7 @@ import httpx
 
 from pi.conversation import citations as message_citations
 from pi.conversation import live_stream
+from pi.models import local_settings
 from pi.models.loopback_http import verification
 from pi.turns import inference_control
 
@@ -156,13 +157,18 @@ class OllamaProvider:
     name = "ollama"
     supports_images = True
 
-    def __init__(self, base_url: str, timeout: float = 120.0, model: str | None = None) -> None:
+    def __init__(
+        self, base_url: str, timeout: float = 120.0, model: str | None = None, store=None
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.local_capacity_key = "ollama:" + self.base_url
         self.timeout = timeout
         # Which model this provider is expected to serve, so health can ask
         # about *that* one rather than about the existence of any model at all.
         self.model = model
+        # Where the owner's local model settings are read on every request
+        # (pi.models.local_settings). Without one, Ollama's own settings apply.
+        self.store = store
 
     def complete(self, messages: list[Message], *, model: str) -> Completion:
         return self.complete_bounded(messages, model=model, timeout=self.timeout)
@@ -181,13 +187,17 @@ class OllamaProvider:
                 for m in messages
             ],
             "stream": live_stream.active() or inference_control.current() is not None,
+            **(local_settings.request_fields(self.store) if self.store is not None else {}),
         }
         wanted = _output.get()
         if wanted is not None:
             if wanted.json:
                 payload["format"] = "json"
             if wanted.max_tokens is not None:
-                payload["options"] = {"num_predict": wanted.max_tokens}
+                payload["options"] = {
+                    **payload.get("options", {}),
+                    "num_predict": wanted.max_tokens,
+                }
             if wanted.think is not None:
                 payload["think"] = wanted.think
         try:

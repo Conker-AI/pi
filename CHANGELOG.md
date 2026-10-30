@@ -6,6 +6,15 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Local model settings are read** (`pi/models/local_settings.py`), on every Ollama request:
+  chats, helper roles and `/inference` alike; hosted providers are unchanged. Keep loaded
+  (`models.local.keep_loaded`, minutes kept to 5..1440, or `"until_restart"`) is sent as
+  `keep_alive`; Local context size (`models.local.context`, kept to 2048..32768 and never above
+  `PI_OLLAMA_CONTEXT_LENGTH` or `OLLAMA_CONTEXT_LENGTH` when Pi's environment has one) as
+  `options.num_ctx`; CPU threads (`models.local.threads`, 1 to the host's threads) as
+  `options.num_thread`. Unset, malformed or 0 threads sends nothing, so Ollama's own settings
+  (`OLLAMA_KEEP_ALIVE` 24h, `OLLAMA_CONTEXT_LENGTH`) still apply. A context too large for the
+  machine makes local answers fail as an unavailable model, never Pi (docs/routing.md).
 - **Sign out when idle is enforced** (`session.idle_timeout_minutes`). The gateway learns the
   owner's `idleTimeoutMinutes` from every preferences document it relays (a read, or a
   password-verified save) and keeps it in its own database, so a restart or Pi being down never
