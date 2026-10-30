@@ -58,6 +58,7 @@ from gateway.mutation_models import (
     TeamUpdate,
     ToolAccess,
     ToolPublish,
+    ToolRunPublished,
     ToolSave,
     TurnResume,
 )
@@ -326,6 +327,9 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             authority = "toolgate-owner-execution" if value.conkerMayUse else "toolgate-owner"
             if not value.conkerMayUse:
                 body.pop("conkerMayUse")
+        elif isinstance(value, ToolRunPublished):
+            path = f"/v2/owner/tools/{value.id}/runs"
+            authority = "toolgate-owner-execution"
         else:
             suffix = "access" if isinstance(value, ToolAccess) else "runs"
             path = f"/v2/owner/editor-drafts/{value.id}/{suffix}"

@@ -14,6 +14,8 @@ _DRAFT_OWNER_READ = re.compile(
 )
 _DRAFT_PUBLISH = re.compile(rf"^/v2/owner/editor-drafts/{_DRAFT_ID}/publish$")
 _DRAFT_EXECUTION = re.compile(rf"^/v2/owner/editor-drafts/{_DRAFT_ID}/(?:access|runs)$")
+_TOOL_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
+_TOOL_RUNS = re.compile(rf"^/v2/owner/tools/{_TOOL_ID}/runs$")
 
 
 def owner_request_allowed(method: str, path: str) -> bool:
@@ -29,8 +31,11 @@ def owner_editor_allowed(method: str, path: str, *, execution: bool = False) -> 
 
     if execution:
         # Publishing with "Let Conker use this tool" names the chat's key as well.
-        return (method in {"GET", "POST"} and _DRAFT_EXECUTION.fullmatch(path) is not None) or (
-            method == "POST" and _DRAFT_PUBLISH.fullmatch(path) is not None
+        # Running any published tool by hand uses the chat's key too.
+        return (
+            (method in {"GET", "POST"} and _DRAFT_EXECUTION.fullmatch(path) is not None)
+            or (method == "POST" and _DRAFT_PUBLISH.fullmatch(path) is not None)
+            or (method == "POST" and _TOOL_RUNS.fullmatch(path) is not None)
         )
     if method == "GET":
         return (
