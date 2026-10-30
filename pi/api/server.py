@@ -128,7 +128,7 @@ def require_owner(
     owner_key: str | None = Header(None, alias="X-Pi-Owner-Key"),
     x_pi_key: str | None = Header(None, alias="X-Pi-Key"),
 ) -> None:
-    from pi.api.browser_contract import owner_allowed
+    from pi.api.browser_contract import owner_allowed, owner_download_allowed
 
     expected = getattr(app.state, "owner_key_hash", "")
     if (
@@ -136,7 +136,9 @@ def require_owner(
         and len(expected) == 64
         and secrets.compare_digest(hashlib.sha256(owner_key.encode()).hexdigest(), expected)
     ):
-        if owner_allowed(request.method, request.url.path):
+        if owner_allowed(request.method, request.url.path) or owner_download_allowed(
+            request.method, request.url.path
+        ):
             return
         raise HTTPException(403, "Owner-control credential cannot perform this operation.")
     if x_pi_key and secrets.compare_digest(x_pi_key.encode(), app.state.admin_key.encode()):
@@ -242,6 +244,9 @@ app.include_router(
 )
 app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
+)
+app.include_router(
+    artifacts_api.answers(lambda: app.state.store, require_owner, session_settings.source_privacy)
 )
 app.include_router(model_roles_api.router(lambda: app.state.store, require_owner))
 app.include_router(inference_api.router(lambda: app.state, require_owner))

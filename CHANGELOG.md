@@ -6,6 +6,23 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Real deliverables: artifacts and chat answers export to DOCX, PDF, PPTX and XLSX**
+  (`pi/content/markdown_blocks.py`, `export_documents.py`, `export_pdf.py`, `export_slides.py`,
+  `_export_worker.py`). Markdown keeps its structure: headings, numbered, bulleted, task and
+  nested lists, quotes, code blocks, rules, tables with their alignment, bold, italic,
+  strikethrough, inline code and links (only http, https and mailto stay clickable; a
+  javascript: or other link stays its plain label). Images are never fetched. XLSX puts each
+  table on its own sheet as text. `GET /artifacts/{id}/download` gains `format=pdf|pptx` and
+  DOCX/PDF/PPTX for table and code artifacts; the new owner-only
+  `GET /sessions/{sid}/messages/{mid}/download?format=docx|pdf|pptx|xlsx` exports one completed
+  answer under the same source and privacy checks as saving it as an artifact. The owner-control
+  key may now fetch both downloads directly (`OWNER_DOWNLOADS`, for the host CLI); they stay out
+  of the gateway's JSON relay. Files are made in an isolated worker with time, CPU, memory, size,
+  page (500), slide (300), nesting (12) and table limits, each refused with a fixed `export_*`
+  code. New pinned libraries: python-pptx 1.0.2 (MIT), markdown-it-py 4.2.0 (MIT), ReportLab
+  5.1.0 (BSD); the image gains `fonts-dejavu-core` for Cyrillic and Greek in PDFs. A Markdown
+  artifact's DOCX now reads single line breaks as spaces (as the chat shows them), and its
+  sources are a short list instead of a JSON block.
 - **Local model settings are read** (`pi/models/local_settings.py`), on every Ollama request:
   chats, helper roles and `/inference` alike; hosted providers are unchanged. Keep loaded
   (`models.local.keep_loaded`, minutes kept to 5..1440, or `"until_restart"`) is sent as

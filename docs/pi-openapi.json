@@ -10925,10 +10925,107 @@
               "enum": [
                 "native",
                 "docx",
+                "pdf",
+                "pptx",
                 "xlsx"
               ],
               "type": "string",
               "default": "native",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/messages/{message_id}/download": {
+      "get": {
+        "summary": "Download",
+        "operationId": "download_sessions__session_id__messages__message_id__download_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_[0-9a-f]{16}$",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^msg_[0-9a-f]{16}$",
+              "title": "Message Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "docx",
+                "pdf",
+                "pptx",
+                "xlsx"
+              ],
+              "type": "string",
               "title": "Format"
             }
           },
