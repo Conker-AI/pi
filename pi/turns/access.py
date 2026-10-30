@@ -154,14 +154,17 @@ def owner_text(store, turn_id):
     """The owner's own message that started this turn (a cron job's instructions in a job run).
 
     For his answer to one of Conker's questions, only the words he typed: an option he tapped
-    was written by the AI, so it is no request of his. Nothing in a run of a job Conker made on
-    its own: the model wrote those instructions, and no owner approved them."""
+    was written by the AI, so it is no request of his. In a run of the owner's own job, only the
+    job's saved instructions: Pi wrote the rest of that message (the preamble, the run's date and
+    time, why it started). Nothing in a run of a job Conker made on its own: the model wrote those
+    instructions, and no owner approved them."""
     with store._connect() as db:
         words = asks.answer_words(db, turn_id)
         if words is not None:
             return words
-        if agent_jobs.made_by(db, turn_id) == "conker":
-            return ""
+        run = agent_jobs.run_of(db, turn_id)
+        if run is not None:
+            return run.get("instructions", "") if run.get("createdBy", "owner") == "owner" else ""
         row = db.execute(
             "SELECT m.content FROM turn_messages t JOIN messages m ON m.id=t.message_id "
             "WHERE t.turn_id=? AND t.purpose='input' AND m.role='user'",

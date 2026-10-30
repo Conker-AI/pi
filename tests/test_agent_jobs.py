@@ -120,6 +120,31 @@ def test_a_finding_becomes_one_inbox_note(store):
     assert agent_jobs.notes(store) == []
 
 
+def test_a_run_is_told_its_date_and_time_in_the_jobs_zone(store):
+    job = agent_jobs.create(store, ai_job(), now=NOON)
+    run = claimed_run(store, job)
+    loop = Loop(reply("NOTHING", agent_jobs.session_for(store, job["id"])))
+    # Dispatched late, then again: both say when Pi took the run up, so the second one replays.
+    agent_jobs.AgentJobs(store, loop).run(run["id"], now=NOON + 7200)
+    agent_jobs.AgentJobs(store, loop).run(run["id"], now=NOON + 86400)
+    [(_, first, _), (_, again, _)] = loop.calls
+    line = (
+        "This run started on Monday, 26 October 2026 (2026-10-26) at 12:00, Asia/Jerusalem time "
+        "(the job's time zone)."
+    )
+    assert first == again and first == f"{agent_jobs.PREAMBLE}\n\n{line}\n\n{ai_job().instructions}"
+
+
+def test_the_date_follows_the_jobs_own_zone():
+    instant = datetime.fromisoformat("2026-11-01T23:30:00+00:00").timestamp()
+    assert agent_jobs.when(instant, "Asia/Tokyo").startswith(
+        "This run started on Monday, 2 November 2026 (2026-11-02) at 08:30, Asia/Tokyo time"
+    )
+    assert agent_jobs.when(instant, "America/Los_Angeles").startswith(
+        "This run started on Sunday, 1 November 2026 (2026-11-01) at 15:30,"
+    )
+
+
 @pytest.mark.parametrize("text", ["NOTHING", "nothing.", "**NOTHING**", "   "])
 def test_nothing_stays_quiet(store, text):
     job = agent_jobs.create(store, ai_job(), now=NOON)
@@ -202,6 +227,10 @@ def test_the_browser_gets_ai_jobs_only_never_raw_tool_jobs(store, monkeypatch):
     created = client.post("/jobs/agent", headers=owner, json=ai_job().model_dump())
     assert created.status_code == 201
     assert created.json()["definition"]["target"]["kind"] == "agent"
+    # The owner's job page shows what it does and which agent does it.
+    shown = client.get(f"/jobs/{created.json()['id']}", headers=owner).json()["definition"]
+    assert shown["instructions"] == ai_job().instructions and shown["instructionsConfigured"]
+    assert (shown["agentId"], shown["agentName"]) == ("companion", "Conker")
     assert client.post("/jobs", headers=owner, json={}).status_code == 403
     empty = {"schemaVersion": 1, "results": []}
     assert client.get("/jobs/agent/notes", headers=owner).json() == empty

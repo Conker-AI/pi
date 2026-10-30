@@ -110,7 +110,7 @@ def _jobs(store):
             "kind": "job",
             "id": job["id"],
             "name": definition["name"],
-            # Like the browser job list: instructions are not shown, only that they exist.
+            # Instructions stay on the job's own view (/jobs), not in this shared list.
             "description": "",
             "revision": job["revision"],
             "state": "active" if definition["enabled"] else "disabled",

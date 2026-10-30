@@ -189,7 +189,12 @@ class WatchSummary(Strict):
 class DefinitionSummary(Strict):
     name: str = Field(min_length=1, max_length=80)
     instructionsConfigured: bool
+    # The job's own instructions in full, for the owner's job page. Only the owner's routes serve
+    # this view; the gateway's runtime key cannot read /jobs. The boolean stays for older readers.
+    instructions: str = Field(min_length=1, max_length=4000)
     agentId: str = Field(min_length=1, max_length=200)
+    # The agent's name from its profile, to show instead of its id; None when Pi has no such agent.
+    agentName: str | None = Field(default=None, min_length=1, max_length=80)
     timing: Timing
     timeZone: str = Field(min_length=1, max_length=100)
     enabled: bool

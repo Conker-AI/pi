@@ -29,8 +29,9 @@ Guards no layer removes:
 **His words count:** when an action would ask, is not on the floor and no outside content is in the
 chat, the reviewer checks whether his own message asks for exactly this action; if so it runs. Not
 for scheduling: a job made from his words would still run instructions the model wrote, so it waits
-for his approval unless his settings loosen it. A run of an AI job Conker made on its own has no
-words of his at all.
+for his approval unless his settings loosen it. In a run of the owner's own AI job only the job's
+saved instructions count: the preamble, the run's date and time and why it started are Pi's.
+A run of an AI job Conker made on its own has no words of his at all.
 
 **The reviewer** (`pi/turns/reviewer.py`) runs on its own model role, `reviewer`, when he set one
 up (otherwise the answer model). In AI decides the hard stop comes from what he set, not from a

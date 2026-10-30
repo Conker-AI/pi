@@ -70,10 +70,13 @@ def next_due(definition, after, *, anchor):
     raise JobError("No valid scheduled slot in the next fifteen days.")
 
 
-# An AI job's chat travels with its job row, for the browser view.
+# An AI job's chat and its agent's current name travel with its job row, for the browser view.
 _COLUMNS = (
     "*, (SELECT session_id FROM agent_job_sessions c WHERE c.job_id=scheduled_jobs.id)"
     " AS agent_session_id,"
+    " (SELECT json_extract(v.configuration,'$.name') FROM agents a JOIN agent_versions v"
+    " ON v.agent_id=a.id AND v.revision=a.revision"
+    " WHERE a.id=json_extract(scheduled_jobs.definition,'$.agentId')) AS agent_name,"
     " (SELECT checked_at FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_checked_at,"
     " (SELECT failure FROM agent_job_watch w WHERE w.job_id=scheduled_jobs.id) AS watch_failure,"
     " EXISTS(SELECT 1 FROM agent_job_hooks h WHERE h.job_id=scheduled_jobs.id) AS has_webhook"
@@ -345,7 +348,9 @@ def browser_job(row):
         definition=DefinitionSummary(
             name=definition.name,
             instructionsConfigured=bool(definition.instructions),
+            instructions=definition.instructions,
             agentId=definition.agentId,
+            agentName=row.get("agent_name") or None,
             timing=definition.timing,
             timeZone=definition.timeZone,
             enabled=definition.enabled,

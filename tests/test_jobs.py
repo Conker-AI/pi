@@ -291,7 +291,7 @@ def test_connected_owner_schedule_contract_is_redacted_bounded_and_restart_safe(
     path = tmp_path / "owner-jobs.db"
     store = Store(path)
     seeded = definition(
-        instructions="Run the published report with never-return-instructions.",
+        instructions="Run the published report and say what changed.",
         enabled=False,
         target={
             "kind": "automation",
@@ -338,7 +338,9 @@ def test_connected_owner_schedule_contract_is_redacted_bounded_and_restart_safe(
     assert view["definition"]["state"] == "paused"
     assert view["definition"]["target"]["inputsConfigured"] is True
     assert view["definition"]["instructionsConfigured"] is True
-    assert "instructions" not in view["definition"]
+    # The job's own instructions in full, on the owner's route only (the runtime key was refused above).
+    assert view["definition"]["instructions"] == "Run the published report and say what changed."
+    assert view["definition"]["agentName"] == "Conker"
     assert "args" not in view["definition"]["target"]
     assert "never-return" not in listing.text and "private" not in listing.text
 
@@ -472,6 +474,28 @@ def test_connected_owner_schedule_contract_is_redacted_bounded_and_restart_safe(
         assert {row["status"] for row in saved_history["results"]} == {"cancelled", "completed"}
     finally:
         reopened.close()
+
+
+def test_the_job_view_names_its_agent_as_its_profile_does_now(store):
+    from pi.agents import profiles
+
+    job = jobs.create(store, definition(), now=0)
+    assert jobs.browser_job(jobs.get_job(store, job["id"])).definition.agentName == "Conker"
+    current = profiles.get(store, "companion")
+    renamed = {**current["configuration"], "name": "Pip"}
+    profiles.update(
+        store,
+        "companion",
+        profiles.UpdateAgent(
+            expected_revision=current["revision"],
+            configuration=profiles.AgentInput.model_validate(renamed),
+        ),
+    )
+    [view] = [jobs.browser_job(row).definition for row in jobs.list_jobs(store)]
+    assert (view.agentId, view.agentName) == ("companion", "Pip")
+    gone = jobs.create(store, definition(agentId="no-such-agent"), now=0)
+    view = jobs.browser_job(jobs.get_job(store, gone["id"])).definition
+    assert (view.agentId, view.agentName) == ("no-such-agent", None)
 
 
 def test_owner_job_browser_allowlist_is_exact():
