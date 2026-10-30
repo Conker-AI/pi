@@ -82,6 +82,8 @@ class Definition(Strict):
     privacy: JobPrivacy | None = None
     # Pi turned it off because the chat Conker made it in was forgotten; he can turn it back on.
     turnedOff: Literal["chat_forgotten"] | None = None
+    # When the owner took this job Conker made as his own (`agent_jobs.adopt`); None otherwise.
+    adoptedAt: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def allowance_requires_budget(self):
@@ -91,6 +93,10 @@ class Definition(Strict):
             self.createdBy != "owner" or self.privacy is not None or self.turnedOff is not None
         ):
             raise ValueError("Only AI jobs are made by Conker or carry a chat's privacy.")
+        if self.adoptedAt is not None and (
+            self.target.kind != "agent" or self.createdBy != "owner"
+        ):
+            raise ValueError("Only an AI job the owner took as his own records when.")
         # An AI job spends through the tools it calls, each with ToolGate's own limits.
         if self.target.kind == "agent" and self.requireBudget:
             raise ValueError("AI jobs use each tool's own budget, not a job budget.")
@@ -129,6 +135,12 @@ RunId = Annotated[str, StringConstraints(pattern=r"^scheduled_[a-f0-9]{32}$")]
 class StateChange(Strict):
     expected_revision: int = Field(ge=1)
     enabled: bool
+
+
+class Adopt(Strict):
+    """The owner takes a job Conker made as his own, at the revision he looked at."""
+
+    expected_revision: int = Field(ge=1)
 
 
 class AgentJobCreate(Strict):
@@ -206,6 +218,8 @@ class DefinitionSummary(Strict):
     budgetAllowanceConfigured: bool
     createdBy: Literal["owner", "conker"] = "owner"
     turnedOff: Literal["chat_forgotten"] | None = None
+    # Conker made it and the owner took it as his own at this time; None for every other job.
+    adoptedAt: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class JobView(Strict):
