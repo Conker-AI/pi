@@ -84,6 +84,7 @@ python scripts/auth_mutation_drill.py
 
 The audit drill is in CI. Each drill runs a passing baseline, mutates isolated
 copies, and requires actual test failures. Collection errors, skipped tests and
-surviving mutants fail the drill. Evidence stays under `.test-tmp/`.
+surviving mutants fail the drill. Evidence stays in the OS temp directory; each drill
+prints the path.
 The module HTTP contract suite requires a running container and remains a separate
 CI job; these local tests do not claim a Linux/Docker deployment drill.

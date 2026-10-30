@@ -234,3 +234,16 @@ OWNER_ROUTES = {
 
 def owner_allowed(method: str, path: str) -> bool:
     return any(re.fullmatch(pattern, path) for pattern in OWNER_ROUTES.get(method, ()))
+
+
+# Files the owner-control credential may download straight from Pi (the host CLI does). They
+# stay out of OWNER_ROUTES because the gateway's control relay forwards JSON only: a browser
+# download needs its own relay that passes the file, its type and its name through unchanged.
+OWNER_DOWNLOADS = (
+    r"/artifacts/artifact_[0-9a-f]{32}/download",
+    r"/sessions/ses_[0-9a-f]{16}/messages/msg_[0-9a-f]{16}/download",
+)
+
+
+def owner_download_allowed(method: str, path: str) -> bool:
+    return method == "GET" and any(re.fullmatch(pattern, path) for pattern in OWNER_DOWNLOADS)

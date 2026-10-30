@@ -47,13 +47,11 @@ CASES = [
 SOURCE = "pi"
 TEST = "tests/test_memory.py"
 IMPORT = "."
-SCRATCH = ".test-tmp"
 
 
 def main():
-    scratch = ROOT / SCRATCH
-    scratch.mkdir(exist_ok=True)
-    run = Path(tempfile.mkdtemp(prefix="memory-mutations-", dir=scratch))
+    # In the OS temp directory, never in the checkout.
+    run = Path(tempfile.mkdtemp(prefix="memory-mutations-"))
     for name, filename, old, new in [("baseline", None, None, None), *CASES]:
         target = run / name
         shutil.copytree(

@@ -17,6 +17,23 @@ be a decision with visible consequences.
   of the month" work. It is the time Pi took the run up, so a repeated dispatch still replays.
   In a run of the owner's own job only the saved instructions count as the owner's words
   (`pi.turns.access.owner_text`); the preamble, the date and why it started are Pi's.
+- **Real deliverables: artifacts and chat answers export to DOCX, PDF, PPTX and XLSX**
+  (`pi/content/markdown_blocks.py`, `export_documents.py`, `export_pdf.py`, `export_slides.py`,
+  `_export_worker.py`). Markdown keeps its structure: headings, numbered, bulleted, task and
+  nested lists, quotes, code blocks, rules, tables with their alignment, bold, italic,
+  strikethrough, inline code and links (only http, https and mailto stay clickable; a
+  javascript: or other link stays its plain label). Images are never fetched. XLSX puts each
+  table on its own sheet as text. `GET /artifacts/{id}/download` gains `format=pdf|pptx` and
+  DOCX/PDF/PPTX for table and code artifacts; the new owner-only
+  `GET /sessions/{sid}/messages/{mid}/download?format=docx|pdf|pptx|xlsx` exports one completed
+  answer under the same source and privacy checks as saving it as an artifact. The owner-control
+  key may now fetch both downloads directly (`OWNER_DOWNLOADS`, for the host CLI); they stay out
+  of the gateway's JSON relay. Files are made in an isolated worker with time, CPU, memory, size,
+  page (500), slide (300), nesting (12) and table limits, each refused with a fixed `export_*`
+  code. New pinned libraries: python-pptx 1.0.2 (MIT), markdown-it-py 4.2.0 (MIT), ReportLab
+  5.1.0 (BSD); the image gains `fonts-dejavu-core` for Cyrillic and Greek in PDFs. A Markdown
+  artifact's DOCX now reads single line breaks as spaces (as the chat shows them), and its
+  sources are a short list instead of a JSON block.
 - **Import from ChatGPT and Claude** (docs/imports.md). Owner routes `POST /imports/{chatgpt|claude}/preview`
   (saves nothing) and `POST /imports/{chatgpt|claude}/{digest}` (exactly the previewed file) read
   an export's `conversations.json` strictly, with size and count limits, and keep each chat as an
@@ -165,6 +182,14 @@ be a decision with visible consequences.
   set), so a replay or retry sees the same words and a change reaches the next turn only. The
   owner's text is framed as data: it grants no permission, and approvals still judge only the
   owner's message in the chat.
+- **Tests keep their files in pytest's `tmp_path` only.** `tests/conftest.py` stops and fails any
+  test that writes into the repository (a file opened for writing, a new folder, a rename, a
+  delete, a SQLite database that is not read-only), naming the path, in every pytest-xdist worker;
+  `__pycache__` and `.pytest_cache` are left alone. A run whose `--basetemp` or temp directory is
+  inside the checkout is refused before any test starts. No test wrote into the repository; the
+  writes came from runs given `--basetemp=.test-tmp/...` and from the three mutation drills, which
+  now keep their copies in the OS temp directory (the audit drill also puts `--basetemp` beside
+  its copy, since the copy brings the guard along).
 
 ## 0.12.0
 

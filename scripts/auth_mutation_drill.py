@@ -181,9 +181,8 @@ CASES = [
 
 
 def main() -> int:
-    scratch = ROOT / ".test-tmp"
-    scratch.mkdir(exist_ok=True)
-    run = Path(tempfile.mkdtemp(prefix="auth-mutations-", dir=scratch))
+    # In the OS temp directory, never in the checkout.
+    run = Path(tempfile.mkdtemp(prefix="auth-mutations-"))
     baseline = ("baseline", None, None, None, None)
     for name, filename, old, new, selected in [baseline, *CASES]:
         target = run / name

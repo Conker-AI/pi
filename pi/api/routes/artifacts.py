@@ -4,7 +4,20 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
-from pi.content import artifact_models, artifacts
+from pi.content import artifact_models, artifacts, office_exports
+
+
+def attachment(content: bytes, mime: str, filename: str, readable: str | None = None):
+    """A file download that is never shown inline, cached or sniffed into something else."""
+    return Response(
+        content,
+        media_type=mime,
+        headers={
+            "Content-Disposition": office_exports.disposition(filename, readable or filename),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def router(store, authorize, resolve=None):
@@ -60,18 +73,27 @@ def router(store, authorize, resolve=None):
     def download(
         identity: ArtifactPath,
         version: int | None = Query(default=None, ge=1, le=100),
-        format: Literal["native", "docx", "xlsx"] = "native",
+        format: Literal["native", "docx", "pdf", "pptx", "xlsx"] = "native",
     ):
         result = run(artifacts.export, identity, version, format=format)
-        content = result["text"].encode("utf-8") if format == "native" else result["content"]
-        return Response(
-            content,
-            media_type=result["mime"],
-            headers={
-                "Content-Disposition": f'attachment; filename="{result["filename"]}"',
-                "Cache-Control": "no-store",
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
+        if format == "native":
+            return attachment(result["text"].encode("utf-8"), result["mime"], result["filename"])
+        return attachment(result["content"], result["mime"], result["filename"], result["readable"])
+
+    return routes
+
+
+def answers(store, authorize, resolve=None):
+    """Download one completed chat answer as a document, deck or spreadsheet."""
+    routes = APIRouter(dependencies=[Depends(authorize)])
+
+    @routes.get("/sessions/{session_id}/messages/{message_id}/download")
+    def download(
+        session_id: Annotated[str, Path(pattern=r"^ses_[0-9a-f]{16}$")],
+        message_id: Annotated[str, Path(pattern=r"^msg_[0-9a-f]{16}$")],
+        format: Literal["docx", "pdf", "pptx", "xlsx"],
+    ):
+        result = artifacts.export_answer(store(), session_id, message_id, resolve, format=format)
+        return attachment(result["content"], result["mime"], result["filename"], result["readable"])
 
     return routes

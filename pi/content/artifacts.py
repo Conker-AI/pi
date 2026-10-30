@@ -6,10 +6,10 @@ import csv
 import io
 import json
 import re
-import unicodedata
 import uuid
 from datetime import UTC, datetime
 
+from pi.content import office_exports
 from pi.content.artifact_models import (
     Append,
     Archive,
@@ -376,14 +376,24 @@ def export(store, identity, version=None, resolve=None, *, format="native"):
         raise ArtifactError("invalid_version", "Choose an existing version.", 422)
     data, mime, extension = selected["content"], "text/plain;charset=utf-8", "txt"
     kind = data["kind"]
-    if (
-        format not in ("native", "docx", "xlsx")
-        or (format == "docx" and kind != "markdown")
-        or (format == "xlsx" and kind != "table")
-    ):
-        raise ArtifactError(
-            "unsupported_format", "Choose a format supported by this artifact.", 422
-        )
+    plain, readable = office_exports.names(selected["title"])
+    if format != "native":
+        if not office_exports.supports(kind, format):
+            raise ArtifactError(
+                "unsupported_format", "Choose a format supported by this artifact.", 422
+            )
+        suffix = f"-v{selected['version']}.{format}"
+        return {
+            "filename": plain + suffix,
+            "readable": readable + suffix,
+            "mime": office_exports.MIME[format],
+            "content": office_exports.render(
+                data,
+                format,
+                title=selected["title"],
+                citations=selected.get("citations") if kind == "markdown" else None,
+            ),
+        }
     if kind == "table":
         output = io.StringIO(newline="")
         writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
@@ -445,32 +455,55 @@ def export(store, identity, version=None, resolve=None, *, format="native"):
             if kind == "markdown"
             else extensions.get(data["language"].lower(), "txt")
         )
-    base = (
-        re.sub(r"[^a-zA-Z0-9_-]+", "-", unicodedata.normalize("NFKD", selected["title"])).strip(
-            "-"
-        )[:80]
-        or "artifact"
-    )
-    if re.fullmatch(r"con|prn|aux|nul|com[0-9]|lpt[0-9]", base, re.I):
-        base = "artifact-" + base
-    if format != "native":
-        from pi.content.office_exports import render
-
-        content = render(data, text, format)
-        return {
-            "filename": f"{base}-v{selected['version']}.{format}",
-            "mime": "application/vnd.openxmlformats-officedocument."
-            + ("spreadsheetml.sheet" if format == "xlsx" else "wordprocessingml.document"),
-            "content": content,
-        }
     return NativeExport(
         artifactId=identity,
         version=selected["version"],
-        filename=f"{base}-v{selected['version']}.{extension}",
+        filename=f"{plain}-v{selected['version']}.{extension}",
         mime=mime,
         text=text,
         privateOrigin=view["privateOrigin"] is True,
     ).model_dump()
+
+
+def _answer_title(text):
+    for line in text.splitlines():
+        words = re.sub(r"[#*_`>|~\[\]()!-]+", " ", line).split()
+        if words:
+            return " ".join(words)[:160]
+    return "Conker answer"
+
+
+def export_answer(store, session_id, message_id, resolve=None, *, format):
+    """One completed answer as a file, under the same source and privacy checks as a copy."""
+    if not office_exports.supports("markdown", format):
+        raise ArtifactError("unsupported_format", "Choose DOCX, PDF, PPTX or XLSX.", 422)
+    with store._connect() as db:
+        db.execute("BEGIN")
+        status, text, _ = _source(db, session_id, message_id, resolve)
+        if status in ("source-unavailable", "source-redacted"):
+            raise ArtifactError("not_found", "Answer not found.", 404)
+        if status == "source-changed":
+            raise ArtifactError(
+                "not_an_answer", "Only Conker's completed final answers can be exported.", 422
+            )
+        if status == "privacy-unknown":
+            raise ArtifactError("privacy_unknown", "This chat's privacy is unknown; try again.")
+        try:
+            evidence = citations.read(db, message_id)
+        except ValueError:
+            raise ArtifactError(
+                "source_changed", "This answer's sources are unreadable; it was not exported."
+            ) from None
+    title = _answer_title(text)
+    plain, readable = office_exports.names(title)
+    return {
+        "filename": f"{plain}.{format}",
+        "readable": f"{readable}.{format}",
+        "mime": office_exports.MIME[format],
+        "content": office_exports.render(
+            {"kind": "markdown", "text": text}, format, title=title, citations=evidence
+        ),
+    }
 
 
 def redact(db, session_ids):
