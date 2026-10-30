@@ -141,13 +141,16 @@ lists open requests (`kind: "change-request"`). Forgetting a chat deletes its re
   `status: "refused"` with a sentence Conker passes on. The owner's own requests (`/tool-drafts`)
   are not limited.
 
-CLI parity: `conker inspect change-requests` lists open requests; `conker apply requests FILE`
-takes `{"operation": "approve" | "decline", "id": "creq_..."}`,
-`{"operation": "saved", "id": "creq_...", "draftId": "..."}` after saving the document with
-`conker apply tools`, `{"operation": "retry", "id": "creq_...", "description"?: "..."}` (an
-answer goes through `conker tool answer creq_... "..."`), and
-`{"operation": "published", "id": "creq_...", "toolId": "...", "name": "..."}`. Publishing with
-`conker apply tools` takes `"conkerMayUse": true` to let Conker use the tool.
+CLI parity: `conker inspect change-requests` lists open requests. `conker apply requests FILE`
+takes one of:
+- `{"operation": "approve" | "decline", "id": "creq_..."}` (a decline may carry `"reply"`);
+- `{"operation": "saved", "id": "creq_...", "draftId": "..."}`, after saving the document with
+  `conker apply tools`;
+- `{"operation": "retry", "id": "creq_...", "description"?: "...", "answer"?: "..."}`, the
+  retry route above (not both fields; `conker tool answer creq_... "..."` sends an answer);
+- `{"operation": "published", "id": "creq_...", "toolId": "...", "name": "..."}`.
+
+Publishing with `conker apply tools` takes `"conkerMayUse": true` to let Conker use the tool.
 
 By hand: the owner adds a memory with `POST /memory/remember` (`{"request_id", "text"}`, password
 verified in the browser; `conker apply memory` with `"operation": "remember"`), which uses the same
