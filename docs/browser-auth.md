@@ -146,7 +146,7 @@ password hashes run one at a time to bound memory. Session bearer tokens are ran
 are transactional. A reset racing a slow password check cannot mint a stale session.
 Backups remain sensitive: they include the password verifier and service secrets.
 
-## Files, imports, server actions, tool settings and lockdown
+## Files, imports, server actions, tool settings, lockdown and tool runs
 
 These routes follow the rules above (session cookie; CSRF and exact Origin on writes; the
 one-use password proof where the table says so). Upstream headers never reach the browser.
@@ -167,6 +167,8 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |
 | `POST /api/owner/lockdown` `{"enabled": true}` | session | ToolGate `POST /v2/owner/lockdown` |
 | `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` |
+| `GET /api/owner/tools/{id}/runs?limit=1..50` | session | ToolGate `GET /v2/owner/tools/{id}/runs` (owner key) |
+| `POST /api/owner/tools/{id}/runs` `{"action_id": "owner_<32 hex>", "args", "approval_request_id"?}` | password | ToolGate `POST /v2/owner/tools/{id}/runs` (owner key and the chat's execution key) |
 
 **Files** go through one streaming relay (`gateway/relay.py`), the only routes that carry bytes
 rather than a JSON object. A download needs exactly one `format`. The relay asks Pi for no
@@ -198,8 +200,11 @@ request; when the helper cannot be reached, or an answer fails those checks, the
 in the same shape, `{"error": "host_unavailable", ...}` with 503. A refusal of the browser's own
 request is `invalid_host_operation` (422).
 
-**ToolGate settings and lockdown** use the gateway's ToolGate owner key. ToolGate's answers and
-refusals (a stale revision is 409) pass through as its JSON.
+**ToolGate settings, lockdown and tool runs** use the gateway's ToolGate owner key; a run by hand
+also sends the chat's own execution key, as the editor-draft run route does, and its proof covers
+the action id and every argument. ToolGate's answers and refusals (a stale revision is 409, a tool
+that asks is `CONFIRMATION_REQUIRED`, resumed with the same `action_id` and its
+`approval_request_id`) pass through as its JSON.
 
 ## Running and recovery
 

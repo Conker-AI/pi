@@ -1637,6 +1637,80 @@
         }
       }
     },
+    "/api/owner/tools/{identity}/runs": {
+      "post": {
+        "summary": "Tool Runs",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "operationId": "tool_runs_api_owner_tools__identity__runs_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Tool Runs",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "operationId": "tool_runs_api_owner_tools__identity__runs_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/owner/editor-capabilities": {
       "get": {
         "summary": "Editor Capabilities",

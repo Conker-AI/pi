@@ -20,7 +20,9 @@ be a decision with visible consequences.
   helper over the provider-control socket, its receipts and refusals unchanged.
   `GET`/`PUT /api/owner/tool-settings` (PUT with the password) and `GET`/`POST
   /api/owner/lockdown` (on with the session, off with the password) go to ToolGate's owner
-  routes. Browser contract: an import preview is a session-only write.
+  routes. `GET /api/owner/tools/{id}/runs` (session) and `POST /api/owner/tools/{id}/runs`
+  (password bound to the body; the chat's execution key) run any tool by hand through ToolGate's
+  owner runs. Browser contract: an import preview is a session-only write.
 
 ## 0.13.0
 

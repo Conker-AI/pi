@@ -223,6 +223,7 @@ def test_the_password_table_names_exactly_the_new_writes():
         ("POST", "/api/owner/lockdown"),
         ("POST", "/api/host/ops"),
         ("POST", "/api/control/pi/imports/claude/" + "a" * 64),
+        ("POST", "/api/owner/tools/sandbox.run/runs"),
     ):
         assert len(fingerprint(method, path, {})) == 64
     for method, path in (
@@ -233,6 +234,8 @@ def test_the_password_table_names_exactly_the_new_writes():
         ("GET", "/api/host/ops"),
         ("DELETE", "/api/host/ops"),
         ("POST", "/api/control/pi/imports/gemini/" + "a" * 64),
+        ("PUT", "/api/owner/tools/sandbox.run/runs"),
+        ("POST", "/api/owner/tools/bad id/runs"),
     ):
         with pytest.raises(AuthError):
             fingerprint(method, path, {})

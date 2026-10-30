@@ -109,6 +109,66 @@ def router(app, session, forward, admit_write):
             extra,
         )
 
+    @routes.get("/api/owner/tools/{identity}/runs")
+    @routes.post("/api/owner/tools/{identity}/runs")
+    async def tool_runs(identity: str, request: Request):
+        """Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when
+        Conker runs it, and asks for the password; a tool that asks still makes an approval
+        request (CONFIRMATION_REQUIRED), resumed with the same action_id."""
+        from starlette.concurrency import run_in_threadpool
+
+        session(request)
+        if not re.fullmatch(ACCESS_TOOL_ID, identity):
+            raise AuthError("Select a tool by its id.", 422)
+        body, extra, params = None, None, request.query_params
+        if request.method == "POST":
+            if request.scope["query_string"]:
+                raise AuthError("Write operations must not include query parameters.", 422)
+            body = await json_body(request)
+            if (
+                not {"action_id", "args"} <= body.keys()
+                or body.keys() - {"action_id", "args", "approval_request_id"}
+                or not isinstance(body["action_id"], str)
+                or not re.fullmatch(r"owner_[a-f0-9]{32}", body["action_id"])
+                or not isinstance(body["args"], dict)
+                or not (
+                    body.get("approval_request_id") is None
+                    or (
+                        isinstance(body["approval_request_id"], str)
+                        and 1 <= len(body["approval_request_id"]) <= 100
+                    )
+                )
+            ):
+                raise AuthError(
+                    "Send an owner action id, the tool's arguments and an optional approval request.",
+                    422,
+                )
+            key = app.state.config.toolgate_execution_key
+            if not key:
+                raise AuthError("The scoped chat execution credential is not configured.", 503)
+            extra = {"X-ToolGate-Execution-Key": key}
+            # The proof covers the action id and every argument.
+            admit_write(request, body)
+        elif set(params) - {"limit"} or (
+            "limit" in params
+            and (
+                len(params.getlist("limit")) != 1
+                or not re.fullmatch(r"[0-9]{1,2}", params["limit"])
+                or not 1 <= int(params["limit"]) <= 50
+            )
+        ):
+            raise AuthError("Use only limit, 1 to 50.", 422)
+        return await run_in_threadpool(
+            forward,
+            request.method,
+            app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/tools/{identity}/runs",
+            "X-ToolGate-Owner-Key",
+            app.state.config.owner_key,
+            body,
+            request.scope["query_string"] if body is None else b"",
+            extra,
+        )
+
     @routes.get("/api/owner/editor-capabilities")
     def editor_capabilities(request: Request):
         session(request)
