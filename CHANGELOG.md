@@ -41,6 +41,9 @@ be a decision with visible consequences.
   owner runs. `POST /api/control/pi/jobs/{id}/adopt` (adopting a job Conker made) passes the
   control relay with the password bound to its body. Browser contract: an import preview is a
   session-only write.
+- **`conker apply requests` can answer the drafter.** A `retry` takes an optional `answer`
+  (1..4000 characters), sent as `POST /change-requests/{id}/retry` `{"answer"}`; with a
+  `description` as well it is refused before Pi is called (`gateway/mutation_models.py`).
 
 ## 0.13.0
 
