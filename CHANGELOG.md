@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Artifact downloads take a version.** `GET /api/control/pi/artifacts/{id}/download` accepts an
+  optional `version` (1 to 100), so an earlier version can be exported to Word, PDF, PowerPoint or
+  Excel; the chat answer download still refuses it.
+
 ## 0.14.0
 
 - **An AI job's opening message stays out of memory.** Each run's first message (the preamble,

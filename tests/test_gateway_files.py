@@ -162,7 +162,15 @@ def test_downloads_need_the_session_and_exact_query(relay):
     for query in (
         "",
         "?format=docx&format=pdf",
-        "?format=docx&version=1",
+        "?format=docx&version=0",
+        "?format=docx&version=101",
+        "?format=docx&version=01",
+        "?format=docx&version=-1",
+        "?format=docx&version=+1",
+        "?format=docx&version=1.0",
+        "?format=docx&version=abc",
+        "?format=docx&version=",
+        "?format=docx&version=1&version=2",
         "?format=native",
         "?format=html",
     ):
@@ -172,6 +180,20 @@ def test_downloads_need_the_session_and_exact_query(relay):
     client.cookies.clear()
     assert client.get(ARTIFACT_PATH + "?format=docx").status_code == 401
     assert client.get(ANSWER_PATH + "?format=docx").status_code == 401
+    assert not seen
+
+
+def test_an_artifact_download_can_ask_for_an_earlier_version(relay):
+    client, _, seen, _ = relay
+    response = client.get(ARTIFACT_PATH + "?format=docx&version=3")
+    assert response.status_code == 200, response.text
+    [request] = seen
+    assert request.url.params["format"] == "docx" and request.url.params["version"] == "3"
+
+
+def test_the_answer_download_refuses_a_version(relay):
+    client, _, seen, _ = relay
+    assert client.get(ANSWER_PATH + "?format=docx&version=1").status_code == 422
     assert not seen
 
 

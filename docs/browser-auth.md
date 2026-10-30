@@ -153,7 +153,7 @@ one-use password proof where the table says so). Upstream headers never reach th
 
 | Route | Needs | Goes to |
 | --- | --- | --- |
-| `GET /api/control/pi/artifacts/{id}/download?format=docx\|pdf\|pptx\|xlsx\|csv\|json` | session | Pi's artifact download (`csv`, `json`: the native export of a table or a chart, diagram or media) |
+| `GET /api/control/pi/artifacts/{id}/download?format=docx\|pdf\|pptx\|xlsx\|csv\|json[&version=1..100]` | session | Pi's artifact download (`csv`, `json`: the native export of a table or a chart, diagram or media); an optional `version` picks an earlier version of the artifact |
 | `GET /api/control/pi/sessions/{sid}/messages/{mid}/download?format=docx\|pdf\|pptx\|xlsx` | session | Pi's chat answer download |
 | `POST /api/control/pi/imports/{chatgpt\|claude}/preview` | session | Pi's import preview; raw body is `conversations.json` |
 | `POST /api/control/pi/imports/{chatgpt\|claude}/{digest}` | password | Pi's import of the previewed file |

@@ -45,25 +45,31 @@ def router(app, session, admit_write, stream_transport):
             raise AuthError("Pi owner-control connection is not configured.", 503)
         return app.state.config.pi_owner_key
 
-    async def download(request: Request, target: str, formats: dict):
+    async def download(request: Request, target: str, formats: dict, versioned: bool = False):
         session(request)
         params = request.query_params
+        extra = {"version"} if versioned else set()
         if (
-            set(params) != {"format"}
+            set(params) - extra != {"format"}
             or len(params.getlist("format")) != 1
+            or len(params.getlist("version")) > 1
             or params["format"] not in formats
+            or ("version" in params and not re.fullmatch(r"[1-9][0-9]?|100", params["version"]))
         ):
             raise AuthError("Choose one format: " + ", ".join(formats) + ".", 422)
         if not owner_download_allowed("GET", target):
             raise AuthError("This file is not available through the gateway.", 403)
         name = params["format"]
         media, content_type, upstream_format = formats[name]
+        sent = {"format": upstream_format}
+        if "version" in params:
+            sent["version"] = int(params["version"])
         return await relay.relay(
             stream_transport,
             "GET",
             app.state.config.pi_url.rstrip("/") + target,
             {"X-Pi-Owner-Key": owner_key()},
-            params={"format": upstream_format},
+            params=sent,
             read_seconds=DOWNLOAD_SECONDS,
             download=relay.Download(
                 media,
@@ -79,11 +85,13 @@ def router(app, session, admit_write, stream_transport):
     @routes.get("/api/control/pi/artifacts/{identity}/download")
     async def artifact_download(identity: str, request: Request):
         """One artifact as a file: DOCX, PDF, PPTX or XLSX, or CSV for a table and JSON for a
-        chart, diagram or media."""
+        chart, diagram or media. An optional `version` (1 to 100) exports an earlier version."""
         if not re.fullmatch(r"artifact_[0-9a-f]{32}", identity):
             session(request)
             raise AuthError("Invalid artifact identity.", 422)
-        return await download(request, f"/artifacts/{identity}/download", ARTIFACT_FORMATS)
+        return await download(
+            request, f"/artifacts/{identity}/download", ARTIFACT_FORMATS, versioned=True
+        )
 
     @routes.get("/api/control/pi/sessions/{session_id}/messages/{message_id}/download")
     async def answer_download(session_id: str, message_id: str, request: Request):
