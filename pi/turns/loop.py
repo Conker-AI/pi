@@ -284,6 +284,11 @@ class Loop(ModelCalls, History, Replies):
     ):
         execution = session_settings.execution(self.store, session_id, turn_id)
         turn_control.guard(self.store, execution)
+        # His answer to the drafter's question waiting in this chat goes to that draft instead.
+        if not continued and (
+            answered := tool_drafting.answered(self, session_id, turn_id, user_text, execution)
+        ):
+            return {**answered, "forked_from": forked_from}
         if not continued:
             self.memory.prepare(turn_id, user_text)
         # Held for the whole turn: if this parks on an approval, the owner needs

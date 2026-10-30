@@ -34,6 +34,7 @@ from pi.schedule.agent_jobs import AgentJobs
 from pi.schedule.job_execution import PublishedJobs
 from pi.schedule.job_worker import JobWorker
 from pi.turns import thinking as background_thinking
+from pi.turns import tool_drafting
 from pi.turns.loop import Loop
 from pi.turns.queue_worker import QueueWorker
 
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
     tool_drafts.recover_interrupted(store)
+    tool_drafting.ask_waiting(store)
     memory_proposals.recover_interrupted(store)
     memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)

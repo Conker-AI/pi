@@ -62,8 +62,6 @@ from pi.api.routes import system_inventory as system_inventory_api
 from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
-from pi.api.routes import workflow_drafts as workflow_drafts_api
-from pi.api.routes import workflow_proposals as workflow_proposals_api
 from pi.api.startup import lifespan
 from pi.context import project_sources
 from pi.conversation import fact_checks, judgements
@@ -187,7 +185,6 @@ app.include_router(
     )
 )
 app.include_router(access_api.router(lambda: app.state.store, require_owner))
-app.include_router(workflow_proposals_api.router(lambda: app.state.store, require_admin))
 app.include_router(characters_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     system_inventory_api.router(
@@ -258,11 +255,6 @@ app.include_router(
 )
 app.include_router(
     summary_draft_api.router(
-        lambda: app.state.store, lambda: app.state.router.adapters(), require_admin
-    )
-)
-app.include_router(
-    workflow_drafts_api.router(
         lambda: app.state.store, lambda: app.state.router.adapters(), require_admin
     )
 )

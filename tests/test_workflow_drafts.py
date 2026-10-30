@@ -4,10 +4,8 @@ import json
 from contextlib import closing
 
 import pytest
-from fastapi.testclient import TestClient
 
 from pi.agents import workflow_drafts
-from pi.api import server
 from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from tests.test_model_roles import Adapter, config
@@ -217,27 +215,6 @@ def test_draft_ids_come_from_the_name(name, expected):
     assert workflow_drafts.slug(name) == expected
 
 
-def test_http_route_needs_the_admin_key(tmp_path):
-    adapter = Recording(json.dumps({"reply": "Which city?", "ready": False, "document": None}))
-    with closing(Store(tmp_path / "pi.db")) as store:
-        configured(store)
-        app = server.app
-        app.state.store = store
-        app.state.admin_key = "test-admin-key"
-        app.state.router = type("Router", (), {"adapters": lambda self: {"one": adapter}})()
-        client = TestClient(app)
-        body = {"description": "Weather", "capabilities": CAPABILITIES}
-        response = client.post(
-            "/workflow-drafts/draft", json=body, headers={"X-Pi-Key": "test-admin-key"}
-        )
-        assert response.status_code == 200 and response.json()["reply"] == "Which city?"
-        owner = client.post(
-            "/workflow-drafts/draft", json=body, headers={"X-Pi-Owner-Key": "test-owner-key"}
-        )
-        assert owner.status_code == 401
-        assert client.post("/workflow-drafts/draft", json=body).status_code == 401
-
-
 def test_the_prompts_example_is_a_complete_valid_draft():
     text = workflow_drafts.INSTRUCTIONS
     example = json.loads(text[text.rindex('{"reply"') : text.index('\nWhen "issues"')])
@@ -267,11 +244,11 @@ def test_a_request_over_one_megabyte_is_refused():
         request(capabilities=huge)
 
 
-def test_the_builder_waits_longer_than_an_answer(tmp_path):
-    # A slow local model needs minutes to write a whole draft; chat answers keep their limit.
+def test_each_model_call_keeps_its_roles_own_limit(tmp_path):
+    # Drafts run in the background now, so no call waits past its role's limit (1 s here).
     result, adapter = drafted(tmp_path, {"reply": "Which city?", "ready": False, "document": None})
     assert result["ready"] is False
-    assert adapter.timeout == workflow_drafts.MODEL_WAIT_MS / 1000 == 600
+    assert adapter.timeout == 1.0
 
 
 def test_a_drafting_model_of_its_own_drafts_while_chat_stays_put(tmp_path):
@@ -294,7 +271,6 @@ def test_a_drafting_model_of_its_own_drafts_while_chat_stays_put(tmp_path):
         )
         result = workflow_drafts.draft(store, {"one": local, "two": strong}, request())
     assert result["modelId"] == "b" and strong.messages and not local.messages
-    assert strong.timeout == 600
 
 
 def test_older_settings_gain_drafting_switched_off(tmp_path):

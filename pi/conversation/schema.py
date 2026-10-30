@@ -10,11 +10,10 @@ from pi.agents import (
     characters,
     continuity,
     keep,
+    retired_workflows,
     skills,
     team_execution,
     tool_drafts,
-    workflow_offers,
-    workflow_proposals,
 )
 from pi.agents import profiles as agents
 from pi.agents import teams as collaboration
@@ -107,14 +106,13 @@ def install(db):
     agent_jobs.initialize(db)
     agent_triggers.initialize(db)
     agent_hooks.initialize(db)
-    workflow_proposals.initialize(db)
+    retired_workflows.initialize(db)
     change_requests.initialize(db)
     keep.initialize(db)
     withdrawals.initialize(db)
     tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
-    workflow_offers.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)

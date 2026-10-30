@@ -11,6 +11,12 @@ running when Pi stopped is marked failed when Pi starts again (`tool_drafts.reco
 
 `announce` is Conker's message in the chat that asked, once the owner has published the tool: a
 note Pi stores, like its other notes, never a model's words.
+
+When the drafter needs a detail for a request from a chat, `ask` posts its question there (a
+stored message, the question in the drafter's words) and the card waits (`needs_detail`). The
+owner's next message in that chat is the answer (`answered`, called by the turn loop before any
+model call): drafting goes on with the questions and answers so far, and Conker's stored reply
+says so. His answer from the Inbox (`retry` with `answer`) goes on the same way.
 """
 
 from __future__ import annotations
@@ -22,14 +28,18 @@ import time
 import unicodedata
 
 from pi.actions.toolgate import ToolGateUnavailable
-from pi.agents import draft_capabilities, tool_drafts
+from pi.agents import asks, draft_capabilities, tool_drafts
 from pi.conversation import submissions
-from pi.turns import answers, inference_control
+from pi.turns import answers, inference_control, native_tools
 
 log = logging.getLogger(__name__)
 
 YIELDS = 3  # times one model call gives way to a chat reply before the draft stops
 LIVE = "“{name}” is live. Want me to run it now?"
+QUESTION = (
+    "One question before I can draft your tool: {question}\nReply here and I'll go on drafting."
+)
+GOING_ON = "Thanks. I'm drafting the tool with that; it will be in your Inbox."
 BUSY_WAIT, BUSY_TRIES = 5.0, 60
 NO_TOOLS = "Tools are not set up, so there is nothing to build a tool from."
 NO_TOOLGATE = "ToolGate didn't answer, so Conker's tools could not be listed. Try again."
@@ -109,6 +119,7 @@ class Drafts:
 
     def draft(self, request) -> None:
         store, description = self.loop.store, request["payload"]["description"]
+        said = tool_drafts.conversation(request)
         title = summary = None
         try:
             payload, title, summary = tool_drafts.build(
@@ -121,17 +132,24 @@ class Drafts:
                 alive=lambda: (
                     not self._stop.is_set() and tool_drafts.still_drafting(store, request)
                 ),
+                conversation=said,
+                # A request from a chat asks there; one without a chat fails with the question.
+                ask=request["sessionId"] is not None,
             )
         except Unbuildable as reason:
-            payload = tool_drafts.failed(description, str(reason))
+            payload = tool_drafts.failed(description, str(reason), said)
         except Stopped as stopped:
-            payload = tool_drafts.failed(description, REASONS.get(stopped.reason, BROKEN))
+            payload = tool_drafts.failed(description, REASONS.get(stopped.reason, BROKEN), said)
         except Exception:
             log.error("A tool draft failed on an unexpected error.")
-            payload = tool_drafts.failed(description, BROKEN)
+            payload = tool_drafts.failed(description, BROKEN, said)
         # The store may close while Pi stops; then Pi marks the draft failed when it starts.
         with contextlib.suppress(RuntimeError):
-            tool_drafts.finish(store, request, payload, title, summary)
+            if (
+                tool_drafts.finish(store, request, payload, title, summary)
+                and payload["status"] == tool_drafts.NEEDS_DETAIL
+            ):
+                ask(store, {**request, "payload": payload})
 
     def _capabilities(self) -> list[dict]:
         if not self.loop._offers_tools():
@@ -208,7 +226,9 @@ def _open_chat(db, session_id):
     return None
 
 
-def _post(store, session_id, text):
+def _post(store, session_id, text, claim=None):
+    """Conker's stored message in the chat, or the one it continues in; None when there is no
+    such chat or `claim(db, chat)` (run in the same transaction) says not to post."""
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         target = _open_chat(db, session_id)
@@ -223,25 +243,93 @@ def _post(store, session_id, text):
             ).fetchone()
         ):
             return _BUSY
+        if claim is not None and not claim(db, target):
+            return None
         message = submissions.append(db, target, "assistant", text)
         db.commit()
     return message
 
 
-def announce(store, session_id, name, *, sleep=time.sleep):
-    """Conker says in the chat that asked that the tool is live: a stored message, no model call.
-    While the chat is busy it waits in the background; the message, or None."""
-    text = LIVE.format(name=_plain(name))
-    posted = _post(store, session_id, text)
+def _deliver(store, session_id, text, sleep, missed, claim=None):
+    """Post now, or in the background once the chat is free; the message, or None."""
+    posted = _post(store, session_id, text, claim)
     if posted is not _BUSY:
         return posted
 
     def later():
         for _ in range(BUSY_TRIES):
             sleep(BUSY_WAIT)
-            if _post(store, session_id, text) is not _BUSY:
+            if _post(store, session_id, text, claim) is not _BUSY:
                 return
-        log.warning("The chat stayed busy; the note that the tool is live was not posted.")
+        log.warning(missed)
 
     answers.background(later)
     return None
+
+
+def announce(store, session_id, name, *, sleep=time.sleep):
+    """Conker says in the chat that asked that the tool is live: a stored message, no model call.
+    While the chat is busy it waits in the background; the message, or None."""
+    text = LIVE.format(name=_plain(name))
+    missed = "The chat stayed busy; the note that the tool is live was not posted."
+    return _deliver(store, session_id, text, sleep, missed)
+
+
+def ask(store, request, *, sleep=time.sleep):
+    """Conker asks the drafter's question in the chat that asked, as a stored message. The card
+    records the chat (`askedIn`) in the same commit, so the owner's next message there answers
+    it; an answer from the Inbox first means nothing is posted. Waits while the chat is busy."""
+    text = QUESTION.format(question=" ".join(request["payload"]["question"].split()))
+
+    def claim(db, chat):
+        return tool_drafts.mark_asked(db, request, chat)
+
+    missed = "The chat stayed busy; the drafter's question was not posted. It waits in the Inbox."
+    return _deliver(store, request["sessionId"], text, sleep, missed, claim)
+
+
+def ask_waiting(store) -> int:
+    """At start: questions the drafter asked that Pi stopped before posting go to their chats."""
+    waiting = [
+        request
+        for request in tool_drafts.asking(store)
+        if request["sessionId"] and not request["payload"].get("askedIn")
+    ]
+    for request in waiting:
+        ask(store, request)
+    return len(waiting)
+
+
+def answered(loop, session_id, turn_id, text, execution) -> dict | None:
+    """The owner's message answers the drafter's question waiting in this chat: drafting goes on
+    with it and Conker says so, a stored reply instead of a model call. None when no question
+    waits here, so the turn goes on as usual. A call, an AI job's run and an answer to one of
+    Conker's own questions (`conker.ask`) are never taken as the answer."""
+    store, started = loop.store, time.monotonic()
+    asked = [item for item in tool_drafts.asking(store) if item["payload"].get("askedIn")]
+    if not asked or execution.get("callExecution") or native_tools.job_run(store, turn_id):
+        return None
+    with store._connect() as db:
+        if asks.answer_words(db, turn_id) is not None:
+            return None
+        waiting = [
+            item for item in asked if _open_chat(db, item["payload"]["askedIn"]) == session_id
+        ]
+    for request in waiting:
+        if tool_drafts.take_answer(store, request, text):
+            break
+    else:
+        return None
+    drafts = getattr(loop, "drafts", None)
+    if drafts is not None:
+        drafts.kick()
+    message = loop._complete_turn(
+        turn_id, GOING_ON, latency_ms=int((time.monotonic() - started) * 1000)
+    )
+    return {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "acted": False,
+        "message": message,
+        "memory": loop.memory.status(session_id, turn_id),
+    }
