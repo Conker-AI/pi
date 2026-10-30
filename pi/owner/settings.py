@@ -109,3 +109,9 @@ def read(db) -> dict:
 def value(store, setting_id: str, default=None):
     """One stored value for a feature that reads it; the default when the owner never set it."""
     return load(store)["values"].get(setting_id, default)
+
+
+def value_in(db, setting_id: str, default=None):
+    """`value` inside the caller's transaction, for a reader that already holds a connection."""
+    row = db.execute("SELECT vals FROM owner_settings WHERE singleton=1").fetchone()
+    return json.loads(row["vals"]).get(setting_id, default) if row else default

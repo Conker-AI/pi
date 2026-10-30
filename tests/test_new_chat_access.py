@@ -220,13 +220,6 @@ def test_chats_that_exist_and_ai_job_chats_keep_their_own_access(store):
     assert access_of(store, agent_jobs.session_for(store, job["id"])) == "default"
 
 
-# The chats part owns Store._create_session (pi/conversation/store.py). Until it calls
-# prefs.new_chat_access(db) for chats the owner starts, these fail; strict, so wiring it turns
-# them into failures that ask for the marker to go.
-WIRING = "Store._create_session does not read prefs.new_chat_access yet (chats part)"
-
-
-@pytest.mark.xfail(strict=True, reason=WIRING)
 def test_a_new_chat_begins_with_the_saved_access(store, monkeypatch):
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", ADMIN, raising=False)
@@ -238,7 +231,6 @@ def test_a_new_chat_begins_with_the_saved_access(store, monkeypatch):
     assert access_of(store, created.json()["session_id"]) == "full"
 
 
-@pytest.mark.xfail(strict=True, reason=WIRING)
 def test_a_draft_started_as_a_chat_begins_with_the_saved_access(store):
     choose(store, "ai")
     drafts.save_new(store, drafts.NewSave(expected_revision=0, text="Plan my week"))

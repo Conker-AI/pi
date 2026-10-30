@@ -266,7 +266,11 @@ def test_approval_and_reply_failure_keep_same_associations_through_resume(store)
     assert [ref["purpose"] for ref in refs] == ["input", "intermediate", "tool_result", "final"]
 
 
-def test_final_message_and_turn_completion_are_one_commit(store):
+def test_final_message_and_turn_completion_are_one_commit(store, monkeypatch):
+    from pi.turns import restart
+
+    monkeypatch.setattr(restart, "_waiting", {})
+    monkeypatch.setattr(restart, "_start", lambda: None)  # The answer waits; nothing settles it.
     session = store.create_session()
     with store._connect() as db:
         db.executescript(
@@ -274,7 +278,7 @@ def test_final_message_and_turn_completion_are_one_commit(store):
             "WHEN NEW.status='complete' "
             "BEGIN SELECT RAISE(ABORT,'completion failed'); END;"
         )
-    with pytest.raises(sqlite3.IntegrityError, match="completion failed"):
+    with pytest.raises(TurnFailed, match="could not save the answer yet"):
         loop_with(store, Recorder()).run_turn(session, "hello", request_id=REQUEST)
     receipt = submissions.get(store, REQUEST)
     assert receipt["status"] == "running" and receipt["final_message_id"] is None

@@ -13,13 +13,25 @@ here without running anything a second time:
   whether it happened and asking it would leave the chat waiting forever. Pi's records decide:
   filed means the turn waits only for its reply; not filed means nothing happened, and the result
   says so plainly. The call itself is never run again.
+
+The final commit can also fail while Pi keeps running: the database is locked, full or failing.
+`save` tries it again a few times, a little later each time. If every try fails, the answer waits
+here and a small settle (`settle`, every `SETTLE_SECONDS` while an answer waits) saves it once the
+database works again, through the same checks, so the chat is not left `running` until the next
+start. A stop or a steer that arrives meanwhile ends the turn as the startup settle would, and an
+answer the database still refuses after `SETTLE_TRIES` tries ends its turn as failed, in plain
+words. Nothing runs again: the commit only ever ends a turn that is still running.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import sqlite3
+import threading
 import time
+from dataclasses import dataclass
 
 from pi.actions import identities as actions
 from pi.actions.toolgate import ToolResult
@@ -50,6 +62,59 @@ STATES = {
     "failed": "failed; the owner's Inbox says why",
 }
 
+# Seconds between the tries of a final commit that hit a database error, while the turn waits on
+# it (four tries; a locked database also waits out its busy timeout on each).
+RETRY_DELAYS = (0.25, 1.0, 3.0)
+# How often a waiting answer is tried again, and after how many failed tries its turn ends:
+# about ten minutes, long enough for a held lock or a full disk to clear.
+SETTLE_SECONDS = 15.0
+SETTLE_TRIES = 40
+NOT_SAVED = (
+    "Pi could not save the answer yet. It is kept and appears in this chat once the database "
+    "works again."
+)
+# How a turn ends when its waiting answer is not saved, by whether the turn had acted.
+UNSAVED = {
+    False: (
+        "Pi could not save this answer: its database kept failing. Your message is kept; send it "
+        "again to retry."
+    ),
+    True: (
+        "The action ran, but Pi could not save the reply: its database kept failing. Ask for the "
+        "reply; the action will not run again."
+    ),
+}
+STEERED = {
+    False: (
+        "Your steer arrived before Pi could save the answer, so that answer was dropped. Send "
+        "your message again to continue."
+    ),
+    True: (
+        "The action ran. Your steer arrived before Pi could save the reply, so it was dropped. "
+        "Ask for the reply; the action will not run again."
+    ),
+}
+
+
+class NotSaved(Exception):
+    """Every try at the final commit failed in the database; the answer now waits for `settle`."""
+
+
+@dataclass
+class _Waiting:
+    store: object
+    turn_id: str
+    text: str
+    fields: dict
+    held: bool
+    tries: int = 0
+
+
+_waiting: dict[str, _Waiting] = {}
+_lock = threading.Lock()
+_settler: threading.Thread | None = None
+_pause = time.sleep  # The wait between the tries of a live commit.
+
 
 def hold(store, turn_id, text, fields):
     """Write the answer down before the final commit, which removes it again."""
@@ -69,6 +134,164 @@ def drop(store, turn_id):
     """The answer was refused (a steer or a stop); a restart must not bring it back."""
     with store._connect() as db:
         release(db, turn_id)
+
+
+def end(store, turn_id, detail):
+    """End a running turn whose answer was refused or not saved, and drop that answer, in one
+    commit. `detail` is the words, or one entry per whether the turn had acted. A turn the owner
+    stopped ends `cancelled`, as every failed turn does. Returns whether the turn had acted."""
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT acted FROM turns WHERE id=?", (turn_id,)).fetchone()
+        acted = bool(row and row["acted"])
+        store._finish_turn(
+            db,
+            turn_id,
+            "acted_no_reply" if acted else "failed",
+            acted=int(acted),
+            detail=detail[acted] if isinstance(detail, dict) else detail,
+        )
+        release(db, turn_id)
+        db.commit()
+    return acted
+
+
+def save(store, turn_id, text, fields):
+    """The final commit while Pi runs: hold the answer, then save it as the turn's end.
+
+    A database error is tried again after each of RETRY_DELAYS. An error the database raised on
+    purpose (a constraint, a damaged file) is not, as the same try would fail the same way. When
+    the tries are spent the answer waits for `settle` and this raises NotSaved. A refusal (an
+    owner stop, a steer, a turn no longer running) raises at once, as it always did.
+    """
+    from pi.models.providers import ProviderUnavailable
+
+    held = False
+    for attempt, delay in enumerate((*RETRY_DELAYS, None)):
+        try:
+            if not held:
+                hold(store, turn_id, text, fields)
+                held = True
+            return store.complete_turn(turn_id, text, **fields)
+        except sqlite3.OperationalError as exc:
+            failure = exc
+        except sqlite3.DatabaseError as exc:
+            failure = exc
+            break
+        except ProviderUnavailable:
+            raise
+        except RuntimeError:
+            # A try that committed and lost only its answer back: the saved answer stands.
+            saved = _saved(store, turn_id) if attempt else None
+            if saved is None:
+                raise
+            return saved
+        if delay is not None:
+            _pause(delay)
+    _keep(_Waiting(store, turn_id, text, dict(fields), held))
+    log.warning("An answer was not saved (%s); it waits for the database.", type(failure).__name__)
+    raise NotSaved(NOT_SAVED) from failure
+
+
+def _saved(store, turn_id):
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT tm.message_id FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
+            "WHERE tm.turn_id=? AND tm.purpose='final' AND t.status='complete'",
+            (turn_id,),
+        ).fetchone()
+    return store.get_message(row[0]) if row else None
+
+
+def waiting() -> list[str]:
+    """The turns whose answer waits for the database to work again."""
+    with _lock:
+        return list(_waiting)
+
+
+def settle() -> int:
+    """Try each waiting answer once more. Returns how many turns it settled (saved or ended)."""
+    with _lock:
+        entries = list(_waiting.values())
+    settled = 0
+    for entry in entries:
+        if _settle(entry):
+            with _lock:
+                _waiting.pop(entry.turn_id, None)
+            settled += 1
+    return settled
+
+
+def _settle(entry) -> bool:
+    """One more try, through every check of a live commit. True when the turn is settled: saved,
+    or ended the way the startup settle would end it."""
+    from pi.models.providers import ProviderUnavailable
+    from pi.turns import steering
+
+    store, turn_id = entry.store, entry.turn_id
+    try:
+        if not entry.held:
+            hold(store, turn_id, entry.text, entry.fields)
+            entry.held = True
+        store.complete_turn(turn_id, entry.text, **entry.fields)
+        log.info("A waiting answer was saved.")
+        return True
+    except sqlite3.OperationalError as exc:
+        entry.tries += 1
+        if entry.tries < SETTLE_TRIES:
+            return False
+        detail, failure = UNSAVED, exc
+    except sqlite3.DatabaseError as exc:
+        detail, failure = UNSAVED, exc
+    except steering.Pending as exc:
+        # Live, the turn would answer again with the steer; nothing here calls a model.
+        detail, failure = STEERED, exc
+    except ProviderUnavailable as exc:
+        # An owner stop (the turn ends cancelled) or a call that ended.
+        detail, failure = exc.reason, exc
+    except RuntimeError:
+        # The turn ended another way, or this store closed (Pi stopping; the next start settles).
+        with contextlib.suppress(Exception):
+            drop(store, turn_id)
+        return True
+    except Exception as exc:
+        detail, failure = UNSAVED, exc
+    try:
+        end(store, turn_id, detail)
+    except Exception:
+        return False  # Still failing: the next round tries the save again first.
+    log.warning("A waiting answer was not saved (%s); its turn ended.", type(failure).__name__)
+    return True
+
+
+def _keep(entry):
+    global _settler
+    with _lock:
+        _waiting[entry.turn_id] = entry
+        if _settler is None or not _settler.is_alive():
+            _settler = _start()
+
+
+def _start():
+    thread = threading.Thread(target=_run, name="pi-answer-settle", daemon=True)
+    thread.start()
+    return thread
+
+
+def _run():
+    """The settle's own thread, alive only while an answer waits."""
+    global _settler
+    while True:
+        time.sleep(SETTLE_SECONDS)
+        try:
+            settle()
+        except Exception as exc:
+            log.warning("Waiting answers were not settled this round (%s).", type(exc).__name__)
+        with _lock:
+            if not _waiting:
+                if _settler is threading.current_thread():
+                    _settler = None
+                return
 
 
 def recover(store) -> int:

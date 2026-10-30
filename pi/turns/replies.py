@@ -286,11 +286,17 @@ class Replies:
         """A stop racing final persistence must leave a truthful terminal turn.
 
         The answer is held first: if Pi stops before the final commit, the next
-        start saves it instead of losing it (`turns.restart`).
+        start saves it instead of losing it. A database error at the commit is
+        tried again; if it lasts, the answer waits and is saved once the database
+        works again, without a restart (`turns.restart.save`).
         """
-        turn_restart.hold(self.store, turn_id, text, fields)
         try:
-            return self.store.complete_turn(turn_id, text, **fields)
+            return turn_restart.save(self.store, turn_id, text, fields)
+        except turn_restart.NotSaved as exc:
+            # The turn stays running, not failed: its answer exists and is saved later.
+            if fields.get("acted"):
+                raise ActedWithoutReply(turn_id, str(exc)) from exc
+            raise TurnFailed(str(exc), turn_id) from exc
         except turn_steering.Pending:
             # Stale after the steer: the next attempt answers again, and a restart
             # before it does must not save this one.
@@ -312,14 +318,6 @@ class Replies:
             )
             raise
         except ProviderUnavailable as exc:
-            turn_restart.drop(self.store, turn_id)
-            acted = bool((self.store.get_turn(turn_id) or {}).get("acted"))
-            self.store.finish_turn(
-                turn_id,
-                "acted_no_reply" if acted else "failed",
-                acted=int(acted),
-                detail=exc.reason,
-            )
-            if acted:
+            if turn_restart.end(self.store, turn_id, exc.reason):
                 raise ActedWithoutReply(turn_id, exc.reason) from exc
             raise TurnFailed(exc.reason, turn_id) from exc
