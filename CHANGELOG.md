@@ -171,6 +171,14 @@ be a decision with visible consequences.
   set), so a replay or retry sees the same words and a change reaches the next turn only. The
   owner's text is framed as data: it grants no permission, and approvals still judge only the
   owner's message in the chat.
+- **Tests keep their files in pytest's `tmp_path` only.** `tests/conftest.py` stops and fails any
+  test that writes into the repository (a file opened for writing, a new folder, a rename, a
+  delete, a SQLite database that is not read-only), naming the path, in every pytest-xdist worker;
+  `__pycache__` and `.pytest_cache` are left alone. A run whose `--basetemp` or temp directory is
+  inside the checkout is refused before any test starts. No test wrote into the repository; the
+  writes came from runs given `--basetemp=.test-tmp/...` and from the three mutation drills, which
+  now keep their copies in the OS temp directory (the audit drill also puts `--basetemp` beside
+  its copy, since the copy brings the guard along).
 
 ## 0.12.0
 

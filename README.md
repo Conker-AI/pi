@@ -138,7 +138,9 @@ python -m pytest -q -n auto   # parallel: minutes, not the better part of an hou
 ruff check . && ruff format --check .
 ```
 
-The owner-terminal tests need Linux; everything else runs anywhere.
+The owner-terminal tests need Linux; everything else runs anywhere. Tests keep their files in
+pytest's `tmp_path`: `tests/conftest.py` fails any test that writes into the checkout, naming the
+path, and refuses a `--basetemp` inside it.
 
 ```text
 pi/                Runtime, one package per type
