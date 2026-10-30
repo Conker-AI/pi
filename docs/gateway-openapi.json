@@ -758,6 +758,33 @@
               "type": "string",
               "title": "Identity"
             }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "docx",
+                "pdf",
+                "pptx",
+                "xlsx",
+                "csv",
+                "json"
+              ]
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "description": "An earlier version to export, 1 to 100; the current one when left out.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
@@ -804,6 +831,20 @@
             "schema": {
               "type": "string",
               "title": "Message Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "docx",
+                "pdf",
+                "pptx",
+                "xlsx"
+              ]
             }
           }
         ],

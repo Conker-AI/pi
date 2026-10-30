@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Download parameters are in the gateway's OpenAPI.** The artifact and chat-answer download
+  routes now list their `format` query parameter (and the artifact's optional `version`, 1 to
+  100) in `docs/gateway-openapi.json`, so generated clients see them. Behaviour is unchanged.
+
 ## 0.15.0
 
 - **Artifact downloads take a version.** `GET /api/control/pi/artifacts/{id}/download` accepts an

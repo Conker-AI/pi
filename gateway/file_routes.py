@@ -31,6 +31,25 @@ ARTIFACT_FORMATS = {**DOCUMENTS, **NATIVE}
 ANSWER_FORMATS = DOCUMENTS
 SOURCES = ("chatgpt", "claude")
 
+# The download routes read their query by hand (session first, one error shape); this lists it
+# in OpenAPI so generated clients see it.
+def format_param(formats: dict) -> dict:
+    return {
+        "name": "format",
+        "in": "query",
+        "required": True,
+        "schema": {"type": "string", "enum": list(formats)},
+    }
+
+
+VERSION_PARAM = {
+    "name": "version",
+    "in": "query",
+    "required": False,
+    "description": "An earlier version to export, 1 to 100; the current one when left out.",
+    "schema": {"type": "integer", "minimum": 1, "maximum": 100},
+}
+
 
 def too_large() -> AuthError:
     limit = MAX_IMPORT_BYTES // (1024 * 1024)
@@ -82,7 +101,10 @@ def router(app, session, admit_write, stream_transport):
             ),
         )
 
-    @routes.get("/api/control/pi/artifacts/{identity}/download")
+    @routes.get(
+        "/api/control/pi/artifacts/{identity}/download",
+        openapi_extra={"parameters": [format_param(ARTIFACT_FORMATS), VERSION_PARAM]},
+    )
     async def artifact_download(identity: str, request: Request):
         """One artifact as a file: DOCX, PDF, PPTX or XLSX, or CSV for a table and JSON for a
         chart, diagram or media. An optional `version` (1 to 100) exports an earlier version."""
@@ -93,7 +115,10 @@ def router(app, session, admit_write, stream_transport):
             request, f"/artifacts/{identity}/download", ARTIFACT_FORMATS, versioned=True
         )
 
-    @routes.get("/api/control/pi/sessions/{session_id}/messages/{message_id}/download")
+    @routes.get(
+        "/api/control/pi/sessions/{session_id}/messages/{message_id}/download",
+        openapi_extra={"parameters": [format_param(ANSWER_FORMATS)]},
+    )
     async def answer_download(session_id: str, message_id: str, request: Request):
         """One completed chat answer as a DOCX, PDF, PPTX or XLSX file."""
         if not re.fullmatch(r"ses_[0-9a-f]{16}", session_id) or not re.fullmatch(
