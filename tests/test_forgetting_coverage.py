@@ -31,6 +31,8 @@ IDS_ONLY = {
     "agent_job_hooks",
     # A fingerprint of a watched tool's answer and when it was read; never the answer.
     "agent_job_watch",
+    # ToolGate approval request ids a forgotten chat's parked turns waited on, to withdraw.
+    "approval_withdrawals",
     "attachment_removals",
     "attachment_reservations",
     "call_events",
@@ -43,11 +45,16 @@ IDS_ONLY = {
     "continuity_seen",
     "draft_starts",
     "filesystem_reads",
+    # What Conker made on its own (a memory id or a job id) and its chat: kept so forgetting the
+    # chat can undo it; never the memory's or the job's text.
+    "keep_results",
     "memory_forget_operations",
     "message_attachment_sets",
     "message_attachments",
     "message_fork_requests",
     "message_privacy",
+    # Chats a webhook payload reached: an id, a reason code and a time.
+    "outside_sessions",
     "proactive_reservations",
     "proposal_watermark",
     "research_model_calls",

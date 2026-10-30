@@ -89,7 +89,7 @@ CASES = [
             'if (\n            not row\n            or row["expires"] <= now\n'
             '            or (\n                row["authenticated"]\n'
             '                and (row["verified_at"] is None or '
-            'row["verified_at"] + self.idle <= now)\n            )\n        ):'
+            'row["verified_at"] + idle <= now)\n            )\n        ):'
         ),
         "if not row:",
         STORE + "test_idle_and_absolute_expiry",

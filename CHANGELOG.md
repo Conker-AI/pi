@@ -6,6 +6,59 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Local model settings are read** (`pi/models/local_settings.py`), on every Ollama request:
+  chats, helper roles and `/inference` alike; hosted providers are unchanged. Keep loaded
+  (`models.local.keep_loaded`, minutes kept to 5..1440, or `"until_restart"`) is sent as
+  `keep_alive`; Local context size (`models.local.context`, kept to 2048..32768 and never above
+  `PI_OLLAMA_CONTEXT_LENGTH` or `OLLAMA_CONTEXT_LENGTH` when Pi's environment has one) as
+  `options.num_ctx`; CPU threads (`models.local.threads`, 1 to the host's threads) as
+  `options.num_thread`. Unset, malformed or 0 threads sends nothing, so Ollama's own settings
+  (`OLLAMA_KEEP_ALIVE` 24h, `OLLAMA_CONTEXT_LENGTH`) still apply. A context too large for the
+  machine makes local answers fail as an unavailable model, never Pi (docs/routing.md).
+- **Sign out when idle is enforced** (`session.idle_timeout_minutes`). The gateway learns the
+  owner's `idleTimeoutMinutes` from every preferences document it relays (a read, or a
+  password-verified save) and keeps it in its own database, so a restart or Pi being down never
+  loosens it. A browser stays unlocked that long after the password was last entered; every
+  signed-in browser follows at once. `GATEWAY_IDLE_TIMEOUT_SECONDS` (default 30 minutes) is the
+  host's ceiling: a longer choice, and 0, mean the host's limit, which also applies until the
+  gateway has seen a document. A save always wins; an older read may only shorten the window.
+- **The access a new chat starts with** has a password-checked home: `newChatAccess`
+  (`default`, `ask`, `ai` or `full`, default `default`) in the owner preferences, which the
+  gateway saves only with a fresh password proof. `pi.owner.preferences.new_chat_access(db)`
+  reads it inside the transaction that creates a chat the owner starts; chats that exist, AI
+  job chats and forks keep their own switch. Creating chats does not call it yet.
+- The dashboard may be installed as an app: its pages allow the web app manifest
+  (`manifest-src 'self'`). Built files under `assets/` whose names carry a content hash are
+  cached for a year (`immutable`); everything else stays `no-store`.
+- **Conker's own actions need the owner (security review 2026-10-29, F-20 to F-27, F-29).**
+  `conker.schedule` asks by default (his settings for an agent or a chat can still loosen it;
+  his own words no longer make a job), jobs record `createdBy`, and a job Conker made on its own
+  reserves from the daily proactive budget before each run and never counts as his words; no
+  AI-job run may schedule or draft a tool; Conker's requests make no job while 20 AI jobs are on
+  and at most 3 a day on its own. A private chat is never offered `conker.remember` or
+  `conker.schedule`, and a job approved from one gets a private chat. Outside content now also
+  covers recalled memories, attachments, project sources and answers to Conker's questions, and
+  a webhook payload marks its whole chat (new table `outside_sessions`; none of that chat's
+  messages goes to memory). In AI decides the hard stop is the owner's Inbox card template
+  (send, publish, ship, delete, pay; read from ToolGate's tool list when it lists `card`), not the
+  reviewer's own answers, and an MCP server's descriptions never reach the reviewer. Keep
+  memories go to MemoryGate with `origin: "conker"`; Keep results are linked to their chat
+  (`keep_results`), and forgetting a chat turns off its Keep jobs, forgets its Keep memories and
+  withdraws its parked turns' ToolGate approval requests once Pi runs again
+  (`approval_withdrawals`, health check `forget_followups`). At most 3 of Conker's requests wait
+  per chat and 20 in all. `memory.across_chats` is on only when unset or exactly true.
+- **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
+  (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
+  Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
+  add privacy, are saved with the chat when it starts (existing chats and forks keep theirs), and
+  a choice sent for that chat still wins. Name chats automatically (`chats.names.auto`) off stops
+  the name after the first answer (asking for one still works); Name style (`chats.names.style`:
+  short, descriptive, emoji) sets the naming rule. Queue messages (`chats.queue`) off refuses new
+  queued messages with `queue_off`; Queued messages (`chats.queue_max`, 1 to 5, default 5) sets
+  how many wait. Messages already queued stay and run. Largest upload (`files.upload_limit`, 1 to
+  500 MB) refuses a bigger file with 413 `upload_limit`, before streaming when its length is
+  declared; with no value set there is still no limit (the 2026-10-18 decision). A value of the
+  wrong type or out of range counts as the default.
 - **Interactive answers.** With the owner setting `chats.interactive_answers` (Settings, Chats,
   Interactive answers: Auto, On, Off; Auto by default) a turn is taught the catalog of parts
   Conker's dashboard draws from an ```` ```openui ```` block: tables, charts, choices to tap, short

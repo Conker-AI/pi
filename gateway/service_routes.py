@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 import httpx
@@ -202,14 +203,34 @@ def router(app, session, forward, admit_write, stream_transport):
                 admit_write(request, body)
         from starlette.concurrency import run_in_threadpool
 
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.pi_url.rstrip("/") + target,
-            "X-Pi-Owner-Key",
-            app.state.config.pi_owner_key,
-            body,
-            request.scope["query_string"],
-        )
+        def relay():
+            response = forward(
+                request.method,
+                app.state.config.pi_url.rstrip("/") + target,
+                "X-Pi-Owner-Key",
+                app.state.config.pi_owner_key,
+                body,
+                request.scope["query_string"],
+            )
+            if target == "/owner/preferences" and response.status_code == 200:
+                learn_sign_out_window(app.state.auth, response, saved=request.method == "POST")
+            return response
+
+        return await run_in_threadpool(relay)
 
     return routes
+
+
+def learn_sign_out_window(auth, response, *, saved: bool) -> None:
+    """Keep the owner's sign-out window from a preferences document Pi just returned.
+
+    Every read and save of his preferences passes here, so whatever Settings shows him is what the
+    gateway enforces from then on. A document without a readable value changes nothing.
+    """
+    try:
+        document = json.loads(response.body)
+        revision = document["revision"]
+        minutes = document["preferences"]["idleTimeoutMinutes"]
+    except (ValueError, TypeError, KeyError):
+        return
+    auth.owner_window(revision, minutes, saved=saved)
