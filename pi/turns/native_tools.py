@@ -1,15 +1,19 @@
 """Conker's own tools: a cron job, a tool draft, a memory or a question, under his access layers.
 
 They are offered next to the owner's published tools and follow the same layers (chat > agent >
-tool default, see `pi.turns.access`). Remembering and scheduling are Keep: allowed by default, done
-at once and listed in Inbox Handled. Anything his settings say to ask about is filed as a change
-request (`pi.agents.change_requests`) that he approves in the Inbox. A tool draft is always filed:
-the request is made at once and Pi drafts it in the background (`pi.turns.tool_drafting`), so the
-chat answers without waiting. Every one is recorded as a request either way. Nothing here acts
-outside Pi's own store and memory (ADR-0005).
-The companion gets them all; another agent gets those selected for it, like any tool. A question
-(`conker.ask`) is always allowed: it goes to his Inbox and his answer comes back to the chat as his
-next message (`pi.agents.asks`).
+tool default, see `pi.turns.access`). Remembering is Keep: allowed by default, done at once and
+listed in Inbox Handled. Scheduling asks by default: a recurring job runs instructions the model
+wrote, so it is filed as a change request (`pi.agents.change_requests`) he approves in the Inbox,
+unless his settings for an agent or a chat loosen it. A tool draft is always filed: the request is
+made at once and Pi drafts it in the background (`pi.turns.tool_drafting`), so the chat answers
+without waiting. Every one is recorded as a request either way. Nothing here acts outside Pi's own
+store and memory (ADR-0005).
+The companion gets them all; another agent gets those selected for it, like any tool. A private
+chat (memory off, or inheriting it) is never offered remembering or scheduling: neither may carry
+what was said there into memory or into a job. A run of an AI job is never offered scheduling or a
+tool draft, so no job makes another. Both are refused again when called. A question (`conker.ask`)
+is always allowed: it goes to his Inbox and his answer comes back to the chat as his next message
+(`pi.agents.asks`).
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ import re
 
 from pi.actions.toolgate import Tool, ToolResult
 from pi.agents import asks, change_requests, tool_drafts
+from pi.agents.profiles import AgentError
+from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
 
 SCHEDULE = "conker.schedule"
@@ -71,7 +77,7 @@ CATALOG = (
                 "description": "For weekly: sunday to saturday",
             },
         ],
-        "auto",
+        "owner_confirmation",
     ),
     Tool(
         DRAFT_TOOL,
@@ -142,6 +148,59 @@ def owns(tool_id: str) -> bool:
     return tool_id in IDS
 
 
+# Never offered, and refused, in a private chat or in a run of an AI job.
+PRIVATE_REFUSED = {REMEMBER, SCHEDULE}
+JOB_REFUSED = {SCHEDULE, DRAFT_TOOL}
+
+
+def private(store, session_id, execution) -> bool:
+    """Memory is off for this turn: in its frozen settings, the chat's own, or a floor it inherits
+    from messages it carries. Anything unreadable counts as private."""
+    if ((execution or {}).get("privacy") or {}).get("memoryDisabled") not in (False, None):
+        return True
+    if not session_id:
+        return False
+    try:
+        with store._connect() as db:
+            db.execute("BEGIN")
+            floor = session_settings.inherited_privacy(db, session_id)
+            live = session_settings.source_privacy(db, session_id)
+    except AgentError:
+        return True
+    return floor["memoryDisabled"] or live is None or bool(live["memoryDisabled"])
+
+
+def job_run(store, turn_id) -> bool:
+    with store._connect() as db:
+        return agent_jobs.run_of(db, turn_id) is not None
+
+
+def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
+    """Why Conker may not use this tool in this turn, in words it can pass on; None if it may."""
+    if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
+        return (
+            "This chat is private (memory off), so nothing from it is remembered or scheduled. "
+            "Tell the owner they can do it from a chat with memory on."
+        )
+    if tool_id in JOB_REFUSED and job_run(store, turn_id):
+        return (
+            "A scheduled AI job cannot make another job or draft a tool. If one is needed, say "
+            "so in the reply and the owner can ask for it."
+        )
+    return None
+
+
+def offered(loop, execution, session_id, turn_id) -> list[Tool]:
+    """Conker's own tools for this turn: the agent's selection, minus what the turn may not use."""
+    return [
+        tool
+        for tool in catalog(execution)
+        if not refused(
+            loop.store, tool.id, session_id=session_id, turn_id=turn_id, execution=execution
+        )
+    ]
+
+
 def _text(args, name, limit, required=True):
     value = args.get(name)
     if not isinstance(value, str) or not value.strip():
@@ -186,9 +245,12 @@ def _timing(args) -> tuple[dict, bool, str]:
 
 
 def _done(loop, request, tool_id) -> ToolResult:
-    """Make the request real now; if that cannot happen (memory not connected), it waits."""
+    """Make the request real now in Conker's name; if that cannot happen (memory not connected,
+    Conker's daily job limit reached), it waits for the owner."""
     try:
-        decided = change_requests.approve(loop.store, request["id"], memory=loop.remember)
+        decided = change_requests.approve(
+            loop.store, request["id"], memory=loop.remember, by="conker"
+        )
     except change_requests.ChangeRequestError:
         return _filed(request, tool_id)
     if decided["state"] != "approved":
@@ -228,7 +290,11 @@ def _filed(request, tool_id) -> ToolResult:
 
 def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> ToolResult:
     """Validate the arguments and file one change request, made real at once when `run` (his
-    access layers allow it). A bad argument is an answer, not a failure."""
+    access layers allow it). A bad argument, or a tool this turn may not use, is an answer, not a
+    failure."""
+    why = refused(loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution)
+    if why:
+        return _refusal(tool_id, why)
     try:
         if tool_id == ASK:
             asked = asks.file(
@@ -252,6 +318,9 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             name = _text(args, "name", 80)
             instructions = _text(args, "instructions", 4000)
             timing, clock, when = _timing(args)
+            full = agent_jobs.room(loop.store, "owner")
+            if full:
+                return _refusal(tool_id, full)
             agent = execution.get("agentId") if execution else None
             payload = {
                 "name": name,
@@ -306,7 +375,13 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             turn_id=turn_id,
         )
         return _done(loop, request, tool_id) if run else _filed(request, tool_id)
+    except change_requests.Full as full:
+        return _refusal(tool_id, str(full))
     except ValueError as invalid:
         return ToolResult(
             ok=False, result={"status": "invalid", "message": str(invalid)}, tool_id=tool_id
         )
+
+
+def _refusal(tool_id, message) -> ToolResult:
+    return ToolResult(ok=False, result={"status": "refused", "message": message}, tool_id=tool_id)

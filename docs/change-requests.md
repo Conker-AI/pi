@@ -1,8 +1,9 @@
 # Change requests: Conker prepares, the owner verifies (2026-10-25)
 
-> Since 2026-10-26 Conker's own tools follow the access layers (docs/access.md): remembering and
-> scheduling are Keep and happen at once (still recorded as approved requests, listed in Handled);
-> a tool draft, and anything his settings say to ask about, waits as below.
+> Since 2026-10-26 Conker's own tools follow the access layers (docs/access.md). Since 2026-10-29
+> only remembering is Keep by default (done at once, still recorded as an approved request, listed
+> in Handled); scheduling waits for the owner unless his settings for an agent or a chat loosen
+> it; a tool draft always waits, as below. See "What Conker makes on its own" at the end.
 
 Conker can prepare anything the owner could make by hand, but never make it real on its own.
 Three of its own tools (`pi/turns/native_tools.py`) are offered to the companion next to the owner's
@@ -15,14 +16,16 @@ owner did not leave tools out at setup:
 | `conker.draft_tool` | a tool request, drafted in the background from the tools Conker can use (see below) | once it is ready, the owner's browser saves it in ToolGate's editor and reports the draft id; the owner publishes it there |
 | `conker.remember` | one stated fact | stores the exact text through MemoryGate's correction capability (`PUT /runtime/corrections/remember/{request id}`), so a retry never stores it twice; if memory is not connected or does not answer, the request stays open (503) |
 
-Calling one only records a change request (`pi/agents/change_requests.py`) and answers at once with
-"waiting for the owner" (a tool request: "drafting"). A request is never edited after it is filed:
+Calling one records a change request (`pi/agents/change_requests.py`) and answers at once with
+"waiting for the owner" (a tool request: "drafting"), unless his access settings let it go ahead
+(Keep). A request is never edited after it is filed:
 what the owner approves is exactly what Conker asked for. The one exception is a tool request,
 whose draft Pi fills in after filing. Bad arguments are an answer to the model, not a request.
 
-Nothing here acts outside Pi's own store (ADR-0005), and Pi holds no ToolGate authority: tool drafts
-reach ToolGate only through the owner's browser. A prompt attack on Conker can therefore at worst
-leave a request the owner declines. Conker's own tools do not count as tool use for model routing.
+Nothing here acts outside Pi's own store and memory (ADR-0005), and Pi holds no ToolGate authority:
+tool drafts reach ToolGate only through the owner's browser. With the default settings a prompt
+attack on Conker can therefore at worst leave a request the owner declines, or a memory stored as
+Conker's own (below). Conker's own tools do not count as tool use for model routing.
 
 ## Tool requests (2026-10-29)
 
@@ -85,6 +88,31 @@ owner's password-verified save in Tools already happened, so this records the id
 signed-in session), `POST .../decline` (signed-in session only).
 `GET /tools` lists Conker's own tools first, so the owner sees everything the AI can call. The Inbox
 lists open requests (`kind: "change-request"`). Forgetting a chat deletes its requests.
+
+## What Conker makes on its own (2026-10-29)
+
+- **Private chats:** a chat with memory off (or inheriting it from messages it carries, or with a
+  message said while it was off) is never offered `conker.remember` or `conker.schedule`, and a
+  call is refused (`status: "refused"`). A job the owner approves from a request filed in a chat
+  that is private by then gets a private chat of its own (`privacy` in the job's definition),
+  kept for every replacement chat.
+- **Jobs:** each job records `createdBy`: `"owner"` (made by hand, or by his approval here) or
+  `"conker"` (made at once where his settings let it). A job Conker made on its own reserves one
+  suggestion from his daily proactive budget before each run (quiet hours, his proactivity switch
+  and the daily limit hold it back, with no model call), and its instructions never count as his
+  own words. No run of any AI job is offered `conker.schedule` or `conker.draft_tool`. Conker's
+  requests make no job while 20 AI jobs are on (refused, or 409 `job_limit` on approval), and
+  Conker makes at most 3 a day on its own; a fourth waits for his approval.
+- **Memories:** a Keep memory is stored with `"origin": "conker"` (MemoryGate keeps it as an
+  assistant statement, medium confidence) under the key `<request id>-conker`; his approval
+  stores his words as his (`origin` left out) under the request id, so the two never collide.
+- **Links:** every Keep result (the AI job, or a memory MemoryGate stored new) is recorded apart
+  from the request, with its chat (`keep_results`, ids only). Forgetting the chat turns those jobs
+  off (marked `turnedOff: "chat_forgotten"`, never deleted) and has Pi forget those memories once
+  it runs again (docs/forgetting.md).
+- **Limits:** at most 3 of Conker's requests wait per chat and 20 in all; past that a call answers
+  `status: "refused"` with a sentence Conker passes on. The owner's own requests (`/tool-drafts`)
+  are not limited.
 
 CLI parity: `conker inspect change-requests` lists open requests; `conker apply requests FILE`
 takes `{"operation": "approve" | "decline", "id": "creq_..."}`,

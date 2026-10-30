@@ -9,10 +9,20 @@ built in: a weekly life review, a deadline watch or a follow-up with friends are
 Repeating (interval) jobs skip the owner's quiet hours; a job set for a time of day runs then.
 When the reply has something for the owner, an Inbox note names it in one line and links to the
 chat. A reply of exactly NOTHING records the run and stays quiet.
+
+A job Conker made on its own (`createdBy: "conker"`, only when the owner's access settings let
+conker.schedule run without asking) is held tighter, since the owner never read its instructions:
+each run first reserves one suggestion from his daily proactive budget (so quiet hours, his
+proactivity switch and the daily limit apply), and its instructions never count as his own words
+(`pi.turns.access.owner_text`). No job run may make another job or draft a tool. Conker's requests
+make no job once `MAX_ENABLED` AI jobs are on, and Conker makes at most `CONKER_PER_DAY` a day by
+itself; past that its request waits for the owner. A job asked for in a private chat gets a
+private chat of its own.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import time
 import uuid
@@ -21,8 +31,8 @@ from datetime import UTC, datetime
 from pi.conversation import submissions
 from pi.core.errors import ServiceError
 from pi.owner import preferences as prefs
-from pi.schedule import agent_hooks, agent_triggers, jobs
-from pi.schedule.job_models import AgentJobCreate, AgentTarget, Definition
+from pi.schedule import agent_hooks, agent_triggers, jobs, proactive_budget
+from pi.schedule.job_models import AgentJobCreate, AgentTarget, Definition, JobPrivacy
 from pi.turns.failures import TurnFailed
 
 QUIET = "NOTHING"
@@ -37,6 +47,15 @@ PREAMBLE = (
 MAX_TITLE = 160
 MAX_DETAIL = 400
 NOTE_ID = r"^note_[a-f0-9]{32}$"
+MAX_ENABLED = 20
+CONKER_PER_DAY = 3
+# Why a run of a job Conker made was held back (the owner's proactive budget refused it).
+HELD = {
+    "quiet_hours": "it is the owner's quiet hours.",
+    "proactivity_off": "the owner turned proactive work off.",
+    "urgent_only": "the owner allows only urgent proactive work.",
+    "daily_budget_suggestions": "the owner's daily limit for Conker's own work is used up.",
+}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_job_sessions (
@@ -72,8 +91,11 @@ def quiet(store, instant: float) -> bool:
     return prefs.quiet_now(preferences, datetime.fromtimestamp(instant, UTC))
 
 
-def create(store, body: AgentJobCreate, now=None):
-    """A new AI job and its own chat. The browser can create these, never raw tool jobs."""
+def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy=None):
+    """A new AI job and its own chat. The browser can create these, never raw tool jobs.
+
+    `created_by` is "conker" only for a job Conker made without the owner's approval; `privacy`
+    carries a private chat's flags to the job's own chat."""
     body = AgentJobCreate.model_validate(body.model_dump())
     definition = Definition(
         name=body.name,
@@ -84,12 +106,113 @@ def create(store, body: AgentJobCreate, now=None):
         enabled=body.enabled,
         target=AgentTarget(kind="agent", clock=body.clock),
         watch=body.watch,
+        createdBy=created_by,
+        privacy=JobPrivacy.model_validate(privacy) if privacy else None,
     )
     job = jobs.create(store, definition, now=now)
-    session_id = store.create_session(title=body.name, agent_id=body.agentId)
+    session_id = _new_session(store, definition.model_dump())
     with store._connect() as db:
         db.execute("INSERT INTO agent_job_sessions VALUES (?,?)", (job["id"], session_id))
     return jobs.get_job(store, job["id"])
+
+
+def _new_session(store, definition) -> str:
+    flags = {key: True for key, on in (definition.get("privacy") or {}).items() if on}
+    return store.create_session(
+        title=definition["name"], agent_id=definition["agentId"], privacy=flags or None
+    )
+
+
+def room(store, created_by, now=None) -> str | None:
+    """Why Conker's request cannot make one more AI job now, in plain words; None when it can."""
+    now = time.time() if now is None else now
+    with store._connect() as db:
+        enabled = db.execute(
+            "SELECT COUNT(*) FROM scheduled_jobs WHERE json_extract(definition,'$.target.kind')="
+            "'agent' AND json_extract(definition,'$.enabled')=1"
+        ).fetchone()[0]
+        made = db.execute(
+            "SELECT COUNT(*) FROM scheduled_jobs WHERE created_at>? "
+            "AND json_extract(definition,'$.createdBy')='conker'",
+            (now - 86400,),
+        ).fetchone()[0]
+    if enabled >= MAX_ENABLED:
+        return (
+            f"{MAX_ENABLED} AI jobs are already on, so no new one was made. The owner can turn "
+            "one off first."
+        )
+    if created_by == "conker" and made >= CONKER_PER_DAY:
+        return (
+            f"Conker already made {CONKER_PER_DAY} AI jobs on its own today; another one waits "
+            "for the owner's approval."
+        )
+    return None
+
+
+def run_of(db, turn_id) -> dict | None:
+    """The definition of the AI-job run a turn carries out; None for any other turn."""
+    if not turn_id:
+        return None
+    row = db.execute(
+        "SELECT r.definition FROM scheduled_runs r JOIN turn_submissions s ON s.request_id=r.id "
+        "WHERE s.turn_id=?",
+        (turn_id,),
+    ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def made_by(db, turn_id) -> str | None:
+    """Who made the job this turn runs ("owner" or "conker"), or None for any other turn."""
+    definition = run_of(db, turn_id)
+    return definition.get("createdBy", "owner") if definition else None
+
+
+def admit(store, run_id, definition, now=None) -> str | None:
+    """Reserve one suggestion from the owner's daily proactive budget for a run of a job Conker
+    made on its own, the way proposals reserve, before any model is asked. Plain words when it
+    is held back; None when it may run. The owner's own jobs run on his schedule, as he set it."""
+    if definition.get("createdBy") != "conker":
+        return None
+    with store._connect() as db:
+        if db.execute(
+            "SELECT 1 FROM proactive_reservations WHERE request_id=?", (run_id,)
+        ).fetchone():
+            return None  # Admitted before: a replay or an approval resuming the same run.
+    instant = datetime.fromtimestamp(now, UTC) if now is not None else datetime.now(UTC)
+    budget = proactive_budget.status(store, now=instant)
+    try:
+        proactive_budget.reserve(
+            store,
+            proactive_budget.Request(
+                request_id=run_id,
+                expected_revision=budget["preferenceRevision"],
+                proposed=prefs.Usage(suggestions=1, researchMinutes=0, costCents=0),
+            ),
+            now=instant,
+        )
+    except proactive_budget.Denied as exc:
+        return HELD.get(exc.reasons[0], "the owner's limits held it back.")
+    return None
+
+
+def turn_off(db, job_ids, reason="chat_forgotten") -> None:
+    """Inside the caller's transaction (forgetting): switch these jobs off, say why, and withdraw
+    their runs that have not started. Never deletes a job; the owner can turn it back on."""
+    for job_id in job_ids:
+        row = db.execute("SELECT definition FROM scheduled_jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            continue
+        definition = Definition.model_validate_json(row[0])
+        definition = definition.model_copy(update={"enabled": False, "turnedOff": reason})
+        db.execute(
+            "UPDATE scheduled_jobs SET revision=revision+1,definition=? WHERE id=?",
+            (Definition.model_validate(definition.model_dump()).model_dump_json(), job_id),
+        )
+        db.execute(
+            "UPDATE scheduled_runs SET status='cancelled' WHERE job_id=? "
+            "AND status IN ('ready','awaiting_budget')",
+            (job_id,),
+        )
 
 
 def session_for(store, job_id) -> str | None:
@@ -106,7 +229,7 @@ def _open_session(store, job_id, definition) -> str:
     session = store.get_session(session_id) if session_id else None
     if session is not None and session["status"] == "open":
         return session_id
-    replacement = store.create_session(title=definition["name"], agent_id=definition["agentId"])
+    replacement = _new_session(store, definition)
     with store._connect() as db:
         db.execute(
             "INSERT INTO agent_job_sessions VALUES (?,?) "
@@ -173,9 +296,16 @@ class AgentJobs:
         if row is None:
             return {"status": "failed", "reason": "Run not found."}
         definition = Definition.model_validate_json(row["definition"]).model_dump()
+        held = admit(self.store, run_id, definition, now)
+        if held:
+            return {"status": "failed", "code": "HELD_BACK", "reason": "Held back: " + held}
         session_id = _open_session(self.store, row["job_id"], definition)
         reason = ""
         if agent_hooks.started_by_hook(row["request_id"]):
+            from pi.turns import access
+
+            # From now on the whole chat holds someone else's text, and none of it goes to memory.
+            access.mark_outside(self.store, session_id)
             sent = agent_hooks.take(self.store, run_id) or "{}"
             reason = (
                 "This run started because its webhook was called. What the caller sent is below. "
