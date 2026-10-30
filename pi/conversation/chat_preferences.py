@@ -1,4 +1,5 @@
-"""The owner's chat settings Pi reads: new-chat privacy, chat names, the queue and uploads.
+"""The owner's chat settings Pi reads: new-chat privacy, chat names, suggestions, the queue and
+uploads.
 
 Each value comes from the owner's settings document (`pi.owner.settings`), which holds
 preferences, never authority. Every reader here checks its value again and uses the setting's
@@ -17,11 +18,13 @@ INCOGNITO = "chats.default_incognito"
 HELPERS = "privacy.helpers"
 NAMES_AUTO = "chats.names.auto"
 NAMES_STYLE = "chats.names.style"
+SUGGESTIONS_COUNT = "chats.suggestions_count"
 QUEUE = "chats.queue"
 QUEUE_MAX = "chats.queue_max"
 UPLOAD_LIMIT = "files.upload_limit"
 
 NAME_STYLES = ("short", "descriptive", "emoji")
+SUGGESTIONS_MAX = 3  # the most suggestions one ask returns; the setting picks 1 to this
 QUEUE_LIMIT = 5  # the most a chat queue ever holds; the setting picks 1 to this
 UPLOAD_MAX_MB = 500
 MIB = 1024 * 1024
@@ -59,6 +62,11 @@ def name_style(db) -> str:
     """Name style: short, descriptive or emoji; short for anything else."""
     value = _value(db, NAMES_STYLE)
     return value if value in NAME_STYLES else "short"
+
+
+def suggestions_count(db) -> int:
+    """Suggestions shown: 1 to 3 next-message suggestions; 2 for anything else."""
+    return _whole(_value(db, SUGGESTIONS_COUNT), 1, SUGGESTIONS_MAX) or 2
 
 
 def queue_on(db) -> bool:
