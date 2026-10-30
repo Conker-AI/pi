@@ -55,6 +55,16 @@ Pi never runs a model call or an action again on its own after a restart. The re
 | While one of Conker's own tools (`conker.*`) was in flight | Settled from Pi's records: if it filed its Inbox request or question, `acted_no_reply` (ask for the reply); if not, `interrupted` with a result saying nothing was done. |
 | After an action's result was recorded, before the reply | `acted_no_reply`; resuming asks only for the reply. |
 
+The final save can also fail while Pi keeps running (the database is locked, full or failing). Pi
+tries it again three times, 0.25, 1 and 3 seconds apart. If it still fails the request answers "Pi
+could not save the answer yet. It is kept and appears in this chat once the database works again."
+and the turn stays `running` while Pi tries again every 15 seconds; the answer is saved as soon as
+the database works, with no restart and no new model call. A stop or a steer sent meanwhile ends
+the turn as it would at a restart. A save the database itself refuses (a constraint), or one still
+failing after 40 tries while other writes work, ends the turn `failed` ("Pi could not save this
+answer: its database kept failing. Your message is kept; send it again to retry.") or, if it had
+acted, `acted_no_reply`, so the chat is never left waiting.
+
 ## Status vocabulary
 
 `/health` reports `ok`, `degraded`, `unavailable`, `not_configured` or `unknown` per check.

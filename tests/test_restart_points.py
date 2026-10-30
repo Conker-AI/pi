@@ -6,7 +6,6 @@ the receipt by request id the way the dashboard does: the outcome is true, nothi
 an answer that was produced is kept.
 """
 
-import sqlite3
 from contextlib import closing
 
 import pytest
@@ -21,6 +20,7 @@ from pi.conversation.store import Store
 from pi.models.routing import Router
 from pi.turns import control as turn_control
 from pi.turns import restart
+from pi.turns.failures import TurnFailed
 from pi.turns.loop import Loop
 
 REQUEST = "restart_request_0001"
@@ -112,7 +112,9 @@ def test_stop_before_the_answer_is_saved_keeps_that_answer(tmp_path):
         assert held(store) == 0
 
 
-def test_an_answer_whose_commit_failed_is_saved_at_the_next_start(tmp_path):
+def test_an_answer_whose_commit_failed_is_saved_at_the_next_start(tmp_path, monkeypatch):
+    monkeypatch.setattr(restart, "_waiting", {})
+    monkeypatch.setattr(restart, "_start", lambda: None)  # Pi restarts before the settle runs.
     path = tmp_path / "pi.db"
     with closing(Store(path)) as store:
         session = store.create_session()
@@ -121,7 +123,7 @@ def test_an_answer_whose_commit_failed_is_saved_at_the_next_start(tmp_path):
                 "CREATE TRIGGER fail_final BEFORE UPDATE OF status ON turns "
                 "WHEN NEW.status='complete' BEGIN SELECT RAISE(ABORT,'disk trouble'); END;"
             )
-        with pytest.raises(sqlite3.IntegrityError, match="disk trouble"):
+        with pytest.raises(TurnFailed, match="could not save the answer yet"):
             loop_with(store, Recorder("kept")).run_turn(session, "hello", request_id=REQUEST)
         with store._connect() as db:
             db.execute("DROP TRIGGER fail_final")  # The trouble passes; Pi restarts.
@@ -129,6 +131,8 @@ def test_an_answer_whose_commit_failed_is_saved_at_the_next_start(tmp_path):
         receipt = submissions.get(store, REQUEST)
         assert receipt["status"] == "complete"
         assert store.get_message(receipt["final_message_id"])["content"] == "kept"
+        assert restart.settle() == 1  # The old process's wait finds its store gone: nothing more.
+        assert [m["role"] for m in store.messages(session)] == ["user", "assistant"]
 
 
 def test_a_held_answer_the_owner_stopped_is_not_saved(tmp_path):

@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A failed answer save no longer leaves the chat running until a restart**
+  (`pi/turns/restart.py`). A database error at the final commit is tried again three times
+  (0.25, 1, 3 s). If it still fails, the request says the answer is kept and a small settle,
+  running only while an answer waits, tries again every 15 s and saves it once the database works,
+  with no restart and no new model call. A stop or steer sent meanwhile ends the turn as the
+  startup settle would; a save the database refuses, or one still failing after 40 tries while
+  other writes work, ends the turn `failed` (or `acted_no_reply`) in plain words. A try that
+  committed but lost its reply is recognised, so nothing is saved twice.
 - **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
   (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
   Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
