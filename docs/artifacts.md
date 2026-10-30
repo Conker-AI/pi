@@ -98,14 +98,12 @@ artifact propagation, forgetting, and raw-file erasure have regression coverage.
 session settings resolver; no session privacy is inferred from global configuration
 or source text. This library does not enforce memory/harness privacy in execution.
 
-The owner browser surface deliberately excludes
-`GET /artifacts/{id}/download`. Gateway control forwarding is JSON-only and cannot
-faithfully proxy a binary attachment contract, so exposing that route would be
-misleading. The direct recovery-admin API retains download for host recovery, but
-the owner key receives 403 through the exact browser allowlist. No dashboard
-adapter, upload, arbitrary filesystem path, deployment, external fetch, or execution
-is included. Artifact persistence does not implement attachment storage, document
-editing, project context selection, or broader deliverable generation.
+Downloads (`GET /artifacts/{id}/download` and the chat answer download below) are not in
+the browser allowlist `OWNER_ROUTES`: the gateway's control relay forwards JSON only and
+cannot carry a file, its type and its name. They are listed in `OWNER_DOWNLOADS`, so the
+owner-control key (the host CLI) and the recovery key fetch them straight from Pi; a browser
+download needs a gateway relay of its own. No upload, arbitrary filesystem path,
+deployment, external fetch, or execution is included.
 
 ## Evidence
 
@@ -119,29 +117,67 @@ session settings, followed by Store reopen and raw database/sidecar byte inspect
 source text, private title, and derived versions disappear while unrelated
 owner-authored artifacts survive. Connected API coverage also verifies owner/runtime
 credential separation, exact browser paths, compact cursor pagination, strict DTOs,
-restart durability, stale-write conflicts, and denial of binary owner downloads.
+restart durability, stale-write conflicts, and owner-key downloads that stay outside the
+JSON relay.
 
 
 ## Downloadable deliverables
 
-`GET /artifacts/{id}/download?version=N&format=native|docx|xlsx` performs the same
-live source/provenance checks as export and returns an authenticated attachment
-with no-store and nosniff headers. Native formats match the existing JSON export
-contract (including formula-protected CSV and inert HTML text). Unknown/missing
-source privacy blocks download; a known private origin may still be explicitly
-exported by its owner under the existing artifact contract.
+`GET /artifacts/{id}/download?version=N&format=native|docx|pdf|pptx|xlsx` performs the same
+live source/provenance checks as export and returns an attachment with no-store and nosniff
+headers. `GET /sessions/{session_id}/messages/{message_id}/download?format=docx|pdf|pptx|xlsx`
+does the same for one completed final answer, with the checks a copy into an artifact makes:
+an unknown or forgotten answer is 404 `not_found`, anything but a completed final answer is
+422 `not_an_answer`, and unknown chat privacy is 409 `privacy_unknown`. Both are owner-only.
+Native formats match the JSON export contract (formula-protected CSV, inert HTML text).
 
-Markdown artifacts support editable DOCX: headings and paragraphs, with other
-Markdown retained as literal text and the existing source-reference appendix
-preserved. This is not a full Markdown layout engine. Table artifacts support XLSX
-with a frozen/filterable header, wrapping and fixed column widths. Every cell is
-stored as a string, including formula-looking text and leading zeros; exports
-contain no formulas, macros, or fetched external resources. Office exports reject
-invalid XML text and files over 2 MiB; DOCX is limited to 5000 paragraphs. No export
-is written into the server filesystem. Other artifact/format pairs return 422.
+| Content | DOCX | PDF | PPTX | XLSX |
+|---|---|---|---|---|
+| Markdown (artifact or answer) | yes | yes | yes | its tables, one sheet each |
+| Table | yes | yes | yes | yes |
+| Code | yes | yes | yes | no |
 
-Runtime dependencies are pinned to [python-docx 1.2.0](https://pypi.org/project/python-docx/1.2.0/)
-and [openpyxl 3.1.5](https://pypi.org/project/openpyxl/3.1.5/). Tests reopen the actual
-Office packages and verify values, structure, auth, safe filenames, source checks,
-version errors, and inert content. This binary route remains a direct recovery-admin
-operation and is not part of the owner browser contract.
+Markdown is read the way the chat shows it: CommonMark with GitHub tables, strikethrough
+and task lists, a single line break as a space, raw HTML as literal text. Headings stay
+headings (Word heading styles, PDF heading sizes, a new slide at level 1 and 2), lists keep
+their numbers, bullets, task boxes and nesting as indented paragraphs, quotes are indented,
+code keeps its lines in a monospaced block, rules become a border (a new slide in PPTX), and
+tables keep their header, cells and column alignment. Only http, https and mailto links
+without credentials stay clickable; any other link (javascript:, data:, file:, a citation
+id) stays its plain label. Images are never fetched: they read "Image: alt" and, when the
+address is safe, an "Open image" link. Supplied citations become a "Supplied source
+references" list marked as not independently verified. XLSX cells are always text, so
+formula-looking cells, leading zeros and markup stay literal; a sheet is named by the
+heading above its table. No export contains formulas, macros, scripts or embedded images.
+
+Files are made in a short-lived worker process (`pi/content/_export_worker.py`, isolated
+Python, at most two at once, 40 s, and on Linux 30 s CPU and 1 GiB memory) that receives the
+content on stdin and returns the file on stdout; nothing is written to disk. A refusal is
+422 with a fixed code and a plain message: `export_too_long` (400,000 characters),
+`export_too_deep` (lists and quotes more than 12 levels inside each other; never silently
+truncated), `export_too_many_blocks` (10,000), `export_table_too_big` (64 columns, 2,000 rows,
+200 tables, 40,000 cells, 32,000 characters a cell), `export_page_cells` (tables over 10,000
+cells export only as XLSX), `export_pages` (500 PDF pages), `export_slides` (300 slides),
+`export_too_big` (16 MB), `export_layout` (a cell or block taller than a PDF page),
+`export_no_table` and `export_control` (characters XML cannot hold). A worker that is busy,
+overruns or crashes is 503 `export_busy` or `export_unavailable`.
+
+File names keep letters, digits, `-` and `_` only and avoid Windows device names. The
+plain `filename` is ASCII (`artifact` when nothing is left), and `filename*` carries the
+readable UTF-8 name, so a Cyrillic title keeps its name in browsers that read it.
+
+PDF text uses DejaVu (Debian's `fonts-dejavu-core`, installed in the image) for Latin,
+Cyrillic and Greek letters; without it, ReportLab's bundled Vera fonts cover Latin only and
+other letters draw empty. DejaVu has Hebrew and Arabic glyphs, but right-to-left lines are
+neither reordered nor shaped, and CJK has no font yet: DOCX keeps those scripts correctly.
+
+Libraries, all pinned in `requirements.txt` and checked by the weekly pip-audit:
+[python-docx 1.2.0](https://pypi.org/project/python-docx/1.2.0/) (MIT),
+[openpyxl 3.1.5](https://pypi.org/project/openpyxl/3.1.5/) (MIT),
+[python-pptx 1.0.2](https://pypi.org/project/python-pptx/1.0.2/) (MIT, brings XlsxWriter,
+BSD-2-Clause), [markdown-it-py 4.2.0](https://pypi.org/project/markdown-it-py/4.2.0/) (MIT,
+brings mdurl, MIT) and [ReportLab 5.1.0](https://pypi.org/project/reportlab/5.1.0/)
+(BSD-3-Clause, pure Python, brings charset-normalizer, MIT). Tests reopen every file with
+its reader library (python-docx, pypdf, python-pptx, openpyxl) and check text, cells, links,
+names, limits and refusals: `tests/test_markdown_blocks.py`, `tests/test_deliverable_exports.py`,
+`tests/test_artifact_downloads.py`.

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi.api import server as api
-from pi.api.browser_contract import owner_allowed, runtime_allowed
+from pi.api.browser_contract import owner_allowed, owner_download_allowed, runtime_allowed
 from pi.api.routes.artifacts import router
 from pi.content import artifacts as a
 from pi.conversation.store import Store
@@ -467,7 +467,11 @@ def test_connected_owner_api_contract_restart_and_native_export(tmp_path, monkey
         assert exported.json()["mime"] == "text/plain;charset=utf-8"
         assert exported.json()["text"] == "<script>never execute</script>"
         assert exported.json()["authority"] == "none"
-        assert client.get(f"/artifacts/{identity}/download", headers=headers).status_code == 403
+        # The owner-control key downloads directly (the host CLI); the gateway's JSON relay cannot.
+        downloaded = client.get(f"/artifacts/{identity}/download", headers=headers)
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"<script>never execute</script>"
+        assert downloaded.headers["content-type"].startswith("text/plain")
 
         archived = client.post(
             f"/artifacts/{identity}/archive",
@@ -548,3 +552,15 @@ def test_browser_owner_artifact_allowlist_is_exact():
         ("GET", f"/artifacts/{identity}/export/extra"),
     ):
         assert not owner_allowed(method, path)
+    answer = "/sessions/ses_" + "a" * 16 + "/messages/msg_" + "b" * 16 + "/download"
+    for path in (f"/artifacts/{identity}/download", answer):
+        assert owner_download_allowed("GET", path)
+        assert not owner_download_allowed("POST", path)
+        assert not owner_allowed("GET", path) and not runtime_allowed("GET", path)
+    for path in (
+        f"/artifacts/{identity}/download/extra",
+        "/artifacts/artifact_short/download",
+        "/sessions/ses_x/messages/msg_" + "b" * 16 + "/download",
+        f"/artifacts/{identity}/export",
+    ):
+        assert not owner_download_allowed("GET", path)
