@@ -2758,7 +2758,7 @@
     "/change-requests/{identity}/retry": {
       "post": {
         "summary": "Retry",
-        "description": "Draft this tool request again, from a new description when one is given.",
+        "description": "Draft this tool request again: from a new description (`description`, a fresh start),\nwith the owner's answer to the drafter's question (`answer`, the same draft goes on), or\nas it was (empty body, answers kept).",
         "operationId": "retry_change_requests__identity__retry_post",
         "parameters": [
           {
@@ -2897,7 +2897,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__agents__tool_drafts__Published"
+                "$ref": "#/components/schemas/Published"
               }
             }
           }
@@ -3119,481 +3119,6 @@
                 }
               ],
               "title": "X-Pi-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals": {
-      "post": {
-        "summary": "Record",
-        "description": "Link one of the owner's messages to the editor draft made from it.",
-        "operationId": "record_workflow_proposals_post",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Record"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "summary": "Listing",
-        "description": "Drafts made from chat messages that still wait for the owner.",
-        "operationId": "listing_workflow_proposals_get",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals/offers": {
-      "get": {
-        "summary": "Offers",
-        "description": "Offers Pi made to draft a workflow from one of the owner's messages.",
-        "operationId": "offers_workflow_proposals_offers_get",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals/offers/{offer_id}": {
-      "get": {
-        "summary": "Offer",
-        "description": "One offer: which chat and message to draft from.",
-        "operationId": "offer_workflow_proposals_offers__offer_id__get",
-        "parameters": [
-          {
-            "name": "offer_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^wfo_[0-9a-f]{32}$",
-              "title": "Offer Id"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals/offers/{offer_id}/dismiss": {
-      "post": {
-        "summary": "Dismiss Offer",
-        "description": "Decline an offer; nothing was drafted.",
-        "operationId": "dismiss_offer_workflow_proposals_offers__offer_id__dismiss_post",
-        "parameters": [
-          {
-            "name": "offer_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^wfo_[0-9a-f]{32}$",
-              "title": "Offer Id"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals/published": {
-      "post": {
-        "summary": "Published",
-        "description": "The owner published this draft; its Inbox items are done.",
-        "operationId": "published_workflow_proposals_published_post",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/pi__agents__workflow_proposals__Published"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-proposals/{proposal_id}/dismiss": {
-      "post": {
-        "summary": "Dismiss",
-        "description": "Remove a draft from the Inbox without publishing it.",
-        "operationId": "dismiss_workflow_proposals__proposal_id__dismiss_post",
-        "parameters": [
-          {
-            "name": "proposal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^wfp_[0-9a-f]{32}$",
-              "title": "Proposal Id"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
             }
           }
         ],
@@ -11536,77 +11061,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/pi__context__summary_draft__Request"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/workflow-drafts/draft": {
-      "post": {
-        "summary": "Draft",
-        "description": "A proposed editor workflow for review; saves nothing.",
-        "operationId": "draft_workflow_drafts_draft_post",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/pi__agents__workflow_drafts__Request"
               }
             }
           }
@@ -25847,90 +25301,6 @@
         ],
         "title": "Candidate"
       },
-      "Capability": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$",
-            "title": "Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "tool",
-              "workflow"
-            ],
-            "title": "Kind"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 800,
-            "title": "Description",
-            "default": ""
-          },
-          "inputs": {
-            "items": {
-              "$ref": "#/components/schemas/CapabilityInput"
-            },
-            "type": "array",
-            "maxItems": 100,
-            "title": "Inputs"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version",
-            "default": 1
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "name"
-        ],
-        "title": "Capability"
-      },
-      "CapabilityInput": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "type": {
-            "type": "string",
-            "maxLength": 40,
-            "title": "Type",
-            "default": "string"
-          },
-          "required": {
-            "type": "boolean",
-            "title": "Required",
-            "default": false
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 500,
-            "title": "Description",
-            "default": ""
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "CapabilityInput"
-      },
       "Case": {
         "properties": {
           "name": {
@@ -27583,31 +26953,6 @@
         ],
         "title": "Evidence"
       },
-      "Exchange": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "builder"
-            ],
-            "title": "Role"
-          },
-          "content": {
-            "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Content"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "Exchange"
-      },
       "Fields": {
         "properties": {
           "name": {
@@ -28417,7 +27762,6 @@
         ],
         "title": "JobView"
       },
-      "JsonValue": {},
       "Judge": {
         "properties": {
           "request_id": {
@@ -29955,6 +29299,29 @@
         ],
         "title": "Provider"
       },
+      "Published": {
+        "properties": {
+          "toolId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
+            "title": "Toolid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "toolId",
+          "name"
+        ],
+        "title": "Published",
+        "description": "The owner published the drafted tool; `toolId` is the id Conker sees in its tool list."
+      },
       "QueueRevision": {
         "properties": {
           "expected_revision": {
@@ -30145,47 +29512,6 @@
           "expectedRevision"
         ],
         "title": "ReceiptInput"
-      },
-      "Record": {
-        "properties": {
-          "sessionId": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Sessionid"
-          },
-          "messageId": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Messageid"
-          },
-          "draftId": {
-            "type": "string",
-            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-            "title": "Draftid"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "valid": {
-            "type": "boolean",
-            "title": "Valid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "sessionId",
-          "messageId",
-          "draftId",
-          "name",
-          "valid"
-        ],
-        "title": "Record"
       },
       "Remember": {
         "properties": {
@@ -32792,29 +32118,6 @@
         ],
         "title": "Start"
       },
-      "pi__agents__tool_drafts__Published": {
-        "properties": {
-          "toolId": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
-            "title": "Toolid"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Name"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "toolId",
-          "name"
-        ],
-        "title": "Published",
-        "description": "The owner published the drafted tool; `toolId` is the id Conker sees in its tool list."
-      },
       "pi__agents__tool_drafts__Retry": {
         "properties": {
           "description": {
@@ -32829,93 +32132,25 @@
               }
             ],
             "title": "Description"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "Retry",
-        "description": "Draft it again, from a new description when one is given."
-      },
-      "pi__agents__workflow_drafts__Request": {
-        "properties": {
-          "description": {
-            "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Description"
-          },
-          "draftId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Draftid"
-          },
-          "conversation": {
-            "items": {
-              "$ref": "#/components/schemas/Exchange"
-            },
-            "type": "array",
-            "maxItems": 16,
-            "title": "Conversation"
-          },
-          "capabilities": {
-            "items": {
-              "$ref": "#/components/schemas/Capability"
-            },
-            "type": "array",
-            "maxItems": 200,
-            "title": "Capabilities"
-          },
-          "previous": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/JsonValue"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous"
-          },
-          "issues": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "title": "Issues"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "description"
-        ],
-        "title": "Request"
-      },
-      "pi__agents__workflow_proposals__Published": {
-        "properties": {
-          "draftId": {
-            "type": "string",
-            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-            "title": "Draftid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "draftId"
-        ],
-        "title": "Published"
+        "description": "Draft it again: from a new description, which starts over; with the owner's answer to the\ndrafter's question, which goes on with the same draft; or as it was, answers kept."
       },
       "pi__calls__call_models__Privacy": {
         "properties": {

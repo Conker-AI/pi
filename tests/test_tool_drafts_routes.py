@@ -132,6 +132,31 @@ def test_retry_and_published_need_the_owner_and_a_tool_request(pi):
     assert client.post(REQUEST + "/retry", json={}, headers=owner).status_code == 404
 
 
+def test_the_inbox_answers_the_drafters_question_through_retry(pi):
+    client, store, loop = pi
+    owner = {"X-Pi-Owner-Key": OWNER}
+    filed = tool_drafts.file(store, "Search the web", session_id=store.create_session())
+    path = f"/change-requests/{filed['id']}/retry"
+    [request] = tool_drafts.pending(store)
+    tool_drafts.finish(store, request, tool_drafts.needs_detail("Search the web", "Which engine?"))
+    both = client.post(path, json={"description": "x", "answer": "y"}, headers=owner)
+    assert both.status_code == 422
+    answered = client.post(path, json={"answer": "Bing"}, headers=owner)
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["payload"] == {
+        "description": "Search the web",
+        "status": "drafting",
+        "conversation": [
+            {"role": "builder", "content": "Which engine?"},
+            {"role": "owner", "content": "Bing"},
+        ],
+    }
+    assert loop.drafts.kicks == 1
+    tool_drafts.recover_interrupted(store)
+    again = client.post(path, json={"answer": "Google"}, headers=owner)
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "not_asking"
+
+
 def test_a_request_made_without_a_chat_is_published_without_a_note(pi):
     client, store, _ = pi
     filed = tool_drafts.submit(
@@ -149,6 +174,7 @@ def test_a_request_made_without_a_chat_is_published_without_a_note(pi):
     [
         ("/tool-drafts", {"description": "Search the web", "request_id": "tool-draft-gw-0001"}),
         (REQUEST + "/retry", {"description": "Search Bing"}),
+        (REQUEST + "/retry", {"answer": "Bing"}),
         (REQUEST + "/retry", {}),
         (REQUEST + "/published", {"toolId": TOOL_ID, "name": "Topic reader"}),
     ],

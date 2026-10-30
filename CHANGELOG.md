@@ -22,6 +22,20 @@ be a decision with visible consequences.
   `adoptedAt` in the job (shown in the job view, kept by edits). Its later runs count as his
   (his words, no proactive budget), and forgetting the chat it came from no longer turns it off.
   A job that is already his is refused (409 `already_owner`).
+- **The drafter asks in the chat.** When the drafter needs a detail for a tool request made in a
+  chat, the card no longer fails: it becomes `payload.status: "needs_detail"` with the drafter's
+  `question`, and Conker posts the question in that chat (a stored message; `askedIn` names the
+  chat once it is posted). The owner's next message there is the answer: Pi takes it before any
+  model call, drafting goes on with the questions and answers so far (`payload.conversation`, at
+  most 16 entries, at most 4 questions) and Conker's stored reply says so. From the Inbox,
+  `POST /change-requests/{id}/retry` `{"answer": "..."}` does the same (409 `not_asking` when no
+  question waits). An empty retry now keeps the answers; a new description starts over. Requests
+  without a chat (`/tool-drafts`) still fail with the question.
+- **Old workflow paths retired.** `POST /workflow-drafts/draft`, the `/workflow-proposals`
+  routes (offers included) and their Inbox items (`kind: "workflow"` and `"workflow-offer"`) are
+  gone; the command line drafts through `POST /tool-drafts`. The `workflow_proposals` and
+  `workflow_offers` tables stay (dropping them needs a migration): nothing writes or lists them,
+  and forgetting a chat still clears its rows.
 - **The browser gateway reaches owner files, imports, server actions, tool settings and
   lockdown** (`gateway/relay.py`, `file_routes.py`, `host_ops.py`; contract in
   `docs/browser-auth.md`). One streaming file relay serves downloads

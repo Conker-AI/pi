@@ -19,7 +19,7 @@ from contextlib import closing
 from pathlib import Path
 
 from pi.actions import withdrawals
-from pi.agents import asks, change_requests, keep, skills, workflow_offers, workflow_proposals
+from pi.agents import asks, change_requests, keep, retired_workflows, skills
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
 from pi.context import compaction, decisions
@@ -193,11 +193,10 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         agent_hooks.redact(db, plan["session_ids"])
         agent_jobs.redact(db, plan["session_ids"])
         skills.redact(db, plan["session_ids"])
-        workflow_proposals.redact(db, plan["session_ids"])
+        retired_workflows.redact(db, plan["session_ids"])
         change_requests.redact(db, plan["session_ids"])
         asks.redact(db, plan["session_ids"])
         turn_access.redact(db, plan["session_ids"])
-        workflow_offers.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])
         turn_queue.redact(db, plan["session_ids"])

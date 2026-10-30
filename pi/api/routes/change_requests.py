@@ -67,7 +67,9 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
 
     @routes.post("/{identity}/retry")
     def retry(identity: RequestPath, body: tool_drafts.Retry | None = None):
-        """Draft this tool request again, from a new description when one is given."""
+        """Draft this tool request again: from a new description (`description`, a fresh start),
+        with the owner's answer to the drafter's question (`answer`, the same draft goes on), or
+        as it was (empty body, answers kept)."""
         request = tool_drafts.retry(store(), identity, body or tool_drafts.Retry())
         _kick(loop)
         return request
