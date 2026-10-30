@@ -14,8 +14,11 @@ schedule stops future automatic admission; an explicit manual run remains possib
 The browser routes are exact and schema version `1`:
 
 - `GET /jobs?limit=50&cursor={job_id}` and `GET /jobs/{id}` return bounded safe
-  projections. Free-form instructions, target arguments and allowance identifiers
-  are replaced by configured booleans.
+  projections. A job's own instructions are shown in full (`instructions`, beside the
+  older `instructionsConfigured`), with its agent's current profile name (`agentName`,
+  null when Pi has no such agent). Target arguments and allowance identifiers are
+  replaced by configured booleans. These are owner routes; the gateway's runtime key
+  cannot read them.
 - `POST /jobs/{id}/state` accepts only `expected_revision` and `enabled`. It changes
   durable schedule state and reports `execution: not-triggered`; it does not dispatch
   as part of the request. Enabling permits the separate worker to admit future due
@@ -124,6 +127,10 @@ that need no confirmation (get tools) run on their own, and a tool that needs th
 (set tools) parks the turn as an Inbox approval. Pi grants nothing of its own
 (`pi/schedule/agent_jobs.py`).
 
+- After the preamble the run is told when it started, in the job's time zone: weekday, date
+  (also as YYYY-MM-DD) and time, so "today", "this week" or "only in the first week of the
+  month" in the instructions work. It is the time Pi took the run up, so a repeated dispatch
+  sends the same text and replays. Pi wrote it, so it never counts as the owner's words.
 - Timing is any cron timing: every N hours, daily at a time, or weekly on a day. Repeating
   (interval) jobs skip slots inside the owner's quiet hours; a job set for a time of day runs then.
 - The run ID is the turn's request ID, so a repeated dispatch replays the saved turn instead of

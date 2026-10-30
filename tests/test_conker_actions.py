@@ -185,6 +185,20 @@ def test_a_run_of_a_job_conker_made_never_counts_as_his_words(store):
     assert "Look at my calendar." in access.owner_text(store, receipt["turnId"])
 
 
+def test_in_a_run_of_the_owners_job_only_the_saved_instructions_count(store):
+    receipt, _, _ = run_job(store, owner_job(store), ["NOTHING"])
+    with store._connect() as db:
+        [sent] = db.execute(
+            "SELECT m.content FROM turn_messages t JOIN messages m ON m.id=t.message_id "
+            "WHERE t.turn_id=? AND t.purpose='input'",
+            (receipt["turnId"],),
+        ).fetchone()
+    started = agent_jobs.when(NOON, "Asia/Jerusalem")
+    assert "Thursday, 29 October 2026" in started and started in sent
+    # The preamble and the run's date and time are Pi's, so neither counts as the owner's request.
+    assert access.owner_text(store, receipt["turnId"]) == "Look at my calendar."
+
+
 def test_a_job_run_cannot_make_a_job_or_draft_a_tool(store):
     his = owner_job(store)
     receipt, loop, _ = run_job(store, his, ["NOTHING"])

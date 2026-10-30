@@ -6,6 +6,17 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A cron job's page can show what it does and who does it.** The owner's job view
+  (`GET /jobs`, `GET /jobs/{id}` and every route that answers with a job) adds `instructions`,
+  the job's own instructions in full, and `agentName`, its agent's current profile name (null
+  when Pi has no such agent). `instructionsConfigured` stays. Owner routes only: the gateway's
+  runtime key still cannot read `/jobs`.
+- **AI job runs know the date.** Each run's opening message says when it started in the job's
+  time zone, for example "This run started on Monday, 26 October 2026 (2026-10-26) at 12:00,
+  Asia/Jerusalem time (the job's time zone).", so "today", "this week" or "only in the first week
+  of the month" work. It is the time Pi took the run up, so a repeated dispatch still replays.
+  In a run of the owner's own job only the saved instructions count as the owner's words
+  (`pi.turns.access.owner_text`); the preamble, the date and why it started are Pi's.
 - **A failed answer save no longer leaves the chat running until a restart**
   (`pi/turns/restart.py`). A database error at the final commit is tried again three times
   (0.25, 1, 3 s). If it still fails, the request says the answer is kept and a small settle,

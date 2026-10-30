@@ -26384,11 +26384,30 @@
             "type": "boolean",
             "title": "Instructionsconfigured"
           },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions"
+          },
           "agentId": {
             "type": "string",
             "maxLength": 200,
             "minLength": 1,
             "title": "Agentid"
+          },
+          "agentName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agentname"
           },
           "timing": {
             "$ref": "#/components/schemas/Timing"
@@ -26480,6 +26499,7 @@
         "required": [
           "name",
           "instructionsConfigured",
+          "instructions",
           "agentId",
           "timing",
           "timeZone",

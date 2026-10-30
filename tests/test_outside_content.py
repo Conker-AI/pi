@@ -129,6 +129,10 @@ def test_a_webhook_payload_makes_the_whole_chat_outside_and_keeps_it_out_of_memo
     _, receipt, _ = hook_run(store)
     chat = receipt["sessionId"]
     assert receipt["status"] == "completed"
+    # The payload is never the owner's words; the run still read outside content.
+    words = access.owner_text(store, receipt["turnId"])
+    assert words == "Sort what arrives."
+    assert outside(store, chat, receipt["turnId"], text=words)
     # The payload message, and anything said in the chat after it, never goes to MemoryGate.
     store.append_message(chat, "user", "Later, in the job's chat.")
     assert queued(store, chat) == 0

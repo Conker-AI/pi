@@ -27,6 +27,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions
 from pi.core.errors import ServiceError
@@ -43,6 +44,22 @@ PREAMBLE = (
     f"through the tool and say why. If nothing needs the owner, reply with only {QUIET}. "
     "Otherwise start with one short line saying what needs them, then the details and what you "
     "can do next."
+)
+# English names, whatever the server's locale.
+DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 )
 MAX_TITLE = 160
 MAX_DETAIL = 400
@@ -123,6 +140,16 @@ def _new_session(store, definition) -> str:
     )
 
 
+def when(instant: float, zone: str) -> str:
+    """The run's date, weekday and time in the job's time zone, so "today", "this week" or "the
+    first week of the month" in its instructions mean something. Pi's words, never the owner's."""
+    local = datetime.fromtimestamp(instant, ZoneInfo(zone))
+    return (
+        f"This run started on {DAYS[local.weekday()]}, {local.day} {MONTHS[local.month - 1]} "
+        f"{local.year} ({local:%Y-%m-%d}) at {local:%H:%M}, {zone} time (the job's time zone)."
+    )
+
+
 def room(store, created_by, now=None) -> str | None:
     """Why Conker's request cannot make one more AI job now, in plain words; None when it can."""
     now = time.time() if now is None else now
@@ -159,12 +186,6 @@ def run_of(db, turn_id) -> dict | None:
         (turn_id,),
     ).fetchone()
     return json.loads(row[0]) if row else None
-
-
-def made_by(db, turn_id) -> str | None:
-    """Who made the job this turn runs ("owner" or "conker"), or None for any other turn."""
-    definition = run_of(db, turn_id)
-    return definition.get("createdBy", "owner") if definition else None
 
 
 def admit(store, run_id, definition, now=None) -> str | None:
@@ -291,7 +312,8 @@ class AgentJobs:
     def run(self, run_id, now=None):
         with self.store._connect() as db:
             row = db.execute(
-                "SELECT job_id, definition, request_id FROM scheduled_runs WHERE id=?", (run_id,)
+                "SELECT job_id, definition, request_id, started_at FROM scheduled_runs WHERE id=?",
+                (run_id,),
             ).fetchone()
         if row is None:
             return {"status": "failed", "reason": "Run not found."}
@@ -315,11 +337,13 @@ class AgentJobs:
         elif agent_triggers.started_by_watch(row["request_id"]) and definition.get("watch"):
             tool = definition["watch"]["toolId"]
             reason = f"This run started because {tool} has something new since the last look; read it with that tool.\n\n"
+        # When Pi took the run up, not when it is dispatched: a repeated dispatch sends the same
+        # text, so it replays the saved turn instead of being refused as a different request.
+        started = when(row["started_at"], definition["timeZone"])
+        text = f"{PREAMBLE}\n\n{started}\n\n{reason}{definition['instructions']}"
         try:
             # The run ID is the turn's request ID: a repeated dispatch replays, never re-runs.
-            result = self.loop.run_turn(
-                session_id, f"{PREAMBLE}\n\n{reason}{definition['instructions']}", request_id=run_id
-            )
+            result = self.loop.run_turn(session_id, text, request_id=run_id)
         except TurnFailed:
             return {
                 "status": "failed",
