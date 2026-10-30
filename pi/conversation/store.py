@@ -35,6 +35,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.message_view import MESSAGE_LOOKUP, _message_with_attachments
+from pi.owner import preferences as owner_preferences
 from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
@@ -132,17 +133,31 @@ class Store:
         summary: str | None = None,
         agent_id: str | None = None,
         privacy: dict[str, bool] | None = None,
+        owner_chat: bool = False,
     ) -> str:
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            session_id = self._create_session(db, title, parent_id, summary, agent_id, privacy)
+            session_id = self._create_session(
+                db, title, parent_id, summary, agent_id, privacy, owner_chat=owner_chat
+            )
             db.commit()
             return session_id
 
     def _create_session(
-        self, db, title="", parent_id=None, summary=None, agent_id=None, privacy=None
+        self,
+        db,
+        title="",
+        parent_id=None,
+        summary=None,
+        agent_id=None,
+        privacy=None,
+        *,
+        owner_chat=False,
     ) -> str:
-        """Insert a session inside the caller's transaction, without inference."""
+        """Insert a session inside the caller's transaction, without inference.
+
+        `owner_chat` marks a chat the owner starts himself (the chat route, a draft started as a
+        chat): only those begin with his saved default access. AI jobs and forks never do."""
         if privacy is not None and (
             not set(privacy) <= {"memoryDisabled", "harnessDisabled"}
             or any(type(value) is not bool for value in privacy.values())
@@ -165,12 +180,20 @@ class Store:
                 initial_settings["privacy"][flag] |= restricted
             if privacy:
                 initial_settings["privacy"].update(privacy)
+            access = owner_preferences.new_chat_access(db) if owner_chat else "default"
+            if access != "default":
+                initial_settings["access"] = access
             if agent_id is not None:
                 selected = agents._get(db, agent_id)
                 if selected["archived_at"] is not None:
                     raise agents.AgentError("agent_archived", "Select an active agent.")
                 initial_settings["agentId"] = selected["id"]
-            elif choice is None and not privacy and not any(defaults.values()):
+            elif (
+                choice is None
+                and not privacy
+                and not any(defaults.values())
+                and "access" not in initial_settings
+            ):
                 initial_settings = None
         db.execute(
             "INSERT INTO sessions (id, parent_id, title, status, created_at, summary)"

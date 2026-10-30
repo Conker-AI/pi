@@ -90,7 +90,7 @@ def router(app_state, require_key, require_admin):
     def create_session(body: NewSession):
         return {
             "session_id": app_state().store.create_session(
-                title=body.title, agent_id=body.agent_id, privacy=body.privacy
+                title=body.title, agent_id=body.agent_id, privacy=body.privacy, owner_chat=True
             )
         }
 
