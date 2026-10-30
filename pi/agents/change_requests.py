@@ -1,18 +1,29 @@
 """Change requests: what Conker asks to create, waiting for the owner's verification.
 
-Conker can prepare anything the owner could make by hand (a cron job, a tool draft, a memory) but
-never make it real on its own. It files a request with the exact thing to create; the Inbox shows
-it, and only the owner's approval creates it, through the same paths the owner's own screens use.
-A request is never edited after it is filed: what the owner approves is exactly what Conker asked.
-The one exception is a tool request, whose draft Pi fills in after filing (`pi.agents.tool_drafts`).
+Conker can prepare anything the owner could make by hand (a cron job, a tool draft, a memory). It
+files a request with the exact thing to create; the Inbox shows it, and the owner's approval
+creates it, through the same paths the owner's own screens use. A request is never edited after it
+is filed: what the owner approves is exactly what Conker asked. The one exception is a tool
+request, whose draft Pi fills in after filing (`pi.agents.tool_drafts`).
 
-- `ai_job`: approving creates the AI job in Pi (`agent_jobs.create`), so the owner's password
-  verification on the approval is the only way it starts to run.
+Only where the owner's own access settings allow it (`pi.turns.access`) does Pi approve a request
+at once in Conker's name (Keep, `by="conker"`). Remembering is allowed by default; scheduling
+waits for him by default; a tool draft always waits. Every Keep result is kept apart, linked to
+its chat (`pi.agents.keep`), so forgetting the chat can undo it.
+
+- `ai_job`: approving creates the AI job in Pi (`agent_jobs.create`). Approved by the owner
+  (password verified) it is his; made at once it is marked `createdBy: "conker"` and held
+  tighter (see `pi.schedule.agent_jobs`). A job asked for in a private chat gets a private chat.
 - `tool_draft`: Pi holds no ToolGate authority. Once the draft is ready, the owner's browser saves
   the document as a draft in ToolGate's editor (password verified there) and reports the draft's
   id here (`saved`), which creates nothing; the owner then publishes it there.
-- `memory`: approving stores the exact text through MemoryGate's correction capability, keyed by
-  the request id, so a retry after a lost answer never stores it twice.
+- `memory`: approving stores the exact text through MemoryGate's statement route, keyed by the
+  request id, so a retry after a lost answer never stores it twice. Approved by the owner it is
+  his statement; made at once it is stored as Conker's (`origin: "conker"`) under its own key, so
+  his later approval of the same request never collides with it.
+
+Conker keeps at most `PER_CHAT` requests open per chat and `OPEN_LIMIT` in all, so outside
+content cannot flood the Inbox; the owner's own requests (`/tool-drafts`) are not limited.
 """
 
 from __future__ import annotations
@@ -31,6 +42,10 @@ from pi.core.models import Strict
 KINDS = ("ai_job", "tool_draft", "memory")
 REQUEST_ID = r"^creq_[a-f0-9]{32}$"
 MAX_PAYLOAD = 200_000
+PER_CHAT = 3
+OPEN_LIMIT = 20
+# MemoryGate keys a Keep memory apart from the owner's approval of the same request.
+CONKER_KEY = "-conker"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS change_requests (
  id TEXT PRIMARY KEY,
@@ -46,6 +61,10 @@ CREATE INDEX IF NOT EXISTS change_requests_open ON change_requests(state, create
 
 class ChangeRequestError(ServiceError):
     pass
+
+
+class Full(ValueError):
+    """Too many of Conker's requests already wait for the owner; a plain answer for the model."""
 
 
 class DraftSaved(Strict):
@@ -94,9 +113,32 @@ def encode(payload) -> str:
 
 
 def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None, now=None) -> dict:
-    """Record one request exactly as Conker asked; nothing is created yet."""
+    """Record one request exactly as Conker asked; nothing is created yet. Full when too many of
+    its requests already wait for the owner."""
     with store._connect() as db:
-        return file_in(db, kind, title, summary, payload, session_id, turn_id, now)
+        db.execute("BEGIN IMMEDIATE")
+        if (
+            session_id is not None
+            and db.execute(
+                "SELECT COUNT(*) FROM change_requests WHERE state='open' AND session_id=?",
+                (session_id,),
+            ).fetchone()[0]
+            >= PER_CHAT
+        ):
+            raise Full(
+                f"{PER_CHAT} of Conker's requests from this chat already wait in the owner's "
+                "Inbox. Nothing new was filed: tell the owner, and ask again once they decide."
+            )
+        if db.execute("SELECT COUNT(*) FROM change_requests WHERE state='open'").fetchone()[0] >= (
+            OPEN_LIMIT
+        ):
+            raise Full(
+                f"{OPEN_LIMIT} requests already wait in the owner's Inbox. Nothing new was filed: "
+                "tell the owner, and ask again once they have decided some."
+            )
+        view = file_in(db, kind, title, summary, payload, session_id, turn_id, now)
+        db.commit()
+        return view
 
 
 def file_in(db, kind, title, summary, payload, session_id=None, turn_id=None, now=None) -> dict:
@@ -156,8 +198,26 @@ def _close(store, identity, state, result, now):
     return get(store, identity)
 
 
-def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
-    """Make the request real, exactly as filed. Only the owner's approval route calls this."""
+def _privacy(store, session_id) -> dict | None:
+    """The flags of the chat a request came from, for the job made from it; unknown is private."""
+    if session_id is None:
+        return None
+    from pi.conversation import settings as session_settings
+
+    with store._connect() as db:
+        db.execute("BEGIN")
+        privacy = session_settings.source_privacy(db, session_id)
+    if privacy is None:
+        return {"memoryDisabled": True, "harnessDisabled": True}
+    flags = {key: True for key in ("memoryDisabled", "harnessDisabled") if privacy.get(key)}
+    return flags or None
+
+
+def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -> dict:
+    """Make the request real, exactly as filed: by the owner's approval route, or by Conker
+    (`by="conker"`) where his access settings let it go ahead without asking (Keep)."""
+    if by not in ("owner", "conker"):
+        raise ValueError("Approve as the owner or as Conker.")
     now = time.time() if now is None else now
     request = get(store, identity)
     if request["state"] != "open":
@@ -172,8 +232,15 @@ def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
             return _close(
                 store, identity, "failed", {"reason": "The requested job is no longer valid."}, now
             )
-        job = agent_jobs.create(store, body, now=now)
-        return _close(store, identity, "approved", {"jobId": job["id"]}, now)
+        full = agent_jobs.room(store, by, now)
+        if full:
+            raise ChangeRequestError("job_limit", full, 409)
+        job = agent_jobs.create(
+            store, body, now=now, created_by=by, privacy=_privacy(store, request["sessionId"])
+        )
+        return _kept(
+            store, request, by, _close(store, identity, "approved", {"jobId": job["id"]}, now)
+        )
     if request["kind"] == "tool_draft":
         # A request filed before drafting moved to the background has no status: it is ready.
         if request["payload"].get("status", "ready") != "ready":
@@ -191,13 +258,28 @@ def approve(store, identity, *, draft=None, memory=None, now=None) -> dict:
             "memory_unavailable", "Memory isn't connected, so nothing was saved.", 503
         )
     try:
-        result = memory(identity, request["payload"]["text"])
+        text = request["payload"]["text"]
+        # The model wrote a Keep memory's words; only his approval makes them his statement.
+        result = (
+            memory(identity + CONKER_KEY, text, origin="conker")
+            if by == "conker"
+            else memory(identity, text)
+        )
     except Exception:
         # The request stays open: retrying with the same id is safe on MemoryGate's side.
         raise ChangeRequestError(
             "memory_unavailable", "Memory didn't answer, so nothing was saved. Try again.", 503
         ) from None
-    return _close(store, identity, "approved", result, now)
+    return _kept(store, request, by, _close(store, identity, "approved", result, now))
+
+
+def _kept(store, request, by, decided) -> dict:
+    """Link what Conker made on its own to its chat, outside this table, for forgetting."""
+    if by == "conker" and request["sessionId"]:
+        from pi.agents import keep
+
+        keep.record(store, request, decided["result"] or {})
+    return decided
 
 
 def saved(store, identity, draft: DraftSaved, now=None) -> dict:

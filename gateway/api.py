@@ -244,7 +244,7 @@ def create_app(
         response = await call_next(request)
         response.headers.update(
             {
-                "Cache-Control": "no-store",
+                "Cache-Control": getattr(request.state, "dashboard_cache", "no-store"),
                 "X-Content-Type-Options": "nosniff",
                 "Referrer-Policy": "same-origin",
                 "Content-Security-Policy": (

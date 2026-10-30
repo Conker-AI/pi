@@ -31,6 +31,8 @@ import httpx
 from pi.models.loopback_http import verification
 
 _WORKFLOW = re.compile(r"^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$")
+# The owner's button templates for a tool's Inbox card (ToolGate `ask_cards`), a fixed list.
+CARDS = ("do", "send", "publish", "ship", "run", "delete", "pay", "save")
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,10 @@ class Tool:
     # ToolGate's default for this tool, and whether it is on the owner's floor (always asks).
     authorization: str = "owner_confirmation"
     sensitive: bool = False
+    # The Inbox card template the owner picked for it, when ToolGate lists one ("do" otherwise).
+    card: str = "do"
+    # A tool on an external MCP server: its name and description came from that server.
+    external: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,6 +203,9 @@ class ToolGateClient:
                 inputs=row.get("inputs", []),
                 authorization=str(row.get("authorization", "owner_confirmation")),
                 sensitive=row.get("sensitive") is True,
+                card=row["card"] if row.get("card") in CARDS else "do",
+                external=row.get("category") == "external-mcp"
+                or (row.get("execution") or {}).get("type") == "mcp_http",
             )
             for row in rows
         ]
@@ -352,6 +361,39 @@ class ToolGateClient:
             )
 
         return self._outcome(response, tool_id, args, action_id)
+
+    def withdraw(self, request_id: str, agent: str | None) -> str:
+        """Take back an approval request Pi's key made and the owner has not answered, so its card
+        leaves his Inbox (ToolGate `POST /v2/agent/requests/{id}/withdraw`). `agent` is the
+        X-ToolGate-Agent the asking invoke carried; a request from before agent identities was
+        made by the key itself, so a 404 as the agent is tried once more as the key.
+
+        "withdrawn", or "gone" (404 unknown or not ours, 409 already answered). Anything else
+        raises ToolGateUnavailable, with the status for a refusal, so the caller can retry."""
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,200}", request_id or ""):
+            return "gone"
+        for acting in dict.fromkeys([agent, None]):
+            headers = {"X-ToolGate-Execution-Key": self.execution_key}
+            if acting is not None:
+                headers["X-ToolGate-Agent"] = acting
+            try:
+                response = httpx.post(
+                    f"{self.base_url}/v2/agent/requests/{request_id}/withdraw",
+                    verify=verification(self.base_url),
+                    headers=headers,
+                    timeout=self.timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+            except Exception as exc:
+                raise ToolGateUnavailable(type(exc).__name__) from exc
+            if response.status_code == 200:
+                return "withdrawn"
+            if response.status_code == 409:
+                return "gone"
+            if response.status_code != 404:
+                raise ToolGateUnavailable(f"withdraw_{response.status_code}")
+        return "gone"
 
     def check_action(self, action_id: str, tool_id: str) -> ToolResult | ToolPending:
         try:

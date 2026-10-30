@@ -40,7 +40,8 @@ docker compose up -d pi
 
 Build the updated image before these commands if it is not installed yet. The
 command never contacts a model, ToolGate, or MemoryGate. It prints JSON: the
-preview contains identifiers and a confirmation; successful forgetting returns
+preview contains identifiers and a confirmation (and `approval_request_ids`, the
+ToolGate requests the chat's parked turns wait on); successful forgetting returns
 a receipt. Review the session IDs before confirming. If messages, turns or fork
 descendants were added after preview, obtain and review a new preview.
 
@@ -117,8 +118,30 @@ including missing Russian evidence, do not alter the meaning of a tombstone.
 This removes content from Pi's current store, not from everywhere it has been.
 MemoryGate evidence, ToolGate approval/provenance records, provider retention,
 exports, browser caches and copies in unrelated sessions need their own deletion
-paths. ToolGate approval revocation is also separate; Pi refuses to resume the
-forgotten turn but does not revoke that approval in ToolGate.
+paths. Pi refuses to resume the forgotten turn.
+
+## What Pi does once it runs again (2026-10-29)
+
+The command also queues, in the same transaction, what the chat left in other services; Pi does
+it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
+`PI_FORGET_FOLLOWUP_SECONDS`). None of it can undo or block the forgetting:
+
+- **Approval requests:** each request a parked turn of the chat waits on is withdrawn in ToolGate
+  (`POST /v2/agent/requests/{id}/withdraw`, as the agent that asked), so its Inbox card, which
+  quotes the action, goes. A request ToolGate no longer knows or the owner already answered (404,
+  409) needs nothing.
+- **Memories Conker kept on its own** from the chat (Keep results of `conker.remember`, recorded
+  apart from the chat in `keep_results`) are forgotten in MemoryGate at their current revision,
+  the same way as forgetting one memory by hand. A memory MemoryGate already held before the chat
+  is left alone, and so is everything the owner approved himself.
+- **AI jobs Conker made on its own** in the chat are turned off and marked `turnedOff:
+  "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). The owner can turn one
+  back on; that clears the mark.
+
+A step that fails (service down, work running, another forget pending) is tried again with a
+growing wait, at most hourly. Pi's health shows what is still owed as `forget_followups`
+(counts only, `degraded` while something is blocked, such as Pi's key being refused, or waits on
+a service that is not set up). The queues hold ids, never text.
 
 Backups made before deletion still contain the content. A restore must replay
 subsequent deletions before exposing a restored database. Cross-service deletion

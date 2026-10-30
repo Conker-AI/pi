@@ -36,6 +36,14 @@ def password_hash(password: str, salt: bytes) -> str:
 
 
 class AuthStore:
+    """The owner's password, browser sessions and the window a sign-in stays unlocked.
+
+    `idle` is the host's ceiling (GATEWAY_IDLE_TIMEOUT_SECONDS). The owner may pick a shorter
+    window in Settings (`idleTimeoutMinutes` in Pi's owner preferences); the gateway keeps the
+    last choice it saw in this database (`owner_window`), so a restart or Pi being down never
+    loosens it. Until it has seen one, the ceiling applies.
+    """
+
     def __init__(
         self,
         path: str | Path,
@@ -72,6 +80,9 @@ class AuthStore:
                     token_hash TEXT PRIMARY KEY, session_id TEXT NOT NULL,
                     generation INTEGER NOT NULL, fingerprint TEXT NOT NULL,
                     expires REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS owner_window (
+                    id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
+                    minutes INTEGER NOT NULL);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
             if "verified_at" not in columns:
@@ -118,6 +129,35 @@ class AuthStore:
             db.execute("DELETE FROM verification_proofs")
             db.execute("DELETE FROM login_attempts")
 
+    def _idle(self, db: sqlite3.Connection) -> int:
+        """Seconds a sign-in stays unlocked: the owner's choice, never past the host's ceiling."""
+        row = db.execute("SELECT minutes FROM owner_window WHERE id=1").fetchone()
+        return min(self.idle, row[0] * 60) if row and row[0] else self.idle
+
+    def owner_window(self, revision: int, minutes: int, *, saved: bool) -> bool:
+        """Record the owner's sign-out window from a preferences document Pi returned.
+
+        `minutes` 0 means no window shorter than the host's. A save is his latest choice and always
+        wins. A read wins when its revision is not older than the one kept; an older read (one that
+        raced a save) may only shorten the window, so a late answer never loosens it. Returns
+        whether the value was kept.
+        """
+        if (
+            type(revision) is not int
+            or revision < 1
+            or type(minutes) is not int
+            or not 0 <= minutes <= 10080
+        ):
+            return False
+        with self.transaction() as db:
+            row = db.execute("SELECT revision,minutes FROM owner_window WHERE id=1").fetchone()
+            if not saved and row and revision < row["revision"]:
+                kept = row["minutes"] or float("inf")
+                if (minutes or float("inf")) >= kept:
+                    return False
+            db.execute("INSERT OR REPLACE INTO owner_window VALUES(1,?,?)", (revision, minutes))
+            return True
+
     def configured(self) -> bool:
         with self.transaction() as db:
             return db.execute("SELECT 1 FROM owner WHERE id=1").fetchone() is not None
@@ -127,7 +167,7 @@ class AuthStore:
         db.execute(
             "DELETE FROM sessions WHERE expires<=? OR (authenticated=1 AND "
             "(verified_at IS NULL OR verified_at<=?))",
-            (now, now - self.idle),
+            (now, now - self._idle(db)),
         )
         db.execute(
             "DELETE FROM verification_proofs WHERE expires<=? OR session_id NOT IN "
@@ -161,7 +201,7 @@ class AuthStore:
             "csrf": csrf,
             "authenticated": authenticated,
             "expires": expires,
-            "unlock_expires_at": min(expires, now + self.idle) if authenticated else None,
+            "unlock_expires_at": min(expires, now + self._idle(db)) if authenticated else None,
         }
 
     def anonymous(self) -> dict:
@@ -183,12 +223,13 @@ class AuthStore:
     def _session(self, db: sqlite3.Connection, token: str, *, authenticated: bool = True) -> dict:
         row = db.execute("SELECT * FROM sessions WHERE token_hash=?", (digest(token),)).fetchone()
         now = self.clock()
+        idle = self._idle(db)
         if (
             not row
             or row["expires"] <= now
             or (
                 row["authenticated"]
-                and (row["verified_at"] is None or row["verified_at"] + self.idle <= now)
+                and (row["verified_at"] is None or row["verified_at"] + idle <= now)
             )
         ):
             raise AuthError("Session expired or revoked. Sign in again.")
@@ -199,7 +240,7 @@ class AuthStore:
             raise AuthError("Password changed. Sign in again.")
         value = dict(row)
         value["unlock_expires_at"] = (
-            min(row["expires"], row["verified_at"] + self.idle) if row["authenticated"] else None
+            min(row["expires"], row["verified_at"] + idle) if row["authenticated"] else None
         )
         return value
 
@@ -251,7 +292,7 @@ class AuthStore:
             if row["generation"] != generation:
                 raise AuthError("Credentials changed during verification. Sign in again.")
             now = self.clock()
-            deadline = min(row["expires"], now + self.idle)
+            deadline = min(row["expires"], now + self._idle(db))
             proof, expires = secrets.token_urlsafe(32), min(now + 120, deadline)
             db.execute(
                 "UPDATE sessions SET verified_at=?,touched=? WHERE id=?", (now, now, row["id"])

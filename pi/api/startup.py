@@ -116,6 +116,7 @@ async def lifespan(app: FastAPI):
         os.environ.get("PI_OLLAMA_URL", "http://ollama:11434"),
         timeout=_seconds("PI_LOCAL_TIMEOUT_S", 600.0),
         model=os.environ.get("PI_MODEL", "qwen3:4b"),
+        store=store,
     )
 
     # Free by default: a fresh install works with no payment and no key. The
@@ -290,9 +291,19 @@ async def lifespan(app: FastAPI):
         plan_worker.start()
     # Conker's tool requests are drafted in the background, one at a time.
     app.state.loop.drafts.start()
+    # What a forgotten chat left in ToolGate and MemoryGate, removed once Pi runs again.
+    from pi.conversation.forget_followups import Followups
+
+    followups = Followups(
+        store, toolgate, correction, interval=_seconds("PI_FORGET_FOLLOWUP_SECONDS", 30.0)
+    )
+    followups.start()
+    app.state.forget_followups = followups
     try:
         yield
     finally:
+        app.state.forget_followups = None
+        followups.close()
         app.state.loop.drafts.close()
         app.state.loop.thinking.close()
         if plan_worker:

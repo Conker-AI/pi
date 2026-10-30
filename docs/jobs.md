@@ -132,6 +132,14 @@ that need no confirmation (get tools) run on their own, and a tool that needs th
   if...") is expressed. Any other reply adds one Inbox note (`kind: "agent-job"`): its first line,
   up to 160 characters, and the next 400 characters, linking to the chat.
 - AI jobs carry no job budget (`requireBudget` is refused); each tool keeps its own limits.
+- `createdBy` says who made a job: `owner` (by hand, or approving Conker's request) or `conker`
+  (Conker on its own, where his access settings let it). Each run of a job Conker made reserves
+  one suggestion from the owner's daily proactive budget first; quiet hours, proactivity off or a
+  used-up daily limit fail the run (`code: "HELD_BACK"`) before any model is asked. The owner's
+  own jobs run on his schedule, as before. No AI-job run may make a job or draft a tool. The
+  browser view shows `createdBy` and `turnedOff` (`chat_forgotten`: Pi turned it off because the
+  chat Conker made it in was forgotten; turning it on clears it). An edit keeps `createdBy` and
+  the job chat's privacy.
 - Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
   something the owner keeps asking. Forgetting a job's chat deletes its notes; the next run starts
   a new chat.
@@ -168,9 +176,13 @@ header (never the address or query, which the server logs) and at most 16 KB: JS
 as `{"text": ...}`. The gateway forwards it with its runtime credential; Pi gives every bad secret
 or unknown job the same 403, allows one call every 30 seconds per job (429), never starts a paused
 job or one that is still running (`started: false` with the reason), and admits one run per call.
-What the caller sent (at most 8000 characters) waits for that run, reaches the agent wrapped as
-information from outside Conker and never as instructions, and is deleted as the run takes it
-(or after a day, or when the job's chat is forgotten). Tools still ask exactly as in chat.
+What the caller sent (at most 8000 characters) waits for that run and reaches the agent wrapped as
+information from outside Conker, never as instructions. The waiting copy is deleted as the run
+takes it (or after a day, or when the job's chat is forgotten); the text itself stays in the run's
+message in the job's chat until that chat is forgotten. Once a payload arrives, the whole chat
+(and any fork of it) counts as holding outside content (docs/access.md) and none of its messages is
+sent to memory, where MemoryGate would read the caller's words as the owner's. Tools still ask
+exactly as in chat.
 
 The gateway is reachable from the owner's own devices (Tailscale); a service on the internet can
 only call it if the owner exposes the gateway on purpose.

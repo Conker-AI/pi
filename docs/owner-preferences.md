@@ -16,7 +16,8 @@ The preference document matches the frontend configuration fields:
   "urgency": "meaningful",
   "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
   "idleTimeoutMinutes": 15,
-  "planAlerts": {"enabled": true, "percent": 80}
+  "planAlerts": {"enabled": true, "percent": 80},
+  "newChatAccess": "default"
 }
 ```
 
@@ -24,7 +25,17 @@ Fields are strict: unknown fields and coercions are rejected. Quiet-hour times u
 24-hour HH:mm and an available IANA zone; enabled start and end must differ.
 Urgency accepts `meaningful`, `urgent_only`, or `off`. Integer daily ceilings are
 0–100 suggestions, 0–1440 research minutes, and 0–100000 cents. Idle timeout accepts
-0, 5, 15, 30, or 60 minutes. [Plan usage alerts](plan-alerts.md) take a level from 50 to 100
+0, 5, 15, 30, or 60 minutes: how long a browser stays signed in after the password was last
+entered. The gateway enforces it from every preferences document it relays and keeps the last
+one in its own database; the host's `GATEWAY_IDLE_TIMEOUT_SECONDS` (default 30 minutes) is the
+ceiling, so a longer choice and 0 both mean the host's limit, and the host's limit applies until
+the gateway has seen a document (see [browser-auth.md](browser-auth.md)).
+`newChatAccess` (`default`, `ask`, `ai` or `full`; preferences saved before it existed read
+`default`) is the access switch a chat the owner starts begins with. `full` lets Conker act
+without asking, so it lives here, where saving through the gateway needs the password, and not
+in the owner settings document. `pi.owner.preferences.new_chat_access` reads it inside the
+transaction that creates the chat; chats that exist, AI job chats and forks keep their own
+switch. [Plan usage alerts](plan-alerts.md) take a level from 50 to 100
 percent; preferences saved before that field existed read its default. Validation failures return 422. Stale revisions return
 409 with `detail.code=revision_conflict` and `detail.current_revision`; reload and
 reconcile before saving. SQLite serializes concurrent updates and retains the
@@ -41,8 +52,8 @@ zero cost ceiling. Existing usage plus proposed usage is checked against each ca
 These functions are **not scheduler enforcement or permission authorization**.
 There is no scheduler admission hook, atomic budget reservation ledger, notification
 delivery, or idle-lock enforcement in this package. A future scheduler must supply
-authoritative same-day usage and reserve work atomically before dispatch. Gateway
-idle enforcement remains separate. Timezone data is supplied by the pinned `tzdata`
+authoritative same-day usage and reserve work atomically before dispatch. The gateway
+enforces the idle timeout. Timezone data is supplied by the pinned `tzdata`
 dependency when the operating system has no IANA database.
 
 Validation (isolated temporary stores; no live services):
