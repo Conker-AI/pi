@@ -23,8 +23,16 @@ Guards no layer removes:
    count, and Conker's own Keep actions go to the reviewer. Outside content is: a result from a
    tool that is not Conker's own (in the chat or a message it inherited), a webhook payload (once
    one arrives, for the whole chat and its forks; none of that chat's messages goes to memory),
-   memories recalled for this turn, an attachment in the chat, a project source, and his answer
-   to one of Conker's questions (its question and options were the AI's).
+   a memory recalled for this turn that is not his own words, an attachment in the chat, a
+   project source, and his answer to one of Conker's questions (its question and options were the
+   AI's). Recalled memories count only when at least one is not his: MemoryGate marks who wrote
+   each (`source_type`), and his own are a statement he typed or approved word for word (`user`)
+   and a memory made from his chat messages (`owner_statement`, counted only when each message it
+   cites is one Pi holds as his, typed in a chat that sends to memory, never an AI job's opening
+   message). Conker's own statements, imported or listener content, entities, episodes, a
+   briefing, and anything without a readable source count as outside
+   (`pi.memory.store.others_wrote`). So in a chat that recalls only his own memories his typed
+   words still approve, as in a chat without memory.
 
 **His words count:** when an action would ask, is not on the floor and no outside content is in the
 chat, the reviewer checks whether his own message asks for exactly this action; if so it runs. Not

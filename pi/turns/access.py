@@ -12,9 +12,12 @@ is one more reason to ask, never a reason to run. ToolGate enforces the floor ag
 "run" only from a key he made a policy delegate. See context/design/automation-and-access.md.
 
 Outside content is any text in the turn the owner did not write: a result from a tool that is not
-Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_outside`), memories
-recalled for this turn, an attachment or a project source, or his answer to Conker's question
-(the question and its options were written by the AI).
+Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_outside`), a memory
+recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
+imported or listener content, anything without a readable source), an attachment or a project
+source, or his answer to Conker's question (the question and its options were written by the AI).
+Memories that are all his own (statements he typed or approved, memories made from his messages)
+leave his typed request able to approve, as in a chat without memory.
 """
 
 from __future__ import annotations
@@ -125,8 +128,11 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
         rows = db.execute(
             f"SELECT m.content FROM messages m WHERE {_IN_CHAT} AND m.role='tool'", chat
         ).fetchall()
-    if turn_id and memory_store.recalled(memory_store.context(store, turn_id)["package"]):
-        return True
+    if turn_id:
+        package = memory_store.context(store, turn_id)["package"]
+        with store._connect() as db:
+            if memory_store.others_wrote(db, package):
+                return True
     for row in rows:
         try:
             # Stored as the JSON of the observation text, which is itself JSON.

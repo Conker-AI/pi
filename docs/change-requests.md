@@ -100,7 +100,7 @@ lists open requests (`kind: "change-request"`). Forgetting a chat deletes its re
   `"conker"` (made at once where his settings let it). A job Conker made on its own reserves one
   suggestion from his daily proactive budget before each run (quiet hours, his proactivity switch
   and the daily limit hold it back, with no model call), and its instructions never count as his
-  own words. No run of any AI job is offered `conker.schedule` or `conker.draft_tool`. Conker's
+  own words until he takes the job as his own (`POST /jobs/{id}/adopt`, docs/jobs.md). No run of any AI job is offered `conker.schedule` or `conker.draft_tool`. Conker's
   requests make no job while 20 AI jobs are on (refused, or 409 `job_limit` on approval), and
   Conker makes at most 3 a day on its own; a fourth waits for his approval.
 - **Memories:** a Keep memory is stored with `"origin": "conker"` (MemoryGate keeps it as an

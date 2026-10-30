@@ -11,6 +11,20 @@ _MESSAGE_SETTINGS = """COALESCE(
  (SELECT settings FROM session_settings WHERE session_id=NEW.session_id),
  '{"agentId":"companion","privacy":{"memoryDisabled":false,"harnessDisabled":false}}')"""
 
+# The opening message of each AI job's run (`pi.schedule.agent_jobs`). Pi wrote it: the preamble,
+# the run's date and time, why it started (a webhook's payload among them) and the job's
+# instructions, which for a job Conker made the model wrote. Nobody typed it, so it never goes to
+# MemoryGate; the job's chat still recalls memory, and what the owner types there is his own.
+JOB_RUN_INPUTS = (
+    "SELECT s.input_message_id FROM turn_submissions s JOIN scheduled_runs r "
+    "ON r.id=s.request_id WHERE s.input_message_id IS NOT NULL"
+)
+# While Pi writes one: the chat's running turn is a run's and has no opening message yet
+# (`pi.conversation.submissions.bind` links the turn to its request before writing it).
+_JOB_RUN_OPENING = """SELECT 1 FROM turns t JOIN turn_submissions s ON s.turn_id=t.id
+  JOIN scheduled_runs r ON r.id=s.request_id
+  WHERE t.session_id=NEW.session_id AND t.status='running' AND s.input_message_id IS NULL"""
+
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS memory_outbox (
     message_id TEXT PRIMARY KEY REFERENCES messages(id),
@@ -61,7 +75,8 @@ BEGIN
       json_extract({_MESSAGE_SETTINGS},'$.privacy.harnessDisabled'),
       NOT json_extract({_MESSAGE_SETTINGS},'$.privacy.memoryDisabled')
       AND json_extract({_MESSAGE_SETTINGS},'$.agentId')='companion'
-      AND NOT EXISTS(SELECT 1 FROM outside_sessions WHERE session_id=NEW.session_id));
+      AND NOT EXISTS(SELECT 1 FROM outside_sessions WHERE session_id=NEW.session_id)
+      AND NOT EXISTS({_JOB_RUN_OPENING}));
     INSERT INTO memory_outbox(message_id, operation)
     SELECT NEW.id,'ingest' FROM message_privacy
     WHERE message_id=NEW.id AND allow_ingest=1 AND NEW.role='user';
@@ -76,6 +91,23 @@ FROM messages m LEFT JOIN forgotten_sessions f ON f.session_id=m.session_id
 WHERE m.role='user' AND (f.session_id IS NOT NULL OR EXISTS(
  SELECT 1 FROM message_privacy p WHERE p.message_id=m.id AND p.allow_ingest=1));
 """
+
+
+def _keep_out_old_job_runs(db):
+    """Older Pi queued job runs' opening messages like the owner's: withdraw those not yet sent.
+    One already sent stays as its receipt records it (recall never counts it as his words)."""
+    tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if not {"turn_submissions", "scheduled_runs"} <= tables:
+        return  # A new database: nothing was queued before.
+    db.execute(
+        "DELETE FROM memory_outbox WHERE operation='ingest' AND state='pending' "
+        f"AND delivery_started=0 AND message_id IN ({JOB_RUN_INPUTS})"
+    )
+
+
+def job_run_input(db, message_id) -> bool:
+    """Whether this message opened an AI job's run."""
+    return bool(db.execute(f"SELECT 1 WHERE ? IN ({JOB_RUN_INPUTS})", (message_id,)).fetchone())
 
 
 def migrate(db):
@@ -99,6 +131,8 @@ def migrate(db):
             "WHERE attempts>0 OR state='sent' OR operation='delete'"
         )
         db.commit()
+    _keep_out_old_job_runs(db)
+    db.commit()
 
 
 def pin_destination(store, message_id, agent_id):
@@ -231,23 +265,77 @@ def _contains_content(value, depth=0):
     return True
 
 
+_GROUPS = ("memories", "entities", "episodes", "evidence")
+_METADATA = {"query", "agent_id", "scope", "retrieval", "usage", "version", "schemaVersion"}
+# MemoryGate's `source_type` of a memory holding the owner's own words: a statement he typed or
+# approved word for word ("user"), or a memory made from one of his chat messages
+# ("owner_statement", which cites them). Conker's own statements ("assistant"), listener and
+# imported content ("automatic_listener"), documents, skills and the rest are someone else's.
+OWNER_SOURCES = ("user", "owner_statement")
+
+
 def recalled(package) -> bool:
     """Whether a saved package carries recalled evidence, not only its empty envelope."""
     if not isinstance(package, dict):
         return False
-    groups = ("memories", "entities", "episodes", "evidence")
-    metadata = {"query", "agent_id", "scope", "retrieval", "usage", "version", "schemaVersion"}
     return (
-        any(package.get(key) for key in groups)
+        any(package.get(key) for key in _GROUPS)
         or _contains_content(package.get("briefing"))
         # Preserve future content fields conservatively; only known empty
         # envelope scaffolding can be elided.
         or any(
             _contains_content(value)
             for key, value in package.items()
-            if key not in (*groups, "briefing", *metadata)
+            if key not in (*_GROUPS, "briefing", *_METADATA)
         )
     )
+
+
+def others_wrote(db, package) -> bool:
+    """Whether recalled evidence holds any text the owner did not write himself (`pi.turns.access`).
+
+    Fails closed. Entities, episodes, evidence, a briefing and any field Pi does not know count as
+    someone else's (MemoryGate derives them). A memory is his only with an owner source; one made
+    from his messages only when each message it cites is one Pi holds as his, typed in a chat that
+    sends to memory (never an AI job's opening message, even one an older Pi sent).
+    """
+    if not recalled(package):
+        return False
+    if any(
+        _contains_content(value)
+        for key, value in package.items()
+        if key not in ("memories", *_METADATA)
+    ):
+        return True
+    memories = package.get("memories")
+    if not isinstance(memories, list):
+        return True
+    cited = set()
+    for item in memories:
+        source = item.get("source_type") if isinstance(item, dict) else None
+        if source not in OWNER_SOURCES:
+            return True
+        if source == "user":
+            continue
+        citations = item.get("citations")
+        ids = (
+            [entry.get("message_id") if isinstance(entry, dict) else None for entry in citations]
+            if isinstance(citations, list)
+            else []
+        )
+        if not ids or not all(isinstance(value, str) and value for value in ids):
+            return True
+        cited.update(ids)
+    if not cited:
+        return False
+    marks = ",".join("?" for _ in cited)
+    his = db.execute(
+        "SELECT COUNT(*) FROM messages m JOIN message_privacy p ON p.message_id=m.id "
+        f"WHERE m.id IN ({marks}) AND m.role='user' AND p.allow_ingest=1 "
+        f"AND m.id NOT IN ({JOB_RUN_INPUTS})",
+        sorted(cited),
+    ).fetchone()[0]
+    return his != len(cited)
 
 
 def prompt_context(saved):

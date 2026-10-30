@@ -16340,6 +16340,89 @@
         }
       }
     },
+    "/jobs/{identity}/adopt": {
+      "post": {
+        "summary": "Adopt",
+        "description": "Take an AI job Conker made as the owner's own: its runs count as his from now on.",
+        "operationId": "adopt_jobs__identity__adopt_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^job_[a-f0-9]{32}$",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Adopt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jobs/{identity}/runs": {
       "get": {
         "summary": "Runs",
@@ -23686,6 +23769,22 @@
         ],
         "title": "Add"
       },
+      "Adopt": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "Adopt",
+        "description": "The owner takes a job Conker made as his own, at the revision he looked at."
+      },
       "AgentCollection": {
         "properties": {
           "schemaVersion": {
@@ -26867,6 +26966,18 @@
               }
             ],
             "title": "Turnedoff"
+          },
+          "adoptedAt": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adoptedat"
           }
         },
         "additionalProperties": false,
@@ -27002,6 +27113,18 @@
               }
             ],
             "title": "Turnedoff"
+          },
+          "adoptedAt": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adoptedat"
           }
         },
         "additionalProperties": false,
