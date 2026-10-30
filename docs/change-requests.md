@@ -42,8 +42,11 @@ The request's `state` stays `open` throughout; its payload says how far drafting
 | `drafting` | `{"description", "status"}` | Drafting... |
 | `ready` | `{"description", "status", "document", "issues", "steps", "checked"}`, plus `"note"` when `checked` is false | Ready to review |
 | `failed` | `{"description", "status", "error"}` | Couldn't draft: `error` |
+| `needs_detail` | `{"description", "status", "question"}`, plus `"askedIn"` once Conker asked in the chat | Conker asks: `question`, with Answer |
 
-A request filed before this has no `status` and counts as `ready`. `steps` are plain-word lines,
+Any of them can also carry `"conversation"`: the drafter's questions and the owner's answers so
+far, oldest first, `[{"role": "builder" | "owner", "content": str}]`, at most 16 entries. A
+request filed before this has no `status` and counts as `ready`. `steps` are plain-word lines,
 one per step in the order they run ("Search the web for the topic (uses Web search)"), which Pi
 reads off the document itself; no model writes them. While drafting the title is "Draft a tool:
 <description>"; when ready it is "Add the tool “<name>”" and the summary is what the drafter says
@@ -62,9 +65,31 @@ How it drafts, in the background, one request at a time:
    workflow exists) reads the document; the model repairs it at most twice from what it found.
    When ToolGate does not answer, or is older and lacks the check (404), the draft is ready with
    Pi's own issues, `checked: false` and a note that Tools checks it again when opened.
-4. A question from the drafter ("which chat?") fails the card with its words, so the owner can
+4. A question from the drafter ("which chat?") for a request from a chat is asked there (below).
+   A request without a chat (`/tool-drafts`) fails with the question's words, so the owner can
    change the description and try again. A request still drafting when Pi stopped is failed when
-   Pi starts: "Pi restarted while drafting. Try again."
+   Pi starts: "Pi restarted while drafting. Try again." (its answers so far are kept).
+
+### When the drafter needs a detail (2026-10-30)
+
+For a request filed in a chat, the card becomes `needs_detail` with the drafter's `question`, and
+Conker posts it in that chat as a stored message (no model call): "One question before I can draft
+your tool: <question> Reply here and I'll go on drafting." It goes to the chat the conversation
+continues in after a fork and waits while the chat is answering; `askedIn` (that chat's id) is
+written in the same commit as the message. A question Pi had not posted when it stopped is posted
+when Pi starts.
+
+- **In the chat:** the owner's next message in that chat (`askedIn`, or the chat it continues in)
+  is the answer. Pi takes it before any model call: the card goes back to `drafting` with
+  `conversation` growing by the question and the answer, the drafting worker wakes, and the turn
+  ends with Conker's stored reply "Thanks. I'm drafting the tool with that; it will be in your
+  Inbox." A voice call, an AI job's run and an answer to one of Conker's own questions
+  (`conker.ask`) are never taken as the answer, nor is a message in another chat.
+- **From the Inbox:** `POST /change-requests/{id}/retry` `{"answer": str 1..4000}` does the same
+  (409 `not_asking` when no question waits). Nothing is posted in the chat then, and the chat's
+  next message is an ordinary one.
+- The drafter sees the description and the conversation so far (the last 16 entries) and asks at
+  most 4 times; after that the card fails: "The drafter still has a question: <question>".
 
 Routes, all owner (`require_owner`; the browser's signed-in session, no password: they make
 nothing real):
@@ -72,9 +97,11 @@ nothing real):
 - `POST /tool-drafts` `{"description": str 1..4000, "request_id": str 16..128 [A-Za-z0-9_.:-]}`:
   the new request (its view, as `GET /change-requests/{id}`), drafting. The same `request_id`
   gives back the same request; with another description it is 409 `request_reused`.
-- `POST /change-requests/{id}/retry` with an empty body or `{"description": str 1..4000}`: back to
-  drafting, from the new description if given. 409 `drafting` while it drafts, `decided` once it
-  is no longer open, `not_a_tool_draft` for other requests.
+- `POST /change-requests/{id}/retry`, back to drafting, with one of: an empty body (as it was,
+  the conversation kept), `{"description": str 1..4000}` (a new description, a fresh start) or
+  `{"answer": str 1..4000}` (the owner's answer to the drafter's question; only while it is
+  `needs_detail`, else 409 `not_asking`). Both fields at once is 422. 409 `drafting` while it
+  drafts, `decided` once it is no longer open, `not_a_tool_draft` for other requests.
 - `POST /change-requests/{id}/published` `{"toolId": str, "name": str 1..160}`: the owner
   published the tool (`toolId` is the id ToolGate's publish answer gives, the one Conker sees).
   Recorded as `result.published = {"toolId", "name", "publishedAt"}` and the request counts as
@@ -117,7 +144,8 @@ lists open requests (`kind: "change-request"`). Forgetting a chat deletes its re
 CLI parity: `conker inspect change-requests` lists open requests; `conker apply requests FILE`
 takes `{"operation": "approve" | "decline", "id": "creq_..."}`,
 `{"operation": "saved", "id": "creq_...", "draftId": "..."}` after saving the document with
-`conker apply tools`, `{"operation": "retry", "id": "creq_...", "description"?: "..."}`, and
+`conker apply tools`, `{"operation": "retry", "id": "creq_...", "description"?: "..."}` (an
+answer goes through `conker tool answer creq_... "..."`), and
 `{"operation": "published", "id": "creq_...", "toolId": "...", "name": "..."}`. Publishing with
 `conker apply tools` takes `"conkerMayUse": true` to let Conker use the tool.
 

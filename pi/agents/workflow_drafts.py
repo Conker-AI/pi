@@ -1,9 +1,10 @@
 """Workflow drafts: the drafting model drafts an editor workflow from the owner's words; nothing is saved.
 
 Pi only thinks here. The owner stores the draft in ToolGate, where the editor validates it, and
-publishes it there. The model sees the owner's description and the capability list it is given:
-no credentials, memories or chats. Tool requests (`pi.agents.tool_drafts`) draft through here in
-the background; `POST /workflow-drafts/draft` is the command line's older way in.
+publishes it there. The model sees the owner's description, the drafter's questions and his
+answers so far, and the capability list it is given: no credentials, memories or chats. Tool
+requests (`pi.agents.tool_drafts`) draft through here in the background, for the chat, the Tools
+screen and the command line alike (`POST /tool-drafts`).
 """
 
 from __future__ import annotations
@@ -39,10 +40,6 @@ NODE_TYPES = {
 FIELD_TYPES = {"string", "number", "boolean", "array", "object"}
 EFFECTS = {"read", "prepare", "write"}
 BUDGETS = {"maxSteps": (2, 200, 50), "maxLoopItems": (1, 50, 20), "timeoutMs": (100, 30000, 15000)}
-# The command line's draft route waits for the model, which writes a whole document: on a
-# CPU-only local model that takes minutes, past the answer role's limit (at most 120 s).
-# Under the command line's own 11-minute wait. Background drafts use the role's own limit.
-MODEL_WAIT_MS = 600_000
 
 INSTRUCTIONS = """You draft one workflow for ToolGate's visual editor from the owner's description.
 You cannot run, save or publish anything; the owner reviews the draft first.
@@ -285,12 +282,12 @@ def _now(seconds, call):
 
 
 def draft(
-    store, providers, body: Request, *, minimum_timeout_ms=MODEL_WAIT_MS, attempt=_now, known=None
+    store, providers, body: Request, *, minimum_timeout_ms=None, attempt=_now, known=None
 ) -> dict:
     """A proposed workflow for review; saves nothing.
 
-    `minimum_timeout_ms` lets each model call wait longer than its role's limit; None keeps the
-    role's own. `attempt(seconds, call)` runs each model call, so a caller can bound and cancel
+    `minimum_timeout_ms` lets each model call wait longer than its role's limit; None (the
+    default, what background drafts use) keeps the role's own. `attempt(seconds, call)` runs each model call, so a caller can bound and cancel
     it. `known` are the capabilities a step may use when they are more than the model was shown.
     """
     saved = model_roles.load(store)

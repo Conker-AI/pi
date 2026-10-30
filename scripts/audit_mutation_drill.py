@@ -218,18 +218,11 @@ CASES = [
         EXEC,
     ),
     (
-        "workflow-drafts-outlive-forgetting",
+        "retired-workflow-records-outlive-forgetting",
         "pi/conversation/forgetting.py",
-        'workflow_proposals.redact(db, plan["session_ids"])',
+        'retired_workflows.redact(db, plan["session_ids"])',
         "pass",
-        "tests/test_workflow_proposals.py",
-    ),
-    (
-        "workflow-offers-outlive-forgetting",
-        "pi/conversation/forgetting.py",
-        'workflow_offers.redact(db, plan["session_ids"])',
-        "pass",
-        "tests/test_workflow_offers.py",
+        "tests/test_retired_workflows.py",
     ),
 ]
 
