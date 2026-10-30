@@ -383,3 +383,17 @@ def test_the_import_archive_is_read_with_the_session(relay):
     client.cookies.clear()
     assert client.get("/api/control/pi/imports").status_code == 401
     assert len(seen) == 3
+
+
+def test_download_query_is_in_openapi():
+    paths = create_app(Config(ORIGIN, "unused.db", "http://pi.test", "r" * 32)).openapi()["paths"]
+    artifact = paths["/api/control/pi/artifacts/{identity}/download"]["get"]["parameters"]
+    artifact = {item["name"]: item for item in artifact}
+    assert artifact["format"]["in"] == "query" and artifact["format"]["required"] is True
+    assert artifact["format"]["schema"]["enum"] == ["docx", "pdf", "pptx", "xlsx", "csv", "json"]
+    assert artifact["version"]["required"] is False
+    assert artifact["version"]["schema"] == {"type": "integer", "minimum": 1, "maximum": 100}
+    answer = paths["/api/control/pi/sessions/{session_id}/messages/{message_id}/download"]["get"]
+    answer = {item["name"]: item for item in answer["parameters"]}
+    assert answer["format"]["schema"]["enum"] == ["docx", "pdf", "pptx", "xlsx"]
+    assert "version" not in answer
