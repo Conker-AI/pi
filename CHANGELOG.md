@@ -23,6 +23,16 @@ be a decision with visible consequences.
   5.1.0 (BSD); the image gains `fonts-dejavu-core` for Cyrillic and Greek in PDFs. A Markdown
   artifact's DOCX now reads single line breaks as spaces (as the chat shows them), and its
   sources are a short list instead of a JSON block.
+- **Import from ChatGPT and Claude** (docs/imports.md). Owner routes `POST /imports/{chatgpt|claude}/preview`
+  (saves nothing) and `POST /imports/{chatgpt|claude}/{digest}` (exactly the previewed file) read
+  an export's `conversations.json` strictly, with size and count limits, and keep each chat as an
+  archived, read-only chat in its own tables (`GET /imports/chats`, labelled "Imported from
+  ChatGPT/Claude", the export's ids and times kept), idempotent by the export's chat and message
+  ids. The owner's own messages are offered to MemoryGate through an import listener
+  (`PI_MEMORYGATE_IMPORT_SOURCE`, `PI_MEMORYGATE_IMPORT_KEY`) as outside content, never as owner
+  statements; nothing is offered when memory was skipped at setup or new chats start private.
+  Nothing runs during an import, and imported text never reaches a turn except as recalled
+  memory, which counts as outside content.
 - **A failed answer save no longer leaves the chat running until a restart**
   (`pi/turns/restart.py`). A database error at the final commit is tried again three times
   (0.25, 1, 3 s). If it still fails, the request says the answer is kept and a small settle,

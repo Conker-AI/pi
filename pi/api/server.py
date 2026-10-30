@@ -412,6 +412,13 @@ app.include_router(sessions_api.router(lambda: app.state, require_key, require_a
 
 
 app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))
+from pi.api.routes import imports as imports_api  # noqa: E402
+
+app.include_router(
+    imports_api.router(
+        lambda: app.state.store, lambda: getattr(app.state, "import_offers", None), require_owner
+    )
+)
 
 
 app.include_router(proposals_api.router(lambda: app.state, require_key, require_owner))
