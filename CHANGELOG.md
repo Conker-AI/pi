@@ -6,6 +6,22 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An AI job's opening message stays out of memory.** Each run's first message (the preamble,
+  the run's date and time, why it started, any webhook payload and the job's instructions,
+  which for a job Conker made the model wrote) is no longer queued for MemoryGate as if the owner
+  had typed it. The job's chat still recalls memory, and what the owner types there is his own as
+  anywhere. The message view shows it as `excluded` with no reason code. An opening message an
+  older Pi had queued and not yet sent is withdrawn on upgrade.
+- **His own memories no longer silence his words.** Recalled memories make a turn count as outside
+  content only when at least one is not the owner's own: MemoryGate's `source_type` `user` (his
+  statement) or `owner_statement` (made from his chat messages, each cited message checked
+  against Pi's own records) are his; anything else, or no readable source, counts as outside, as
+  do entities, episodes and a briefing (`pi.memory.store.others_wrote`).
+- **The owner can take a job Conker made as his own.** `POST /jobs/{id}/adopt`
+  `{"expected_revision": n}` (owner credential) sets `createdBy` to `owner` and records
+  `adoptedAt` in the job (shown in the job view, kept by edits). Its later runs count as his
+  (his words, no proactive budget), and forgetting the chat it came from no longer turns it off.
+  A job that is already his is refused (409 `already_owner`).
 - **The browser gateway reaches owner files, imports, server actions, tool settings and
   lockdown** (`gateway/relay.py`, `file_routes.py`, `host_ops.py`; contract in
   `docs/browser-auth.md`). One streaming file relay serves downloads
@@ -22,7 +38,9 @@ be a decision with visible consequences.
   /api/owner/lockdown` (on with the session, off with the password) go to ToolGate's owner
   routes. `GET /api/owner/tools/{id}/runs` (session) and `POST /api/owner/tools/{id}/runs`
   (password bound to the body; the chat's execution key) run any tool by hand through ToolGate's
-  owner runs. Browser contract: an import preview is a session-only write.
+  owner runs. `POST /api/control/pi/jobs/{id}/adopt` (adopting a job Conker made) passes the
+  control relay with the password bound to its body. Browser contract: an import preview is a
+  session-only write.
 
 ## 0.13.0
 

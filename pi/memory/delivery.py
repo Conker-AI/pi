@@ -7,6 +7,8 @@ import re
 import unicodedata
 from uuid import NAMESPACE_URL, uuid5
 
+from pi.memory import store as memory_store
+
 MAX_RECEIPT_BYTES = 16384
 MAX_RESULTS = 100
 NOTE_PREFIX = "Memory delivery acknowledgement for the current input: "
@@ -93,6 +95,11 @@ def for_message(db, message):
         return _view("unavailable", "legacy_unknown")
     if row["memory_disabled"] == 1:
         return _view("excluded", "privacy_disabled")
+    if (row["allow_ingest"] == 0 or row["message_id"] is None) and memory_store.job_run_input(
+        db, message["id"]
+    ):
+        # An AI job's opening message: Pi wrote it, so it is kept out (no agent was excluded).
+        return _view("excluded")
     if row["allow_ingest"] == 0:
         return _view("excluded", "agent_excluded")
     if row["message_id"] is None:

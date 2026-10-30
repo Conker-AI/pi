@@ -131,8 +131,8 @@ def create(store, definition, now=None):
 
 
 def _carried(previous: Definition, definition: Definition) -> Definition:
-    """What an edit keeps: who made the job and its chat's privacy, which only ever tightens.
-    Turning it back on clears why Pi turned it off."""
+    """What an edit keeps: who made the job (and when he adopted it) and its chat's privacy, which
+    only ever tightens. Turning it back on clears why Pi turned it off."""
     privacy = None
     if previous.privacy or definition.privacy:
         before, after = previous.privacy or JobPrivacy(), definition.privacy or JobPrivacy()
@@ -143,6 +143,7 @@ def _carried(previous: Definition, definition: Definition) -> Definition:
     return definition.model_copy(
         update={
             "createdBy": previous.createdBy,
+            "adoptedAt": previous.adoptedAt,
             "privacy": privacy,
             "turnedOff": None if definition.enabled else previous.turnedOff,
         }
@@ -383,6 +384,7 @@ def browser_job(row):
             budgetAllowanceConfigured=definition.budgetAllowanceId is not None,
             createdBy=definition.createdBy,
             turnedOff=definition.turnedOff,
+            adoptedAt=definition.adoptedAt,
         ),
         createdAt=row["created_at"],
         nextAt=row["next_at"],

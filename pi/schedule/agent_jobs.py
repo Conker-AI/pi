@@ -18,6 +18,15 @@ proactivity switch and the daily limit apply), and its instructions never count 
 make no job once `MAX_ENABLED` AI jobs are on, and Conker makes at most `CONKER_PER_DAY` a day by
 itself; past that its request waits for the owner. A job asked for in a private chat gets a
 private chat of its own.
+
+The owner can take a job Conker made as his own (`adopt`, `POST /jobs/{id}/adopt`): it becomes
+`createdBy: "owner"` and records when (`adoptedAt`). From its next run its instructions count as
+his words and it runs on his schedule like a job he made; forgetting the chat it came from no
+longer turns it off.
+
+A run's opening message (all of the above, the instructions and any webhook payload) is never sent
+to memory (`pi.memory.store.JOB_RUN_INPUTS`); the job's chat still recalls memory, and what the
+owner types there is his own.
 """
 
 from __future__ import annotations
@@ -33,7 +42,7 @@ from pi.conversation import submissions
 from pi.core.errors import ServiceError
 from pi.owner import preferences as prefs
 from pi.schedule import agent_hooks, agent_triggers, jobs, proactive_budget
-from pi.schedule.job_models import AgentJobCreate, AgentTarget, Definition, JobPrivacy
+from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 from pi.turns.failures import TurnFailed
 
 QUIET = "NOTHING"
@@ -218,12 +227,15 @@ def admit(store, run_id, definition, now=None) -> str | None:
 
 def turn_off(db, job_ids, reason="chat_forgotten") -> None:
     """Inside the caller's transaction (forgetting): switch these jobs off, say why, and withdraw
-    their runs that have not started. Never deletes a job; the owner can turn it back on."""
+    their runs that have not started. Never deletes a job; the owner can turn it back on. A job he
+    took as his own is his and stays as it is."""
     for job_id in job_ids:
         row = db.execute("SELECT definition FROM scheduled_jobs WHERE id=?", (job_id,)).fetchone()
         if row is None:
             continue
         definition = Definition.model_validate_json(row[0])
+        if definition.createdBy == "owner":
+            continue
         definition = definition.model_copy(update={"enabled": False, "turnedOff": reason})
         db.execute(
             "UPDATE scheduled_jobs SET revision=revision+1,definition=? WHERE id=?",
@@ -234,6 +246,37 @@ def turn_off(db, job_ids, reason="chat_forgotten") -> None:
             "AND status IN ('ready','awaiting_budget')",
             (job_id,),
         )
+
+
+def adopt(store, identity, body: Adopt, now=None):
+    """The owner takes an AI job Conker made as his own, at the revision he looked at.
+
+    It becomes `createdBy: "owner"` with the time recorded (`adoptedAt`), so runs claimed from
+    now on count as his: its instructions are his words and no proactive budget is reserved for
+    them. A run already admitted keeps what it was. Refused for a job that is already his."""
+    body = Adopt.model_validate(body.model_dump())
+    now = time.time() if now is None else now
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT revision, definition FROM scheduled_jobs WHERE id=?", (identity,)
+        ).fetchone()
+        if row is None:
+            raise jobs.JobError("Job not found.", 404)
+        if row["revision"] != body.expected_revision:
+            raise jobs.JobError("Job changed; reload before saving.")
+        definition = Definition.model_validate_json(row["definition"])
+        if definition.createdBy != "conker":
+            raise AgentJobError("already_owner", "This job is already yours.", 409)
+        definition = Definition.model_validate(
+            {**definition.model_dump(), "createdBy": "owner", "adoptedAt": now}
+        )
+        db.execute(
+            "UPDATE scheduled_jobs SET revision=revision+1,definition=? WHERE id=?",
+            (definition.model_dump_json(), identity),
+        )
+        db.commit()
+    return jobs.get_job(store, identity)
 
 
 def session_for(store, job_id) -> str | None:

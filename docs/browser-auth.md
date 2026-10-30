@@ -159,6 +159,7 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `POST /api/control/pi/imports/{chatgpt\|claude}/{digest}` | password | Pi's import of the previewed file |
 | `GET /api/control/pi/imports`, `/imports/chats`, `/imports/chats/{id}` | session | the JSON control relay |
 | `GET /api/control/pi/inference/usage?limit=` | session | the JSON control relay (read-only) |
+| `POST /api/control/pi/jobs/{id}/adopt` `{"expected_revision"}` | password | the JSON control relay (taking a job Conker made as the owner's own) |
 | `GET /api/host/ops`, `GET /api/host/ops/{id}` | session | the host helper's receipts |
 | `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list` |
 | `POST /api/host/ops` `{"id","operation","arguments"}` | password | the helper's actions: `backup.verify`, `services.restart`, `backup.run` |

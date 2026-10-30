@@ -67,9 +67,10 @@ Imported chats live in their own tables (`imported_chats`, `imported_messages`),
 conversation store, and an imported message cannot be changed. No turn can be sent to one, and
 no fork, search, summary, recall or access check reads them, so imported text can never be
 the owner's own message in an access decision (`pi.turns.access.owner_text`). The only way it can
-reach a turn is through MemoryGate recall, and recalled memories make a turn count as having read
-outside content (`pi.turns.access.outside_content`), so the owner's words in that turn no longer
-loosen an action that would ask.
+reach a turn is through MemoryGate recall, and a recalled imported memory (MemoryGate's listener
+marks it `automatic_listener`) makes a turn count as having read outside content
+(`pi.turns.access.outside_content`), so the owner's words in that turn no longer loosen an action
+that would ask.
 
 ## Idempotent
 
