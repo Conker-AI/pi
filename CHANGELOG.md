@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.13.0
+
 - **A cron job's page can show what it does and who does it.** The owner's job view
   (`GET /jobs`, `GET /jobs/{id}` and every route that answers with a job) adds `instructions`,
   the job's own instructions in full, and `agentName`, its agent's current profile name (null
