@@ -36,6 +36,28 @@ be a decision with visible consequences.
   gone; the command line drafts through `POST /tool-drafts`. The `workflow_proposals` and
   `workflow_offers` tables stay (dropping them needs a migration): nothing writes or lists them,
   and forgetting a chat still clears its rows.
+- **The browser gateway reaches owner files, imports, server actions, tool settings and
+  lockdown** (`gateway/relay.py`, `file_routes.py`, `host_ops.py`; contract in
+  `docs/browser-auth.md`). One streaming file relay serves downloads
+  (`GET /api/control/pi/artifacts/{id}/download?format=docx|pdf|pptx|xlsx|csv|json` and the chat
+  answer download; session; only the asked type, a checked attachment name, at most 16 MB,
+  no-store, nosniff; Pi's refusal JSON passes through) and imports
+  (`POST /api/control/pi/imports/{chatgpt|claude}/preview` with the session,
+  `.../{digest}` with the password; raw `conversations.json` up to 128 MB, a body with another
+  digest refused before Pi has all of it). `GET /api/host/ops`, `GET /api/host/ops/{id}`,
+  `POST /api/host/read` (session; `services.status`, `backup.list`) and `POST /api/host/ops`
+  (password bound to the body; `backup.verify`, `services.restart`, `backup.run`) go to the host
+  helper over the provider-control socket, its receipts and refusals unchanged.
+  `GET`/`PUT /api/owner/tool-settings` (PUT with the password) and `GET`/`POST
+  /api/owner/lockdown` (on with the session, off with the password) go to ToolGate's owner
+  routes. `GET /api/owner/tools/{id}/runs` (session) and `POST /api/owner/tools/{id}/runs`
+  (password bound to the body; the chat's execution key) run any tool by hand through ToolGate's
+  owner runs. `POST /api/control/pi/jobs/{id}/adopt` (adopting a job Conker made) passes the
+  control relay with the password bound to its body. Browser contract: an import preview is a
+  session-only write.
+- **`conker apply requests` can answer the drafter.** A `retry` takes an optional `answer`
+  (1..4000 characters), sent as `POST /change-requests/{id}/retry` `{"answer"}`; with a
+  `description` as well it is refused before Pi is called (`gateway/mutation_models.py`).
 
 ## 0.13.0
 

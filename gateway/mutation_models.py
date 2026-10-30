@@ -171,11 +171,19 @@ class RequestSaved(Strict):
 
 
 class RequestRetry(Strict):
-    """Draft a tool request again, from a new description when one is given."""
+    """Draft a tool request again: from a new description (a fresh start), with the owner's
+    answer to the drafter's question (the same draft goes on), or as it was (answers kept)."""
 
     operation: Literal["retry"]
     id: str = Field(pattern=r"^creq_[a-f0-9]{32}$")
     description: str | None = Field(default=None, min_length=1, max_length=4000)
+    answer: str | None = Field(default=None, min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def one(self):
+        if self.description is not None and self.answer is not None:
+            raise ValueError("Give a new description or an answer, not both.")
+        return self
 
 
 class RequestPublished(Strict):

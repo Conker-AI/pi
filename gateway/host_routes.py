@@ -184,4 +184,44 @@ def router(app, session, admit_write):
     async def codex_session_status(identity: str, request: Request):
         return await codex_session_request(request, "status", identity)
 
+    @routes.get("/api/host/ops")
+    @routes.get("/api/host/ops/{identity}")
+    @routes.post("/api/host/ops")
+    @routes.post("/api/host/read")
+    async def host_operations(request: Request, identity: str | None = None):
+        """Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)
+        with his session, and the three actions (backup.verify, services.restart, backup.run)
+        with the password proof bound to the exact body. Answers are the helper's own."""
+        from starlette.concurrency import run_in_threadpool
+
+        from . import host_ops
+
+        session(request)
+        try:
+            if request.scope["query_string"] or (
+                identity is not None and not re.fullmatch(host_ops.OP_ID, identity)
+            ):
+                raise host_ops.invalid(
+                    "Name one server action by its id, without query parameters."
+                )
+            body, path = None, "/host/ops" if identity is None else f"/host/ops/{identity}"
+            if request.method == "POST":
+                read = request.url.path == "/api/host/read"
+                path = "/host/read" if read else "/host/ops"
+                body = host_ops.validate(await json_body(request, max_bytes=1024), read=read)
+                if not read:
+                    # An action changes the server; the proof covers its id, name and arguments.
+                    admit_write(request, body)
+            status, value = await run_in_threadpool(
+                host_ops.request,
+                app.state.provider_transport,
+                app.state.config.provider_control_socket,
+                request.method,
+                path,
+                body,
+            )
+        except host_ops.HostOpsError as error:
+            status, value = error.status, {"error": error.code, "message": str(error)}
+        return JSONResponse(value, status_code=status)
+
     return routes

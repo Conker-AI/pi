@@ -440,6 +440,184 @@
         }
       }
     },
+    "/api/host/read": {
+      "post": {
+        "summary": "Host Operations",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "operationId": "host_operations_api_host_read_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/host/ops": {
+      "post": {
+        "summary": "Host Operations",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "operationId": "host_operations_api_host_ops_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Host Operations",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "operationId": "host_operations_api_host_ops_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/host/ops/{identity}": {
+      "get": {
+        "summary": "Host Operations",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "operationId": "host_operations_api_host_ops__identity__get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/terminal": {
       "post": {
         "summary": "Terminal Create",
@@ -541,6 +719,138 @@
             "schema": {
               "type": "string",
               "title": "Operation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/control/pi/artifacts/{identity}/download": {
+      "get": {
+        "summary": "Artifact Download",
+        "description": "One artifact as a file: DOCX, PDF, PPTX or XLSX, or CSV for a table and JSON for a\nchart, diagram or media.",
+        "operationId": "artifact_download_api_control_pi_artifacts__identity__download_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/control/pi/sessions/{session_id}/messages/{message_id}/download": {
+      "get": {
+        "summary": "Answer Download",
+        "description": "One completed chat answer as a DOCX, PDF, PPTX or XLSX file.",
+        "operationId": "answer_download_api_control_pi_sessions__session_id__messages__message_id__download_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/control/pi/imports/{source}/{step}": {
+      "post": {
+        "summary": "Import File",
+        "description": "A ChatGPT or Claude export's `conversations.json` as the raw body, up to 128 MB.\n\n`preview` saves nothing, so the signed-in session is enough. An import (named by the\npreviewed file's SHA-256) saves chats and offers his words to memory, so it asks for the\npassword: the proof covers this path with an empty body, the path's digest names the file,\nand a body with another digest is refused before Pi receives all of it.",
+        "operationId": "import_file_api_control_pi_imports__source___step__post",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source"
+            }
+          },
+          {
+            "name": "step",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Step"
             }
           }
         ],
@@ -1327,6 +1637,80 @@
         }
       }
     },
+    "/api/owner/tools/{identity}/runs": {
+      "post": {
+        "summary": "Tool Runs",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "operationId": "tool_runs_api_owner_tools__identity__runs_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Tool Runs",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "operationId": "tool_runs_api_owner_tools__identity__runs_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/owner/editor-capabilities": {
       "get": {
         "summary": "Editor Capabilities",
@@ -1680,6 +2064,70 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner/tool-settings": {
+      "get": {
+        "summary": "Tool Settings",
+        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw, so it asks for the password; ToolGate refuses a stale revision (409).",
+        "operationId": "tool_settings_api_owner_tool_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Tool Settings",
+        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw, so it asks for the password; ToolGate refuses a stale revision (409).",
+        "operationId": "tool_settings_api_owner_tool_settings_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner/lockdown": {
+      "get": {
+        "summary": "Lockdown",
+        "description": "ToolGate's lockdown: no tool or workflow runs and no agent files a request. Turning it\non only takes power away, so his session is enough; turning it off gives the power back,\nso it asks for the password.",
+        "operationId": "lockdown_api_owner_lockdown_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Lockdown",
+        "description": "ToolGate's lockdown: no tool or workflow runs and no agent files a request. Turning it\non only takes power away, so his session is enough; turning it off gives the power back,\nso it asks for the password.",
+        "operationId": "lockdown_api_owner_lockdown_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
