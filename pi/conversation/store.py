@@ -35,8 +35,8 @@ from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.message_view import MESSAGE_LOOKUP, _message_with_attachments
-from pi.owner import preferences as owner_preferences
 from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
+from pi.owner import preferences as owner_preferences
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
