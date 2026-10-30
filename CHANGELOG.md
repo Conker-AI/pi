@@ -6,6 +6,22 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An AI job's opening message stays out of memory.** Each run's first message (the preamble,
+  the run's date and time, why it started, any webhook payload and the job's instructions,
+  which for a job Conker made the model wrote) is no longer queued for MemoryGate as if the owner
+  had typed it. The job's chat still recalls memory, and what the owner types there is his own as
+  anywhere. The message view shows it as `excluded` with no reason code. An opening message an
+  older Pi had queued and not yet sent is withdrawn on upgrade.
+- **His own memories no longer silence his words.** Recalled memories make a turn count as outside
+  content only when at least one is not the owner's own: MemoryGate's `source_type` `user` (his
+  statement) or `owner_statement` (made from his chat messages, each cited message checked
+  against Pi's own records) are his; anything else, or no readable source, counts as outside, as
+  do entities, episodes and a briefing (`pi.memory.store.others_wrote`).
+- **The owner can take a job Conker made as his own.** `POST /jobs/{id}/adopt`
+  `{"expected_revision": n}` (owner credential) sets `createdBy` to `owner` and records
+  `adoptedAt` in the job (shown in the job view, kept by edits). Its later runs count as his
+  (his words, no proactive budget), and forgetting the chat it came from no longer turns it off.
+  A job that is already his is refused (409 `already_owner`).
 - **The drafter asks in the chat.** When the drafter needs a detail for a tool request made in a
   chat, the card no longer fails: it becomes `payload.status: "needs_detail"` with the drafter's
   `question`, and Conker posts the question in that chat (a stored message; `askedIn` names the

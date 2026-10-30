@@ -74,6 +74,11 @@ def router(store, authorize, executor=None):
     def state(identity: JobPath, body: job_models.StateChange):
         return jobs.browser_job(call(jobs.set_enabled, identity, body))
 
+    @routes.post("/{identity}/adopt", response_model=job_models.JobView)
+    def adopt(identity: JobPath, body: job_models.Adopt):
+        """Take an AI job Conker made as the owner's own: its runs count as his from now on."""
+        return jobs.browser_job(call(agent_jobs.adopt, identity, body))
+
     @routes.get("/{identity}/runs", response_model=job_models.RunCollection)
     def runs(
         identity: JobPath,

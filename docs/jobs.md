@@ -147,6 +147,19 @@ that need no confirmation (get tools) run on their own, and a tool that needs th
   browser view shows `createdBy` and `turnedOff` (`chat_forgotten`: Pi turned it off because the
   chat Conker made it in was forgotten; turning it on clears it). An edit keeps `createdBy` and
   the job chat's privacy.
+- The owner can take a job Conker made as his own: `POST /jobs/{id}/adopt` with
+  `{"expected_revision": n}` (owner credential; 409 on a stale revision). It sets `createdBy` to
+  `owner` and records when in the job (`adoptedAt`, shown in the browser view and kept by every
+  edit). Runs admitted from then on are his: its instructions count as his words and no proactive
+  budget is reserved for them; a run already admitted keeps what it was. Forgetting the chat
+  Conker made it in no longer turns it off. A job that is already his is refused (409
+  `already_owner`, "This job is already yours.").
+- A run's opening message (the preamble, the run's date and time, why it started, any webhook
+  payload and the instructions) is never sent to memory: Pi wrote it, and for a job Conker made
+  the model wrote the instructions. The message view shows it as excluded from memory. The job's
+  chat still recalls memory like any chat, and what the owner types there goes to memory as his
+  own. An opening message an older Pi had queued and not yet sent is withdrawn on upgrade; one it
+  already sent stays in MemoryGate, and recall never counts it as his words.
 - Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
   something the owner keeps asking. Forgetting a job's chat deletes its notes; the next run starts
   a new chat.

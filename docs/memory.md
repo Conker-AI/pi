@@ -3,8 +3,11 @@
 Pi commits each user message and an outbox entry together. The entry contains a
 message ID, not another copy of the text. A background worker delivers quoted
 owner evidence to MemoryGate under that ID. Assistant replies, tool results and
-system instructions are not admitted as owner evidence. Existing user messages
-are queued on upgrade; existing forgetting tombstones queue deletions instead.
+system instructions are not admitted as owner evidence. Neither is the opening
+message of an AI job's run, which Pi writes (docs/jobs.md); the job's chat still
+recalls memory, and what the owner types there is queued as his. Existing user
+messages are queued on upgrade; existing forgetting tombstones queue deletions
+instead.
 
 MemoryGate acknowledges its SQL commit. A timeout after that commit is safe:
 retrying the same ID and content returns the same receipt. Pi retains failed

@@ -500,6 +500,11 @@ def bind(store, request_id, *, fork_summary=None):
         )
         session_settings.bind(db, turn_id, session_id, request_id)
         context_retrieval.bind(db, request_id, turn_id)
+        # The turn is linked to its request before its input is written, so the memory trigger
+        # can tell an AI job's opening message (Pi's text) from the owner's (`pi.memory.store`).
+        db.execute(
+            "UPDATE turn_submissions SET turn_id=? WHERE request_id=?", (turn_id, request_id)
+        )
         message = append(
             db, session_id, "user", row["pending_text"], turn_id=turn_id, purpose="input"
         )

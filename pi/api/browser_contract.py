@@ -190,6 +190,8 @@ OWNER_ROUTES = {
         # A webhook secret is shown once; making or stopping one asks for the password.
         r"/jobs/job_[0-9a-f]{32}/hook",
         r"/jobs/job_[0-9a-f]{32}/hook/revoke",
+        # Taking a job Conker made as his own: from then on its runs count as his.
+        r"/jobs/job_[0-9a-f]{32}/adopt",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
         r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
         # The gateway, after ToolGate recorded his decision: run it, or close it. Pi grants nothing.
