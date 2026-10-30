@@ -75,7 +75,7 @@ from pi.schedule import agent_hooks, job_models
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
-SERVICE_VERSION = "0.13.0"
+SERVICE_VERSION = "0.14.0"
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
