@@ -235,9 +235,9 @@ CASES = [
 
 
 def main():
-    scratch = ROOT / ".test-tmp"
-    scratch.mkdir(exist_ok=True)
-    run = Path(tempfile.mkdtemp(prefix="audit-mutations-", dir=scratch))
+    # In the OS temp directory, never in the checkout (tests/conftest.py refuses that).
+    run = Path(tempfile.mkdtemp(prefix="audit-mutations-"))
+    (run / "temp").mkdir()  # pytest creates --basetemp itself, but not its parent
     for name, filename, old, new, selected in [("baseline", None, None, None, None), *CASES]:
         target = run / name
         for directory in ("pi", "gateway", "tests"):
@@ -260,8 +260,10 @@ def main():
                 "-q",
                 "-p",
                 "no:cacheprovider",
+                # Beside the copy, not inside it: the copied tests/conftest.py refuses a
+                # temporary directory in the tree it guards.
                 "--basetemp",
-                str(target / "temp"),
+                str(run / "temp" / name),
                 "--junitxml",
                 str(report),
             ],

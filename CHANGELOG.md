@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Tests keep their files in pytest's `tmp_path` only.** `tests/conftest.py` stops and fails any
+  test that writes into the repository (a file opened for writing, a new folder, a rename, a
+  delete, a SQLite database that is not read-only), naming the path, in every pytest-xdist worker;
+  `__pycache__` and `.pytest_cache` are left alone. A run whose `--basetemp` or temp directory is
+  inside the checkout is refused before any test starts. No test wrote into the repository; the
+  writes came from runs given `--basetemp=.test-tmp/...` and from the three mutation drills, which
+  now keep their copies in the OS temp directory (the audit drill also puts `--basetemp` beside
+  its copy, since the copy brings the guard along).
 - **Chat settings are read** (`pi/conversation/chat_preferences.py`). Private by default
   (`chats.default_incognito`) turns memory off in new chats, which also keeps them out of search;
   Helper models in new chats (`privacy.helpers`) off turns helpers off in new chats. Both only
