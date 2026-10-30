@@ -262,6 +262,33 @@ def test_call_apply_rejects_media_and_untyped_routes_before_network():
             },
             True,
         ),
+        (
+            {
+                "operation": "run_tool",
+                "id": "sandbox.run",
+                "action_id": "owner_" + "d" * 32,
+                "args": {"text": "hi"},
+            },
+            "/v2/owner/tools/sandbox.run/runs",
+            {"action_id": "owner_" + "d" * 32, "args": {"text": "hi"}},
+            True,
+        ),
+        (
+            {
+                "operation": "run_tool",
+                "id": "sandbox.run",
+                "action_id": "owner_" + "d" * 32,
+                "args": {"text": "hi"},
+                "approval_request_id": "req_1",
+            },
+            "/v2/owner/tools/sandbox.run/runs",
+            {
+                "action_id": "owner_" + "d" * 32,
+                "args": {"text": "hi"},
+                "approval_request_id": "req_1",
+            },
+            True,
+        ),
     ],
 )
 def test_tool_apply_keeps_owner_and_execution_channels_separate(
@@ -328,6 +355,56 @@ def test_tool_apply_rejects_unreviewed_shapes_before_network():
             "action_id": "editor_" + "c" * 32,
             "args": {"large": "x" * 32769},
         },
+        {
+            "operation": "run_tool",
+            "id": "example",
+            "action_id": "editor_" + "d" * 32,
+            "args": {},
+        },
+        {
+            "operation": "run_tool",
+            "id": ".hidden",
+            "action_id": "owner_" + "d" * 32,
+            "args": {},
+        },
+        {
+            "operation": "run_tool",
+            "id": "a/b",
+            "action_id": "owner_" + "d" * 32,
+            "args": {},
+        },
+        {
+            "operation": "run_tool",
+            "id": "x" * 129,
+            "action_id": "owner_" + "d" * 32,
+            "args": {},
+        },
+        {
+            "operation": "run_tool",
+            "id": "example",
+            "action_id": "owner_" + "d" * 32,
+            "args": {"large": "x" * 32769},
+        },
+        {
+            "operation": "run_tool",
+            "id": "example",
+            "action_id": "owner_" + "d" * 32,
+            "args": {},
+            "version": 1,
+        },
+        {
+            "operation": "run_tool",
+            "id": "example",
+            "action_id": "owner_" + "d" * 32,
+            "args": {},
+            "approval_request_id": "",
+        },
+        {
+            "operation": "run_tool",
+            "id": "example",
+            "action_id": "owner_" + "d" * 32,
+            "args": [],
+        },
     ]
     with httpx.Client(
         transport=httpx.MockTransport(lambda _request: pytest.fail("network used"))
@@ -335,6 +412,14 @@ def test_tool_apply_rejects_unreviewed_shapes_before_network():
         for payload in invalid:
             with pytest.raises(MutationError, match="unsupported shape"):
                 apply_resource(config(), "tools", io.BytesIO(json.dumps(payload).encode()), client)
+
+
+def test_owner_tool_runs_are_execution_posts_only():
+    assert owner_editor_allowed("POST", "/v2/owner/tools/sandbox.run/runs", execution=True)
+    assert not owner_editor_allowed("POST", "/v2/owner/tools/sandbox.run/runs")
+    assert not owner_editor_allowed("GET", "/v2/owner/tools/sandbox.run/runs", execution=True)
+    assert not owner_editor_allowed("POST", "/v2/owner/tools/sandbox.run/access", execution=True)
+    assert not owner_editor_allowed("POST", "/v2/owner/tools/../runs", execution=True)
 
 
 def test_tool_execution_apply_requires_both_scoped_credentials_before_network():

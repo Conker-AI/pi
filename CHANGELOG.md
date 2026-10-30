@@ -9,6 +9,10 @@ be a decision with visible consequences.
 - **Artifact downloads take a version.** `GET /api/control/pi/artifacts/{id}/download` accepts an
   optional `version` (1 to 100), so an earlier version can be exported to Word, PDF, PowerPoint or
   Excel; the chat answer download still refuses it.
+- **The CLI runs any tool by hand.** `conker apply tools` takes `{"operation": "run_tool", "id",
+  "action_id": "owner_…", "args", "approval_request_id"?}` and sends it to ToolGate's
+  `/v2/owner/tools/{id}/runs` with the chat's key, as the browser's Run does; a tool that asks
+  still makes an approval request, resumed with the same action id.
 
 ## 0.14.0
 

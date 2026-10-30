@@ -460,8 +460,28 @@ class ToolRun(Strict):
         return self
 
 
+class ToolRunPublished(Strict):
+    """Run one published tool by hand, as the browser's `POST /api/owner/tools/{id}/runs` does."""
+
+    operation: Literal["run_tool"]
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    action_id: str = Field(pattern=r"^owner_[a-f0-9]{32}$")
+    args: dict[str, JsonValue] = Field(default_factory=dict)
+    approval_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def bounded_arguments(self):
+        encoded = json.dumps(
+            self.args, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ).encode("utf-8")
+        if len(encoded) > 32768:
+            raise ValueError("Tool arguments exceed 32 KiB.")
+        return self
+
+
 ToolMutation = Annotated[
-    ToolSave | ToolPublish | ToolAccess | ToolRun, Field(discriminator="operation")
+    ToolSave | ToolPublish | ToolAccess | ToolRun | ToolRunPublished,
+    Field(discriminator="operation"),
 ]
 
 
