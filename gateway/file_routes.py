@@ -31,6 +31,7 @@ ARTIFACT_FORMATS = {**DOCUMENTS, **NATIVE}
 ANSWER_FORMATS = DOCUMENTS
 SOURCES = ("chatgpt", "claude")
 
+
 # The download routes read their query by hand (session first, one error shape); this lists it
 # in OpenAPI so generated clients see it.
 def format_param(formats: dict) -> dict:
