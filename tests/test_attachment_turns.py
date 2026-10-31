@@ -1,7 +1,9 @@
 from contextlib import closing
 
 import pytest
+from pydantic import ValidationError
 
+from pi.api.routes.sessions import TurnRequest
 from pi.content import attachments
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
@@ -67,6 +69,15 @@ def test_foreign_or_unsupported_attachment_never_creates_submission(tmp_path):
                 )
         with store._connect() as db:
             assert db.execute("SELECT COUNT(*) FROM turn_submissions").fetchone()[0] == 0
+
+
+def test_a_turn_names_at_most_five_attachments():
+    assert (
+        len(TurnRequest(text="Read", attachment_ids=[f"a{n}" for n in range(5)]).attachment_ids)
+        == 5
+    )
+    with pytest.raises(ValidationError, match="attachment_ids"):
+        TurnRequest(text="Read", attachment_ids=[f"a{n}" for n in range(6)])
 
 
 def test_preparation_holds_file_until_failed(tmp_path):
