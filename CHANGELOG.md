@@ -53,6 +53,9 @@ be a decision with visible consequences.
   `ORDER BY attachment_id`, so a message's attachments appeared in the model input and the
   transcript in random order instead of the order the owner sent them; it now reads them back
   in insertion order.
+- **The memory outbox no longer scans every past message each second.** The once-a-second poll for
+  due memory work now reads pending rows from a partial index instead of the whole table, whose
+  receipt rows grow with the owner's history. What is sent, and when, is unchanged.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
