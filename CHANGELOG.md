@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A repeated setup memory review answers instead of failing with a 500.** Retrying the review
+  with a new `requestId` at the same choice revision computed the same evidence digest, passed the
+  `request_id` replay check, and hit the table's unique digest constraint, so a review that was
+  already recorded raised `IntegrityError`. The same evidence is now treated as a replay and the
+  status is returned without inserting.
 - **Two webhook calls at once can no longer both start a job.** The 30-second gap was checked
   before the run started and written after, so two calls arriving together both passed it, and if
   the first run ended quickly the second started too. The gap is now claimed in one statement
