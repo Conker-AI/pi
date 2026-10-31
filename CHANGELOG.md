@@ -9,6 +9,11 @@ be a decision with visible consequences.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
+- **Agent identities come back after a ToolGate restart.** A 404 or 405 from ToolGate's identities
+  route turned per-agent scoping off until Pi restarted; Pi now asks again after five minutes.
+- **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is
+  `unavailable` (`unreadable status`) when ToolGate answers 200 with a body that is not a JSON
+  object; the status endpoint used to answer 500.
 - **An AI job request is approved once.** Approving takes the request before the job is made, so a
   second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
   `decided` instead of making a second cron job or leaving one behind a declined request. If the job

@@ -22,6 +22,7 @@ import copy
 import hashlib
 import json
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -33,6 +34,8 @@ from pi.models.loopback_http import verification
 _WORKFLOW = re.compile(r"^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$")
 # The owner's button templates for a tool's Inbox card (ToolGate `ask_cards`), a fixed list.
 CARDS = ("do", "send", "publish", "ship", "run", "delete", "pay", "save")
+# How long Pi believes a ToolGate without agent identities before asking it again.
+IDENTITY_RECHECK_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -111,7 +114,7 @@ class ToolGateClient:
         # The agent this client acts as in ToolGate (None: the key itself), and the toolkits
         # already defined there, shared by every client made from this one.
         self.agent: str | None = None
-        self._identities: dict = {"supported": True, "defined": {}}
+        self._identities: dict = {"older_until": 0.0, "defined": {}}
 
     def _headers(self) -> dict[str, str]:
         headers = {"X-ToolGate-Execution-Key": self.execution_key}
@@ -122,8 +125,9 @@ class ToolGateClient:
     def acting_as(self, agent_id: str, scopes: list[str]) -> ToolGateClient:
         """This client acting as one agent, after ToolGate holds the agent's toolkit, so ToolGate
         enforces it (it only narrows the key). An older ToolGate without identities keeps the key
-        itself, where Pi's own toolkit filter still applies."""
-        if self.agent is not None or not self._identities["supported"]:
+        itself, where Pi's own toolkit filter still applies; it is asked again after a while, so
+        one 404 while ToolGate restarts or is upgraded does not turn identities off until Pi does."""
+        if self.agent is not None or time.monotonic() < self._identities["older_until"]:
             return self
         wanted = sorted(set(scopes))
         if self._identities["defined"].get(agent_id) != wanted:
@@ -140,7 +144,7 @@ class ToolGateClient:
             except Exception as exc:
                 raise ToolGateUnavailable(type(exc).__name__) from exc
             if response.status_code in (404, 405):
-                self._identities["supported"] = False
+                self._identities["older_until"] = time.monotonic() + IDENTITY_RECHECK_SECONDS
                 return self
             if response.status_code != 200:
                 raise ToolGateUnavailable(f"identity_{response.status_code}")
@@ -489,7 +493,12 @@ class ToolGateClient:
             return {"status": "unavailable", "reason": "execution key rejected"}
         if response.status_code >= 400:
             return {"status": "unavailable", "reason": f"HTTP {response.status_code}"}
-        body = response.json()
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return {"status": "unavailable", "reason": "unreadable status"}
         if body.get("lockdown"):
             # Reachable and deliberately refusing everything. Reporting ok would
             # hide the single most important thing about the action boundary
