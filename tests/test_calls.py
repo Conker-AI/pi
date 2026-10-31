@@ -474,6 +474,26 @@ def test_atomic_final_commit_rechecks_generation(store, monkeypatch):
     assert [m["role"] for m in store.messages(call["sessionId"])] == ["user"]
 
 
+def test_a_pause_after_the_reply_committed_keeps_the_turn_complete(store):
+    call = start(store)
+    loop, _ = runtime(store)
+    answer = loop.run_turn
+
+    def answer_then_pause(*args, **kwargs):
+        result = answer(*args, **kwargs)
+        c.update(store, call["id"], call_models.Update(expected_revision=1, paused=True))
+        return result
+
+    loop.run_turn = answer_then_pause
+    speech = Speech()
+    result = send(store, loop, call, speech=speech)
+    request = result["call"]["requests"][0]
+    assert request["state"] == "complete" and request["textStatus"] == "complete"
+    assert request["speechStatus"] == "failed-or-interrupted" and request["errorCode"] is None
+    assert result["audio"] is None and speech.tts == 0
+    assert [m["role"] for m in store.messages(call["sessionId"])] == ["user", "assistant"]
+
+
 def test_end_during_tts_discards_transient_audio(store):
     call = start(store)
     loop, _ = runtime(store)

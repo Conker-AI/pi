@@ -44,7 +44,10 @@ def citations(db, turn_id, text, supplied):
         "WHERE tm.turn_id=? AND tm.purpose='input' ORDER BY ma.position",
         (turn_id,),
     ).fetchall()
+    cited = {passage_id.split(":", 1)[0] for passage_id in requested}
     for row in rows:
+        if row["attachment_id"] not in cited:
+            continue  # re-extracting an uncited file only holds the write lock longer
         try:
             record, _view, raw = attachments._verified(
                 db, row["session_id"], row["attachment_id"], session_settings.source_privacy
