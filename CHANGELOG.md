@@ -11,6 +11,10 @@ be a decision with visible consequences.
 - **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is
   `unavailable` (`unreadable status`) when ToolGate answers 200 with a body that is not a JSON
   object; the status endpoint used to answer 500.
+- **A long reply no longer breaks the call screen.** The browser call view caps each event's text
+  at 16,000 characters, but replies have no limit, so one long answer made every
+  `/calls/browser` route fail. The view now clips that text with an ellipsis; the event's source
+  still names the full message.
 - **Pi refuses a gateway credential equal to its admin key.** `PI_GATEWAY_KEY_SHA256` set to the
   admin key's digest gave the browser path recovery authority (the admin key is checked first).
   Startup now refuses it, as it already did for the owner and service keys.
