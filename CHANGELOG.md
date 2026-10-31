@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Building a turn's history looks up attachments once, not once per message.** Every selected
+  history message opened its own SQLite connection to `message_attachments`, almost always to
+  learn it had none, so a 1,000-message chat opened 1,000 connections before the model was
+  called, on every turn and every retry. The message ids that have attachments are now read once
+  in batches and only those messages are walked.
 - **A retried fact check or judge pays for one model call.** Two requests with the same
   `request_id` that arrived together both called the model and kept one answer. The later one
   now waits for the first and replays its result.
