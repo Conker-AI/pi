@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A model that starts charging falls back instead of failing.** Refusing a paid OpenRouter
+  model (with paid models off) raised a plain error, so a role's fallback models and a turn's
+  next free model were never tried and the call failed. The refusal now counts as this one model
+  being unusable, like a gated one: the next candidate, which passes the same check, answers,
+  and the skipped reason is recorded. A setup test of such a model reports
+  `provider_unavailable`. One malformed entry in OpenRouter's model list is left out (so calling
+  it is refused) instead of failing every call, and a list that is not a list is reported as the
+  catalogue being unavailable.
 - **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
   memory in MemoryGate but left its old text, the proposed text and the reason in every memory
   proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as

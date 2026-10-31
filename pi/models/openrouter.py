@@ -74,8 +74,26 @@ def _price(pricing: dict, key: str) -> float | None:
         return None
 
 
-class PaidModelRefused(RuntimeError):
-    """Asked for a model that costs money without allow_paid."""
+def _model_info(entry: dict) -> ModelInfo | None:
+    arch = entry.get("architecture") or {}
+    inputs = arch.get("input_modalities") or []
+    outputs = arch.get("output_modalities") or []
+    # Text in, text *only* out. Some zero-priced entries are audio or
+    # image generators - Google's Lyria outputs ["text", "audio"] - and
+    # routing a conversation into one would be a strange failure to
+    # diagnose from the answer alone.
+    if "text" not in inputs or outputs != ["text"] or not isinstance(entry["id"], str):
+        return None
+    pricing = entry.get("pricing") or {}
+    return ModelInfo(
+        id=entry["id"],
+        context_length=int(entry.get("context_length") or 0),
+        prompt_usd_per_token=_price(pricing, "prompt"),
+        completion_usd_per_token=_price(pricing, "completion"),
+        supports_tools="tools" in (entry.get("supported_parameters") or []),
+        pricing=pricing,
+        supports_images="image" in inputs,
+    )
 
 
 class ModelUnusable(ProviderUnavailable):
@@ -85,6 +103,15 @@ class ModelUnusable(ProviderUnavailable):
     gated to particular clients and answer 403 with an explanation. That is a
     fact about one model, not about the provider or the key, so the caller
     should try the next candidate rather than fail the turn.
+    """
+
+
+class PaidModelRefused(ModelUnusable):
+    """Asked for a model that costs money without allow_paid.
+
+    A refusal of one model, like a gated one: a model the owner picked while it
+    was free and that now charges moves on to the configured fallback, which
+    passes this same check, instead of failing the role.
     """
 
 
@@ -129,6 +156,8 @@ class OpenRouterProvider:
                 )
                 response.raise_for_status()
                 data = response.json()["data"]
+            if not isinstance(data, list):
+                raise ValueError("catalogue is not a list")
         except inference_control.InferenceCancelled:
             raise
         except Exception as exc:
@@ -137,25 +166,14 @@ class OpenRouterProvider:
 
         catalogue: dict[str, ModelInfo] = {}
         for entry in data:
-            arch = entry.get("architecture") or {}
-            inputs = arch.get("input_modalities") or []
-            outputs = arch.get("output_modalities") or []
-            # Text in, text *only* out. Some zero-priced entries are audio or
-            # image generators - Google's Lyria outputs ["text", "audio"] - and
-            # routing a conversation into one would be a strange failure to
-            # diagnose from the answer alone.
-            if "text" not in inputs or outputs != ["text"]:
+            try:
+                info = _model_info(entry)
+            except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+                # One malformed entry is left out rather than failing every call:
+                # left out, it is unknown, and an unknown model is refused.
                 continue
-            pricing = entry.get("pricing") or {}
-            catalogue[entry["id"]] = ModelInfo(
-                id=entry["id"],
-                context_length=int(entry.get("context_length") or 0),
-                prompt_usd_per_token=_price(pricing, "prompt"),
-                completion_usd_per_token=_price(pricing, "completion"),
-                supports_tools="tools" in (entry.get("supported_parameters") or []),
-                pricing=pricing,
-                supports_images="image" in inputs,
-            )
+            if info is not None:
+                catalogue[info.id] = info
         self._catalogue = catalogue
         self._fetched_at = now
         return catalogue
