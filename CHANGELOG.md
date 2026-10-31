@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An export that is too long says so.** The size check in `office_exports.render` now matches the
+  limit the export worker actually reads, so a payload between the two limits is refused up front
+  with "too long" instead of starting a worker that answers `invalid`.
 - **The definitions list no longer reads every team preparation.** Building the team and template
   rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
   so the route got slower as those append-only tables grew; it now reads each record's own columns
