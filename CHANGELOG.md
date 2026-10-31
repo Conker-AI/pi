@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.15.1
+
 - **One sent offer no longer hides that another one failed in the same pass.** `Offers.drain_once`
   sent offers one at a time and cleared the status problem after every success, so a later offer
   that was acknowledged erased the "MemoryGate did not answer" note an earlier offer in the same
