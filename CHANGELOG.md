@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A cited answer re-checks only the files it cites.** When a final answer cites an attachment
+  passage, Pi re-reads and re-extracts each cited file inside the write that saves the answer, to
+  prove the passage still matches; it used to do that for every file of the turn (a PDF each time),
+  holding the write lock while it ran. Citations that are kept are the same.
+
 - **Agent identities come back after a ToolGate restart.** A 404 or 405 from ToolGate's identities
   route turned per-agent scoping off until Pi restarted; Pi now asks again after five minutes.
 - **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is

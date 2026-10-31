@@ -79,3 +79,52 @@ def test_final_citations_only_accept_bound_existing_passages(tmp_path):
         expected = [{"id": item["id"] + ":p0", "label": "Attachment passage 1"}]
         assert result["message"]["citations"] == expected
         assert store.get_message(result["message"]["id"])["citations"] == expected
+
+
+def test_final_citations_re_extract_only_the_cited_attachments(tmp_path, monkeypatch):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        uploaded = [
+            attachments.upload(
+                store,
+                sid,
+                attachments.Metadata(name=f"source-{n}.txt", type="text/plain"),
+                f"source text {n}".encode(),
+                resolve=session_settings.source_privacy,
+            )
+            for n in range(2)
+        ]
+        extracted = []
+        original = attachments._extract
+
+        def recording(raw, media_type):
+            extracted.append(raw)
+            return original(raw, media_type)
+
+        cite = attachment_passages.citations
+
+        def citing(*args):
+            extracted.clear()  # count only what the citation check itself extracts
+            return cite(*args)
+
+        monkeypatch.setattr(attachments, "_extract", recording)
+        monkeypatch.setattr(attachment_passages, "citations", citing)
+
+        class Provider:
+            name = "local"
+
+            def complete(self, messages, *, model):
+                return Completion(
+                    provider=self.name, model=model, text=f"Answer [[{uploaded[1]['id']}:p0]]"
+                )
+
+        result = Loop(store, Router(local_provider=Provider(), local_model="test")).run_turn(
+            sid,
+            "Read",
+            request_id="cited_only_request",
+            attachment_ids=[item["id"] for item in uploaded],
+        )
+        assert result["message"]["citations"] == [
+            {"id": uploaded[1]["id"] + ":p0", "label": "Attachment passage 1"}
+        ]
+        assert extracted == [b"source text 1"]
