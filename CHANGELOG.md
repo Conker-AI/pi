@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Health says when the voice is down.** A speech capability that is set up but whose last
+  call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
+  while calls had no voice. It is now `degraded` and named in `degraded`.
 - **A long reply no longer breaks the call screen.** The browser call view caps each event's text
   at 16,000 characters, but replies have no limit, so one long answer made every
   `/calls/browser` route fail. The view now clips that text with an ellipsis; the event's source
