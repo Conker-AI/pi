@@ -304,6 +304,19 @@ def test_no_configuration_503(tmp_path):
     assert adapter.calls == []
 
 
+def test_routing_off_503_not_configured_and_zero_calls(tmp_path):
+    adapter = Recording('{"title": "Name"}')
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store, routing_enabled=False)
+        sid = store.create_session()
+        store.append_message(sid, "user", "Hello")
+        store.append_message(sid, "assistant", "Hi")
+        with pytest.raises(naming.NamingError) as raised:
+            naming.auto_name(store, {"one": adapter}, sid, naming.AutoName(expected_revision=0))
+    assert raised.value.status == 503 and raised.value.code == "not_configured"
+    assert adapter.calls == []
+
+
 def test_no_messages_409_empty(tmp_path):
     adapter = Recording('{"title": "Name"}')
     with closing(Store(tmp_path / "pi.db")) as store:
