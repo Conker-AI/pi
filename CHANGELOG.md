@@ -10,6 +10,9 @@ be a decision with visible consequences.
   memory in MemoryGate but left its old text, the proposed text and the reason in every memory
   proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
   forgetting their conversation already did.
+- **A retried fact check or judge pays for one model call.** Two requests with the same
+  `request_id` that arrived together both called the model and kept one answer. The later one
+  now waits for the first and replays its result.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
