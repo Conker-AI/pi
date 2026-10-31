@@ -11,7 +11,7 @@ from pi.agents import change_requests, tool_drafts
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, session_only_write
 from pi.conversation.store import Store
-from pi.schedule import jobs
+from pi.schedule import agent_jobs, jobs
 from pi.turns import native_tools
 
 OWNER = "change-requests-owner-key-" + "o" * 32
@@ -73,6 +73,44 @@ def test_approving_creates_exactly_what_was_filed_once(store):
     with pytest.raises(change_requests.ChangeRequestError) as again:
         change_requests.approve(store, request["id"])
     assert again.value.status == 409
+    assert len(jobs.list_jobs(store)) == 1
+
+
+def test_a_second_decision_while_the_job_is_made_is_refused(store, monkeypatch):
+    # Two approvals at once (a double-click, two tabs) must not make two jobs, and a decline
+    # arriving meanwhile must not leave a job behind a declined request.
+    schedule(store)
+    [request] = change_requests.listing(store)
+    create, refused = agent_jobs.create, []
+
+    def racing(*args, **kwargs):
+        for decide in (change_requests.approve, change_requests.decline):
+            with pytest.raises(change_requests.ChangeRequestError) as busy:
+                decide(store, request["id"])
+            refused.append(busy.value.status)
+        return create(*args, **kwargs)
+
+    monkeypatch.setattr(agent_jobs, "create", racing)
+    approved = change_requests.approve(store, request["id"])
+    [job] = jobs.list_jobs(store)
+    assert refused == [409, 409]
+    assert approved["state"] == "approved" and approved["result"] == {"jobId": job["id"]}
+
+
+def test_a_job_that_could_not_be_made_leaves_the_request_open(store, monkeypatch):
+    schedule(store)
+    [request] = change_requests.listing(store)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(agent_jobs, "create", broken)
+    with pytest.raises(RuntimeError):
+        change_requests.approve(store, request["id"])
+    [still] = change_requests.listing(store)
+    assert still["id"] == request["id"] and still["decidedAt"] is None
+    monkeypatch.undo()
+    assert change_requests.approve(store, request["id"])["state"] == "approved"
     assert len(jobs.list_jobs(store)) == 1
 
 
