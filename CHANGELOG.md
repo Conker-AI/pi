@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Webhook text cannot pose as Pi's own words.** An AI job started by its webhook got the sent
+  JSON inside a `<webhook>` label, and a value containing `</webhook>` closed it early. `<` in
+  the sent JSON now reaches the model as `\u003c` (the same JSON value). Inbox notes from AI jobs
+  drop terminal and other control codes, and a model probe whose reported model name holds them
+  fails as `invalid_response`.
 - **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
   character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
   streams and call audio waited behind it; that work now runs in a worker thread. Responses and

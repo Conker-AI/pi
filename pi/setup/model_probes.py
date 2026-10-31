@@ -305,7 +305,13 @@ def _execute(store, router, body, model, adapter, *, staged=None):
         actual.encode("utf-8")
     except UnicodeEncodeError:
         text = ""
-    if not text or len(text) > MAX_RESPONSE_CHARACTERS or not actual or len(actual) > 300:
+    if (
+        not text
+        or len(text) > MAX_RESPONSE_CHARACTERS
+        or not actual
+        or len(actual) > 300
+        or not actual.isprintable()
+    ):
         _failed(store, body.requestId, "invalid_response", datetime.now(UTC))
         raise ProbeError(
             "invalid_response", "The selected answer model returned an invalid setup response."
