@@ -46,6 +46,17 @@ def test_a_description_from_chat_files_a_plain_card(store):
     assert filed["summary"] == "Fetch[2J the page]0;pwned\nevery morning"
 
 
+def test_trying_again_from_a_new_description_keeps_the_card_plain(store):
+    loop, _ = build(store, [json.dumps({"reply": "Which site?", "ready": False})])
+    filed = tool_drafts.file(store, "Search the web")
+    loop.drafts.tick()
+    again = tool_drafts.retry(
+        store, filed["id"], tool_drafts.Retry(description=f"Search{CLEAR} Bing{RETITLE}")
+    )
+    assert again["title"] == "Draft a tool: Search[2J Bing]0;pwned"
+    assert plain(again["summary"])
+
+
 def test_a_memory_card_is_plain_and_its_text_stays_exactly_as_asked(store):
     loop, _ = companion(store, [], FakeGate())
     text = f"The exam{RETITLE} is on Thursday."
