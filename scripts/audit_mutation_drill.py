@@ -25,7 +25,9 @@ CASES = [
         "F1-resume-new-identity",
         "pi/turns/replies.py",
         "action = actions.latest(self.store, turn_id)",
-        'action = {**actions.latest(self.store, turn_id), "id": ToolGateClient.new_action_id()}',
+        # A fresh id built in place: replies.py does not import ToolGateClient, and a NameError
+        # would fail the test without the reused-identity guard ever being reached.
+        'action = {**actions.latest(self.store, turn_id), "id": "pi_" + __import__("uuid").uuid4().hex}',
         EXEC,
     ),
     (
