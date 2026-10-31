@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
+  memory in MemoryGate but left its old text, the proposed text and the reason in every memory
+  proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
+  forgetting their conversation already did.
 - **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
   character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
   streams and call audio waited behind it; that work now runs in a worker thread. Responses and
