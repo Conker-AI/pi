@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
+  five while the queue and the dashboard already stopped there; it now answers 422 at
+  six, so a direct caller cannot reserve a long list of uploads in one turn.
 - **An AI job request is approved once.** Approving takes the request before the job is made, so a
   second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
   `decided` instead of making a second cron job or leaving one behind a declined request. If the job
