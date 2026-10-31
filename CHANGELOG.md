@@ -9,6 +9,17 @@ be a decision with visible consequences.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
+- **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
+  that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
+  call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
+- **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
+  call just after the reply was saved, the request was marked `failed` beside a delivered
+  message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
+- **A cited answer re-checks only the files it cites.** When a final answer cites an attachment
+  passage, Pi re-reads and re-extracts each cited file inside the write that saves the answer, to
+  prove the passage still matches; it used to do that for every file of the turn (a PDF each time),
+  holding the write lock while it ran. Citations that are kept are the same.
+
 - **Agent identities come back after a ToolGate restart.** A 404 or 405 from ToolGate's identities
   route turned per-agent scoping off until Pi restarted; Pi now asks again after five minutes.
 - **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is
