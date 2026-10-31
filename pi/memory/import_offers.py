@@ -163,6 +163,7 @@ class Offers:
         with self.store._connect() as db:
             rows = db.execute(_WAITING, (self.clock(), limit)).fetchall()
         sent = 0
+        troubled = False
         for row in rows:
             if self.stop_event.is_set():
                 break
@@ -179,6 +180,8 @@ class Offers:
                     break
                 refused = code is not None and 400 <= code < 500 and code not in (408, 425)
                 self._failed(row, refused, code)
+                if not refused:
+                    troubled = True
                 continue
             with self.store._connect() as db:
                 db.execute(
@@ -186,7 +189,8 @@ class Offers:
                     "error='' WHERE message_id=? AND state='pending'",
                     (evidence, self.clock(), row["message_id"]),
                 )
-            self.problem = None
+            if not troubled:
+                self.problem = None
             sent += 1
         return sent
 

@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One sent offer no longer hides that another one failed in the same pass.** `Offers.drain_once`
+  sent offers one at a time and cleared the status problem after every success, so a later offer
+  that was acknowledged erased the "MemoryGate did not answer" note an earlier offer in the same
+  pass had set, and the owner's status showed no problem while an offer still waited to be retried.
+  The problem is now cleared only by a pass in which nothing failed for a passing reason.
 - **A declined turn that already acted no longer blocks its queue for good.** A queued message that
   ran a tool and then parked on an approval the owner declined stayed `claimed`, so it could be
   neither removed nor resumed and every later queued message waited behind it; `reconcile` now marks
