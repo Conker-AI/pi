@@ -139,7 +139,8 @@ def auto_name(store, providers, sid, body) -> dict:
         )
 
     saved = model_roles.load(store)
-    if saved["configuration"] is None:
+    configuration = saved["configuration"]
+    if configuration is None or not configuration["roleSettings"]["roles"]["routing"]["enabled"]:
         raise NamingError(
             "not_configured", "Naming needs a routing model. Choose one in Models settings.", 503
         )
@@ -191,7 +192,7 @@ def auto_name(store, providers, sid, body) -> dict:
     ]
 
     try:
-        decision = model_roles.dispatch(saved["configuration"], "routing", messages, providers)
+        decision = model_roles.dispatch(configuration, "routing", messages, providers)
         result = json.loads(decision["completion"].text)
         if not isinstance(result, dict) or set(result) != {"title"}:
             raise ValueError("unexpected keys")
