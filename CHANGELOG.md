@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Helper roles can follow the answer model ("Auto").** A role assignment with `followAnswer: true`
+  is saved with the answer role's model and backups, filled in again on every save, so changing the
+  main model moves every Auto role with it; the role keeps its own time limit. Off is still
+  `enabled: false`, roles added by an upgrade still arrive Off, and the answer role cannot follow
+  itself. Contract change: `followAnswer` (default `false`) on every role assignment.
+
 ## 0.15.1
 
 - **One sent offer no longer hides that another one failed in the same pass.** `Offers.drain_once`
