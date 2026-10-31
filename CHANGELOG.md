@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.16.0
+
 - **Helper roles can follow the answer model ("Auto").** A role assignment with `followAnswer: true`
   is saved with the answer role's model and backups, filled in again on every save, so changing the
   main model moves every Auto role with it; the role keeps its own time limit. Off is still
