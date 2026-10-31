@@ -271,7 +271,7 @@ def attempt_seconds(configuration, role, minimum_timeout_ms=None) -> float:
     roles = configuration["roleSettings"]["roles"]
     chosen = roles[role]
     each = max(chosen["timeoutMs"], minimum_timeout_ms or 0) / 1000
-    total = each * (2 if chosen["failure"] == "fallback" else 1)
+    total = each * model_roles.tries(chosen)
     if role == "answer" and configuration["roleSettings"]["answerMode"] == "router":
         total += roles["routing"]["timeoutMs"] / 1000
     return total

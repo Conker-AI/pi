@@ -153,8 +153,8 @@ def _answer_models(execution) -> list[str]:
         if item["enabled"] and item["providerId"] in providers
     ]
     candidates = [identity for identity in answer["eligibleModelIds"] if identity in models]
-    if answer["failure"] == "fallback" and answer["fallbackModelId"]:
-        candidates.append(answer["fallbackModelId"])
+    if answer["failure"] == "fallback":
+        candidates.extend(answer["fallbackModelIds"])
     return candidates
 
 

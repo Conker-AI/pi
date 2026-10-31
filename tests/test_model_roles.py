@@ -26,7 +26,7 @@ def config():
         modelId=None,
         timeoutMs=1000,
         failure="stop",
-        fallbackModelId=None,
+        fallbackModelIds=[],
     )
     return dict(
         providers=[
@@ -106,7 +106,7 @@ def test_explicit_helper_fallback_and_privacy():
     value["roleSettings"]["roles"]["summarization"] = {
         **value["roleSettings"]["roles"]["answer"],
         "failure": "fallback",
-        "fallbackModelId": "b",
+        "fallbackModelIds": ["b"],
     }
     result = r.dispatch(value, "summarization", [], {"one": Adapter(fail=True), "two": Adapter()})
     assert result["modelId"] == "b"
@@ -133,7 +133,7 @@ def test_storage_revision_validation_and_restart(tmp_path):
     with closing(Store(path)) as store:
         assert r.load(store)["configuration"] == config()
     value = config()
-    value["roleSettings"]["roles"]["answer"]["fallbackModelId"] = "b"
+    value["roleSettings"]["roles"]["answer"]["fallbackModelIds"] = ["b"]
     with pytest.raises(ValidationError):
         r.Configuration.model_validate(value)
 
@@ -144,7 +144,7 @@ def test_interruption_during_attempt_does_not_fall_back(provider_fails):
     value["roleSettings"]["roles"]["summarization"] = {
         **value["roleSettings"]["roles"]["answer"],
         "failure": "fallback",
-        "fallbackModelId": "b",
+        "fallbackModelIds": ["b"],
     }
     first, second = Adapter(fail=provider_fails), Adapter()
 

@@ -24504,16 +24504,14 @@
             ],
             "title": "Failure"
           },
-          "fallbackModelId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fallbackmodelid"
+          "fallbackModelIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Fallbackmodelids",
+            "description": "Backup models tried in this order after the role's model fails."
           }
         },
         "additionalProperties": false,
@@ -24524,7 +24522,7 @@
           "modelId",
           "timeoutMs",
           "failure",
-          "fallbackModelId"
+          "fallbackModelIds"
         ],
         "title": "Assignment"
       },

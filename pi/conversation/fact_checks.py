@@ -234,8 +234,8 @@ def _prepare(store, sid, mid, body):
             role = "routing"
             routing = configuration["roleSettings"]["roles"]["routing"]
             models = {routing["modelId"]}
-            if routing["failure"] == "fallback" and routing["fallbackModelId"]:
-                models.add(routing["fallbackModelId"])
+            if routing["failure"] == "fallback":
+                models.update(routing["fallbackModelIds"])
         else:
             if body.model_id not in routes:
                 raise CheckError("unknown_model", "Unknown fact check model.", 422)
