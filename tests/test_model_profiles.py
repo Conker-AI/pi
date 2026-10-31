@@ -1,5 +1,6 @@
 """Tests for model profiles computed from recorded outcomes."""
 
+import itertools
 import json
 import time
 from contextlib import closing, contextmanager
@@ -9,6 +10,9 @@ from fastapi.testclient import TestClient
 from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from tests.test_model_roles import config
+
+# A counter, not the clock: time.time_ns() repeats on Windows between two quick calls.
+_judgement_ids = itertools.count()
 
 
 def setup_models(store):
@@ -87,7 +91,7 @@ def create_response_family(store, session_id, message_a_id, message_b_id):
 def create_judgement(store, session_id, root_message_id, scores, winner, request_id=None):
     """Create a judgement with scores."""
     if request_id is None:
-        request_id = f"req_{time.time_ns() % (10**16):016x}"
+        request_id = f"req_{next(_judgement_ids):016x}"
     result = {
         "request_id": request_id,
         "judgeModelId": "judge-model",
