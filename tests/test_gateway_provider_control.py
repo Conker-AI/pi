@@ -176,3 +176,37 @@ def test_unconfigured_bridge_is_unavailable_not_fake_connected():
     assert request("", "GET")["available"] is False
     with pytest.raises(ProviderControlError):
         request("", "POST", {"operation": "verify", "provider": "openai", "revision": REVISION})
+
+
+def _row(provider):
+    return {**status()["providers"][0], "id": provider}
+
+
+@pytest.mark.parametrize("provider", ["gemini", "xai", "mistral", "deepseek", "groq"])
+def test_direct_vendor_ids_are_valid_targets(provider):
+    body = {"operation": "verify", "provider": provider, "revision": REVISION}
+    assert validate_operation(body) == body
+
+
+@pytest.mark.parametrize(
+    "ids,accepted",
+    [
+        (("openrouter", "openai", "anthropic"), True),
+        (
+            ("openrouter", "openai", "anthropic", "gemini", "xai", "mistral", "deepseek", "groq"),
+            True,
+        ),
+        (("openrouter", "openai", "gemini"), False),
+        (("openrouter", "openai", "anthropic", "openai"), False),
+        (("openrouter", "openai", "anthropic", "custom"), False),
+    ],
+)
+def test_host_status_needs_the_original_three_once_each(ids, accepted):
+    body = {**status(), "providers": [_row(provider) for provider in ids]}
+    transport = httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+    if accepted:
+        result = request("/private/control.sock", "GET", transport=transport)
+        assert [row["id"] for row in result["providers"]] == list(ids)
+    else:
+        with pytest.raises(ProviderControlError):
+            request("/private/control.sock", "GET", transport=transport)

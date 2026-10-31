@@ -43,7 +43,20 @@ CATALOG = Path(__file__).with_name("interactive_answers.txt").read_text(encoding
 # Hosted model providers, by the adapter names configured models use as `providerId`. Auto keeps
 # interactive answers to these, which follow the catalog; a small local model (Ollama) or a provider
 # not listed here gets plain Markdown.
-HOSTED_PROVIDERS = frozenset({"anthropic", "chatgpt", "claude-code", "openai", "openrouter"})
+HOSTED_PROVIDERS = frozenset(
+    {
+        "anthropic",
+        "chatgpt",
+        "claude-code",
+        "deepseek",
+        "gemini",
+        "groq",
+        "mistral",
+        "openai",
+        "openrouter",
+        "xai",
+    }
+)
 
 
 class Output(Strict):

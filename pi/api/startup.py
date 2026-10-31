@@ -25,6 +25,7 @@ from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
 from pi.models import secrets as provider_secrets
 from pi.models import service_inference
+from pi.models.direct import ADAPTERS as DIRECT_ADAPTERS
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import OllamaProvider
@@ -230,8 +231,7 @@ async def lifespan(app: FastAPI):
         name
         for name, environment_name in (
             ("openrouter", "PI_OPENROUTER_KEY"),
-            ("openai", "PI_OPENAI_KEY"),
-            ("anthropic", "PI_ANTHROPIC_KEY"),
+            *((adapter.name, key) for key, adapter in DIRECT_ADAPTERS),
         )
         if provider_environment.get(environment_name, "").strip()
     )

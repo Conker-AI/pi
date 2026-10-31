@@ -9,7 +9,11 @@ from pydantic import Field, ValidationError
 
 from pi.core.models import Strict
 
-ProviderId = Literal["openrouter", "openai", "anthropic"]
+ProviderId = Literal[
+    "openrouter", "openai", "anthropic", "gemini", "xai", "mistral", "deepseek", "groq"
+]
+# Every host status reports these; hosts that predate the other direct providers omit them.
+REQUIRED_PROVIDERS = frozenset({"openrouter", "openai", "anthropic"})
 Revision = Annotated[str, Field(pattern=r"^credential_[0-9a-f]{32}$")]
 
 
@@ -66,7 +70,7 @@ class Status(Strict):
     secretsIncluded: Literal[False]
     paidAllowed: bool | None
     policyRecoveryRequired: bool
-    providers: list[ProviderState] = Field(max_length=3)
+    providers: list[ProviderState] = Field(max_length=8)
 
 
 class ProviderControlError(ValueError):
@@ -133,15 +137,12 @@ def request(
                 if len(content) > 65536:
                     raise ProviderControlError("Host provider status is too large.")
             result = Status.model_validate_json(content)
+            ids = [row.id for row in result.providers]
             if (
                 not result.available
                 or result.paidAllowed is None
-                or {row.id for row in result.providers}
-                != {
-                    "openai",
-                    "openrouter",
-                    "anthropic",
-                }
+                or not REQUIRED_PROVIDERS.issubset(ids)
+                or len(set(ids)) != len(ids)
             ):
                 raise ProviderControlError("Host provider status is incomplete.")
             return result.model_dump(mode="json")
