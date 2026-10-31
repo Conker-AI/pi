@@ -7,12 +7,12 @@ never writes, and it includes nothing a kind's own list would not already show.
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from pydantic import Field
 
 from pi.agents import profiles, skills
-from pi.agents import teams as collaboration
 from pi.context import projects
 from pi.core.models import Strict
 from pi.schedule import jobs
@@ -62,29 +62,33 @@ def _agents(store):
 
 
 def _collaboration(store):
-    records = collaboration.list_all(store)
     with store._connect() as db:
-        published = {
-            row[0] for row in db.execute("SELECT DISTINCT template_id FROM template_publications")
+        records = db.execute(
+            "SELECT r.id, r.kind, r.revision, r.definition, r.archived_at, r.created_at,"
+            " r.updated_at,"
+            " EXISTS(SELECT 1 FROM template_publications p WHERE p.template_id = r.id) AS published"
+            " FROM collaboration_records r"
+            " WHERE r.deleted_at IS NULL AND r.kind IN ('template', 'team')"
+        ).fetchall()
+    for record in records:
+        kind = record["kind"]
+        key = "templates" if kind == "template" else "teams"
+        definition = json.loads(record["definition"])
+        state = "archived" if record["archived_at"] else "active"
+        if kind == "template" and state == "active":
+            state = "published" if record["published"] else "draft"
+        yield {
+            "kind": kind,
+            "id": record["id"],
+            "name": definition["name"],
+            "description": _short(definition.get("description") or definition.get("objective")),
+            "revision": record["revision"],
+            "state": state,
+            "createdAt": record["created_at"],
+            "updatedAt": record["updated_at"],
+            "archivedAt": record["archived_at"],
+            "href": f"/collaboration/{key}/{record['id']}",
         }
-    for kind, key in (("template", "templates"), ("team", "teams")):
-        for record in records[key]:
-            definition = record["definition"]
-            state = "archived" if record["archived_at"] else "active"
-            if kind == "template" and state == "active":
-                state = "published" if record["id"] in published else "draft"
-            yield {
-                "kind": kind,
-                "id": record["id"],
-                "name": definition["name"],
-                "description": _short(definition.get("description") or definition.get("objective")),
-                "revision": record["revision"],
-                "state": state,
-                "createdAt": record["created_at"],
-                "updatedAt": record["updated_at"],
-                "archivedAt": record["archived_at"],
-                "href": f"/collaboration/{key}/{record['id']}",
-            }
 
 
 def _skills(store):

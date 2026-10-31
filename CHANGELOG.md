@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The definitions list no longer reads every team preparation.** Building the team and template
+  rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
+  so the route got slower as those append-only tables grew; it now reads each record's own columns
+  in one query. The rows it returns are unchanged.
+
 - **A cited answer re-checks only the files it cites.** When a final answer cites an attachment
   passage, Pi re-reads and re-extracts each cited file inside the write that saves the answer, to
   prove the passage still matches; it used to do that for every file of the turn (a PDF each time),
