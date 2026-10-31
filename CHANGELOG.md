@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Inbox cards carry no terminal control characters.** Change-request titles and summaries, and the
+  names, labels and description of a drafted tool, drop control characters (except tab and newline in
+  summaries), so a model reply or a chat message cannot retitle or clear the owner's terminal when
+  `conker` prints the Inbox. Titles stay on one line. A memory request's text stays exactly as asked.
 - **Naming says so when the routing role is off.** `POST /sessions/{id}/title/auto` answers 503
   `not_configured` without calling a model when the routing role is switched off, as it does when
   nothing is saved (it used to try, fail and answer `unavailable`).
