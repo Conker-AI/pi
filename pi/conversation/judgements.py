@@ -143,8 +143,8 @@ def _prepare(store, sid, root, body):
             role = "routing"
             routing = configuration["roleSettings"]["roles"]["routing"]
             judges = {routing["modelId"]}
-            if routing["failure"] == "fallback" and routing["fallbackModelId"]:
-                judges.add(routing["fallbackModelId"])
+            if routing["failure"] == "fallback":
+                judges.update(routing["fallbackModelIds"])
         else:
             if body.model_id not in routes:
                 raise JudgeError("unknown_model", "Unknown judge model.", 422)

@@ -44,7 +44,7 @@ def configuration():
         modelId="a",
         timeoutMs=1200,
         failure="stop",
-        fallbackModelId=None,
+        fallbackModelIds=[],
     )
     return model_roles.Configuration.model_validate(
         {
@@ -252,7 +252,7 @@ def test_failure_and_fallback_have_actual_call_records_and_unknown_usage(store):
     saved = e.save_case(store, case())
     value = configuration()
     role = value.roleSettings.roles["routing"]
-    role.failure, role.fallbackModelId = "fallback", "b"
+    role.failure, role.fallbackModelIds = "fallback", ["b"]
     model_roles.save(store, model_roles.Update(expected_revision=1, configuration=value))
     first, second = Adapter(fail=True), Adapter()
     run = e.evaluate(

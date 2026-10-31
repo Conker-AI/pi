@@ -46,6 +46,8 @@ LOCAL_ROLES = ("memory-sorting", "tool-text")
 # A cold local model on a small server can take minutes to answer its first prompt.
 LOCAL_TIMEOUT_MS = 300_000
 MAX_TIMEOUT_MS = 600_000
+# Backup models a role tries in order after its own model fails.
+MAX_BACKUPS = 8
 
 
 def default_timeout_ms(role: str, *, local: bool = False) -> int:
@@ -53,6 +55,11 @@ def default_timeout_ms(role: str, *, local: bool = False) -> int:
     if role == "memory-ranking":
         return 2000
     return LOCAL_TIMEOUT_MS if local or role in LOCAL_ROLES else 120000
+
+
+def tries(assignment: dict) -> int:
+    """How many models one call of a role may try: its own, then each backup in order."""
+    return 1 + (len(assignment["fallbackModelIds"]) if assignment["failure"] == "fallback" else 0)
 
 
 class Provider(Strict):
@@ -76,7 +83,21 @@ class Assignment(Strict):
     modelId: str | None
     timeoutMs: int = Field(ge=100, le=MAX_TIMEOUT_MS)
     failure: Literal["stop", "fallback"]
-    fallbackModelId: str | None
+    fallbackModelIds: list[str] = Field(
+        max_length=MAX_BACKUPS,
+        description="Backup models tried in this order after the role's model fails.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def one_backup(cls, value):
+        # Settings saved before backup lists, and older clients, name one fallback model. An
+        # older client that read a list and sends one fallback back means that one.
+        if isinstance(value, dict) and "fallbackModelId" in value:
+            value = dict(value)
+            legacy = value.pop("fallbackModelId")
+            value["fallbackModelIds"] = [] if legacy is None else [legacy]
+        return value
 
 
 class Roles(Strict):
@@ -114,7 +135,7 @@ class Configuration(Strict):
                                     modelId=None,
                                     timeoutMs=default_timeout_ms(role),
                                     failure="stop",
-                                    fallbackModelId=None,
+                                    fallbackModelIds=[],
                                 )
                                 for role in missing
                             },
@@ -140,18 +161,20 @@ class Configuration(Strict):
             eligible = set(item.eligibleModelIds)
             if len(eligible) != len(item.eligibleModelIds) or not eligible.issubset(known):
                 raise ValueError("Role eligibility requires unique known model IDs.")
+            backups = item.fallbackModelIds
             if any(
-                value is not None and value not in eligible
-                for value in (item.modelId, item.fallbackModelId)
+                value is not None and value not in eligible for value in (item.modelId, *backups)
             ):
                 raise ValueError("Primary and fallback must be explicitly eligible.")
-            if item.fallbackModelId is not None and item.fallbackModelId == item.modelId:
+            if len(set(backups)) != len(backups):
+                raise ValueError("Each fallback model may be listed once.")
+            if item.modelId in backups:
                 raise ValueError("Fallback must differ from primary.")
-            if item.failure == "stop" and item.fallbackModelId is not None:
+            if item.failure == "stop" and backups:
                 raise ValueError("Stop-on-failure cannot specify fallback.")
             if item.enabled and (
                 item.modelId not in enabled
-                or (item.failure == "fallback" and item.fallbackModelId not in enabled)
+                or (item.failure == "fallback" and (not backups or not enabled.issuperset(backups)))
             ):
                 raise ValueError("Enabled roles need enabled primary/fallback routes.")
         if (
@@ -190,7 +213,7 @@ class Update(Strict):
         routing = config.roleSettings.roles["routing"]
         uses_laya = any(
             models[identity].providerId == "decisions"
-            for identity in (routing.modelId, routing.fallbackModelId)
+            for identity in (routing.modelId, *routing.fallbackModelIds)
             if identity is not None
         )
         if (
@@ -428,7 +451,7 @@ def dispatch(
                 raise SelectionError(
                     "Routing helper unavailable or returned an ineligible choice."
                 ) from None
-            selected = assignment.fallbackModelId
+            selected = assignment.fallbackModelIds[0]
             attempts.append(
                 {
                     "role": "routing",
@@ -439,7 +462,7 @@ def dispatch(
             )
     candidates = [selected]
     if not locked and assignment.failure == "fallback":
-        candidates.append(assignment.fallbackModelId)
+        candidates.extend(assignment.fallbackModelIds)
     for candidate in dict.fromkeys(candidates):
         model = eligible.get(candidate)
         adapter = providers.get(model.providerId) if model else None

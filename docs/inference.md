@@ -52,8 +52,8 @@ compared as hashes in constant time. The owner, gateway and recovery keys cannot
   service can match its logs; Pi does not replay answers, so a repeated id is a new call.
 - Unknown fields are refused.
 
-One request makes one role call: the role's model, then its fallback if the owner set one, and no
-retries. The whole request never runs longer than the role's wait for each model it may try.
+One request makes one role call: the role's model, then its backups in order if the owner set any,
+and no retries. The whole request never runs longer than the role's wait for each model it may try.
 Memory sorting yields the local model to the owner's replies; ToolGate's text does not. A service
 may have 4 calls running at once; the next one gets `unavailable`.
 
