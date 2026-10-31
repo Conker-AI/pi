@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One sent offer no longer hides that another one failed in the same pass.** `Offers.drain_once`
+  sent offers one at a time and cleared the status problem after every success, so a later offer
+  that was acknowledged erased the "MemoryGate did not answer" note an earlier offer in the same
+  pass had set, and the owner's status showed no problem while an offer still waited to be retried.
+  The problem is now cleared only by a pass in which nothing failed for a passing reason.
 - **Queue submits and receipt reads decode the settings snapshot once.** `_files` parsed the same
   snapshot JSON four times per submit, edit and validation, and `_view` decoded the submission
   settings a second time for the research mode after already decoding them; both now parse the

@@ -255,6 +255,28 @@ def test_the_listener_refusing_pauses_every_offer_without_losing_one(store, list
     sender.close()
 
 
+def test_a_later_offer_sent_does_not_hide_an_earlier_one_failing(store, listener):
+    now = [1000.0]
+    client = import_offers.ListenerClient(
+        "http://memorygate",
+        "assistant-imports",
+        KEY,
+        transport=httpx.MockTransport(listener.handle),
+    )
+    sender = import_offers.Offers(store, client, clock=lambda: now[0])
+    body = raw([claude_chat("k1"), claude_chat("k2")])
+    imports.save(store, "claude", body, imports.digest(body), memory_configured=True)
+    listener.answers = [(503, {})]
+    assert sender.drain_once() == 1 and len(listener.requests) == 2
+    status = import_offers.status(store, sender)
+    assert "did not answer" in status["problem"] and status["waiting"] == 1
+    now[0] += 10
+    assert sender.drain_once() == 1
+    status = import_offers.status(store, sender)
+    assert status["problem"] is None and status["waiting"] == 0
+    sender.close()
+
+
 def test_without_the_listener_offers_wait_and_say_why(store):
     body = raw([chatgpt_chat()])
     imports.save(store, "chatgpt", body, imports.digest(body), memory_configured=False)
