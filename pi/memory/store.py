@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS memory_outbox (
     error TEXT NOT NULL DEFAULT '',
     receipt TEXT
 );
+CREATE INDEX IF NOT EXISTS memory_outbox_due ON memory_outbox(next_at) WHERE state='pending';
 CREATE TABLE IF NOT EXISTS memory_contexts (
     turn_id TEXT PRIMARY KEY REFERENCES turns(id),
     status TEXT NOT NULL,

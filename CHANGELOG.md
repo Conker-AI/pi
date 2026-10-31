@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The memory outbox no longer scans every past message each second.** The once-a-second poll for
+  due memory work now reads pending rows from a partial index instead of the whole table, whose
+  receipt rows grow with the owner's history. What is sent, and when, is unchanged.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
