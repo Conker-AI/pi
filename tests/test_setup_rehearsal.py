@@ -153,6 +153,31 @@ def test_memory_review_is_revision_bound_idempotent_and_content_free(tmp_path):
         assert stale.value.code == "revision_conflict"
 
 
+def test_memory_review_with_new_request_id_replays_recorded_evidence(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        choice = choose_memory(store, "skip")
+        first = setup_rehearsal.review_memory(
+            store,
+            setup_rehearsal.MemoryReviewInput(
+                requestId="memory-review-1", expectedChoiceRevision=choice.revision
+            ),
+            Memory(),
+            now=NOW_TS,
+        )
+        second = setup_rehearsal.review_memory(
+            store,
+            setup_rehearsal.MemoryReviewInput(
+                requestId="memory-review-2", expectedChoiceRevision=choice.revision
+            ),
+            Memory(),
+            now=NOW_TS + 1,
+        )
+        assert first == second
+        with store._connect() as db:
+            count = db.execute("SELECT COUNT(*) FROM setup_rehearsal_memory_reviews").fetchone()[0]
+        assert count == 1
+
+
 def test_approval_start_replay_never_dispatches_twice_and_unknown_never_retries(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         gate = Gate()

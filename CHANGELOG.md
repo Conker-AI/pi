@@ -11,6 +11,16 @@ be a decision with visible consequences.
   having no problem after the first overnight pause, although nothing had looked since. A pause
   now writes back the failure the last real look recorded.
 
+- **A repeated setup memory review answers instead of failing with a 500.** Retrying the review
+  with a new `requestId` at the same choice revision computed the same evidence digest, passed the
+  `request_id` replay check, and hit the table's unique digest constraint, so a review that was
+  already recorded raised `IntegrityError`. The same evidence is now treated as a replay and the
+  status is returned without inserting.
+- **A malformed settings document never fails an Ollama answer.** Reading the local model settings
+  caught only a broken database, so a missing `owner_settings` row, `vals` that was not JSON, or
+  JSON that was not an object (an array, say) raised and failed the whole chat answer over a
+  preference. Each now reads as an unset document and sends nothing, so the answer comes with
+  Ollama's own settings.
 - **Model profiles stay fast as judgements pile up.** Every dashboard load re-read the whole
   `response_judgements` and `response_votes` tables once per configured model and ran one point
   query per score and per vote, so the work grew with models x judgements x scores. Both tables
