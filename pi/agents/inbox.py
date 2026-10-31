@@ -26,11 +26,11 @@ def _local_midnight(day, zone):
     return datetime.combine(day, datetime.min.time(), zone).timestamp()
 
 
-def _needs_approval_items(store, day_start):
+def _needs_approval_items(store, day_start, turns):
     """Get items needing approval from turns."""
     items = []
-    for turn in store.awaiting_approval():
-        with store._connect() as db:
+    with store._connect() as db:
+        for turn in turns:
             privacy = session_settings.source_privacy(db, turn["session_id"])
             is_private = privacy is not None and any(privacy.values())
 
@@ -117,14 +117,12 @@ def _needs_memory_items(store):
     return items
 
 
-def _needs_attention_items(store):
+def _needs_attention_items(store, turns):
     """Get continuity items needing attention."""
     items = []
     briefing = continuity.briefing(store, limit=100)
 
-    approval_turn_ids = set()
-    for turn in store.awaiting_approval():
-        approval_turn_ids.add(turn["id"])
+    approval_turn_ids = {turn["id"] for turn in turns}
 
     for item in briefing["items"]:
         if not item["needsAttention"]:
@@ -340,10 +338,11 @@ def inbox(store, *, now=None):
     week_start = _local_midnight(today - timedelta(days=6), zone)
 
     needs_you = []
-    needs_you.extend(_needs_approval_items(store, day_start))
+    approval_turns = store.awaiting_approval()
+    needs_you.extend(_needs_approval_items(store, day_start, approval_turns))
     needs_you.extend(_needs_suggestion_items(store))
     needs_you.extend(_needs_memory_items(store))
-    needs_you.extend(_needs_attention_items(store))
+    needs_you.extend(_needs_attention_items(store, approval_turns))
     needs_you.extend(plan_alerts.needs_you(store))
     needs_you.extend(change_requests.needs_you(store))
     needs_you.extend(asks.needs_you(store))

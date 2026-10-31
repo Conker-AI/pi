@@ -80,6 +80,23 @@ def test_approval_resume_keeps_plan_and_continues_from_saved_evidence(store):
     assert len(research.receipt(store, first["turn_id"])["actions"]) == 2
 
 
+def test_a_resume_without_a_recorded_question_keeps_the_action_and_asks_for_the_reply(store):
+    gate = SearchGate(needs_approval=True)
+    loop, _ = build(store, [PLAN, SEARCH, "Reply from what ran"], gate)
+    first = loop.run_turn(store.create_session(), "Investigate", research_mode="deep")
+    tid = first["turn_id"]
+    with store._connect() as db:
+        # A turn from before inputs were bound to it.
+        db.execute("DROP TRIGGER turn_messages_no_delete")
+        db.execute("DELETE FROM turn_messages WHERE turn_id=? AND purpose='input'", (tid,))
+    with pytest.raises(ActedWithoutReply, match="not recorded"):
+        loop.resume_turn(tid)
+    # The approved search ran once, after the ask.
+    assert [call[2] for call in gate.invocations] == [None, "req_1"]
+    assert store.get_turn(tid)["status"] == "acted_no_reply"
+    assert len(research.receipt(store, tid)["actions"]) == 1
+
+
 def test_partial_failure_can_inform_next_search_without_erasing_receipt(store):
     gate = SearchGate(refuse=("SOURCE_UNAVAILABLE", "Source temporarily unavailable"))
     loop, provider = build(store, [PLAN, SEARCH, FOLLOWUP, "Evidence remains insufficient"], gate)

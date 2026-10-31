@@ -275,7 +275,8 @@ def test_paid_only_catalogue_remains_testable_without_weakening_dispatch_guard(
         else:
             with pytest.raises(setup_model_probes.ProbeError) as failure:
                 setup_models.activate(store, router, activation())
-            assert failure.value.code == "provider_error"
+            # Refused as one model, the way a gated model is; nothing was called.
+            assert failure.value.code == "provider_unavailable"
             assert model_roles.load(store) == before
             assert setup_model_probes.current(store, 2, "hosted") is None
     assert seen == {"catalogue": [CATALOGUE_URL], "inference": [CHAT_URL] if paid else []}

@@ -119,6 +119,11 @@ class History:
                 "reply_excluded",
                 "The reply target is not in selected context; review its context policy.",
             )
+        from pi.content import attachment_turns, attachments
+
+        attached_ids = attachment_turns.attached_message_ids(
+            self.store, [row["id"] for row in selected_history]
+        )
         for row in selected_history:
             if row["id"] == reply_to:
                 messages.append(
@@ -133,18 +138,17 @@ class History:
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             messages.append(Message(row["role"], text))
-            from pi.content import attachment_turns, attachments
-
-            try:
-                attached = attachment_turns.context(
-                    self.store, row["session_id"], row["id"], execution["privacy"]
-                )
-            except attachments.AttachmentError as exc:
-                raise context_controls.ContextError(
-                    exc.detail["code"], exc.detail["message"], exc.status
-                ) from exc
-            if attached:
-                messages.append(attached)
+            if row["id"] in attached_ids:
+                try:
+                    attached = attachment_turns.context(
+                        self.store, row["session_id"], row["id"], execution["privacy"]
+                    )
+                except attachments.AttachmentError as exc:
+                    raise context_controls.ContextError(
+                        exc.detail["code"], exc.detail["message"], exc.status
+                    ) from exc
+                if attached:
+                    messages.append(attached)
         context_controls.check_budget(policy, messages)
         if turn_id:
             turn_context.capture(

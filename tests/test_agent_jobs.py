@@ -245,6 +245,10 @@ def test_summaries_are_one_plain_line():
     )
     assert agent_jobs.summarize("NOTHING") is None
     assert len(agent_jobs.summarize("x" * 500)[0]) == agent_jobs.MAX_TITLE
+    assert agent_jobs.summarize("Rent\x1b]0;owned\x07 due\nPay\x9b it") == (
+        "Rent]0;owned due",
+        "Pay it",
+    ), "control codes never reach the Inbox"
 
 
 def test_the_ideas_pass_ignores_ai_job_chats(store):
