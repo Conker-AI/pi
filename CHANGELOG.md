@@ -10,6 +10,10 @@ be a decision with visible consequences.
   at 16,000 characters, but replies have no limit, so one long answer made every
   `/calls/browser` route fail. The view now clips that text with an ellipsis; the event's source
   still names the full message.
+- **Inbox cards carry no terminal control characters.** Change-request titles and summaries, and the
+  names, labels and description of a drafted tool, drop control characters (except tab and newline in
+  summaries), so a model reply or a chat message cannot retitle or clear the owner's terminal when
+  `conker` prints the Inbox. Titles stay on one line. A memory request's text stays exactly as asked.
 - **pypdf 6.21.4.** Fixes seven published denial-of-service advisories in 6.21.2 (crafted PDFs
   that loop, exhaust memory or forge page counts). Pi reads attached PDFs with it.
 - **Naming says so when the routing role is off.** `POST /sessions/{id}/title/auto` answers 503
