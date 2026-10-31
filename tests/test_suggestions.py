@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from pi.api import server as api
+from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation import settings as session_settings
 from pi.conversation import suggestions
 from pi.conversation.store import Store
@@ -417,3 +418,13 @@ def test_route_refuses_extra_fields(http):
         json={"count": 2, "other": 1},
     )
     assert response.status_code == 422
+
+
+def test_the_browser_may_ask_only_by_post_to_one_chat():
+    path = "/sessions/ses_0123456789abcdef/suggestions"
+    assert owner_allowed("POST", path)
+    assert not owner_allowed("GET", path)
+    # The conversation credential never gets it, and the pattern names one chat, nothing else.
+    assert not runtime_allowed("POST", path)
+    for other in ("/sessions/a/b/suggestions", "/sessions//suggestions", path + "/x"):
+        assert not owner_allowed("POST", other)
