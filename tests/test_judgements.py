@@ -2,6 +2,7 @@
 
 import json
 import random
+import threading
 from contextlib import closing
 from unittest.mock import patch
 
@@ -433,3 +434,42 @@ def test_judge_accepts_a_pinned_version(tmp_path):
 def test_vote_value_is_validated():
     with pytest.raises(ValueError):
         judgements.Vote(message_id="msg_1", vote="maybe")
+
+
+def test_a_concurrent_retry_waits_for_the_first_judge_call_and_replays_it(tmp_path):
+    """Two calls with one request id pay for one judge call; the later one replays the first."""
+    entered, release = threading.Event(), threading.Event()
+
+    def hold_the_first_call():
+        if not entered.is_set():
+            entered.set()
+            release.wait(5)
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        setup_models(store)
+        adapters = {"one": Recording(JUDGE_JSON), "two": Recording()}
+        from pi.models.routing import Router
+        from pi.turns.loop import Loop
+
+        loop = Loop(store, Router(providers=adapters))
+        sid = store.create_session()
+        root, _version_b, _version_c = create_family(store, loop, sid)
+        before = len(adapters["one"].messages)
+        adapters["one"].callback = hold_the_first_call
+        body = judgements.Judge(request_id="judge_request_concurrent", rubric="Test rubric")
+        results = []
+
+        def call():
+            results.append(judgements.judge(store, adapters, sid, root, body))
+
+        first = threading.Thread(target=call)
+        first.start()
+        assert entered.wait(5)
+        second = threading.Thread(target=call)
+        second.start()
+        second.join(0.5)
+        release.set()
+        first.join(5)
+        second.join(5)
+        assert len(adapters["one"].messages) == before + 1
+        assert sorted(result["replayed"] for result in results) == [False, True]

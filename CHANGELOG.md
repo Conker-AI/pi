@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A retried fact check or judge pays for one model call.** Two requests with the same
+  `request_id` that arrived together both called the model and kept one answer. The later one
+  now waits for the first and replays its result.
 - **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
   call just after the reply was saved, the request was marked `failed` beside a delivered
   message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
