@@ -39,7 +39,7 @@ class TurnRequest(BaseModel):
     task_id: str | None = Field(default=None, min_length=1, max_length=128)
     task_expected_revision: int | None = Field(default=None, ge=1, strict=True)
     draft_revision: int | None = Field(default=None, ge=1, strict=True)
-    attachment_ids: list[str] = Field(default_factory=list)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     reply_to: str | None = Field(default=None, min_length=1, max_length=200)
     research_mode: Literal["off", "web", "deep"] = "off"
