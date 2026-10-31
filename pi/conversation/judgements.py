@@ -12,6 +12,7 @@ from pydantic import Field
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation import versions
+from pi.core import once
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models import roles as model_roles
@@ -199,6 +200,13 @@ def _prepare(store, sid, root, body):
 
 def judge(store, providers, sid: str, root: str, body: Judge):
     body = Judge.model_validate(body.model_dump())
+    # A retry that arrives while the first call runs waits for it and replays its result,
+    # instead of paying for a second model call.
+    with once.per_key(("response_judgements", str(store.path), body.request_id)):
+        return _judge(store, providers, sid, root, body)
+
+
+def _judge(store, providers, sid: str, root: str, body: Judge):
     digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
 
     def stored():
