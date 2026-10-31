@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A malformed settings document never fails an Ollama answer.** Reading the local model settings
+  caught only a broken database, so a missing `owner_settings` row, `vals` that was not JSON, or
+  JSON that was not an object (an array, say) raised and failed the whole chat answer over a
+  preference. Each now reads as an unset document and sends nothing, so the answer comes with
+  Ollama's own settings.
 - **An export that is too long says so.** The size check in `office_exports.render` now matches the
   limit the export worker actually reads, so a payload between the two limits is refused up front
   with "too long" instead of starting a worker that answers `invalid`.
