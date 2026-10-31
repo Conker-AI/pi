@@ -46,6 +46,9 @@ be a decision with visible consequences.
 - **A retried fact check or judge pays for one model call.** Two requests with the same
   `request_id` that arrived together both called the model and kept one answer. The later one
   now waits for the first and replays its result.
+- **The Inbox reads its approvals once.** Building the Inbox scanned the approval queue twice
+  and opened a new database connection for every turn in it; it now reads the queue once on one
+  connection and shows the same items.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
