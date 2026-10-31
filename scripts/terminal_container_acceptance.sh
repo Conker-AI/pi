@@ -24,8 +24,12 @@ cleanup() {
         docker volume rm "$volume" >/dev/null 2>&1 || true
     done
     rm -rf "$scratch"
-    docker run --rm -v /tmp:/host "$python_image" \
-        rm -rf "/host/$(basename "$workspace")" >/dev/null 2>&1 || true
+    # The workspace now belongs to the sandbox user, so only root can empty it. That container
+    # sees this one folder and nothing else, then hands it back to us to remove.
+    docker run --rm --network none -v "$workspace:/workspace" "$python_image" \
+        sh -c 'find /workspace -mindepth 1 -delete && chown "$1" /workspace' sh \
+        "$(id -u):$(id -g)" >/dev/null 2>&1 || true
+    rm -rf "$workspace" 2>/dev/null || true
 }
 trap cleanup EXIT HUP INT TERM
 

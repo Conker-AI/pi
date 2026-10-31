@@ -183,6 +183,7 @@ def replay(store, turn_id):
         raise context_controls.ContextError(
             "retry_action_unresolved", "Reconcile recorded action outcomes before retrying."
         )
+    attached_ids = attachment_turns.attached_message_ids(store, saved["message_ids"])
     try:
         # Validate live project-source availability without replacing the saved text.
         project_context.messages(store, execution)
@@ -207,11 +208,12 @@ def replay(store, turn_id):
             messages.append(
                 Message(row["role"], content if isinstance(content, str) else str(content))
             )
-            attached = attachment_turns.context(
-                store, row["session_id"], identity, execution["privacy"]
-            )
-            if attached:
-                messages.append(attached)
+            if identity in attached_ids:
+                attached = attachment_turns.context(
+                    store, row["session_id"], identity, execution["privacy"]
+                )
+                if attached:
+                    messages.append(attached)
     except (agents.AgentError, attachments.AttachmentError) as exc:
         raise context_controls.ContextError(
             exc.detail["code"], exc.detail["message"], exc.status

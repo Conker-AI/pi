@@ -182,6 +182,20 @@ class Replies:
                     "WHERE tm.turn_id=? AND tm.purpose='input'",
                     (turn_id,),
                 ).fetchone()
+            if source is None:
+                # A turn recorded before inputs were bound has no question to continue from.
+                # What ran stays recorded; only the reply is missing, and it can be asked for.
+                reason = "the question this research answered is not recorded"
+                self.store.finish_turn(
+                    turn_id,
+                    "acted_no_reply" if acted else "failed",
+                    acted=int(acted),
+                    detail=reason,
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
+                if acted:
+                    raise ActedWithoutReply(turn_id, reason)
+                raise TurnFailed(reason, turn_id)
             return self._run_bound(
                 session_id, json.loads(source[0]), turn_id, {}, None, continued=True
             )
