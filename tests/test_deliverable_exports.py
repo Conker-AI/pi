@@ -215,10 +215,17 @@ def test_refusals_before_any_worker_starts(monkeypatch):
         ({"kind": "html", "text": "<p>x</p>"}, "pdf", "unsupported_format"),
         ({"kind": "code", "text": "x", "language": "py"}, "xlsx", "unsupported_format"),
         ({"kind": "markdown", "text": "x"}, "exe", "unsupported_format"),
+        ({"kind": "markdown", "text": "x" * (3 * 1024 * 1024)}, "pdf", "export_too_long"),
     ):
         with pytest.raises(office_exports.ExportError) as caught:
             office_exports.render(data, format, title="t")
         assert (caught.value.code, caught.value.status) == (code, 422)
+
+
+def test_export_limit_matches_the_worker():
+    from pi.content import _export_worker
+
+    assert _export_worker.MAX_INPUT == office_exports.MAX_INPUT
 
 
 def test_a_worker_that_overruns_its_time_is_reported_unavailable(monkeypatch):

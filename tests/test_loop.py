@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from pi.conversation.store import Store
-from pi.models.openrouter import ModelUnusable
+from pi.models.openrouter import ModelUnusable, PaidModelRefused
 from pi.models.providers import Completion, Message, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns.failures import TurnFailed
@@ -295,3 +295,25 @@ def test_when_every_hosted_model_refuses_the_local_one_answers(store):
     assert result["route"]["provider"] == "recorder"
     assert result["message"]["content"] == "local answer"
     assert len(result["route"]["skipped"]) == 2
+
+
+def test_a_model_refused_for_its_price_skips_only_that_model(store):
+    """A model that started charging is refused like a gated one: the next hosted
+    model answers, rather than the provider being dropped or the turn failing."""
+
+    class Repriced(GatedHosted):
+        def complete(self, messages, *, model):
+            self.asked_for.append(model)
+            if model in self.gated:
+                raise PaidModelRefused(f"{model!r} is not free and allow_paid is off.")
+            return Completion(text="hosted answer", model=model, provider=self.name)
+
+    hosted = Repriced(["now-paid", "works"], gated={"now-paid"})
+    router = Router(local_provider=Recorder(), hosted_provider=hosted, local_model="local-m")
+    session = store.create_session()
+
+    result = Loop(store, router).run_turn(session, "analyse this", context={"is_analysis": True})
+
+    assert result["route"]["model"] == "works"
+    assert hosted.asked_for == ["now-paid", "works"]
+    assert "not free" in result["route"]["skipped"][0]

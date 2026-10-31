@@ -21,7 +21,9 @@ from pi.core.errors import ServiceError
 
 TIMEOUT = 40
 WORKERS = threading.BoundedSemaphore(2)
-MAX_INPUT = 4 * 1024 * 1024
+# Must equal _export_worker.MAX_INPUT: the worker runs as a separate isolated script and
+# keeps its own constant.
+MAX_INPUT = 2 * 1024 * 1024
 MAX_OUTPUT = 16 * 1024 * 1024
 MIME = {
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

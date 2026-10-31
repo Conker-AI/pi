@@ -11,20 +11,72 @@ be a decision with visible consequences.
   query per score and per vote, so the work grew with models x judgements x scores. Both tables
   are now read once per load, each judgement's JSON is parsed once, and all message ids are
   mapped to their models in chunks of at most 500; the computed profiles are unchanged.
+- **Two webhook calls at once can no longer both start a job.** The 30-second gap was checked
+  before the run started and written after, so two calls arriving together both passed it, and if
+  the first run ended quickly the second started too. The gap is now claimed in one statement
+  before the run starts; a call that finds the job busy gives it back, as before.
+- **An export that is too long says so.** The size check in `office_exports.render` now matches the
+  limit the export worker actually reads, so a payload between the two limits is refused up front
+  with "too long" instead of starting a worker that answers `invalid`.
+- **A deep-research turn with no recorded question now ends cleanly when approved.** Resuming
+  it after approval read the turn's input message without checking it exists and crashed with a
+  `TypeError`, leaving the turn claimed. The approved search still runs and is recorded; the turn
+  then ends as acted without a reply (or failed, if nothing ran), so the reply can be asked for.
+- **A provider key file swapped after its check is no longer read.** `PI_*_KEY_FILE` was checked
+  to be a regular file and then opened by name, so a symlink or named pipe put there in between was
+  followed or waited on. The open now refuses a final symlink where the OS can (`O_NOFOLLOW`), never
+  waits on a pipe, and checks again that what it opened is a regular file.
+
+- **The definitions list no longer reads every team preparation.** Building the team and template
+  rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
+  so the route got slower as those append-only tables grew; it now reads each record's own columns
+  in one query. The rows it returns are unchanged.
+
+- **A model that starts charging falls back instead of failing.** Refusing a paid OpenRouter
+  model (with paid models off) raised a plain error, so a role's fallback models and a turn's
+  next free model were never tried and the call failed. The refusal now counts as this one model
+  being unusable, like a gated one: the next candidate, which passes the same check, answers,
+  and the skipped reason is recorded. A setup test of such a model reports
+  `provider_unavailable`. One malformed entry in OpenRouter's model list is left out (so calling
+  it is refused) instead of failing every call, and a list that is not a list is reported as the
+  catalogue being unavailable.
 - **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
   memory in MemoryGate but left its old text, the proposed text and the reason in every memory
   proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
   forgetting their conversation already did.
+- **Webhook text cannot pose as Pi's own words.** An AI job started by its webhook got the sent
+  JSON inside a `<webhook>` label, and a value containing `</webhook>` closed it early. `<` in
+  the sent JSON now reaches the model as `\u003c` (the same JSON value). Inbox notes from AI jobs
+  drop terminal and other control codes, and a model probe whose reported model name holds them
+  fails as `invalid_response`.
 - **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
   character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
   streams and call audio waited behind it; that work now runs in a worker thread. Responses and
   limits are unchanged.
+- **Building a turn's history looks up attachments once, not once per message.** Every selected
+  history message opened its own SQLite connection to `message_attachments`, almost always to
+  learn it had none, so a 1,000-message chat opened 1,000 connections before the model was
+  called, on every turn and every retry. The message ids that have attachments are now read once
+  in batches and only those messages are walked.
 - **A retried fact check or judge pays for one model call.** Two requests with the same
   `request_id` that arrived together both called the model and kept one answer. The later one
   now waits for the first and replays its result.
+- **The Inbox reads its approvals once.** Building the Inbox scanned the approval queue twice
+  and opened a new database connection for every turn in it; it now reads the queue once on one
+  connection and shows the same items.
+- **The artifacts list no longer reads every version of every artifact.** Building the library
+  listing decoded the body of every stored version (up to 100) only to drop them all; it now reads
+  each artifact's first and last version, and the listing shows the same summaries as before.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
+- **Attachments keep the order they were sent in.** `bind()` read reserved attachments back
+  `ORDER BY attachment_id`, so a message's attachments appeared in the model input and the
+  transcript in random order instead of the order the owner sent them; it now reads them back
+  in insertion order.
+- **The memory outbox no longer scans every past message each second.** The once-a-second poll for
+  due memory work now reads pending rows from a partial index instead of the whole table, whose
+  receipt rows grow with the owner's history. What is sent, and when, is unchanged.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
