@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Pi refuses a gateway credential equal to its admin key.** `PI_GATEWAY_KEY_SHA256` set to the
+  admin key's digest gave the browser path recovery authority (the admin key is checked first).
+  Startup now refuses it, as it already did for the owner and service keys.
 - **pypdf 6.21.4.** Fixes seven published denial-of-service advisories in 6.21.2 (crafted PDFs
   that loop, exhaust memory or forge page counts). Pi reads attached PDFs with it.
 - **Naming says so when the routing role is off.** `POST /sessions/{id}/title/auto` answers 503
