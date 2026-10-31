@@ -10,6 +10,15 @@ be a decision with visible consequences.
   snapshot JSON four times per submit, edit and validation, and `_view` decoded the submission
   settings a second time for the research mode after already decoding them; both now parse the
   text once and reuse the result.
+- **A quiet-hours pause keeps the last look's failure.** The paused look in `agent_triggers.check`
+  saved the watch row without `failure`, so a tool that didn't answer in the evening read as
+  having no problem after the first overnight pause, although nothing had looked since. A pause
+  now writes back the failure the last real look recorded.
+
+- **A declined turn that already acted no longer blocks its queue for good.** A queued message that
+  ran a tool and then parked on an approval the owner declined stayed `claimed`, so it could be
+  neither removed nor resumed and every later queued message waited behind it; `reconcile` now marks
+  it `failed` like any other stopped turn, so it can be removed and the queue continues.
 - **A repeated setup memory review answers instead of failing with a 500.** Retrying the review
   with a new `requestId` at the same choice revision computed the same evidence digest, passed the
   `request_id` replay check, and hit the table's unique digest constraint, so a review that was

@@ -362,15 +362,9 @@ def reconcile(store, sid):
                 )
                 if receipt["effective_session_id"] != sid:
                     _pause(db, sid, "conversation_forked")
-            elif (
-                status
-                in {
-                    "failed",
-                    "cancelled",
-                    "preparation_failed",
-                    "preparation_interrupted",
-                    "interrupted",
-                }
+            # A declined turn is a stopped entry even when its tool ran; it cannot be resumed.
+            elif status == "cancelled" or (
+                status in {"failed", "preparation_failed", "preparation_interrupted", "interrupted"}
                 and not receipt["acted"]
             ):
                 db.execute(
