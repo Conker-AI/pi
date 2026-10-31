@@ -9,6 +9,10 @@ be a decision with visible consequences.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
+- **An AI job request is approved once.** Approving takes the request before the job is made, so a
+  second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
+  `decided` instead of making a second cron job or leaving one behind a declined request. If the job
+  cannot be made, the request stays open.
 - **A long reply no longer breaks the call screen.** The browser call view caps each event's text
   at 16,000 characters, but replies have no limit, so one long answer made every
   `/calls/browser` route fail. The view now clips that text with an ellipsis; the event's source
