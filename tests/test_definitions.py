@@ -89,6 +89,25 @@ def test_long_descriptions_are_shortened_and_job_instructions_stay_out(store):
     assert definitions.summaries(store, "job")["results"][0]["description"] == ""
 
 
+def test_team_and_template_rows_skip_snapshots_and_versions(store, monkeypatch):
+    _, draft, published, crew, *_ = populate(store)
+    collaboration.archive(
+        store, crew["id"], "team", profiles.ArchiveAgent(expected_revision=1, archived=True)
+    )
+    before = definitions.summaries(store, archived=True)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("the definitions list must not read preparations or versions")
+
+    monkeypatch.setattr(collaboration, "list_all", forbidden)
+    monkeypatch.setattr(collaboration, "_get", forbidden)
+    assert definitions.summaries(store, archived=True) == before
+    rows = {row["id"]: row for row in before["results"]}
+    assert rows[draft["id"]]["state"] == "draft"
+    assert rows[published["id"]]["state"] == "published"
+    assert rows[crew["id"]]["state"] == "archived" and rows[crew["id"]]["archivedAt"]
+
+
 def test_route_is_admin_or_owner_only_and_validates_kind(tmp_path, monkeypatch):
     with closing(Store(tmp_path / "pi.db")) as store:
         monkeypatch.setattr(api.app.state, "store", store, raising=False)

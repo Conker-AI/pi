@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The definitions list no longer reads every team preparation.** Building the team and template
+  rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
+  so the route got slower as those append-only tables grew; it now reads each record's own columns
+  in one query. The rows it returns are unchanged.
+
 - **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
   memory in MemoryGate but left its old text, the proposed text and the reason in every memory
   proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
