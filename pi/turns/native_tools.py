@@ -38,7 +38,7 @@ CATALOG = (
         "Schedule an AI job",
         "Create a cron job: an AI job that carries out instructions with tools on a schedule or when "
         "its webhook is called. Depending on the owner's settings it is created at once or waits for "
-        "his approval; the result says which.",
+        "their approval; the result says which.",
         [
             {
                 "name": "name",
@@ -100,7 +100,7 @@ CATALOG = (
         REMEMBER,
         "Remember something",
         "Save one fact to memory, in a full sentence. Depending on the owner's settings it is saved at "
-        "once or waits for his approval; the result says which.",
+        "once or waits for their approval; the result says which.",
         [
             {
                 "name": "text",
@@ -114,9 +114,9 @@ CATALOG = (
     Tool(
         ASK,
         "Ask the owner",
-        "Ask the owner a question when you are unsure he wants something done. It waits in his "
-        "Inbox; his answer arrives later as his next message in this chat. Give 2 to 4 short "
-        "options he can tap; he can always write his own answer instead.",
+        "Ask the owner a question when you are unsure they want something done. It waits in their "
+        "Inbox; their answer arrives later as their next message in this chat. Give 2 to 4 short "
+        "options they can tap; they can always write their own answer instead.",
         [
             {
                 "name": "question",
@@ -128,7 +128,7 @@ CATALOG = (
                 "name": "options",
                 "type": "array",
                 "required": False,
-                "description": '2 to 4 short answers he can tap, e.g. ["Yes, fix it", "Not now"]',
+                "description": '2 to 4 short answers they can tap, e.g. ["Yes, fix it", "Not now"]',
             },
         ],
         "auto",
@@ -264,7 +264,7 @@ def _done(loop, request, tool_id) -> ToolResult:
             "made": decided["result"],
             "message": (
                 f"Done: \u201c{title}\u201d. It is listed in the owner's Inbox under Handled, "
-                "where he can undo it."
+                "where they can undo it."
             ),
         },
         tool_id=tool_id,
@@ -307,9 +307,9 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
                     "askId": asked["id"],
                     "options": asked["options"],
                     "message": (
-                        "Asked. The question waits in the owner's Inbox; his answer will arrive "
-                        "as his next message in this chat. Tell him in one line that you asked, "
-                        "and do not act on it until he answers."
+                        "Asked. The question waits in the owner's Inbox; their answer will arrive "
+                        "as their next message in this chat. Tell them in one line that you asked, "
+                        "and do not act on it until they answer."
                     ),
                 },
                 tool_id=tool_id,
