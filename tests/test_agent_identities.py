@@ -68,3 +68,17 @@ def test_toolkits_become_scopes():
         "notes.read",
         "automation:daily-brief",
     ]
+
+
+def test_an_older_toolgate_is_asked_again_later(monkeypatch):
+    # One 404 (a ToolGate restarting or being upgraded) must not leave every agent on the bare
+    # key until Pi restarts.
+    gate, clock = Recorder(put_status=404), [1000.0]
+    monkeypatch.setattr(gate_module.httpx, "put", gate.put)
+    monkeypatch.setattr(gate_module.time, "monotonic", lambda: clock[0])
+    client = ToolGateClient("http://toolgate.test", "tgx_" + "k" * 30)
+    assert client.acting_as("companion", ["*"]) is client
+    clock[0] += gate_module.IDENTITY_RECHECK_SECONDS - 1
+    assert client.acting_as("companion", ["*"]) is client and len(gate.calls) == 1
+    gate.put_status, clock[0] = 200, clock[0] + 2
+    assert client.acting_as("companion", ["*"]).agent == "companion" and len(gate.calls) == 2
