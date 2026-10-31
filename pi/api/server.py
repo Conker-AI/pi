@@ -56,6 +56,7 @@ from pi.api.routes import session_settings as session_settings_api
 from pi.api.routes import sessions as sessions_api
 from pi.api.routes import setup_status as setup_status_api
 from pi.api.routes import skills as skills_api
+from pi.api.routes import suggestions as suggestions_api
 from pi.api.routes import summary_draft as summary_draft_api
 from pi.api.routes import system_actions as system_actions_api
 from pi.api.routes import system_inventory as system_inventory_api
@@ -238,6 +239,11 @@ app.include_router(output_settings_api.router(lambda: app.state.store, require_a
 app.include_router(decisions_api.router(lambda: app.state.store, require_admin))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
+)
+app.include_router(
+    suggestions_api.router(
+        lambda: app.state.store, lambda: app.state.router.adapters(), require_owner
+    )
 )
 app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)

@@ -29,6 +29,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Attachments](attachments.md) · [In turns](attachment-turns.md) · [Document text](document-text.md) | Files in conversation |
 | [Session settings](session-settings.md) · [Output settings](output-settings.md) | Per-chat privacy, agent and output selections |
 | [Chat names](chat-names.md) | Owner rename and Jev's automatic name |
+| [Chat suggestions](chat-suggestions.md) | Jev's next-message suggestions |
 | [Prepared context](turn-context.md) · [Context controls](context-controls.md) · [Context selection](context-retrieval.md) · [Summaries](context-summaries.md) | What the model is given |
 | [Decisions and open threads](decisions.md) | What was decided and what is still open |
 
