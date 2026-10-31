@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Next-message suggestions.** `POST /sessions/{id}/suggestions` asks Jev (the routing helper)
+  for 1 to 3 messages the owner might send next, from the chat's last exchange; the count
+  defaults to the owner's Suggestions shown setting. Nothing is saved. The owner key may call it.
+
 - **Download parameters are in the gateway's OpenAPI.** The artifact and chat-answer download
   routes now list their `format` query parameter (and the artifact's optional `version`, 1 to
   100) in `docs/gateway-openapi.json`, so generated clients see them. Behaviour is unchanged.
