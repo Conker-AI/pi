@@ -61,8 +61,7 @@ def bind(db, request_id, session_id, message_id):
     ids = [
         row[0]
         for row in db.execute(
-            "SELECT attachment_id FROM attachment_reservations "
-            "WHERE request_id=? ORDER BY attachment_id",
+            "SELECT attachment_id FROM attachment_reservations WHERE request_id=? ORDER BY rowid",
             (request_id,),
         )
     ]
@@ -73,6 +72,24 @@ def bind(db, request_id, session_id, message_id):
 
 def release(db, request_id):
     db.execute("DELETE FROM attachment_reservations WHERE request_id=?", (request_id,))
+
+
+def attached_message_ids(store, message_ids):
+    """Ids from message_ids that have attachment rows, read in one chunked query."""
+    ids = list(message_ids)
+    if not ids:
+        return set()
+    found = set()
+    with store._connect() as db:
+        for start in range(0, len(ids), 500):
+            chunk = ids[start : start + 500]
+            rows = db.execute(
+                "SELECT DISTINCT message_id FROM message_attachments "
+                f"WHERE message_id IN ({','.join('?' * len(chunk))})",
+                chunk,
+            )
+            found.update(row[0] for row in rows)
+    return found
 
 
 def context(store, session_id, message_id, privacy):

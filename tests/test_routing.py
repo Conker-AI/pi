@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import pytest
 
+from pi.models import openrouter, roles
 from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider, PaidModelRefused
-from pi.models.providers import Completion, Message
+from pi.models.providers import Completion, Message, ProviderUnavailable
 from pi.models.routing import Reason, Router, Tier, TurnContext
 
 
@@ -226,3 +227,77 @@ def test_an_ordinary_turn_does_not_enumerate_hosted_models():
         local_provider=FakeLocal(), hosted_provider=FakeHosted([free("a")]), local_model="qwen3:4b"
     )
     assert len(router.candidates(TurnContext())) == 1
+
+
+def test_a_role_whose_model_turned_paid_uses_its_fallback(monkeypatch):
+    """OpenRouter can start charging for a model picked while it was free. The
+    refusal is about that one model, so the role's fallback (checked the same
+    way) answers, and nothing paid is called."""
+    from test_model_roles import Adapter, config
+
+    value = config()
+    value["models"][0]["route"] = "expensive"
+    value["roleSettings"]["roles"]["summarization"] = {
+        **value["roleSettings"]["roles"]["answer"],
+        "failure": "fallback",
+        "fallbackModelIds": ["b"],
+    }
+    hosted, other = Catalogued([paid("expensive")]), Adapter()
+    monkeypatch.setattr(hosted, "_posted", lambda *a: pytest.fail("a paid model was called"))
+
+    result = roles.dispatch(value, "summarization", [], {"one": hosted, "two": other})
+
+    assert result["modelId"] == "b" and other.calls == [("actual-b", 1.0)]
+    assert result["attempts"][0] == {
+        "role": "summarization",
+        "modelId": "a",
+        "status": "unavailable",
+    }
+
+
+class Listing:
+    def __init__(self, body):
+        self.body = body
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.body
+
+
+def entry(model_id, **changes):
+    return {
+        "id": model_id,
+        "context_length": 1000,
+        "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+        "pricing": {"prompt": "0", "completion": "0", "request": "0"},
+        **changes,
+    }
+
+
+def test_a_malformed_catalogue_entry_is_left_out_and_refused(monkeypatch):
+    """One odd entry must not fail every call that reads the catalogue, and
+    must not become callable: left out, it is unknown, and unknown is refused."""
+    data = [
+        "not an entry",
+        entry("odd-length", context_length="lots"),
+        entry("odd-pricing", pricing=["0"]),
+        entry("odd-architecture", architecture=["text"]),
+        entry(None),
+        {key: value for key, value in entry("x").items() if key != "id"},
+        entry("fine"),
+    ]
+    monkeypatch.setattr(openrouter.httpx, "get", lambda *a, **k: Listing({"data": data}))
+    provider = OpenRouterProvider("test-key")
+
+    assert list(provider.catalogue()) == ["fine"]
+    with pytest.raises(PaidModelRefused, match="not in the catalogue"):
+        provider.complete([Message("user", "hi")], model="odd-length")
+
+
+@pytest.mark.parametrize("body", [{"data": {"id": "x"}}, {"data": None}, ["x"]])
+def test_a_catalogue_that_is_not_a_list_is_unavailable(monkeypatch, body):
+    monkeypatch.setattr(openrouter.httpx, "get", lambda *a, **k: Listing(body))
+    with pytest.raises(ProviderUnavailable, match="catalogue unavailable"):
+        OpenRouterProvider("test-key").catalogue()

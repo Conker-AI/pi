@@ -56,6 +56,56 @@ def profiles(store) -> dict[str, Any]:
         }
         exclude_clause, exclude_params = _forgotten_exclusion(forgotten_sessions)
 
+        # Read judgements and votes once; per-model stats are computed in memory below.
+        judge_rows = db.execute(
+            f"""
+            SELECT rj.result
+            FROM response_judgements rj
+            WHERE 1=1 {exclude_clause.replace("t.session_id", "rj.session_id")}
+            """,
+            exclude_params,
+        ).fetchall()
+        vote_rows = db.execute(
+            f"""
+            SELECT rv.vote, rv.message_id
+            FROM response_votes rv
+            WHERE 1=1 {exclude_clause.replace("t.session_id", "rv.session_id")}
+            """,
+            exclude_params,
+        ).fetchall()
+
+        # Stored judgements list scores as [{"message_id", "score", "reason"}].
+        score_entries: list[tuple[str, Any, bool]] = []
+        vote_entries: list[tuple[str, str]] = []
+        message_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for judge_row in judge_rows:
+            result = json.loads(judge_row["result"])
+            winner = result.get("winner")
+            for score_data in result.get("scores", []):
+                mid = score_data["message_id"]
+                score_entries.append((mid, score_data["score"], mid == winner))
+                if mid not in seen_ids:
+                    seen_ids.add(mid)
+                    message_ids.append(mid)
+        for vote_row in vote_rows:
+            vote_entries.append((vote_row["message_id"], vote_row["vote"]))
+            if vote_row["message_id"] not in seen_ids:
+                seen_ids.add(vote_row["message_id"])
+                message_ids.append(vote_row["message_id"])
+
+        # Map each named message to its final turn's model route, 500 ids at a time.
+        message_models: dict[str, Any] = {}
+        for start in range(0, len(message_ids), 500):
+            chunk = message_ids[start : start + 500]
+            placeholders = ",".join("?" * len(chunk))
+            for row in db.execute(
+                "SELECT tm.message_id, t.model FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
+                f"WHERE tm.purpose='final' AND tm.message_id IN ({placeholders})",
+                chunk,
+            ).fetchall():
+                message_models[row["message_id"]] = row["model"]
+
         models = []
         for model in configuration["models"]:
             route = model["route"]
@@ -116,35 +166,15 @@ def profiles(store) -> dict[str, Any]:
 
             # Judge scores and wins
             judge_stats: dict[str, Any] = {"judged": 0, "averageScore": None, "wins": 0}
-            judge_rows = db.execute(
-                f"""
-                SELECT rj.result
-                FROM response_judgements rj
-                WHERE 1=1 {exclude_clause.replace("t.session_id", "rj.session_id")}
-                """,
-                exclude_params,
-            ).fetchall()
-
             route_scores: list[float] = []
             route_wins = 0
             route_judged = 0
-            for row in judge_rows:
-                result = json.loads(row["result"])
-                # Stored judgements list scores as [{"message_id", "score", "reason"}].
-                winner = result.get("winner")
-                for score_data in result.get("scores", []):
-                    mid = score_data["message_id"]
-                    # Map message to its turn's model route
-                    turn_row = db.execute(
-                        "SELECT t.model FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
-                        "WHERE tm.message_id=? AND tm.purpose='final'",
-                        (mid,),
-                    ).fetchone()
-                    if turn_row and turn_row["model"] == route:
-                        route_judged += 1
-                        route_scores.append(score_data["score"])
-                        if mid == winner:
-                            route_wins += 1
+            for mid, score, is_winner in score_entries:
+                if message_models.get(mid) == route:
+                    route_judged += 1
+                    route_scores.append(score)
+                    if is_winner:
+                        route_wins += 1
 
             if route_judged > 0:
                 judge_stats["judged"] = route_judged
@@ -153,28 +183,9 @@ def profiles(store) -> dict[str, Any]:
 
             # Owner votes
             votes = {"up": 0, "down": 0, "winner": 0}
-            vote_row = db.execute(
-                f"""
-                SELECT rv.vote, rv.message_id
-                FROM response_votes rv
-                WHERE 1=1 {exclude_clause.replace("t.session_id", "rv.session_id")}
-                """,
-                exclude_params,
-            ).fetchall()
-
-            for row in vote_row:
-                # Map message to its turn's model route
-                turn_row = db.execute(
-                    "SELECT t.model FROM turn_messages tm JOIN turns t ON t.id=tm.turn_id "
-                    "WHERE tm.message_id=? AND tm.purpose='final'",
-                    (row["message_id"],),
-                ).fetchone()
-                if (
-                    turn_row
-                    and turn_row["model"] == route
-                    and row["vote"] in ("up", "down", "winner")
-                ):
-                    votes[row["vote"]] += 1
+            for mid, vote in vote_entries:
+                if message_models.get(mid) == route and vote in ("up", "down", "winner"):
+                    votes[vote] += 1
 
             models.append(
                 {
