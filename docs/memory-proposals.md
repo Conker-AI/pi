@@ -35,6 +35,8 @@ Retention is explicit in proposal views: after approval, the corrected memory is
 an independently reviewed MemoryGate record. Forgetting the source conversation
 scrubs Pi's proposal text, baseline and reason, but does **not** undo that manual
 memory edit. Remove the saved memory through MemoryGate to remove it as well.
+Forgetting the memory itself (`POST /memory/forget`) scrubs the same fields from
+every proposal for that memory, pending or reviewed, and hides those proposals.
 Existing conversation evidence ingestion and incognito behavior remain unchanged;
 this API neither converts every conversation into a proposal nor promotes model
 inferences automatically. Correction preserves the memory's original source type

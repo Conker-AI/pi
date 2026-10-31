@@ -1,5 +1,6 @@
 """Character packages persist authored state without media execution or authority."""
 
+import asyncio
 import base64
 import copy
 import json
@@ -304,6 +305,60 @@ def test_owner_api_and_stream_bound(store, monkeypatch):
         assert (
             client.put("/characters/companion", headers=headers, content=b"x" * 11).status_code
             == 413
+        )
+
+
+def test_character_writes_parse_and_save_off_the_event_loop(store, monkeypatch):
+    app = FastAPI()
+    install(app)
+
+    def authorize(x_owner: str | None = Header(default=None)):
+        if x_owner != "yes":
+            raise HTTPException(403, "Owner required")
+
+    app.include_router(characters_api.router(lambda: store, authorize))
+
+    off_loop = []
+    on_loop = []
+
+    def record(where, fn, *args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            off_loop.append(where)
+        else:
+            on_loop.append(where)
+        return fn(*args, **kwargs)
+
+    original_save = characters.save
+    monkeypatch.setattr(
+        characters, "save", lambda *args, **kwargs: record("save", original_save, *args, **kwargs)
+    )
+    original_validate = characters.Save.model_validate.__func__
+    monkeypatch.setattr(
+        characters.Save,
+        "model_validate",
+        classmethod(
+            lambda cls, *args, **kwargs: record("validate", original_validate, cls, *args, **kwargs)
+        ),
+    )
+
+    headers = {"x-owner": "yes"}
+    with TestClient(app) as client:
+        response = client.put(
+            "/characters/companion",
+            headers=headers,
+            json={"expected_revision": 0, "profile": profile()},
+        )
+        assert response.status_code == 200 and response.json()["revision"] == 1
+        assert on_loop == []
+        assert set(off_loop) == {"validate", "save"}
+        assert off_loop.index("validate") < off_loop.index("save")
+        assert (
+            client.post(
+                "/characters/companion/restore", headers=headers, content=b"{not json"
+            ).status_code
+            == 422
         )
 
 

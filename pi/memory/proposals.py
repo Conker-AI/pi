@@ -273,14 +273,25 @@ def recover_interrupted(store):
         ).rowcount
 
 
+SCRUB = (
+    "UPDATE memory_proposals SET baseline=NULL,desired=NULL,reason=NULL,"
+    "payload_hash='',source_ids='[]',receipt=NULL,state='forgotten' WHERE "
+)
+
+
 def redact(db, sessions):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
         return
     db.execute("DROP TRIGGER memory_proposals_fixed")
     for session in sessions:
-        db.execute(
-            "UPDATE memory_proposals SET baseline=NULL,desired=NULL,reason=NULL,"
-            "payload_hash='',source_ids='[]',receipt=NULL,state='forgotten' WHERE session_id=?",
-            (session,),
-        )
+        db.execute(SCRUB + "session_id=?", (session,))
+    db.execute(FIXED)
+
+
+def redact_memory(db, agent_id, memory_id):
+    """A verified memory forget scrubs every proposal that quoted or targeted that memory."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
+        return
+    db.execute("DROP TRIGGER memory_proposals_fixed")
+    db.execute(SCRUB + "agent_id=? AND memory_id=?", (agent_id, memory_id))
     db.execute(FIXED)

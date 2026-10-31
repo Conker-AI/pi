@@ -11,6 +11,17 @@ be a decision with visible consequences.
   so the route got slower as those append-only tables grew; it now reads each record's own columns
   in one query. The rows it returns are unchanged.
 
+- **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
+  memory in MemoryGate but left its old text, the proposed text and the reason in every memory
+  proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
+  forgetting their conversation already did.
+- **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
+  character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
+  streams and call audio waited behind it; that work now runs in a worker thread. Responses and
+  limits are unchanged.
+- **A retried fact check or judge pays for one model call.** Two requests with the same
+  `request_id` that arrived together both called the model and kept one answer. The later one
+  now waits for the first and replays its result.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
