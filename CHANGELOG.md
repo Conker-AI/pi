@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **pypdf 6.21.4.** Fixes seven published denial-of-service advisories in 6.21.2 (crafted PDFs
+  that loop, exhaust memory or forge page counts). Pi reads attached PDFs with it.
 - **Naming says so when the routing role is off.** `POST /sessions/{id}/title/auto` answers 503
   `not_configured` without calling a model when the routing role is switched off, as it does when
   nothing is saved (it used to try, fail and answer `unavailable`).
