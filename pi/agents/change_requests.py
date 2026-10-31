@@ -46,6 +46,9 @@ PER_CHAT = 3
 OPEN_LIMIT = 20
 # MemoryGate keys a Keep memory apart from the owner's approval of the same request.
 CONKER_KEY = "-conker"
+# Terminal control characters (C0 except tab and newline, DEL, C1): titles and summaries come from
+# the model or outside content and are printed by the command line.
+CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS change_requests (
  id TEXT PRIMARY KEY,
@@ -112,6 +115,16 @@ def encode(payload) -> str:
     return encoded
 
 
+def title_text(title: str) -> str:
+    """A card title on one line, without control characters."""
+    return " ".join(CONTROL.sub("", title).split())[:160] or "Conker's request"
+
+
+def summary_text(summary: str) -> str:
+    """A card summary without control characters; its lines stay."""
+    return CONTROL.sub("", summary)[:600]
+
+
 def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None, now=None) -> dict:
     """Record one request exactly as Conker asked; nothing is created yet. Full when too many of
     its requests already wait for the owner."""
@@ -152,8 +165,8 @@ def file_in(db, kind, title, summary, payload, session_id=None, turn_id=None, no
         (
             identity,
             kind,
-            title[:160] or "Conker's request",
-            summary[:600],
+            title_text(title),
+            summary_text(summary),
             encoded,
             session_id,
             turn_id,
