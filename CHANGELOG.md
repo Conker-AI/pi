@@ -9,6 +9,9 @@ be a decision with visible consequences.
 - **The artifacts list no longer reads every version of every artifact.** Building the library
   listing decoded the body of every stored version (up to 100) only to drop them all; it now reads
   each artifact's first and last version, and the listing shows the same summaries as before.
+- **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
+  five while the queue and the dashboard already stopped there; it now answers 422 at
+  six, so a direct caller cannot reserve a long list of uploads in one turn.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.

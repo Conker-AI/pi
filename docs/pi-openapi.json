@@ -31780,6 +31780,7 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 5,
             "title": "Attachment Ids"
           },
           "model_id": {
