@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
+  character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
+  streams and call audio waited behind it; that work now runs in a worker thread. Responses and
+  limits are unchanged.
 - **A cited answer re-checks only the files it cites.** When a final answer cites an attachment
   passage, Pi re-reads and re-extracts each cited file inside the write that saves the answer, to
   prove the passage still matches; it used to do that for every file of the turn (a PDF each time),
