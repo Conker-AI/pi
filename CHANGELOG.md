@@ -10,6 +10,9 @@ be a decision with visible consequences.
   character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
   streams and call audio waited behind it; that work now runs in a worker thread. Responses and
   limits are unchanged.
+- **A retried fact check or judge pays for one model call.** Two requests with the same
+  `request_id` that arrived together both called the model and kept one answer. The later one
+  now waits for the first and replays its result.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
