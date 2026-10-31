@@ -45,6 +45,9 @@ def test_terminal_container_acceptance_covers_hostile_replacement_and_boundaries
         "fake-listener-accepted",
     ):
         assert required in acceptance
+    # Cleanup runs as root, so it may reach only the workspace it removes, never all of /tmp.
+    assert "-v /tmp:" not in acceptance
+    assert '-v "$workspace:/workspace" "$python_image"' in acceptance
     assert 'choices=("normal", "attack")' in probe
     assert "fake-listener-ready" in probe
     assert "os.kill(pid,signal.SIGTERM)" in probe
