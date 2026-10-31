@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Attachments keep the order they were sent in.** `bind()` read reserved attachments back
+  `ORDER BY attachment_id`, so a message's attachments appeared in the model input and the
+  transcript in random order instead of the order the owner sent them; it now reads them back
+  in insertion order.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.

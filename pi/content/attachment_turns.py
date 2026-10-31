@@ -61,8 +61,7 @@ def bind(db, request_id, session_id, message_id):
     ids = [
         row[0]
         for row in db.execute(
-            "SELECT attachment_id FROM attachment_reservations "
-            "WHERE request_id=? ORDER BY attachment_id",
+            "SELECT attachment_id FROM attachment_reservations WHERE request_id=? ORDER BY rowid",
             (request_id,),
         )
     ]

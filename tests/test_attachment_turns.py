@@ -22,12 +22,12 @@ class Provider:
         return Completion(text="Read it", model=model, provider=self.name)
 
 
-def upload(store, sid, kind="text/plain"):
+def upload(store, sid, kind="text/plain", name="note.txt", data=b"Attachment content 42"):
     return attachments.upload(
         store,
         sid,
-        attachments.Metadata(name="note.txt", type=kind),
-        b"Attachment content 42",
+        attachments.Metadata(name=name, type=kind),
+        data,
         resolve=session_settings.source_privacy,
     )["id"]
 
@@ -55,6 +55,24 @@ def test_attachment_reaches_model_bound_to_exact_input(tmp_path):
         with store._connect() as db:
             assert db.execute("SELECT COUNT(*) FROM message_attachments").fetchone()[0] == 1
             assert db.execute("SELECT COUNT(*) FROM attachment_reservations").fetchone()[0] == 0
+
+
+def test_attachments_keep_the_order_the_owner_sent(tmp_path):
+    with closing(Store(tmp_path / "a.db")) as store:
+        sid = store.create_session()
+        first = upload(store, sid, name="first.txt", data=b"First file body")
+        second = upload(store, sid, name="second.txt", data=b"Second file body")
+        ids = sorted([first, second], reverse=True)
+        provider = Provider()
+        loop = Loop(store, Router(local_provider=provider, local_model="local"))
+        loop.run_turn(sid, "Read this", request_id="attachment_request_1", attachment_ids=ids)
+        input_message = next(
+            message for message in store.messages(sid) if message["role"] == "user"
+        )
+        assert [item["id"] for item in input_message["attachments"]] == ids
+        bodies = {first: "First file body", second: "Second file body"}
+        model_input = "\n".join(message.content or "" for message in provider.calls[0])
+        assert model_input.index(bodies[ids[0]]) < model_input.index(bodies[ids[1]])
 
 
 def test_foreign_or_unsupported_attachment_never_creates_submission(tmp_path):
