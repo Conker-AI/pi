@@ -335,6 +335,18 @@ app.include_router(owner_preferences_api.router(lambda: app.state, require_owner
 app.include_router(agents_api.router(lambda: app.state, require_owner))
 
 
+def _speech_status(capabilities):
+    """A configured voice whose latest call failed is degraded, never "not configured"."""
+    states = {
+        item["status"]
+        for item in capabilities.values()
+        if isinstance(item, dict) and "status" in item
+    }
+    if "unavailable" in states:
+        return "degraded"
+    return "ok" if states & {"configured", "available"} else "not_configured"
+
+
 @app.get("/health")
 def health():
     """Shape is fixed by the Conker module contract - see docs/module-contract.md."""
@@ -351,6 +363,7 @@ def health():
     if hosted_health["status"] == "unverified":
         # Provider readiness has a separate vocabulary from module health.
         hosted_health = {"status": "unknown", "reason": "Configured; inference not verified"}
+    speech = app.state.speech.capabilities()
     checks = {
         "store": app.state.store.health(),
         "memory": app.state.loop.memory.health(),
@@ -366,17 +379,9 @@ def health():
             "secrets_included": False,
         },
         "speech": {
-            "status": (
-                "ok"
-                if any(
-                    item["status"] in {"configured", "available"}
-                    for item in app.state.speech.capabilities().values()
-                    if isinstance(item, dict) and "status" in item
-                )
-                else "not_configured"
-            ),
-            "input": app.state.speech.capabilities()["stt"]["status"],
-            "output": app.state.speech.capabilities()["tts"]["status"],
+            "status": _speech_status(speech),
+            "input": speech["stt"]["status"],
+            "output": speech["tts"]["status"],
             "credentialConfigured": app.state.speech_credential_configured,
             "secrets_included": False,
         },

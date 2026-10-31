@@ -249,6 +249,21 @@ def test_transport_errors_are_static(error, code):
     assert "secret" not in str(failure.value)
 
 
+def test_health_calls_a_configured_voice_that_failed_degraded():
+    from pi.api.server import _speech_status
+
+    def handle(request):
+        raise httpx.ConnectError("down", request=request)
+
+    service = client(handle)
+    assert _speech_status(service.capabilities()) == "ok"
+    with pytest.raises(speech.SpeechError):
+        service.synthesize("Hello")
+    assert service.capabilities()["tts"]["status"] == "unavailable"
+    assert _speech_status(service.capabilities()) == "degraded"
+    assert _speech_status(speech.SpeechClient().capabilities()) == "not_configured"
+
+
 class BytesStream(httpx.SyncByteStream):
     def __init__(self, chunks):
         self.chunks = chunks

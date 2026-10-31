@@ -10,6 +10,9 @@ be a decision with visible consequences.
   `ORDER BY attachment_id`, so a message's attachments appeared in the model input and the
   transcript in random order instead of the order the owner sent them; it now reads them back
   in insertion order.
+- **Health says when the voice is down.** A speech capability that is set up but whose last
+  call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
+  while calls had no voice. It is now `degraded` and named in `degraded`.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
