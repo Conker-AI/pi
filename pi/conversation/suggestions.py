@@ -105,7 +105,8 @@ def suggest(store, providers, sid, body: Ask) -> dict:
             "helpers_off", "Suggestions need helper models, which are off for this chat.", 409
         )
     saved = model_roles.load(store)
-    if saved["configuration"] is None:
+    configuration = saved["configuration"]
+    if configuration is None or not configuration["roleSettings"]["roles"]["routing"]["enabled"]:
         raise SuggestionError(
             "not_configured",
             "Suggestions need a routing model. Choose one in Models settings.",

@@ -214,7 +214,7 @@ def test_malformed_replies_fail_closed(tmp_path, reply):
 # --- 2. The chat's filters ---
 
 
-def test_excluded_and_forgotten_messages_are_not_sent(tmp_path):
+def test_excluded_messages_are_not_sent(tmp_path):
     adapter = Recording(json.dumps({"suggestions": ["One", "Two"]}))
     with closing(Store(tmp_path / "pi.db")) as store:
         configured(store)
@@ -239,6 +239,29 @@ def test_excluded_and_forgotten_messages_are_not_sent(tmp_path):
     assert result["messageId"] == first["id"]
     sent = json.loads(adapter.messages[0][1].content)
     assert [m["content"] for m in sent["messages"]] == ["First question", "First answer"]
+
+
+def test_redacted_and_forgotten_messages_are_not_sent(tmp_path, monkeypatch):
+    adapter = Recording(json.dumps({"suggestions": ["One"]}))
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        sid = store.create_session()
+        rows = [
+            store.append_message(sid, role, text)
+            for role, text in (
+                ("user", "Kept question"),
+                ("user", "Redacted question"),
+                ("assistant", "Kept answer"),
+                ("assistant", "Forgotten answer"),
+            )
+        ]
+        rows[1] = {**rows[1], "redacted": True}
+        rows[3] = {**rows[3], "content_status": "forgotten"}
+        monkeypatch.setattr(suggestions.controls, "history", lambda *_: rows)
+        result = suggestions.suggest(store, {"one": adapter}, sid, suggestions.Ask())
+    assert result["messageId"] == rows[2]["id"]
+    sent = json.loads(adapter.messages[0][1].content)
+    assert [m["content"] for m in sent["messages"]] == ["Kept question", "Kept answer"]
 
 
 def test_answer_without_question(tmp_path):
@@ -290,9 +313,13 @@ def test_helpers_off_409_and_zero_calls(tmp_path):
     assert adapter.calls == []
 
 
-def test_no_configuration_503(tmp_path):
+@pytest.mark.parametrize("saved", [False, True], ids=["no settings", "routing off"])
+def test_no_configuration_503(tmp_path, saved):
     adapter = Recording(json.dumps({"suggestions": ["One", "Two"]}))
     with closing(Store(tmp_path / "pi.db")) as store:
+        if saved:
+            update = model_roles.Configuration.model_validate(config())
+            model_roles.save(store, model_roles.Update(expected_revision=0, configuration=update))
         sid = store.create_session()
         exchange(store, sid)
         with pytest.raises(suggestions.SuggestionError) as raised:
