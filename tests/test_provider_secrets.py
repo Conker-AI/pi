@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -67,3 +68,25 @@ def test_relative_missing_and_symlink_paths_fail_closed(tmp_path: Path):
         pytest.skip("host does not permit symlink creation")
     with pytest.raises(ValueError, match="absolute regular file"):
         load({"PI_OPENAI_KEY_FILE": str(link.absolute())})
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="the OS cannot refuse a link at open")
+def test_a_file_swapped_for_a_link_after_the_check_is_refused(tmp_path: Path, monkeypatch):
+    target = secret(tmp_path, "target", b"synthetic-provider-key")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    # The checks ran while a regular file was there; a link took its place before the open.
+    monkeypatch.setattr(Path, "is_symlink", lambda self: False)
+    with pytest.raises(ValueError, match="absolute regular file"):
+        load({"PI_OPENAI_KEY_FILE": str(link.absolute())})
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no named pipes on this OS")
+def test_a_file_swapped_for_a_pipe_after_the_check_is_refused_without_waiting(
+    tmp_path: Path, monkeypatch
+):
+    pipe = (tmp_path / "pipe").resolve()
+    os.mkfifo(pipe)
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    with pytest.raises(ValueError, match="absolute regular file"):
+        load({"PI_OPENAI_KEY_FILE": str(pipe)})
