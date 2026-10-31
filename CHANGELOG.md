@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A declined turn that already acted no longer blocks its queue for good.** A queued message that
+  ran a tool and then parked on an approval the owner declined stayed `claimed`, so it could be
+  neither removed nor resumed and every later queued message waited behind it; `reconcile` now marks
+  it `failed` like any other stopped turn, so it can be removed and the queue continues.
 - **Two webhook calls at once can no longer both start a job.** The 30-second gap was checked
   before the run started and written after, so two calls arriving together both passed it, and if
   the first run ended quickly the second started too. The gap is now claimed in one statement
