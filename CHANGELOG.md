@@ -17,6 +17,10 @@ be a decision with visible consequences.
   it after approval read the turn's input message without checking it exists and crashed with a
   `TypeError`, leaving the turn claimed. The approved search still runs and is recorded; the turn
   then ends as acted without a reply (or failed, if nothing ran), so the reply can be asked for.
+- **A provider key file swapped after its check is no longer read.** `PI_*_KEY_FILE` was checked
+  to be a regular file and then opened by name, so a symlink or named pipe put there in between was
+  followed or waited on. The open now refuses a final symlink where the OS can (`O_NOFOLLOW`), never
+  waits on a pipe, and checks again that what it opened is a regular file.
 
 - **The definitions list no longer reads every team preparation.** Building the team and template
   rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
