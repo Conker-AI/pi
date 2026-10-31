@@ -149,8 +149,11 @@ def answer(text: str) -> dict:
 
 
 def text(value, limit, default=None):
-    if isinstance(value, str) and value.strip() and len(value) <= limit:
-        return value.strip()
+    """A name, label or description from the model, without terminal control characters."""
+    if isinstance(value, str):
+        value = CONTROL.sub("", value).strip()
+        if value and len(value) <= limit:
+            return value
     if default is None:
         raise ValueError("a name or label is missing or too long")
     return default
