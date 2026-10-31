@@ -147,6 +147,27 @@ def test_an_unreadable_settings_document_still_answers(tmp_path, sent):
 
 
 @pytest.mark.parametrize(
+    "statement",
+    [
+        "DELETE FROM owner_settings",
+        "UPDATE owner_settings SET vals='{not json'",
+        "UPDATE owner_settings SET vals='[]'",
+    ],
+    ids=["missing row", "not json", "json array"],
+)
+def test_a_broken_settings_document_still_answers(tmp_path, sent, statement):
+    broken = Store(tmp_path / "pi.db")
+    try:
+        with broken._connect() as db:
+            db.execute(statement)
+        result = complete(providers.OllamaProvider("http://127.0.0.1:1", store=broken))
+    finally:
+        broken.close()
+    (payload,) = sent
+    assert result.text == "{}" and "keep_alive" not in payload and "options" not in payload
+
+
+@pytest.mark.parametrize(
     "value,expected",
     [
         (5, "5m"),

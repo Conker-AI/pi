@@ -95,7 +95,9 @@ def request_fields(store) -> dict:
     Ollama's own settings rather than failing over a preference."""
     try:
         values = owner_settings.load(store)["values"]
-    except sqlite3.Error:
+    except (sqlite3.Error, TypeError, ValueError):
+        return {}
+    if not isinstance(values, dict):
         return {}
     fields, options = {}, {}
     if (alive := keep_alive(values.get(KEEP_LOADED))) is not None:

@@ -174,6 +174,16 @@ def review_memory(store, body: MemoryReviewInput, memory, *, now: float | None =
                 )
             db.execute("COMMIT")
             return status(store)
+        # A retry with a new requestId at the same choice revision produces the
+        # same evidence digest; it is already recorded, so replay instead of
+        # tripping the digest UNIQUE constraint.
+        recorded = db.execute(
+            "SELECT * FROM setup_rehearsal_memory_reviews WHERE evidence_digest=?",
+            (digest,),
+        ).fetchone()
+        if recorded:
+            db.execute("COMMIT")
+            return status(store)
         revision = db.execute(
             "SELECT COALESCE(MAX(revision),0)+1 FROM setup_rehearsal_memory_reviews"
         ).fetchone()[0]
