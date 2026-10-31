@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
+  call just after the reply was saved, the request was marked `failed` beside a delivered
+  message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
 - **A long reply no longer breaks the call screen.** The browser call view caps each event's text
   at 16,000 characters, but replies have no limit, so one long answer made every
   `/calls/browser` route fail. The view now clips that text with an ellipsis; the event's source
