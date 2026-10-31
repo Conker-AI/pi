@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Naming says so when the routing role is off.** `POST /sessions/{id}/title/auto` answers 503
+  `not_configured` without calling a model when the routing role is switched off, as it does when
+  nothing is saved (it used to try, fail and answer `unavailable`).
 - **Ordered backup models for each role.** A role's `fallbackModelId` becomes
   `fallbackModelIds`, up to 8 backups tried in the owner's order after the role's model fails
   (contract change: reads return the list). Saved settings and older clients that send one
