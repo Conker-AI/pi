@@ -49,6 +49,10 @@ be a decision with visible consequences.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
+- **Attachments keep the order they were sent in.** `bind()` read reserved attachments back
+  `ORDER BY attachment_id`, so a message's attachments appeared in the model input and the
+  transcript in random order instead of the order the owner sent them; it now reads them back
+  in insertion order.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
