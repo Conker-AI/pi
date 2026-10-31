@@ -158,7 +158,7 @@ def _disabled(role: str, *, local: bool = False) -> dict:
         "modelId": None,
         "timeoutMs": model_roles.default_timeout_ms(role, local=local),
         "failure": "stop",
-        "fallbackModelId": None,
+        "fallbackModelIds": [],
     }
 
 
@@ -234,7 +234,7 @@ def _selection(store, router, body: Selection) -> model_roles.Update:
             eligibleModelIds=list(dict.fromkeys([*answer["eligibleModelIds"], candidate.id])),
             modelId=candidate.id,
             failure="stop",
-            fallbackModelId=None,
+            fallbackModelIds=[],
         )
         configuration["roleSettings"]["answerMode"] = "manual"
         configuration["defaultModelId"] = candidate.id

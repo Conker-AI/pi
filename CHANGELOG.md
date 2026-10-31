@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Ordered backup models for each role.** A role's `fallbackModelId` becomes
+  `fallbackModelIds`, up to 8 backups tried in the owner's order after the role's model fails
+  (contract change: reads return the list). Saved settings and older clients that send one
+  `fallbackModelId` still work: it replaces the list. Waits count every model a role may try.
+
 - **Download parameters are in the gateway's OpenAPI.** The artifact and chat-answer download
   routes now list their `format` query parameter (and the artifact's optional `version`, 1 to
   100) in `docs/gateway-openapi.json`, so generated clients see them. Behaviour is unchanged.

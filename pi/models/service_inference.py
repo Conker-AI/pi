@@ -129,7 +129,7 @@ def _local(role: str, router, timeout_ms: int) -> dict:
         modelId=None,
         timeoutMs=model_roles.default_timeout_ms(role),
         failure="stop",
-        fallbackModelId=None,
+        fallbackModelIds=[],
     )
     return model_roles.Configuration.model_validate(
         dict(
@@ -176,7 +176,7 @@ def _usable(configuration: dict, role: str, adapters: dict) -> bool:
     models = {item["id"]: item for item in configuration["models"]}
     wanted = [assignment["modelId"]]
     if assignment["failure"] == "fallback":
-        wanted.append(assignment["fallbackModelId"])
+        wanted.extend(assignment["fallbackModelIds"])
     return any(
         identity in models
         and callable(
@@ -272,7 +272,7 @@ def _observer(store, service: str, request_id: str):
 
 
 def call(store, router, service: str, body: InferenceRequest) -> InferenceAnswer:
-    """One role call for one request: no retries beyond the fallback the owner set."""
+    """One role call for one request: no retries beyond the backups the owner set."""
     if body.role not in SERVICES.get(service, ()):
         raise InferenceError("role_not_allowed", "This service may not use that model role.", 403)
     configuration = settings(store, router, body.role)
@@ -289,7 +289,7 @@ def call(store, router, service: str, body: InferenceRequest) -> InferenceAnswer
 
 def _answer(store, service, body, configuration, adapters) -> InferenceAnswer:
     assignment = configuration["roleSettings"]["roles"][body.role]
-    attempts = 2 if assignment["failure"] == "fallback" else 1
+    attempts = model_roles.tries(assignment)
     messages = [Message("system", body.system)] if body.system else []
     messages.append(Message("user", body.prompt))
     token = inference_control.Token()
