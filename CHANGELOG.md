@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The artifacts list no longer reads every version of every artifact.** Building the library
+  listing decoded the body of every stored version (up to 100) only to drop them all; it now reads
+  each artifact's first and last version, and the listing shows the same summaries as before.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.

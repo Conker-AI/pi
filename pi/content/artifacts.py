@@ -110,13 +110,33 @@ def _task(db, task_id):
     ).fetchone()
 
 
-def _view(db, row, resolve):
-    versions = [
-        json.loads(v[0])
-        for v in db.execute(
-            "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version", (row["id"],)
-        )
-    ]
+def _view(db, row, resolve, summary=False):
+    if summary:
+        versions = []
+        count = db.execute(
+            "SELECT COUNT(*) FROM artifact_versions WHERE artifact_id=?", (row["id"],)
+        ).fetchone()[0]
+        edges = []
+        for sql in (
+            "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version LIMIT 1",
+            "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version DESC LIMIT 1",
+        ):
+            edge = db.execute(sql, (row["id"],)).fetchone()
+            if edge:
+                edges.append(json.loads(edge[0]))
+        first = edges[0] if edges else None
+        current = edges[-1]["version"] if edges else 0
+    else:
+        versions = [
+            json.loads(v[0])
+            for v in db.execute(
+                "SELECT body FROM artifact_versions WHERE artifact_id=? ORDER BY version",
+                (row["id"],),
+            )
+        ]
+        count = len(versions)
+        first = versions[0] if versions else None
+        current = versions[-1]["version"] if versions else 0
     availability, privacy, private = "available", None, False
     source, has_source = None, bool(row["source_session_id"])
     if row["source_session_id"]:
@@ -137,9 +157,9 @@ def _view(db, row, resolve):
             availability = "source-changed"
         if availability in ("available", "source-archived", "privacy-unknown"):
             try:
-                current = citations.read(db, raw_source["messageId"])
-                original = citations.normalize(versions[0].get("citations", []) if versions else [])
-                if current != original:
+                evidence = citations.read(db, raw_source["messageId"])
+                original = citations.normalize(first.get("citations", []) if first else [])
+                if evidence != original:
                     availability = "source-changed"
             except ValueError:
                 availability = "source-changed"
@@ -181,8 +201,8 @@ def _view(db, row, resolve):
         taskAvailability=task_availability,
         contentIncluded=bool(visible_versions),
         versions=visible_versions,
-        versionCount=len(versions),
-        currentVersion=versions[-1]["version"] if versions else 0,
+        versionCount=count,
+        currentVersion=current,
     ).model_dump(mode="json")
     for version in result["versions"]:
         if version.get("citations") is None:
@@ -216,7 +236,7 @@ def list_artifacts(store, resolve=None, limit=None, cursor=None):
         if limit is not None:
             values.append(limit)
         return [
-            _summary(_view(db, row, resolve))
+            _summary(_view(db, row, resolve, summary=True))
             for row in db.execute(
                 f"SELECT * FROM artifacts {where} ORDER BY created_at,id{suffix}", values
             )
