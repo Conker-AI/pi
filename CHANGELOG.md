@@ -10,6 +10,9 @@ be a decision with visible consequences.
   second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
   `decided` instead of making a second cron job or leaving one behind a declined request. If the job
   cannot be made, the request stays open.
+- **Pi refuses a gateway credential equal to its admin key.** `PI_GATEWAY_KEY_SHA256` set to the
+  admin key's digest gave the browser path recovery authority (the admin key is checked first).
+  Startup now refuses it, as it already did for the owner and service keys.
 - **Inbox cards carry no terminal control characters.** Change-request titles and summaries, and the
   names, labels and description of a drafted tool, drop control characters (except tab and newline in
   summaries), so a model reply or a chat message cannot retitle or clear the owner's terminal when
