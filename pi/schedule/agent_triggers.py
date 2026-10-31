@@ -47,7 +47,7 @@ def due(store, now: float) -> list[dict]:
     """Enabled AI jobs with a watch whose next look has come."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT j.id, j.definition, w.digest, w.checked_at FROM scheduled_jobs j "
+            "SELECT j.id, j.definition, w.digest, w.checked_at, w.failure FROM scheduled_jobs j "
             "LEFT JOIN agent_job_watch w ON w.job_id=j.id "
             "WHERE json_extract(j.definition,'$.watch') IS NOT NULL "
             "AND COALESCE(w.next_check, 0)<=? ORDER BY COALESCE(w.next_check, 0), j.id LIMIT 20",
@@ -76,12 +76,14 @@ def check(store, client, row, now: float, *, quiet=False) -> str:
     watch = row["definition"].watch
     following = now + watch.everyMinutes * 60
     if quiet:
+        # A pause looks at nothing, so it keeps whatever the last real look recorded.
         _save(
             store,
             row["id"],
             digest=row["digest"],
             checked_at=row["checked_at"],
             next_check=following,
+            failure=row["failure"],
         )
         return "paused"
     if client is None:

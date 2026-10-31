@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A quiet-hours pause keeps the last look's failure.** The paused look in `agent_triggers.check`
+  saved the watch row without `failure`, so a tool that didn't answer in the evening read as
+  having no problem after the first overnight pause, although nothing had looked since. A pause
+  now writes back the failure the last real look recorded.
+
 - **Model profiles stay fast as judgements pile up.** Every dashboard load re-read the whole
   `response_judgements` and `response_votes` tables once per configured model and ran one point
   query per score and per vote, so the work grew with models x judgements x scores. Both tables
