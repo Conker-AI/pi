@@ -10,6 +10,9 @@ be a decision with visible consequences.
   before the run started and written after, so two calls arriving together both passed it, and if
   the first run ended quickly the second started too. The gap is now claimed in one statement
   before the run starts; a call that finds the job busy gives it back, as before.
+- **An export that is too long says so.** The size check in `office_exports.render` now matches the
+  limit the export worker actually reads, so a payload between the two limits is refused up front
+  with "too long" instead of starting a worker that answers `invalid`.
 - **The definitions list no longer reads every team preparation.** Building the team and template
   rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
   so the route got slower as those append-only tables grew; it now reads each record's own columns
