@@ -59,6 +59,12 @@ async def lifespan(app: FastAPI):
             "Set PI_GATEWAY_KEY_SHA256 to the gateway credential's SHA-256 hex digest, "
             "then restart Pi."
         )
+    # The admin key is checked first and is recovery authority, so a gateway
+    # credential equal to it would give the browser path full control.
+    if runtime_hash and runtime_hash == hashlib.sha256(admin_key.encode()).hexdigest():
+        raise RuntimeError(
+            "PI_GATEWAY_KEY_SHA256 must identify a credential distinct from PI_ADMIN_KEY."
+        )
     try:
         service_keys = service_inference.key_hashes(os.environ.get("PI_SERVICE_KEYS_SHA256", ""))
     except ValueError as exc:
