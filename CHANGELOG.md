@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A declined turn that already acted no longer blocks its queue for good.** A queued message that
+  ran a tool and then parked on an approval the owner declined stayed `claimed`, so it could be
+  neither removed nor resumed and every later queued message waited behind it; `reconcile` now marks
+  it `failed` like any other stopped turn, so it can be removed and the queue continues.
 - **A repeated setup memory review answers instead of failing with a 500.** Retrying the review
   with a new `requestId` at the same choice revision computed the same evidence digest, passed the
   `request_id` replay check, and hit the table's unique digest constraint, so a review that was
