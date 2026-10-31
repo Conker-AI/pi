@@ -11,6 +11,11 @@ be a decision with visible consequences.
   JSON that was not an object (an array, say) raised and failed the whole chat answer over a
   preference. Each now reads as an unset document and sends nothing, so the answer comes with
   Ollama's own settings.
+- **Model profiles stay fast as judgements pile up.** Every dashboard load re-read the whole
+  `response_judgements` and `response_votes` tables once per configured model and ran one point
+  query per score and per vote, so the work grew with models x judgements x scores. Both tables
+  are now read once per load, each judgement's JSON is parsed once, and all message ids are
+  mapped to their models in chunks of at most 500; the computed profiles are unchanged.
 - **Two webhook calls at once can no longer both start a job.** The 30-second gap was checked
   before the run started and written after, so two calls arriving together both passed it, and if
   the first run ended quickly the second started too. The gap is now claimed in one statement
