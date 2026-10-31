@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An AI job request is approved once.** Approving takes the request before the job is made, so a
+  second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
+  `decided` instead of making a second cron job or leaving one behind a declined request. If the job
+  cannot be made, the request stays open.
 - **Inbox cards carry no terminal control characters.** Change-request titles and summaries, and the
   names, labels and description of a drafted tool, drop control characters (except tab and newline in
   summaries), so a model reply or a chat message cannot retitle or clear the owner's terminal when
