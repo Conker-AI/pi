@@ -211,7 +211,12 @@ def _replace(store, request, payload, title, summary) -> bool:
             return False
         db.execute(
             "UPDATE change_requests SET payload=?, title=?, summary=? WHERE id=?",
-            (change_requests.encode(payload), title[:160], summary[:600], request["id"]),
+            (
+                change_requests.encode(payload),
+                change_requests.title_text(title),
+                change_requests.summary_text(summary),
+                request["id"],
+            ),
         )
         db.commit()
     return True
