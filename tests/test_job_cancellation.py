@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -11,6 +12,7 @@ from pi.agents import continuity
 from pi.api.routes.jobs import router
 from pi.conversation.store import Store
 from pi.schedule import jobs
+from pi.turns import answers
 
 
 @pytest.mark.parametrize("state", ["ready", "awaiting_budget", "awaiting_approval"])
@@ -41,6 +43,13 @@ def test_waiting_run_cancels_durably_and_releases_overlap(tmp_path, state):
         row = jobs.runs(store, job["id"])[0]
         if state == "awaiting_approval":
             assert row["receipt"]["request_id"] == "retained-approval"
+            # Approving the still-open request later finds nothing to continue.
+            assert answers.decided(
+                SimpleNamespace(store=store),
+                "retained-approval",
+                "approved",
+                resume_run=lambda run_id: pytest.fail("a cancelled run resumed"),
+            ) == {"continued": "nothing_waiting"}
         item = continuity.briefing(store)["items"][0]
         assert item["status"] == "cancelled" and not item["needsAttention"]
     with closing(Store(path)) as store:

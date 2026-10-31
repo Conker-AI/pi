@@ -217,8 +217,10 @@ def forget(store, client, body: Forget) -> dict:
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             from pi.memory import edits as memory_edits
+            from pi.memory import proposals as memory_proposals
 
             memory_edits.redact_memory(db, client.agent_id, client.destination, body.memory_id)
+            memory_proposals.redact_memory(db, client.agent_id, body.memory_id)
             cleared = memory_store.invalidate_recall(db)
             old = db.execute(
                 "SELECT cached_packages_cleared FROM memory_forget_operations WHERE request_id=?",

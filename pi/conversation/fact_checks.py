@@ -11,6 +11,7 @@ from pi.context import controls as context_controls
 from pi.context import research
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
+from pi.core import once
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models import roles as model_roles
@@ -272,6 +273,13 @@ def _prepare(store, sid, mid, body):
 
 def check(store, providers, sid: str, mid: str, body: Check):
     body = Check.model_validate(body.model_dump())
+    # A retry that arrives while the first call runs waits for it and replays its result,
+    # instead of paying for a second model call.
+    with once.per_key(("fact_checks", str(store.path), body.request_id)):
+        return _check(store, providers, sid, mid, body)
+
+
+def _check(store, providers, sid: str, mid: str, body: Check):
     digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
 
     def stored():

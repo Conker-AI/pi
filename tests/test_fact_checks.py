@@ -1,6 +1,7 @@
 """Fact check a researched answer against its own sources."""
 
 import json
+import threading
 import time
 from contextlib import closing
 
@@ -11,6 +12,7 @@ from test_model_roles import Adapter, config
 from pi.conversation import fact_checks
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import once
 from pi.models import roles as model_roles
 
 
@@ -444,3 +446,37 @@ def test_http_auth_requires_admin_key(tmp_path, monkeypatch):
             headers={"X-Pi-Key": "admin_key"},
         )
         assert response.status_code in [404, 422, 200, 409, 503]
+
+
+def test_a_concurrent_retry_waits_for_the_first_call_and_replays_it(tmp_path):
+    """Two calls with one request id pay for one model call; the later one replays the first."""
+    entered, release = threading.Event(), threading.Event()
+
+    def hold_the_first_call():
+        if not entered.is_set():
+            entered.set()
+            release.wait(5)
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        setup_models(store)
+        adapters = {"one": Recording(CLAIMS_JSON, hold_the_first_call), "two": Recording()}
+        sid = store.create_session()
+        mid, _turn_id = create_researched_answer(store, sid)
+        body = fact_checks.Check(request_id="factcheck_request_concurrent")
+        results = []
+
+        def call():
+            results.append(fact_checks.check(store, adapters, sid, mid, body))
+
+        first = threading.Thread(target=call)
+        first.start()
+        assert entered.wait(5)
+        second = threading.Thread(target=call)
+        second.start()
+        second.join(0.5)
+        release.set()
+        first.join(5)
+        second.join(5)
+        assert len(adapters["one"].messages) == 1
+        assert sorted(result["replayed"] for result in results) == [False, True]
+        assert not once._held

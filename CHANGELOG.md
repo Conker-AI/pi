@@ -9,6 +9,25 @@ be a decision with visible consequences.
 - **An export that is too long says so.** The size check in `office_exports.render` now matches the
   limit the export worker actually reads, so a payload between the two limits is refused up front
   with "too long" instead of starting a worker that answers `invalid`.
+- **The definitions list no longer reads every team preparation.** Building the team and template
+  rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
+  so the route got slower as those append-only tables grew; it now reads each record's own columns
+  in one query. The rows it returns are unchanged.
+
+- **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
+  memory in MemoryGate but left its old text, the proposed text and the reason in every memory
+  proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
+  forgetting their conversation already did.
+- **Saving a large character no longer stalls other requests.** Saving, importing or restoring a
+  character package (up to 66 MiB) parsed, validated and wrote it on the event loop, so event
+  streams and call audio waited behind it; that work now runs in a worker thread. Responses and
+  limits are unchanged.
+- **A retried fact check or judge pays for one model call.** Two requests with the same
+  `request_id` that arrived together both called the model and kept one answer. The later one
+  now waits for the first and replays its result.
+- **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
+  five while the queue and the dashboard already stopped there; it now answers 422 at
+  six, so a direct caller cannot reserve a long list of uploads in one turn.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
