@@ -215,7 +215,7 @@ def listing(store, conversation_id):
 
 
 def update(store, identity, body: Update):
-    body = Update.model_validate(body.model_dump())
+    body = Update.model_validate(body.model_dump(exclude_unset=True))
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         row = _row(db, identity, body.expected_revision)

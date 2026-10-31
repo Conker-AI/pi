@@ -395,6 +395,38 @@ def test_model_preference_changes_only_future_accepted_requests(store):
     assert session_settings.load(store, call["conversationId"])["settings"].get("modelId") is None
 
 
+def test_an_update_that_does_not_name_a_model_keeps_the_chosen_one(store):
+    from test_model_roles import config
+
+    from pi.models import roles as model_roles
+
+    model_roles.save(
+        store,
+        model_roles.Update(
+            expected_revision=0, configuration=model_roles.Configuration.model_validate(config())
+        ),
+    )
+    call = start(store)
+    call = c.update(store, call["id"], call_models.Update(expected_revision=1, modelId="a"))
+    assert call["modelId"] == "a"
+    for change in (
+        {"paused": True},
+        {"paused": False},
+        {"mode": "character"},
+        {"channels": call_models.ChannelUpdate(microphone=False)},
+    ):
+        call = c.update(
+            store,
+            call["id"],
+            call_models.Update(expected_revision=call["revision"], **change),
+        )
+        assert call["modelId"] == "a", change
+    call = c.update(
+        store, call["id"], call_models.Update(expected_revision=call["revision"], modelId=None)
+    )
+    assert call["modelId"] is None
+
+
 def test_interruption_blocks_configured_model_fallback(store):
     from test_model_roles import config
 
