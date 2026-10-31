@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Queue submits and receipt reads decode the settings snapshot once.** `_files` parsed the same
+  snapshot JSON four times per submit, edit and validation, and `_view` decoded the submission
+  settings a second time for the research mode after already decoding them; both now parse the
+  text once and reuse the result.
 - **Model profiles stay fast as judgements pile up.** Every dashboard load re-read the whole
   `response_judgements` and `response_votes` tables once per configured model and ran one point
   query per score and per vote, so the work grew with models x judgements x scores. Both tables

@@ -92,18 +92,15 @@ def _files(db, sid, payload, snapshot):
     from pi.context import research
     from pi.turns import thinking as background_thinking
 
-    background_thinking.validate_request(
-        payload.get("think", False), json.loads(snapshot)["execution"]
-    )
-    research.validate(payload.get("research_mode", "off"), json.loads(snapshot)["execution"])
-    session_settings.validate_answer_model(
-        json.loads(snapshot)["execution"], payload.get("model_id")
-    )
+    execution = json.loads(snapshot)["execution"]
+    background_thinking.validate_request(payload.get("think", False), execution)
+    research.validate(payload.get("research_mode", "off"), execution)
+    session_settings.validate_answer_model(execution, payload.get("model_id"))
     session_settings.validate_reply(db, sid, payload.get("reply_to"))
     ids = payload["attachment_ids"]
     if len(ids) != len(set(ids)):
         raise tasks.TaskError("invalid_attachments", "Select distinct attachments.", 422)
-    privacy = json.loads(snapshot)["execution"]["privacy"]
+    privacy = execution["privacy"]
     texts = [attachment_turns._text(db, sid, identity, privacy) for identity in ids]
     if sum(len(item["text"]) for item in texts) > 32000:
         raise tasks.TaskError("input_limit", "Attached text exceeds 32000 characters.", 413)

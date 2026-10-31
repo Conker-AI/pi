@@ -182,9 +182,7 @@ def _view(db, row):
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "content_status": "available" if available else "forgotten",
-        "research_mode": (
-            json.loads(selection[0]).get("researchMode", "off") if available and selection else None
-        ),
+        "research_mode": selected.get("researchMode", "off") if available and selection else None,
         "skill_ids": [skill["id"] for skill in selected.get("skills", [])],
         "model_id": selected.get("answerModelId"),
         "think": selected.get("think", False) if available else False,
