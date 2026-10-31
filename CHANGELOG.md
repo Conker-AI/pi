@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The Inbox reads its approvals once.** Building the Inbox scanned the approval queue twice
+  and opened a new database connection for every turn in it; it now reads the queue once on one
+  connection and shows the same items.
 - **Health says when the voice is down.** A speech capability that is set up but whose last
   call failed was reported as `not_configured`, which counts as healthy, so `/health` said `ok`
   while calls had no voice. It is now `degraded` and named in `degraded`.
