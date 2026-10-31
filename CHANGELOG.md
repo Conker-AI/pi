@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Queue submits and receipt reads decode the settings snapshot once.** `_files` parsed the same
+  snapshot JSON four times per submit, edit and validation, and `_view` decoded the submission
+  settings a second time for the research mode after already decoding them; both now parse the
+  text once and reuse the result.
 - **A quiet-hours pause keeps the last look's failure.** The paused look in `agent_triggers.check`
   saved the watch row without `failure`, so a tool that didn't answer in the evening read as
   having no problem after the first overnight pause, although nothing had looked since. A pause
