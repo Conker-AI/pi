@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A deep-research turn with no recorded question now ends cleanly when approved.** Resuming
+  it after approval read the turn's input message without checking it exists and crashed with a
+  `TypeError`, leaving the turn claimed. The approved search still runs and is recorded; the turn
+  then ends as acted without a reply (or failed, if nothing ran), so the reply can be asked for.
+
 - **The definitions list no longer reads every team preparation.** Building the team and template
   rows of `/definitions` parsed every preparation snapshot and every published version ever stored,
   so the route got slower as those append-only tables grew; it now reads each record's own columns
