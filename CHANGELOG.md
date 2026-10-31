@@ -9,6 +9,9 @@ be a decision with visible consequences.
 - **A retried fact check or judge pays for one model call.** Two requests with the same
   `request_id` that arrived together both called the model and kept one answer. The later one
   now waits for the first and replays its result.
+- **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
+  that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
+  call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
 - **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
   call just after the reply was saved, the request was marked `failed` beside a delivered
   message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
