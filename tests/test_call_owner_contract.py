@@ -206,3 +206,22 @@ def test_browser_projection_keeps_only_latest_bounded_history(tmp_path):
     assert len(projected.events) == 200 and projected.events[0].id == "call_event_5"
     assert len(projected.requests) == 100 and projected.requests[0].requestId.endswith("005")
     store.close()
+
+
+def test_browser_projection_clips_a_long_reply_instead_of_failing(tmp_path):
+    store = Store(tmp_path / "calls.db")
+    source = store.create_session()
+    value = calls.start(
+        store, call_models.Start(request_id="bounded_call_start_02", conversationId=source)
+    )
+    reply = "word " * 5000
+    value["events"] = [
+        {"id": "m_short", "at": 1.0, "kind": "user", "text": "hello"},
+        {"id": "m_long", "at": 2.0, "kind": "assistant", "text": reply},
+    ]
+    projected = call_models.browser_view(value)
+    short, long = projected.events
+    assert short.text == "hello"
+    assert len(long.text) == call_models.EVENT_TEXT
+    assert long.text == reply[: call_models.EVENT_TEXT - 1] + "\u2026"
+    store.close()

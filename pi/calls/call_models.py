@@ -61,11 +61,14 @@ class BrowserEventSource(Strict):
     messageId: str = Field(min_length=1, max_length=200)
 
 
+EVENT_TEXT = 16_000
+
+
 class BrowserEvent(Strict):
     id: str = Field(min_length=1, max_length=200)
     at: float = Field(ge=0, allow_inf_nan=False)
     kind: Literal["event", "user", "assistant"]
-    text: str = Field(max_length=16_000)
+    text: str = Field(max_length=EVENT_TEXT)
     source: BrowserEventSource | None = None
 
 
@@ -190,8 +193,16 @@ class BrowserCallAvailability(Strict):
     authority: Literal["none"] = "none"
 
 
+def _clipped(event):
+    # Replies have no length limit; the event's source names the full message.
+    if len(event["text"]) <= EVENT_TEXT:
+        return event
+    return {**event, "text": event["text"][: EVENT_TEXT - 1] + "…"}
+
+
 def browser_view(value):
-    events, requests = value["events"][-200:], value["requests"][-100:]
+    events = [_clipped(event) for event in value["events"][-200:]]
+    requests = value["requests"][-100:]
     return BrowserCall(
         **{
             key: value[key]
