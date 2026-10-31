@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
+  memory in MemoryGate but left its old text, the proposed text and the reason in every memory
+  proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
+  forgetting their conversation already did.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
