@@ -49,6 +49,9 @@ be a decision with visible consequences.
 - **The Inbox reads its approvals once.** Building the Inbox scanned the approval queue twice
   and opened a new database connection for every turn in it; it now reads the queue once on one
   connection and shows the same items.
+- **The artifacts list no longer reads every version of every artifact.** Building the library
+  listing decoded the body of every stored version (up to 100) only to drop them all; it now reads
+  each artifact's first and last version, and the listing shows the same summaries as before.
 - **A turn names at most five attachments.** `POST /sessions/{id}/turns` refused nothing above
   five while the queue and the dashboard already stopped there; it now answers 422 at
   six, so a direct caller cannot reserve a long list of uploads in one turn.
