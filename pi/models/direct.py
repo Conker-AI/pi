@@ -182,6 +182,52 @@ class OpenAIProvider(_DirectProvider):
         )
 
 
+class OpenAICompatibleProvider(OpenAIProvider):
+    """A vendor serving OpenAI Chat Completions at its own URL with a Bearer key.
+
+    `store` is OpenAI's own flag: no other vendor documents it (Groq lists it as unsupported).
+    """
+
+    def _payload(self, messages, model):
+        payload = super()._payload(messages, model)
+        del payload["store"]
+        return payload
+
+
+class GeminiProvider(OpenAICompatibleProvider):
+    # https://ai.google.dev/gemini-api/docs/openai
+    name = "gemini"
+    url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+
+
+class XAIProvider(OpenAICompatibleProvider):
+    # https://docs.x.ai/developers/rest-api-reference/inference/chat-completions
+    name = "xai"
+    url = "https://api.x.ai/v1/chat/completions"
+
+
+class MistralProvider(OpenAICompatibleProvider):
+    # https://docs.mistral.ai/api/endpoint/chat
+    name = "mistral"
+    url = "https://api.mistral.ai/v1/chat/completions"
+
+    def _stream_options(self):
+        # Mistral's request schema has no `stream_options`.
+        return {"stream": True}
+
+
+class DeepSeekProvider(OpenAICompatibleProvider):
+    # https://api-docs.deepseek.com/api/create-chat-completion
+    name = "deepseek"
+    url = "https://api.deepseek.com/chat/completions"
+
+
+class GroqProvider(OpenAICompatibleProvider):
+    # https://console.groq.com/docs/api-reference
+    name = "groq"
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+
 class AnthropicProvider(_DirectProvider):
     name = "anthropic"
     url = "https://api.anthropic.com/v1/messages"
@@ -333,6 +379,18 @@ def collect_chat_stream(events) -> dict:
     return {**body, "choices": [{"message": message, "finish_reason": finish}]}
 
 
+# Each direct adapter and the environment name of its key (pi.models.secrets reads the _FILE form).
+ADAPTERS = (
+    ("PI_OPENAI_KEY", OpenAIProvider),
+    ("PI_ANTHROPIC_KEY", AnthropicProvider),
+    ("PI_GEMINI_KEY", GeminiProvider),
+    ("PI_XAI_KEY", XAIProvider),
+    ("PI_MISTRAL_KEY", MistralProvider),
+    ("PI_DEEPSEEK_KEY", DeepSeekProvider),
+    ("PI_GROQ_KEY", GroqProvider),
+)
+
+
 def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dict:
     """Pure factory: never loads .env, contacts providers, or reads UI key drafts."""
     allowed = environment.get("PI_ALLOW_PAID_MODELS", "").strip() in {"1", "true", "yes"}
@@ -346,10 +404,7 @@ def configured(environment: Mapping[str, str], *, timeout: float = 180.0) -> dic
         **claude_code_providers(environment, timeout),
         **{
             adapter.name: adapter(environment[key], allow_paid=allowed, timeout=timeout)
-            for key, adapter in (
-                ("PI_OPENAI_KEY", OpenAIProvider),
-                ("PI_ANTHROPIC_KEY", AnthropicProvider),
-            )
+            for key, adapter in ADAPTERS
             if environment.get(key, "").strip()
         },
     }

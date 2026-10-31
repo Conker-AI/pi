@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Direct Gemini, xAI, Mistral, DeepSeek and Groq.** Five more direct text providers, each over its
+  vendor's OpenAI-compatible Chat Completions endpoint with a Bearer key: provider IDs `gemini`,
+  `xai`, `mistral`, `deepseek`, `groq`, keys `PI_GEMINI_KEY`, `PI_XAI_KEY`, `PI_MISTRAL_KEY`,
+  `PI_DEEPSEEK_KEY`, `PI_GROQ_KEY` (or their `_FILE` forms). Same spending opt-in, redaction and
+  readiness rows as OpenAI. They count as hosted for interactive answers on Auto. Contract change:
+  the gateway's host provider operations accept the five IDs, and a host status may list them
+  beside the three it must list (openrouter, openai, anthropic).
+
 ## 0.16.0
 
 - **Helper roles can follow the answer model ("Auto").** A role assignment with `followAnswer: true`

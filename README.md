@@ -100,6 +100,7 @@ Precedence is environment, then file, then default. The essentials:
 | `PI_OPENROUTER_KEY` / `PI_OPENROUTER_KEY_FILE` | *(empty)* | Optional hosted models; Conker mounts the file form read-only. Configure only one. |
 | `PI_OPENAI_KEY` / `PI_OPENAI_KEY_FILE` | *(empty)* | Optional direct OpenAI text models; Conker mounts the file form read-only. |
 | `PI_ANTHROPIC_KEY` / `PI_ANTHROPIC_KEY_FILE` | *(empty)* | Optional direct Anthropic text models; Conker mounts the file form read-only. |
+| `PI_GEMINI_KEY`, `PI_XAI_KEY`, `PI_MISTRAL_KEY`, `PI_DEEPSEEK_KEY`, `PI_GROQ_KEY` (each also `_FILE`) | *(empty)* | Optional direct Google Gemini, xAI, Mistral, DeepSeek and Groq text models ([direct providers](docs/direct-providers.md)). |
 | `PI_ALLOW_PAID_MODELS` | *(off)* | Off means free models only, enforced in code. |
 | `PI_TOOLGATE_URL` | `http://toolgate-api:8010` | The action boundary. |
 | `PI_TOOLGATE_KEY` | *(empty)* | A scoped ToolGate key. Without it Pi acts on nothing and reports `not_configured`. |

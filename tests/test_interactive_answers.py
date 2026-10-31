@@ -63,13 +63,12 @@ def taught(value):
 def test_hosted_providers_are_the_hosted_adapters():
     from pi.models.chatgpt import ChatGPTProvider
     from pi.models.claude_code import ClaudeCodeProvider
-    from pi.models.direct import AnthropicProvider, OpenAIProvider
+    from pi.models.direct import ADAPTERS
     from pi.models.openrouter import OpenRouterProvider
     from pi.models.providers import OllamaProvider
 
     hosted = {
-        OpenAIProvider,
-        AnthropicProvider,
+        *(adapter for _key, adapter in ADAPTERS),
         OpenRouterProvider,
         ChatGPTProvider,
         ClaudeCodeProvider,

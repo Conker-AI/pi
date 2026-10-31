@@ -15,8 +15,8 @@ the existing hosted opt-in. `PI_HOSTED_TIMEOUT_S` supplies the default ceiling;
 configured roles pass their own existing timeout. No keys are loaded from a
 Settings draft or persisted in the model configuration. Restart after setup.
 
-Use provider IDs `openai` or `anthropic` in the existing model-role configuration
-and supply the provider's model ID as `route`. Explicit roles, context helpers,
+Use provider IDs `openai` or `anthropic` (or one of the vendors below) in the
+existing model-role configuration and supply the provider's model ID as `route`. Explicit roles, context helpers,
 and model evaluations use the same registered adapters. Existing eligibility,
 manual locks, helper privacy, frozen execution settings, and team metering still
 apply. Legacy free-model escalation remains Ollama/OpenRouter only; registering
@@ -30,6 +30,32 @@ host verification. `/health` separately reports the configured provider identiti
 with `verification: host-revision-bound` and `secrets_included: false`; it does not
 receive or expose host revision metadata. Prices are not guessed: completion cost
 remains unknown.
+
+## OpenAI-compatible vendors
+
+October 31, 2026. Five vendors serve OpenAI Chat Completions at their own URL with an
+`Authorization: Bearer` key. They share OpenAI's adapter (`OpenAICompatibleProvider`
+in `pi/models/direct.py`): same messages, images as `image_url` data URLs, streaming
+and usage, the same paid opt-in, key files, redaction and readiness rows. Endpoints
+were checked against each vendor's documentation on that date.
+
+| Provider ID | Key | Chat Completions | Models list | Docs |
+|---|---|---|---|---|
+| `gemini` | `PI_GEMINI_KEY` | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` | `GET …/v1beta/openai/models` | [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai) |
+| `xai` | `PI_XAI_KEY` | `https://api.x.ai/v1/chat/completions` | `GET https://api.x.ai/v1/models` | [xAI Chat Completions](https://docs.x.ai/developers/rest-api-reference/inference/chat-completions) |
+| `mistral` | `PI_MISTRAL_KEY` | `https://api.mistral.ai/v1/chat/completions` | `GET https://api.mistral.ai/v1/models` | [Mistral chat](https://docs.mistral.ai/api/endpoint/chat) |
+| `deepseek` | `PI_DEEPSEEK_KEY` | `https://api.deepseek.com/chat/completions` | `GET https://api.deepseek.com/models` | [DeepSeek chat completion](https://api-docs.deepseek.com/api/create-chat-completion) |
+| `groq` | `PI_GROQ_KEY` | `https://api.groq.com/openai/v1/chat/completions` | `GET https://api.groq.com/openai/v1/models` | [Groq API reference](https://console.groq.com/docs/api-reference) |
+
+Each key also has a `_FILE` form, read as described above. Differences from OpenAI:
+no vendor sends `store` (it is OpenAI's own flag; Groq documents it as unsupported),
+and Mistral streams without `stream_options`, which its request schema lacks. xAI
+calls Chat Completions a legacy endpoint beside its Responses API; it still serves
+it. Pi does not call the models lists: discovery stays manual, as for OpenAI. The
+host provider bridge (`gateway/provider_control.py`) accepts the five IDs; a host
+status must still list openrouter, openai and anthropic, and may list these.
+
+## Message shapes
 
 The adapters accept text system/user/assistant messages. Anthropic lifts leading
 system messages into its top-level system field and rejects late system messages
