@@ -186,10 +186,19 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             }
         _stage(store, identity, body.request_id, generation, "model")
         result = loop.run_turn(session_id, text, request_id=body.request_id)
-        guard(store, {"callExecution": {"id": identity, "generation": generation}})
         message = result.get("message")
+        try:
+            guard(store, {"callExecution": {"id": identity, "generation": generation}})
+            live = True
+        except ProviderUnavailable:
+            if not message:
+                raise
+            # The reply committed before the stop: the turn is complete, only its voice is skipped.
+            live = False
         if message and settings["channels"]["voice"]:
-            if speech is None or speech.capabilities()["tts"]["status"] == "unconfigured":
+            if not live:
+                speech_status = "failed-or-interrupted"
+            elif speech is None or speech.capabilities()["tts"]["status"] == "unconfigured":
                 speech_status = "unavailable"
             else:
                 try:

@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
+  call just after the reply was saved, the request was marked `failed` beside a delivered
+  message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
 - **A cited answer re-checks only the files it cites.** When a final answer cites an attachment
   passage, Pi re-reads and re-extracts each cited file inside the write that saves the answer, to
   prove the passage still matches; it used to do that for every file of the turn (a PDF each time),
