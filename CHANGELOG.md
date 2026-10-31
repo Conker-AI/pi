@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Agent identities come back after a ToolGate restart.** A 404 or 405 from ToolGate's identities
+  route turned per-agent scoping off until Pi restarted; Pi now asks again after five minutes.
+- **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is
+  `unavailable` (`unreadable status`) when ToolGate answers 200 with a body that is not a JSON
+  object; the status endpoint used to answer 500.
 - **Inbox cards carry no terminal control characters.** Change-request titles and summaries, and the
   names, labels and description of a drafted tool, drop control characters (except tab and newline in
   summaries), so a model reply or a chat message cannot retitle or clear the owner's terminal when
