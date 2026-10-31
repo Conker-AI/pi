@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A quiet-hours pause keeps the last look's failure.** The paused look in `agent_triggers.check`
+  saved the watch row without `failure`, so a tool that didn't answer in the evening read as
+  having no problem after the first overnight pause, although nothing had looked since. A pause
+  now writes back the failure the last real look recorded.
+
 - **A declined turn that already acted no longer blocks its queue for good.** A queued message that
   ran a tool and then parked on an approval the owner declined stayed `claimed`, so it could be
   neither removed nor resumed and every later queued message waited behind it; `reconcile` now marks
