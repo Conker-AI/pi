@@ -138,6 +138,15 @@ def test_watches_pause_in_quiet_hours(store):
     assert look(store, client, NIGHT) == ["paused"] and client.calls == []
 
 
+def test_a_pause_keeps_the_last_failure(store):
+    job = watched(store)
+    client = Client(RuntimeError("down"))
+    assert look(store, client, NOON) == ["failed"]
+    assert look(store, client, NIGHT + 86_400) == ["paused"] and len(client.calls) == 1
+    summary = jobs.browser_job(jobs.get_job(store, job["id"])).definition.watch
+    assert summary.problem == "failed"
+
+
 def test_a_watched_job_never_starts_from_the_clock(store):
     job = watched(store)
     with store._connect() as db:
