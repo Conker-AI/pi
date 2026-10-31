@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An export that is too long says so.** The size check in `office_exports.render` now matches the
+  limit the export worker actually reads, so a payload between the two limits is refused up front
+  with "too long" instead of starting a worker that answers `invalid`.
 - **Pausing a call keeps the model chosen for it.** A call update re-read its own body in a way
   that marked every field as sent, so pausing, resuming, switching mode or a channel cleared the
   call's model choice. Only a field the request names changes now; `modelId: null` still clears it.
