@@ -222,6 +222,8 @@ OWNER_ROUTES = {
         r"/calls/browser/call_[a-f0-9]{32}/audio",
         r"/models/configuration",
         r"/sessions/[A-Za-z0-9_-]+/settings",
+        # Next-message suggestions for one chat: Jev reads its last exchange and saves nothing.
+        r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
         r"/proposals/passes",
         r"/memory/forget",
         r"/memory/remember",
