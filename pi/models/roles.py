@@ -87,6 +87,11 @@ class Assignment(Strict):
         max_length=MAX_BACKUPS,
         description="Backup models tried in this order after the role's model fails.",
     )
+    followAnswer: bool = Field(
+        default=False,
+        description="Auto: use the answer role's model and backups. Every save fills them in "
+        "again, so a change of the answer model reaches this role.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -142,7 +147,7 @@ class Configuration(Strict):
                         },
                     },
                 }
-        return value
+        return follow_answer(value)
 
     @model_validator(mode="after")
     def references(self):
@@ -177,6 +182,8 @@ class Configuration(Strict):
                 or (item.failure == "fallback" and (not backups or not enabled.issuperset(backups)))
             ):
                 raise ValueError("Enabled roles need enabled primary/fallback routes.")
+        if self.roleSettings.roles["answer"].followAnswer:
+            raise ValueError("The answer role cannot follow itself.")
         if (
             self.roleSettings.answerMode == "manual"
             and self.roleSettings.roles["answer"].failure != "stop"
@@ -187,6 +194,33 @@ class Configuration(Strict):
         ):
             raise ValueError("Router mode requires answer and routing roles.")
         return self
+
+
+def follow_answer(value):
+    """Fill each Auto role with the answer role's model and backups; it keeps its own timeout."""
+    roles = value.get("roleSettings", {}).get("roles") if isinstance(value, dict) else None
+    answer = roles.get("answer") if isinstance(roles, dict) else None
+    if not isinstance(answer, dict):
+        return value
+    model, backups = answer.get("modelId"), answer.get("fallbackModelIds")
+    if backups is None:  # saved before backup lists
+        backups = [] if answer.get("fallbackModelId") is None else [answer["fallbackModelId"]]
+    backups = list(backups)
+    followed = {
+        name: {
+            **{key: item for key, item in role.items() if key != "fallbackModelId"},
+            "modelId": model,
+            "eligibleModelIds": [] if model is None else [model, *backups],
+            "failure": answer.get("failure", "stop") if backups else "stop",
+            "fallbackModelIds": backups,
+        }
+        for name, role in roles.items()
+        if name != "answer" and isinstance(role, dict) and role.get("followAnswer") is True
+    }
+    if not followed:
+        return value
+    settings = {**value["roleSettings"], "roles": {**roles, **followed}}
+    return {**value, "roleSettings": settings}
 
 
 class Update(Strict):

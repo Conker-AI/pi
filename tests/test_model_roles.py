@@ -27,6 +27,7 @@ def config():
         timeoutMs=1000,
         failure="stop",
         fallbackModelIds=[],
+        followAnswer=False,
     )
     return dict(
         providers=[
