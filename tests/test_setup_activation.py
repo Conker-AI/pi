@@ -177,6 +177,7 @@ def test_setup_readiness_drops_after_selected_route_disappears(store, monkeypatc
         (Completion("ready", "x" * 301, "ollama"), "invalid_response"),
         (Completion("\ud800", "spare:4b", "ollama"), "invalid_response"),
         (Completion("ready", "\ud800", "ollama"), "invalid_response"),
+        (Completion("ready", "spare\x1b[2J", "ollama"), "invalid_response"),
         (None, "invalid_response"),
     ],
 )
