@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Model profiles stay fast as judgements pile up.** Every dashboard load re-read the whole
+  `response_judgements` and `response_votes` tables once per configured model and ran one point
+  query per score and per vote, so the work grew with models x judgements x scores. Both tables
+  are now read once per load, each judgement's JSON is parsed once, and all message ids are
+  mapped to their models in chunks of at most 500; the computed profiles are unchanged.
 - **Forgetting a memory scrubs the proposals about it.** `POST /memory/forget` removed the
   memory in MemoryGate but left its old text, the proposed text and the reason in every memory
   proposal for it. Those proposals are now scrubbed and hidden in the same transaction, as
