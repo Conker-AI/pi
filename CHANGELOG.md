@@ -9,6 +9,11 @@ be a decision with visible consequences.
 - **A call turn paused after its reply is recorded complete.** When the owner paused or ended a
   call just after the reply was saved, the request was marked `failed` beside a delivered
   message. It is now `complete`, its voice is skipped and marked `failed-or-interrupted`.
+- **Agent identities come back after a ToolGate restart.** A 404 or 405 from ToolGate's identities
+  route turned per-agent scoping off until Pi restarted; Pi now asks again after five minutes.
+- **A garbled ToolGate status is reported, not raised.** `action_boundary` in Pi's status is
+  `unavailable` (`unreadable status`) when ToolGate answers 200 with a body that is not a JSON
+  object; the status endpoint used to answer 500.
 - **An AI job request is approved once.** Approving takes the request before the job is made, so a
   second approval or a decline arriving at the same time (a double-click, two tabs) answers 409
   `decided` instead of making a second cron job or leaving one behind a declined request. If the job
