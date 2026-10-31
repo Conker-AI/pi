@@ -12,6 +12,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import submissions
 from pi.conversation.store import Store
 from pi.schedule import tasks
+from pi.turns import answers
 from pi.turns import queue as q
 from pi.turns.queue_worker import QueueWorker
 
@@ -173,6 +174,38 @@ def test_approval_hold_pauses_following_messages(tmp_path):
         assert value["paused"] and value["reason"] == "turn_needs_review"
         assert len(gate.invocations) == len(provider.sent) == 1
         assert [entry["state"] for entry in value["entries"]] == ["claimed", "waiting"]
+
+
+def test_declined_turn_that_acted_fails_and_unblocks_queue(tmp_path):
+    from test_tool_turns import CALL, FakeGate, build
+
+    with closing(Store(tmp_path / "pi.db")) as store:
+        sid = store.create_session()
+        first = q.enqueue(store, sid, body())
+        q.enqueue(store, sid, body(1, "Should wait"))
+        gate = FakeGate(needs_approval=True)
+        loop, provider = build(store, [CALL, "Must not answer next message"], gate)
+        worker = QueueWorker(store, loop)
+        worker.tick()
+        worker.tick()
+        turn = store.awaiting_approval()[0]["id"]
+        store.mark_acted(turn)
+        assert answers.close(store, store.get_turn(turn))
+        q.reconcile(store, sid)
+        value = q.read(store, sid)
+        assert value["paused"] and value["reason"] == "queued_turn_failed"
+        assert [entry["state"] for entry in value["entries"]] == ["failed", "waiting"]
+        entry = value["entries"][0]
+        assert entry["id"] == first["id"]
+        removed = q.change(
+            store, sid, entry["id"], q.Revision(expected_revision=entry["revision"]), "remove"
+        )
+        assert removed["state"] == "removed"
+        value = q.read(store, sid)
+        q.pause(store, sid, q.QueueRevision(expected_revision=value["revision"]), False)
+        worker.tick()
+        assert len(provider.sent) == 2
+        assert q.read(store, sid)["entries"] == []
 
 
 def test_queued_attachment_reaches_actual_turn_input(tmp_path):
