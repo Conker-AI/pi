@@ -6,6 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Opening a chat reads memory delivery once, not once per turn.** `GET /sessions/{id}` scanned
+  the memory outbox and validated every receipt again for each turn; it now does that once and
+  reuses it for the session and every turn. The response is unchanged.
 - **Service calls cut off by a restart are marked failed.** A service model call that was running
   when Pi stopped stayed `pending` until the 30-day cleanup, so usage showed calls that were not
   running. Startup now marks each one `failed` (`failure_kind` `interrupted`, with an end time); it
