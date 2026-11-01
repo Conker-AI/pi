@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Service calls cut off by a restart are marked failed, not pending forever.** A service model call that was interrupted when Pi stopped stayed pending until the 30‑day cleanup, so usage showed calls that weren't running. Startup now recovers any still‑pending calls, marking them failed with failure_kind='interrupted' and a non‑null ended_at, so they're counted properly and never retried.
+
 ## 0.17.0
 
 - **Direct Gemini, xAI, Mistral, DeepSeek and Groq.** Five more direct text providers, each over its

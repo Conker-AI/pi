@@ -104,6 +104,7 @@ async def lifespan(app: FastAPI):
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()
     model_evaluations.recover_interrupted(store)
+    service_inference.recover_interrupted(store)
     background_thinking.recover_interrupted(store)
     context_retrieval.recover_interrupted(store)
     team_execution.recover_interrupted(store)
