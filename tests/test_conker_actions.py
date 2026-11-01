@@ -158,9 +158,15 @@ def test_the_schedule_tool_asks_by_default():
 
 def test_a_memory_made_at_once_says_remembered_not_inbox(store):
     loop, _ = build(store, [], FakeGate())
-    loop.remember = lambda identity, text, origin="owner": {"memoryId": "m1", "status": "remembered"}
+    loop.remember = lambda identity, text, origin="owner": {
+        "memoryId": "m1",
+        "status": "remembered",
+    }
     done = call(
-        loop, native_tools.REMEMBER, {"text": "The owner drinks tea."}, store.create_session(),
+        loop,
+        native_tools.REMEMBER,
+        {"text": "The owner drinks tea."},
+        store.create_session(),
         run=True,
     )
     assert done.result["made"] == {"memoryId": "m1", "status": "remembered"}
