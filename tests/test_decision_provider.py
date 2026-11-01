@@ -350,3 +350,41 @@ def test_typed_memory_ranking_route():
     assert json.loads(result.text) == {"order": ["m1", "m0"]}
     assert result.model == "replacement-model"
     assert len(calls) == 1
+    assert calls[0]["instructions"].startswith("Rank memory previews")
+    assert calls[0]["choices"] == {"m0": "Memory m0", "m1": "Memory m1"}
+
+
+def test_typed_search_ranking_route():
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choice": "r1",
+                "confidence": 0.8,
+                "model": "search-model",
+                "probabilities": {"r0": 0.1, "r1": 0.9},
+            },
+        )
+
+    _, provider = setup(httpx.MockTransport(handler))
+    result = provider.complete_bounded(
+        [
+            Message(
+                "user",
+                json.dumps(
+                    {"query": "question", "search_previews": {"r0": "first", "r1": "second"}}
+                ),
+            )
+        ],
+        model="search-ranking",
+        timeout=1,
+    )
+    assert json.loads(result.text) == {"order": ["r1", "r0"]}
+    assert result.model == "search-model"
+    assert len(calls) == 1
+    assert calls[0]["choices"] == {"r0": "Result r0", "r1": "Result r1"}
+    assert calls[0]["instructions"].startswith("Rank search results")
+    assert "memory" not in calls[0]["instructions"].lower()

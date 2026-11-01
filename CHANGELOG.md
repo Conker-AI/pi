@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Search ranking uses result-specific instructions and labels.** The decision model now receives "Rank search results" with "Result r0" labels instead of the memory-specific "Rank memory previews" with "Memory m0" labels, improving classification accuracy for universal search.
+
+## 0.17.0
+
 ## 0.17.0
 
 - **Direct Gemini, xAI, Mistral, DeepSeek and Groq.** Five more direct text providers, each over its
