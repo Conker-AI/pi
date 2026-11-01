@@ -115,16 +115,15 @@ def router(app_state, require_key, require_admin):
         if session is None:
             raise HTTPException(404, "no such session")
         pending = submissions.list_pending(app_state().store, session_id, limit=100)
+        turns = app_state().store.turns(session_id)
+        memory = app_state().loop.memory.statuses(session_id, [turn["id"] for turn in turns])
         return {
             **session,
             "pending_submissions": pending["results"],
             "pending_submissions_truncated": pending["next_cursor"] is not None,
             "messages": app_state().store.messages(session_id),
-            "turns": [
-                {**turn, "memory": app_state().loop.memory.status(session_id, turn["id"])}
-                for turn in app_state().store.turns(session_id)
-            ],
-            "memory": app_state().loop.memory.status(session_id),
+            "turns": [{**turn, "memory": memory["turns"][turn["id"]]} for turn in turns],
+            "memory": memory["session"],
             "thinking": background_thinking.list_for_session(app_state().store, session_id),
         }
 

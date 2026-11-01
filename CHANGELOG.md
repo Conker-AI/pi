@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Opening a chat reads memory delivery once, not once per turn.** `GET /sessions/{id}` scanned
+  the memory outbox and validated every receipt again for each turn; it now does that once and
+  reuses it for the session and every turn. The response is unchanged.
+
 ## 0.17.0
 
 - **Direct Gemini, xAI, Mistral, DeepSeek and Groq.** Five more direct text providers, each over its
