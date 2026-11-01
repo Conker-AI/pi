@@ -1,6 +1,5 @@
 """The retired workflow offers and chat drafts: no routes, no Inbox items, rows leave with the chat."""
 
-import sqlite3
 import time
 import uuid
 from contextlib import closing
@@ -75,7 +74,7 @@ def test_forgetting_the_chat_removes_its_rows(tmp_path):
 def test_redact_with_empty_list_changes_nothing(tmp_path):
     """redact(db, []) is a no-op: rows remain untouched."""
     with closing(Store(tmp_path / "pi.db")) as store:
-        session = rows(store)
+        rows(store)
         assert counts(store) == [1, 1]
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -98,18 +97,13 @@ def test_redact_without_tables_does_not_raise(tmp_path):
 
 
 def test_initialize_twice_is_harmless(tmp_path):
-    """Calling initialize twice is harmless (IF NOT EXISTS)."""
+    """Calling initialize again (as every start does) keeps the tables and their rows."""
     with closing(Store(tmp_path / "pi.db")) as store:
+        rows(store)
         with store._connect() as db:
             retired_workflows.initialize(db)
             retired_workflows.initialize(db)
-            # Tables exist and are usable.
-            assert db.execute(
-                "SELECT COUNT(*) FROM workflow_proposals"
-            ).fetchone()[0] == 0
-            assert db.execute(
-                "SELECT COUNT(*) FROM workflow_offers"
-            ).fetchone()[0] == 0
+        assert counts(store) == [1, 1]
 
 
 def test_the_old_routes_are_gone(tmp_path):
