@@ -99,8 +99,12 @@ CATALOG = (
     Tool(
         REMEMBER,
         "Remember something",
-        "Save one fact to memory, in a full sentence. Depending on the owner's settings it is saved at "
-        "once or waits for their approval; the result says which.",
+        "Save one lasting fact about the owner to memory, in a full sentence: a preference, a person "
+        "in their life, a plan, a date, a habit, a decision. Do it on your own as soon as they tell "
+        "you such a fact; never ask whether to remember it. Skip passing small talk, things true only "
+        "for this chat, and secrets such as passwords or card numbers. The chat shows a quiet "
+        "Remembered note with Undo, so mention it in a few words at most. Depending on the owner's "
+        "settings it is saved at once or waits for their approval; the result says which.",
         [
             {
                 "name": "text",
@@ -263,7 +267,10 @@ def _done(loop, request, tool_id) -> ToolResult:
             "requestId": request["id"],
             "made": decided["result"],
             "message": (
-                f"Done: \u201c{title}\u201d. It is listed in the owner's Inbox under Handled, "
+                f"Remembered: \u201c{request['payload']['text'][:140]}\u201d. The chat shows the owner a quiet note with Undo, "
+                "and it is in Memory, where they can forget it."
+                if request["kind"] == "memory"
+                else f"Done: \u201c{title}\u201d. It is listed in the owner's Inbox under Handled, "
                 "where they can undo it."
             ),
         },
