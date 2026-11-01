@@ -98,6 +98,50 @@ def session_only_write(method: str, path: str) -> bool:
     return method == "POST" and any(re.fullmatch(pattern, path) for pattern in SESSION_ONLY_WRITES)
 
 
+# The chat features of the v1 dashboard: output settings, chat names, answer families (compare by
+# retry, judge, vote, select), fact checks, branching from a message, and context editing (policy,
+# summary, compaction, decisions and threads, a new chat from a reviewed summary). Ids are exact:
+# a chat is ses_ plus 16 hex, a message msg_ plus 16 hex, a decision or thread dec_/thr_ plus 16
+# hex, a request id 16-128 safe characters. Every write keeps operation-bound verification; the
+# gateway also checks each body against Pi's own model before asking for it (gateway/chat_bodies.py).
+# Turn snapshots and context selections stay with the recovery credential.
+_CHAT = r"ses_[0-9a-f]{16}"
+_MESSAGE = r"msg_[0-9a-f]{16}"
+_REQUEST = r"[A-Za-z0-9_-]{16,128}"
+_ITEM = r"(?:dec|thr)_[0-9a-f]{16}"
+CHAT_READS = (
+    rf"/sessions/{_CHAT}/output",
+    rf"/sessions/{_CHAT}/title",
+    rf"/sessions/{_CHAT}/branch-history",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}/judgements",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}/votes",
+    rf"/sessions/{_CHAT}/response-retries/{_REQUEST}",
+    rf"/sessions/{_CHAT}/messages/{_MESSAGE}/fact-checks",
+    rf"/context/{_CHAT}/items",
+    rf"/context/{_CHAT}/compaction",
+)
+CHAT_WRITES = (
+    rf"/sessions/{_CHAT}/output",
+    rf"/sessions/{_CHAT}/title",
+    rf"/sessions/{_CHAT}/title/auto",
+    rf"/sessions/{_CHAT}/messages/{_MESSAGE}/retry",
+    rf"/sessions/{_CHAT}/messages/{_MESSAGE}/fact-check",
+    rf"/sessions/{_CHAT}/messages/{_MESSAGE}/fork",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}/select",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}/judge",
+    rf"/sessions/{_CHAT}/response-families/{_MESSAGE}/vote",
+    rf"/context/{_CHAT}",
+    rf"/context/{_CHAT}/fork",
+    rf"/context/{_CHAT}/summary",
+    rf"/context/{_CHAT}/summary/restore",
+    rf"/context/{_CHAT}/summary/draft",
+    rf"/context/{_CHAT}/compact",
+    rf"/context/{_CHAT}/items",
+    rf"/context/{_CHAT}/items/{_ITEM}/state",
+)
+
+
 # Separate owner-control credential; these capabilities are never added to the
 # conversation runtime credential. Expand only alongside the corresponding UI.
 OWNER_ROUTES = {
@@ -149,10 +193,10 @@ OWNER_ROUTES = {
         r"/calls/browser/call_[a-f0-9]{32}",
         r"/models/configuration",
         r"/sessions/[A-Za-z0-9_-]+/settings",
-        # Read-only: the chat's context policy and summary for the Context view. Edits, forks,
-        # turn snapshots and selections stay with the recovery credential.
+        # The chat's context policy and summary for the Context view.
         r"/context/[A-Za-z0-9_-]{1,128}",
         r"/context/[A-Za-z0-9_-]{1,128}/summary",
+        *CHAT_READS,
         r"/memory/objects",
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
@@ -224,6 +268,7 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         # Next-message suggestions for one chat: Jev reads its last exchange and saves nothing.
         r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
+        *CHAT_WRITES,
         r"/proposals/passes",
         r"/memory/forget",
         r"/memory/remember",

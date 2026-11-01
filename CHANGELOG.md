@@ -6,6 +6,16 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The owner's browser reaches the v1 chat features.** Output settings, chat title and auto name,
+  retry, fact check, branching from a message and branch history, response families (select,
+  judge, vote and their reads), and the chat's context (policy, transfer to a new chat, summary
+  edit, restore and draft, compaction, decisions and threads) now take the owner-control key as
+  well as the recovery key, through `/api/control/pi/...`, for a well-formed chat, message, item
+  or request id only (`browser_contract.CHAT_READS` / `CHAT_WRITES`). Each write needs the signed-in
+  session, CSRF, no query string, a body Pi's own strict model accepts (checked at the gateway
+  before the password proof) and a proof bound to that exact operation. Turn snapshots and context
+  selections stay recovery-only. Contract change: these operations list `X-Pi-Owner-Key` instead
+  of `X-Pi-Gateway-Key` among their headers (the runtime key never reached them).
 - **Opening a chat reads memory delivery once, not once per turn.** `GET /sessions/{id}` scanned
   the memory outbox and validated every receipt again for each turn; it now does that once and
   reuses it for the session and every turn. The response is unchanged.

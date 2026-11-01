@@ -12,6 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 API = "tests/test_gateway_api.py::"
 STORE = "tests/test_gateway_store.py::"
 VERIFY = "tests/test_gateway_verification.py::"
+CHAT = "tests/test_gateway_chat_routes.py::"
+CHAT_WRITE = CHAT + "test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof"
+CHAT_READ = CHAT + "test_owner_reads_through_the_control_key"
+OWNER_CHAT = (
+    "tests/test_owner_chat_routes.py::test_owner_key_reaches_the_route_and_nothing_else_does"
+)
 CASES = [
     (
         "proof-replay-admitted",
@@ -177,6 +183,41 @@ CASES = [
         '        if False:\n            raise AuthError(\n                "Service returned an unexpected redirect. Check gateway service URLs on the host.",',
         API + "test_upstream_failure_is_explicit_and_never_retried[redirect]",
     ),
+    (
+        "chat-body-unchecked",
+        "gateway/chat_bodies.py",
+        "BODIES[pattern].model_validate_json(json.dumps(body))",
+        "None",
+        CHAT_WRITE + "[sessions-output]",
+    ),
+    (
+        "chat-read-query-unchecked",
+        "gateway/chat_bodies.py",
+        "_query(query, PAGED.get(pattern, set()))",
+        "None",
+        CHAT_READ + "[sessions-output]",
+    ),
+    (
+        "chat-check-skipped",
+        "gateway/service_routes.py",
+        'check_chat_call(request.method, target, request.scope["query_string"], body)',
+        "None",
+        CHAT_WRITE + "[context-items-state]",
+    ),
+    (
+        "chat-id-loosened",
+        "pi/api/browser_contract.py",
+        '_CHAT = r"ses_[0-9a-f]{16}"',
+        '_CHAT = r"[A-Za-z0-9_-]+"',
+        CHAT_READ + "[context-compaction]",
+    ),
+    (
+        "owner-key-reaches-any-chat-path",
+        "pi/api/server.py",
+        "if owner_allowed(request.method, request.url.path) or owner_download_allowed(",
+        "if True or owner_download_allowed(",
+        OWNER_CHAT + "[POST-context-items-state]",
+    ),
 ]
 
 
@@ -197,6 +238,8 @@ def main() -> int:
             "test_gateway_tls.py",
             "test_gateway_verification.py",
             "test_gateway_cookie_namespace.py",
+            "test_gateway_chat_routes.py",
+            "test_owner_chat_routes.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:

@@ -167,14 +167,17 @@ def test_title_routes_accept_admin_key(http):
     assert response.status_code not in (401, 403)
 
 
-def test_title_routes_refuse_owner_key(http):
+def test_title_routes_take_the_owner_key_for_a_chat_id_only(http):
     store, client = http
     sid = store.create_session()
     owner = {"X-Pi-Owner-Key": OWNER}
-    # require_admin depends on require_key, which doesn't accept X-Pi-Owner-Key
-    assert client.get(f"/sessions/{sid}/title", headers=owner).status_code == 401
-    assert client.post(f"/sessions/{sid}/title", headers=owner, json={}).status_code == 401
-    assert client.post(f"/sessions/{sid}/title/auto", headers=owner, json={}).status_code == 401
+    assert client.get(f"/sessions/{sid}/title", headers=owner).status_code == 200
+    renamed = client.post(
+        f"/sessions/{sid}/title", headers=owner, json={"expected_revision": 0, "title": "Named"}
+    )
+    assert renamed.status_code == 200
+    assert client.post(f"/sessions/{sid}/title", headers=owner, json={}).status_code == 422
+    assert client.get("/sessions/ses_abc/title", headers=owner).status_code == 403
 
 
 def test_title_routes_refuse_no_key(http):

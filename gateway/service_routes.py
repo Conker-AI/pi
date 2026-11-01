@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 
+from .chat_bodies import check as check_chat_call
 from .operations import json_body
 from .store import AuthError
 
@@ -195,6 +196,7 @@ def router(app, session, forward, admit_write, stream_transport):
             if request.method == "POST"
             else None
         )
+        check_chat_call(request.method, target, request.scope["query_string"], body)
         if body is not None:
             if session_only_write(request.method, target):
                 if request.scope["query_string"]:

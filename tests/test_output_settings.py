@@ -315,7 +315,7 @@ def http(tmp_path, monkeypatch):
         yield store, TestClient(api.app)
 
 
-def test_routes_accept_only_the_admin_key(http):
+def test_routes_accept_the_admin_and_owner_keys(http):
     store, client = http
     session = store.create_session()
     admin = {"X-Pi-Key": "synthetic-admin"}
@@ -333,6 +333,8 @@ def test_routes_accept_only_the_admin_key(http):
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "revision_conflict"
     assert client.get("/sessions/ses_missing/output", headers=admin).status_code == 404
     owner = {"X-Pi-Owner-Key": OWNER}
-    assert client.get(f"/sessions/{session}/output", headers=owner).status_code == 401
-    assert client.post(f"/sessions/{session}/output", headers=owner, json=body).status_code == 401
+    assert client.get(f"/sessions/{session}/output", headers=owner).status_code == 200
+    again = {**body, "expected_revision": 1}
+    assert client.post(f"/sessions/{session}/output", headers=owner, json=again).status_code == 200
+    assert client.get("/sessions/ses_missing/output", headers=owner).status_code == 403
     assert client.get(f"/sessions/{session}/output").status_code == 401
