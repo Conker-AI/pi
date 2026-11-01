@@ -235,10 +235,10 @@ app.include_router(
     team_execution_api.create_router(lambda: app.state.store, lambda: app.state.loop, require_admin)
 )
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
-app.include_router(output_settings_api.router(lambda: app.state.store, require_admin))
-app.include_router(decisions_api.router(lambda: app.state.store, require_admin))
+app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
+app.include_router(decisions_api.router(lambda: app.state.store, require_owner))
 app.include_router(
-    naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
+    naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
 app.include_router(
     suggestions_api.router(
@@ -261,10 +261,10 @@ app.include_router(
 )
 app.include_router(
     summary_draft_api.router(
-        lambda: app.state.store, lambda: app.state.router.adapters(), require_admin
+        lambda: app.state.store, lambda: app.state.router.adapters(), require_owner
     )
 )
-app.include_router(compaction_api.router(lambda: app.state.store, require_admin))
+app.include_router(compaction_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     setup_status_api.router(
         lambda: app.state.store,
@@ -528,13 +528,13 @@ app.include_router(
 )
 
 
-app.include_router(message_forks.router(lambda: app.state.store, require_admin))
-app.include_router(response_versions.router(lambda: app.state.store, require_admin))
-app.include_router(response_retries.router(lambda: app.state.loop, require_admin))
+app.include_router(message_forks.router(lambda: app.state.store, require_owner))
+app.include_router(response_versions.router(lambda: app.state.store, require_owner))
+app.include_router(response_retries.router(lambda: app.state.loop, require_owner))
 app.include_router(
-    judgements.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
+    judgements.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
 app.include_router(
-    fact_checks.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_admin)
+    fact_checks.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
 app.include_router(turn_steering.router(lambda: app.state.store, require_admin))

@@ -268,20 +268,35 @@ class TestHTTPRoutes:
         )
         assert response.status_code == 200
 
-    def test_owner_key_refused(self, http):
-        """Owner key -> 401."""
+    def test_owner_key_reaches_the_items_and_nothing_wider(self, http):
+        """The owner's browser lists, adds and closes items; a malformed chat id is refused."""
         store, client = http
         session = store.create_session()
         owner = {"X-Pi-Owner-Key": OWNER}
 
-        assert client.get(f"/context/{session}/items", headers=owner).status_code == 401
+        assert client.get(f"/context/{session}/items", headers=owner).status_code == 200
+        added = client.post(
+            f"/context/{session}/items",
+            headers=owner,
+            json={"expected_revision": 0, "kind": "decision", "text": "Test"},
+        )
+        assert added.status_code == 200
+        item = added.json()["item"]["id"]
+        state = {"expected_revision": 1, "state": "withdrawn"}
+        assert (
+            client.post(
+                f"/context/{session}/items/{item}/state", headers=owner, json=state
+            ).status_code
+            == 200
+        )
+        assert client.get("/context/ses_abc/items", headers=owner).status_code == 403
         assert (
             client.post(
                 f"/context/{session}/items",
                 headers=owner,
-                json={"expected_revision": 0, "kind": "decision", "text": "Test"},
+                json={"expected_revision": 2, "kind": "decision", "text": "Test", "extra": 1},
             ).status_code
-            == 401
+            == 422
         )
 
     def test_no_key_refused(self, http):
