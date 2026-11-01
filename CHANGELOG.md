@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.18.0
+
 - **The owner's browser reaches the v1 chat features.** Output settings, chat title and auto name,
   retry, fact check, branching from a message and branch history, response families (select,
   judge, vote and their reads), and the chat's context (policy, transfer to a new chat, summary
