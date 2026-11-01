@@ -1,185 +1,122 @@
-"""Tests that docs/direct-providers.md and README.md stay in sync with direct provider adapters."""
+"""docs/direct-providers.md and README.md stay in step with the direct provider adapters."""
 
 import re
 from pathlib import Path
 
-from pi.models.direct import ADAPTERS
+import pytest
+
+from pi.models.direct import ADAPTERS, OpenAICompatibleProvider
 from pi.models.secrets import PROVIDER_KEYS
 
+ROOT = Path(__file__).resolve().parents[1]
+ROW = re.compile(r"^\| `(\w+)` \| `(PI_\w+)` \| `(https://[^`]+)` \|", re.MULTILINE)
 
-def _adapter_tuples():
-    """Return (key, name, url) tuples from the real ADAPTERS."""
+
+def adapter_tuples():
+    """(key, name, url) for every real adapter."""
     return [(key, cls.name, cls.url) for key, cls in ADAPTERS]
 
 
-def _compatible_provider_names():
-    """Return the set of provider names that are OpenAI-compatible vendors.
-    
-    Based on the current table in docs/direct-providers.md and the analysis
-    that OpenAI and Anthropic are not in the table while the other five are.
+def compatible_names():
+    """Vendors that speak the OpenAI wire format through OpenAICompatibleProvider.
+
+    Those are the ones the table lists; OpenAI and Anthropic have their own adapters.
     """
-    return {"gemini", "xai", "mistral", "deepseek", "groq"}
+    return {cls.name for _, cls in ADAPTERS if issubclass(cls, OpenAICompatibleProvider)}
 
 
-def doc_problems(doc_text: str, readme_text: str, adapters: list[tuple[str, str, str]]) -> list[str]:
-    """Check for drift between documentation and adapter registration.
-    
-    Args:
-        doc_text: Content of docs/direct-providers.md
-        readme_text: Content of README.md  
-        adapters: List of (key, name, url) tuples from ADAPTERS
-        
-    Returns:
-        List of human-readable problem descriptions, one per drift.
-    """
+def doc_problems(doc_text, readme_text, adapters, compatible):
+    """One short string per drift between the docs and the adapter registry."""
     problems = []
-    
-    # Parse the table rows from direct-providers.md
-    table_pattern = re.compile(r"^\| `(\w+)` \| `(PI_\w+)` \| `(https://[^`]+)` \|", re.MULTILINE)
-    table_rows = {}
-    for match in table_pattern.finditer(doc_text):
-        provider_id, key_var, url = match.groups()
-        table_rows[provider_id] = (key_var, url)
-    
-    # Build adapter lookups
-    adapter_by_name = {name: (key, url) for key, name, url in adapters}
-    adapter_keys = {key for key, _, _ in adapters}
-    compatible_names = _compatible_provider_names()
-    
-    # Check 1: Table rows match adapters for compatible providers
-    for provider_id, (key_var, url) in table_rows.items():
-        if provider_id not in adapter_by_name:
-            problems.append(f"Table row for unknown provider '{provider_id}'")
+    by_name = {name: (key, url) for key, name, url in adapters}
+    rows = {}
+    for provider, key, url in ROW.findall(doc_text):
+        rows[provider] = (key, url)
+        if provider not in by_name:
+            problems.append(f"table row for '{provider}' is not an adapter")
             continue
-            
-        adapter_key, adapter_url = adapter_by_name[provider_id]
-        if key_var != adapter_key:
-            problems.append(f"Provider '{provider_id}' has wrong key in table: '{key_var}' != '{adapter_key}'")
+        adapter_key, adapter_url = by_name[provider]
+        if key != adapter_key:
+            problems.append(f"'{provider}' key in table is {key}, adapter uses {adapter_key}")
         if url != adapter_url:
-            problems.append(f"Provider '{provider_id}' has wrong URL in table: '{url}' != '{adapter_url}'")
-    
-    # Check 2: Compatible providers have table rows
-    for provider_id in compatible_names:
-        if provider_id not in table_rows:
-            problems.append(f"Compatible provider '{provider_id}' missing from table")
-    
-    # Check 3: All adapter keys appear in docs/direct-providers.md
+            problems.append(f"'{provider}' url in table is {url}, adapter uses {adapter_url}")
+    for provider in sorted(compatible):
+        if provider not in rows:
+            problems.append(f"compatible adapter '{provider}' has no table row")
     for key, _, _ in adapters:
         if key not in doc_text:
-            problems.append(f"Adapter key '{key}' missing from docs/direct-providers.md")
-    
-    # Check 4: All adapter keys appear in README.md
-    for key, _, _ in adapters:
+            problems.append(f"{key} is missing from docs/direct-providers.md")
         if key not in readme_text:
-            problems.append(f"Adapter key '{key}' missing from README.md")
-    
+            problems.append(f"{key} is missing from README.md")
     return problems
 
 
-def test_the_docs_match_the_adapters():
-    """Real files should have no drift."""
-    repo_root = Path(__file__).resolve().parents[1]
-    doc_path = repo_root / "docs" / "direct-providers.md"
-    readme_path = repo_root / "README.md"
-    
-    doc_text = doc_path.read_text(encoding="utf-8")
-    readme_text = readme_path.read_text(encoding="utf-8")
-    adapters = _adapter_tuples()
-    
-    problems = doc_problems(doc_text, readme_text, adapters)
-    assert problems == [], f"Documentation drift detected: {problems}"
+@pytest.fixture
+def texts():
+    doc = (ROOT / "docs" / "direct-providers.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    return doc, readme
 
 
-def test_doc_problems_detects_url_changes():
-    """Changing a URL should be detected."""
-    repo_root = Path(__file__).resolve().parents[1]
-    doc_path = repo_root / "docs" / "direct-providers.md"
-    readme_path = repo_root / "README.md"
-    
-    doc_text = doc_path.read_text(encoding="utf-8")
-    readme_text = readme_path.read_text(encoding="utf-8")
-    adapters = _adapter_tuples()
-    
-    # Change Gemini URL
-    broken_doc = doc_text.replace(
-        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions/v2"
-    )
-    
-    problems = doc_problems(broken_doc, readme_text, adapters)
-    assert len(problems) > 0
-    assert any("gemini" in problem.lower() for problem in problems)
-    assert any("url" in problem.lower() for problem in problems)
+def check(doc, readme):
+    return doc_problems(doc, readme, adapter_tuples(), compatible_names())
 
 
-def test_doc_problems_detects_deleted_row():
-    """Deleting a table row should be detected."""
-    repo_root = Path(__file__).resolve().parents[1]
-    doc_path = repo_root / "docs" / "direct-providers.md"
-    readme_path = repo_root / "README.md"
-    
-    doc_text = doc_path.read_text(encoding="utf-8")
-    readme_text = readme_path.read_text(encoding="utf-8")
-    adapters = _adapter_tuples()
-    
-    # Remove the xAI row
-    broken_doc = re.sub(
-        r"^\| `xai` \| `PI_XAI_KEY` \| `https://api\.x\.ai/v1/chat/completions` \|\n",
-        "",
-        doc_text,
-        flags=re.MULTILINE
-    )
-    
-    problems = doc_problems(broken_doc, readme_text, adapters)
-    assert len(problems) > 0
-    assert any("xai" in problem.lower() for problem in problems)
+def test_the_compatible_vendors_are_the_five_in_the_table():
+    assert compatible_names() == {"gemini", "xai", "mistral", "deepseek", "groq"}
 
 
-def test_doc_problems_detects_key_rename_in_doc():
-    """Renaming a key variable in the doc should be detected."""
-    repo_root = Path(__file__).resolve().parents[1]
-    doc_path = repo_root / "docs" / "direct-providers.md"
-    readme_path = repo_root / "README.md"
-    
-    doc_text = doc_path.read_text(encoding="utf-8")
-    readme_text = readme_path.read_text(encoding="utf-8")
-    adapters = _adapter_tuples()
-    
-    # Rename PI_XAI_KEY to PI_X_KEY in the doc
-    broken_doc = doc_text.replace("PI_XAI_KEY", "PI_X_KEY")
-    
-    problems = doc_problems(broken_doc, readme_text, adapters)
-    assert len(problems) > 0
-    assert any("xai" in problem.lower() for problem in problems)
-    assert any("key" in problem.lower() for problem in problems)
+def test_the_docs_match_the_adapters(texts):
+    assert check(*texts) == []
 
 
-def test_doc_problems_detects_missing_key_in_readme():
-    """Removing a key from README should be detected."""
-    repo_root = Path(__file__).resolve().parents[1]
-    doc_path = repo_root / "docs" / "direct-providers.md"
-    readme_path = repo_root / "README.md"
-    
-    doc_text = doc_path.read_text(encoding="utf-8")
-    readme_text = readme_path.read_text(encoding="utf-8")
-    adapters = _adapter_tuples()
-    
-    # Remove PI_GEMINI_KEY from README
-    broken_readme = readme_text.replace("PI_GEMINI_KEY", "")
-    
-    problems = doc_problems(doc_text, broken_readme, adapters)
-    assert len(problems) > 0
-    assert any("PI_GEMINI_KEY" in problem for problem in problems)
+def test_checker_flags_a_changed_url(texts):
+    doc, readme = texts
+    url = "https://api.x.ai/v1/chat/completions"
+    assert url in doc
+    problems = check(doc.replace(url, url.replace("/v1/", "/v2/")), readme)
+    assert len(problems) == 1
+    assert "'xai'" in problems[0] and "url" in problems[0]
+
+
+def test_checker_flags_a_deleted_row(texts):
+    doc, readme = texts
+    lines = doc.splitlines(keepends=True)
+    kept = [line for line in lines if not line.startswith("| `xai` |")]
+    assert len(kept) == len(lines) - 1
+    problems = check("".join(kept), readme)
+    assert any("'xai'" in p and "no table row" in p for p in problems)
+
+
+def test_checker_flags_a_renamed_key_in_the_doc(texts):
+    doc, readme = texts
+    problems = check(doc.replace("PI_XAI_KEY", "PI_X_KEY"), readme)
+    assert any("'xai'" in p and "PI_X_KEY" in p for p in problems)
+    assert any("PI_XAI_KEY is missing from docs" in p for p in problems)
+
+
+def test_checker_flags_a_key_removed_from_the_readme(texts):
+    doc, readme = texts
+    assert "PI_GEMINI_KEY" in readme
+    problems = check(doc, readme.replace("PI_GEMINI_KEY", ""))
+    assert problems == ["PI_GEMINI_KEY is missing from README.md"]
+
+
+def test_checker_flags_a_row_for_a_provider_that_is_not_an_adapter(texts):
+    doc, readme = texts
+    extra = "| `acme` | `PI_ACME_KEY` | `https://api.acme.example/v1` | x | y |\n"
+    problems = check(doc + extra, readme)
+    assert any("'acme'" in p and "not an adapter" in p for p in problems)
+
+
+def test_checker_works_on_made_up_data():
+    adapters = [("PI_A_KEY", "a", "https://a.example/v1")]
+    doc = "| `a` | `PI_A_KEY` | `https://a.example/v1` | x |\n"
+    assert doc_problems(doc, "PI_A_KEY", adapters, {"a"}) == []
+    assert doc_problems("PI_A_KEY", "PI_A_KEY", adapters, {"a"}) == [
+        "compatible adapter 'a' has no table row"
+    ]
 
 
 def test_every_adapter_key_is_a_known_secret():
-    """All ADAPTERS keys must be in pi.models.secrets.PROVIDER_KEYS."""
-    adapter_keys = {key for key, _ in ADAPTERS}
-    
-    # Check that all adapter keys are in PROVIDER_KEYS
-    missing_keys = adapter_keys - set(PROVIDER_KEYS)
-    assert missing_keys == set(), f"Adapter keys not in PROVIDER_KEYS: {missing_keys}"
-    
-    # Check that PROVIDER_KEYS doesn't have extra adapter keys (optional sanity check)
-    # Note: PROVIDER_KEYS may have additional keys like PI_OPENROUTER_KEY, PI_SPEECH_KEY
-    # that aren't in ADAPTERS, so we only check the subset relationship
+    assert {key for key, _ in ADAPTERS} <= set(PROVIDER_KEYS)
