@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Search ranking asks about search results.** The `search-ranking` role now tells the decision model
+  to rank search results and labels each choice "Result …"; it used memory wording before. Memory
+  ranking is unchanged.
+
 ## 0.17.0
 
 - **Direct Gemini, xAI, Mistral, DeepSeek and Groq.** Five more direct text providers, each over its
