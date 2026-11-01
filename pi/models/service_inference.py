@@ -271,6 +271,20 @@ def _observer(store, service: str, request_id: str):
     return observe
 
 
+def recover_interrupted(store) -> int:
+    """Call once at startup, before any service call can start. A call still pending then
+    was cut off by the restart: its outcome is unknown, so it is failed, never retried."""
+    now = time.time()
+    with store._connect() as db:
+        cursor = db.execute(
+            "UPDATE service_model_calls SET status='failed',failure_kind='interrupted',"
+            "ended_at=? WHERE status='pending'",
+            (now,),
+        )
+        db.commit()
+        return cursor.rowcount
+
+
 def call(store, router, service: str, body: InferenceRequest) -> InferenceAnswer:
     """One role call for one request: no retries beyond the backups the owner set."""
     if body.role not in SERVICES.get(service, ()):
