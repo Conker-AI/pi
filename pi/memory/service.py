@@ -371,6 +371,11 @@ class Memory:
             self.store, session_id, turn_id, configured=self.client is not None
         )
 
+    def statuses(self, session_id, turn_ids):
+        return memory_store.statuses(
+            self.store, session_id, turn_ids, configured=self.client is not None
+        )
+
     def health(self):
         if not self.client:
             return {"status": "degraded", "reason": "Long-term memory is not configured"}

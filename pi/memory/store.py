@@ -387,7 +387,7 @@ def prompt_context(saved):
     )
 
 
-def status(store, session_id=None, turn_id=None, *, configured=False):
+def delivery(store, session_id=None):
     from pi.memory import delivery as memory_delivery
 
     with store._connect() as db:
@@ -423,9 +423,19 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
         state: sum(receipt.get("state") == state for receipt in receipts)
         for state in ("admitted", "filtered", "deleted")
     }
+    delivery_error = next((row["error"] for row in rows if row["error"]), None)
+    return {
+        "pending": pending,
+        "blocked": blocked,
+        "deleting": deleting,
+        "admission": admission,
+        "delivery_error": delivery_error,
+    }
+
+
+def _status(part, retrieval, configured):
     notices = []
-    retrieval = context(store, turn_id) if turn_id else None
-    if blocked:
+    if part["blocked"]:
         notices.append(
             "Conversation saved. Long-term memory delivery is blocked; "
             "see delivery_error and repair it before explicitly retrying."
@@ -438,11 +448,11 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
         notices.append(
             "Conversation saved. Long-term memory is not configured; delivery remains pending."
         )
-    elif pending:
+    elif part["pending"]:
         notices.append(
             "Conversation saved. Long-term memory is pending; Pi will retry automatically."
         )
-    if deleting:
+    if part["deleting"]:
         notices.append(
             "Forgetting is pending in MemoryGate. "
             "Memory retrieval is paused until deletion is acknowledged."
@@ -478,13 +488,27 @@ def status(store, session_id=None, turn_id=None, *, configured=False):
             )
     return {
         "configured": configured,
-        "pending_ingestion": pending,
-        "blocked_delivery": blocked,
-        "pending_deletion": deleting,
-        "admission": admission,
-        "delivery_error": next((row["error"] for row in rows if row["error"]), None),
+        "pending_ingestion": part["pending"],
+        "blocked_delivery": part["blocked"],
+        "pending_deletion": part["deleting"],
+        "admission": part["admission"],
+        "delivery_error": part["delivery_error"],
         "retrieval": retrieval,
         "notices": notices,
+    }
+
+
+def status(store, session_id=None, turn_id=None, *, configured=False):
+    return _status(
+        delivery(store, session_id), context(store, turn_id) if turn_id else None, configured
+    )
+
+
+def statuses(store, session_id, turn_ids, *, configured=False):
+    part = delivery(store, session_id)
+    return {
+        "session": _status(part, None, configured),
+        "turns": {tid: _status(part, context(store, tid), configured) for tid in turn_ids},
     }
 
 
