@@ -6,9 +6,9 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- **Search ranking uses result-specific instructions and labels.** The decision model now receives "Rank search results" with "Result r0" labels instead of the memory-specific "Rank memory previews" with "Memory m0" labels, improving classification accuracy for universal search.
-
-## 0.17.0
+- **Search ranking asks about search results.** The `search-ranking` role now tells the decision model
+  to rank search results and labels each choice "Result …"; it used memory wording before. Memory
+  ranking is unchanged.
 
 ## 0.17.0
 
