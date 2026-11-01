@@ -152,6 +152,26 @@ def test_the_schedule_tool_asks_by_default():
     assert tool.authorization == "owner_confirmation"
     remember = next(t for t in native_tools.CATALOG if t.id == native_tools.REMEMBER)
     assert remember.authorization == "auto"
+    # He wants memory automatic: the model saves lasting facts itself and never asks first.
+    assert "on your own" in remember.description and "never ask" in remember.description
+
+
+def test_a_memory_made_at_once_says_remembered_not_inbox(store):
+    loop, _ = build(store, [], FakeGate())
+    loop.remember = lambda identity, text, origin="owner": {
+        "memoryId": "m1",
+        "status": "remembered",
+    }
+    done = call(
+        loop,
+        native_tools.REMEMBER,
+        {"text": "The owner drinks tea."},
+        store.create_session(),
+        run=True,
+    )
+    assert done.result["made"] == {"memoryId": "m1", "status": "remembered"}
+    assert done.result["message"].startswith("Remembered: “The owner drinks tea.”")
+    assert "Inbox" not in done.result["message"]
 
 
 def test_a_job_made_at_once_is_conkers_and_one_he_approves_is_his(store):

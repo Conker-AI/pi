@@ -9,6 +9,9 @@ be a decision with visible consequences.
 - **Opening a chat reads memory delivery once, not once per turn.** `GET /sessions/{id}` scanned
   the memory outbox and validated every receipt again for each turn; it now does that once and
   reuses it for the session and every turn. The response is unchanged.
+- **Search ranking asks about search results.** The `search-ranking` role now tells the decision model
+  to rank search results and labels each choice "Result …"; it used memory wording before. Memory
+  ranking is unchanged.
 
 ## 0.17.0
 
