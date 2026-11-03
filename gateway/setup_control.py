@@ -352,12 +352,23 @@ def resume_rehearsal_approval(config: Config, request_id: str, client: httpx.Cli
 
 
 def finalize_rehearsal(config: Config, client: httpx.Client) -> dict:
-    value = _request_json(config, client, "POST", "/setup/rehearsal/finalize", body={})
+    request_id = f"setup-finalize-{uuid.uuid4()}"
+    value = _request_json(
+        config,
+        client,
+        "POST",
+        "/setup/rehearsal/finalize",
+        body={"requestId": request_id},
+    )
     try:
         receipt = Receipt.model_validate(value, strict=False)
     except ValidationError:
         raise SetupControlError("Pi returned an unsupported rehearsal receipt.") from None
-    if receipt.step != "rehearsal" or receipt.source != "conker.first-run-rehearsal":
+    if (
+        receipt.step != "rehearsal"
+        or receipt.source != "conker.first-run-rehearsal"
+        or receipt.requestId != request_id
+    ):
         raise SetupControlError("Pi returned a mismatched rehearsal receipt.")
     return receipt.model_dump(mode="json")
 
