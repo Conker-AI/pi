@@ -15,7 +15,22 @@ def _receipt_step(store, identity, *, now, toolgate=None):
         "rehearsal": ("rehearsal_receipt_unavailable", "rehearsal_receipt_stale"),
     }
     missing_reason, stale_reason = labels[identity]
-    protection_policy = setup_protection.current(store) if identity == "protection" else None
+    try:
+        protection_policy = setup_protection.current(store) if identity == "protection" else None
+    except Exception:
+        return _step(
+            identity,
+            "degraded",
+            True,
+            [
+                _evidence(
+                    "setup.protection.policy",
+                    "degraded",
+                    "Setup protection policy could not be read from Pi's durable store.",
+                )
+            ],
+            missing_reason,
+        )
     if protection_policy is not None and protection_policy.revision == 0:
         return _step(
             identity,
@@ -110,7 +125,27 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 ],
                 stale_reason,
             )
-    if identity == "rehearsal" and not setup_rehearsal.receipt_matches_current(store, receipt):
+    try:
+        rehearsal_matches = (
+            setup_rehearsal.receipt_matches_current(store, receipt)
+            if identity == "rehearsal"
+            else True
+        )
+    except Exception:
+        return _step(
+            identity,
+            "degraded",
+            True,
+            [
+                _evidence(
+                    "setup.receipt.rehearsal",
+                    "degraded",
+                    "Setup evidence receipts could not be read from Pi's durable store.",
+                )
+            ],
+            stale_reason,
+        )
+    if identity == "rehearsal" and not rehearsal_matches:
         return _step(
             identity,
             "degraded",
