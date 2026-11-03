@@ -103,21 +103,7 @@ def _current_revision(config: Config, client: httpx.Client, step: str) -> int:
 
 
 def _record(config: Config, client: httpx.Client, step: str, payload: dict) -> dict:
-    current = _request_json(config, client, "GET", f"/setup/receipts/{step}", missing=True)
-    existing = None
-    if current is not None:
-        try:
-            existing = Receipt.model_validate(current, strict=False)
-        except ValidationError:
-            raise SetupControlError("Pi returned an unsupported current setup receipt.") from None
-        if existing.step != step:
-            raise SetupControlError("Pi returned a mismatched current setup receipt.")
-        if (
-            existing.receiptId == payload.get("receiptId")
-            and existing.evidenceDigest == payload.get("evidenceDigest")
-        ):
-            return existing.model_dump(mode="json")
-    revision = existing.revision if existing is not None else 0
+    revision = _current_revision(config, client, step)
     try:
         value = ReceiptInput.model_validate({**payload, "expectedRevision": revision})
     except ValidationError:
@@ -352,23 +338,12 @@ def resume_rehearsal_approval(config: Config, request_id: str, client: httpx.Cli
 
 
 def finalize_rehearsal(config: Config, client: httpx.Client) -> dict:
-    request_id = f"setup-finalize-{uuid.uuid4()}"
-    value = _request_json(
-        config,
-        client,
-        "POST",
-        "/setup/rehearsal/finalize",
-        body={"requestId": request_id},
-    )
+    value = _request_json(config, client, "POST", "/setup/rehearsal/finalize", body={})
     try:
         receipt = Receipt.model_validate(value, strict=False)
     except ValidationError:
         raise SetupControlError("Pi returned an unsupported rehearsal receipt.") from None
-    if (
-        receipt.step != "rehearsal"
-        or receipt.source != "conker.first-run-rehearsal"
-        or receipt.requestId != request_id
-    ):
+    if receipt.step != "rehearsal" or receipt.source != "conker.first-run-rehearsal":
         raise SetupControlError("Pi returned a mismatched rehearsal receipt.")
     return receipt.model_dump(mode="json")
 

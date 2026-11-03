@@ -60,7 +60,6 @@ def router(app, session, forward, admit_write, stream_transport):
                 async for chunk in response.aiter_bytes():
                     yield chunk
             except httpx.HTTPError:
-                yield b"event: gateway-error\ndata: {\"error\": \"live preview interrupted\"}\n\n"
                 return
             finally:
                 await response.aclose()
