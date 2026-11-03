@@ -229,6 +229,11 @@ CASES = [
 ]
 
 
+# The baseline runs every file a case selects: a file that already fails unmutated would
+# otherwise count as a caught mutant.
+BASELINE = sorted({case[4] for case in CASES})
+
+
 def main():
     # In the OS temp directory, never in the checkout (tests/conftest.py refuses that).
     run = Path(tempfile.mkdtemp(prefix="audit-mutations-"))
@@ -251,7 +256,7 @@ def main():
                 sys.executable,
                 "-m",
                 "pytest",
-                *([selected] if selected else [EXEC, MODELS, MEMORY]),
+                *([selected] if selected else BASELINE),
                 "-q",
                 "-p",
                 "no:cacheprovider",
@@ -266,7 +271,8 @@ def main():
             env={**os.environ, "PYTHONPATH": str(target)},
             capture_output=True,
             text=True,
-            timeout=120,
+            # One file takes about 50 s alone; a loaded CI runner needs the headroom.
+            timeout=300,
         )
         (target / "output.txt").write_text(result.stdout + result.stderr, encoding="utf-8")
         suites = list(ET.parse(report).getroot().iter("testsuite")) if report.exists() else []
