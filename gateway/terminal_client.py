@@ -188,7 +188,10 @@ class RemoteTerminal:
     def close(self) -> None:
         if self._closed:
             return
-        result = self.sidecar.call("close", id=self.identity)
+        self._closed = True
+        try:
+            result = self.sidecar.call("close", id=self.identity)
+        except TerminalError:
+            return
         if result != {"closed": True}:
             raise TerminalError("Terminal sidecar did not confirm closure.")
-        self._closed = True
