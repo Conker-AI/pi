@@ -78,6 +78,12 @@ class Terminals:
 
     def sweep(self):
         with self.lock:
+            for identity in [
+                identity
+                for identity, entry in self.entries.items()
+                if entry["terminal"].closed
+            ]:
+                del self.entries[identity]
             for entry in self.entries.values():
                 if entry["terminal"].closed:
                     continue
