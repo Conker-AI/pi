@@ -7,9 +7,10 @@ the address, because request paths are written to the server's access log.
 
 Each call admits at most one run, at most one every 30 seconds per job, and never while the job
 is still running. What the caller sent waits for that run and is handed to the agent as
-information from outside Conker, never as instructions. Its waiting copy here is deleted when the
-run takes it; the text itself stays in the run's message in the job's chat until that chat is
-forgotten. From then on the whole chat counts as holding outside content (`pi.turns.access`) and
+information from outside Conker, never as instructions. It is saved with the run, in one
+transaction, and its copy here is kept until the run has ended (a repeated dispatch must build the
+same text to replay), then swept on the next call; the text itself stays in the run's message in
+the job's chat until that chat is forgotten, which drops a copy still here too. From then on the whole chat counts as holding outside content (`pi.turns.access`) and
 none of its messages is sent to memory. Tools still ask exactly as in chat, so a webhook can never
 change anything without the owner.
 """
@@ -104,7 +105,11 @@ def receive(store, job_id, token, body, now=None) -> dict:
     if not isinstance(token, str) or not TOKEN.fullmatch(token):
         raise HookError("hook_refused", "Webhook refused.", 403)
     with store._connect() as db:
-        db.execute("DELETE FROM agent_job_events WHERE created_at<?", (now - STALE_EVENT_SECONDS,))
+        db.execute(
+            "DELETE FROM agent_job_events WHERE created_at<? OR run_id IN (SELECT id FROM "
+            "scheduled_runs WHERE status IN ('completed','failed','cancelled'))",
+            (now - STALE_EVENT_SECONDS,),
+        )
         row = db.execute(
             "SELECT token_hash, last_at FROM agent_job_hooks WHERE job_id=?", (job_id,)
         ).fetchone()
@@ -125,8 +130,15 @@ def receive(store, job_id, token, body, now=None) -> dict:
     if not claimed:
         raise HookError("hook_too_soon", "Wait 30 seconds between webhook calls.", 429)
     request_id = HOOK_REQUEST + uuid.uuid4().hex
+    payload = _payload(body)
+
+    def save(db, run):
+        db.execute(
+            "INSERT INTO agent_job_events VALUES (?,?,?,?)", (run["id"], job_id, payload, now)
+        )
+
     try:
-        run = jobs.run_now(store, job_id, request_id, now=now)
+        run = jobs.run_now(store, job_id, request_id, now=now, with_run=save)
     except jobs.JobError:
         # A busy job started nothing, so the call does not use up the gap.
         with store._connect() as db:
@@ -135,11 +147,6 @@ def receive(store, job_id, token, body, now=None) -> dict:
                 (row["last_at"], job_id, now),
             )
         return {"started": False, "reason": "busy"}
-    with store._connect() as db:
-        db.execute(
-            "INSERT INTO agent_job_events VALUES (?,?,?,?)",
-            (run["id"], job_id, _payload(body), now),
-        )
     return {"started": True, "runId": run["id"]}
 
 
@@ -147,16 +154,13 @@ def started_by_hook(request_id: str | None) -> bool:
     return bool(request_id) and request_id.startswith(HOOK_REQUEST)
 
 
-def take(store, run_id) -> str | None:
-    """The caller's payload for this run, once: this waiting copy is deleted as it is read (the
-    run's message keeps the text in the job's chat)."""
+def sent(store, run_id) -> str | None:
+    """The caller's payload for this run. It is not deleted as it is read: a repeated dispatch of
+    the same run must send the same text to replay the saved turn."""
     with store._connect() as db:
-        db.execute("BEGIN IMMEDIATE")
         row = db.execute(
             "SELECT payload FROM agent_job_events WHERE run_id=?", (run_id,)
         ).fetchone()
-        db.execute("DELETE FROM agent_job_events WHERE run_id=?", (run_id,))
-        db.commit()
     return row["payload"] if row else None
 
 

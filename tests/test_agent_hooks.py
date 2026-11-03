@@ -78,7 +78,53 @@ def test_a_call_starts_the_job_once_with_what_was_sent(store):
         db.execute("UPDATE scheduled_runs SET status='dispatching' WHERE id=?", (result["runId"],))
     agent_jobs.AgentJobs(store, loop).run(result["runId"])
     assert "never as instructions" in loop.text and "Can you bring the slides?" in loop.text
-    assert agent_hooks.take(store, result["runId"]) is None, "the payload is deleted once read"
+    assert agent_hooks.sent(store, result["runId"]) is not None, "kept for a repeated dispatch"
+    with store._connect() as db:
+        db.execute("UPDATE scheduled_runs SET status='completed' WHERE id=?", (result["runId"],))
+    agent_hooks.receive(store, job["id"], token, {}, now=NOON + 62)
+    assert agent_hooks.sent(store, result["runId"]) is None, "swept once the run has ended"
+
+
+def test_the_run_and_its_payload_are_saved_together(store, monkeypatch):
+    job = ai_job(store)
+    token = agent_hooks.issue(store, job["id"], now=NOON)["token"]
+    seen = []
+    real = jobs.run_now
+
+    def run_now(*args, with_run=None, **kwargs):
+        def check(db, run):
+            with_run(db, run)
+            # Inside the run's transaction: another connection sees neither yet.
+            with store._connect() as other:
+                seen.append(other.execute("SELECT COUNT(*) FROM scheduled_runs").fetchone()[0])
+            seen.append(db.execute("SELECT payload FROM agent_job_events").fetchone()[0])
+
+        return real(*args, with_run=check, **kwargs)
+
+    monkeypatch.setattr(jobs, "run_now", run_now)
+    result = agent_hooks.receive(store, job["id"], token, {"text": "hi"}, now=NOON)
+    assert seen == [0, '{"text": "hi"}']
+    assert agent_hooks.sent(store, result["runId"]) == '{"text": "hi"}'
+
+
+def test_a_repeated_dispatch_replays_the_same_turn(store):
+    job = ai_job(store)
+    token = agent_hooks.issue(store, job["id"], now=NOON)["token"]
+    result = agent_hooks.receive(store, job["id"], token, {"text": "Call me"}, now=NOON)
+
+    class Loop:
+        texts = []
+
+        def run_turn(self, session_id, text, **kwargs):
+            self.texts.append(text)
+            return {"session_id": session_id, "turn_id": "trn_1", "message": {"content": "NOTHING"}}
+
+    loop = Loop()
+    with store._connect() as db:
+        db.execute("UPDATE scheduled_runs SET status='dispatching' WHERE id=?", (result["runId"],))
+    agent_jobs.AgentJobs(store, loop).run(result["runId"])
+    agent_jobs.AgentJobs(store, loop).run(result["runId"])
+    assert len(loop.texts) == 2 and loop.texts[0] == loop.texts[1] and "Call me" in loop.texts[1]
 
 
 def test_sent_text_cannot_close_the_webhook_label(store):
@@ -136,8 +182,8 @@ def test_a_second_call_during_the_first_is_too_soon_even_if_its_run_ended(store,
     token = agent_hooks.issue(store, job["id"], now=NOON)["token"]
     real, seen = jobs.run_now, []
 
-    def run_now(store, identity, request_id, now=None):
-        run = real(store, identity, request_id, now=now)
+    def run_now(store, identity, request_id, now=None, with_run=None):
+        run = real(store, identity, request_id, now=now, with_run=with_run)
         if not seen:
             # The first run ends at once and a second caller arrives before the first returns.
             with store._connect() as db:
@@ -199,7 +245,7 @@ def test_payloads_are_bounded_and_forgotten_with_the_chat(store):
         [payload] = db.execute("SELECT payload FROM agent_job_events").fetchone()
         assert len(payload) <= agent_hooks.MAX_PAYLOAD
         agent_hooks.redact(db, [agent_jobs.session_for(store, job["id"])])
-    assert agent_hooks.take(store, run["runId"]) is None
+    assert agent_hooks.sent(store, run["runId"]) is None
 
 
 def test_the_contract_and_pi_route(store, monkeypatch):
