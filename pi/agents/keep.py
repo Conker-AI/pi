@@ -44,17 +44,22 @@ def record(store, request, result, now=None) -> None:
     if not isinstance(target, str) or not target or not request.get("sessionId"):
         return
     with store._connect() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO keep_results(request_id,session_id,kind,target_id,created_at) "
-            "VALUES (?,?,?,?,?)",
-            (
-                request["id"],
-                request["sessionId"],
-                request["kind"],
-                target,
-                time.time() if now is None else now,
-            ),
-        )
+        link(db, request, target, now)
+
+
+def link(db, request, target, now=None) -> None:
+    """Save one Keep result inside the caller's transaction."""
+    db.execute(
+        "INSERT OR IGNORE INTO keep_results(request_id,session_id,kind,target_id,created_at) "
+        "VALUES (?,?,?,?,?)",
+        (
+            request["id"],
+            request["sessionId"],
+            request["kind"],
+            target,
+            time.time() if now is None else now,
+        ),
+    )
 
 
 def listing(store, session_id) -> list[dict]:

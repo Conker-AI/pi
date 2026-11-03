@@ -211,37 +211,6 @@ def _close(store, identity, state, result, now):
     return get(store, identity)
 
 
-def _claim(store, identity, now):
-    """Take an open request before making what it asks for, so a second approval or a decline
-    arriving meanwhile (a double-click, two tabs) is refused instead of making it twice."""
-    with store._connect() as db:
-        changed = db.execute(
-            "UPDATE change_requests SET state='approved', decided_at=? WHERE id=? AND state='open'",
-            (now, identity),
-        ).rowcount
-    if not changed:
-        raise ChangeRequestError("decided", "This request was already decided.", 409)
-
-
-def _reopen(store, identity):
-    """Give back a claimed request when making it failed, so the owner can approve it again."""
-    with store._connect() as db:
-        db.execute(
-            "UPDATE change_requests SET state='open', decided_at=NULL "
-            "WHERE id=? AND state='approved' AND result IS NULL",
-            (identity,),
-        )
-
-
-def _made(store, identity, result):
-    with store._connect() as db:
-        db.execute(
-            "UPDATE change_requests SET result=? WHERE id=?",
-            (json.dumps(result, ensure_ascii=False), identity),
-        )
-    return get(store, identity)
-
-
 def _privacy(store, session_id) -> dict | None:
     """The flags of the chat a request came from, for the job made from it; unknown is private."""
     if session_id is None:
@@ -279,15 +248,29 @@ def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -
         full = agent_jobs.room(store, by, now)
         if full:
             raise ChangeRequestError("job_limit", full, 409)
-        _claim(store, identity, now)
-        try:
-            job = agent_jobs.create(
-                store, body, now=now, created_by=by, privacy=_privacy(store, request["sessionId"])
-            )
-        except Exception:
-            _reopen(store, identity)
-            raise
-        return _kept(store, request, by, _made(store, identity, {"jobId": job["id"]}))
+
+        def decided(db, job):
+            # Decided in the job's own transaction: a second approval meanwhile is refused, and
+            # a failure leaves the request open with no job made.
+            if not db.execute(
+                "UPDATE change_requests SET state='approved', result=?, decided_at=? "
+                "WHERE id=? AND state='open'",
+                (json.dumps({"jobId": job["id"]}), now, identity),
+            ).rowcount:
+                raise ChangeRequestError("decided", "This request was already decided.", 409)
+            # Checked again under the write lock: two approvals at once cannot both take the
+            # last place.
+            full = agent_jobs.room_in(db, by, now, besides=job["id"])
+            if full:
+                raise ChangeRequestError("job_limit", full, 409)
+            if by == "conker" and request["sessionId"]:
+                from pi.agents import keep
+
+                keep.link(db, request, job["id"], now)
+
+        privacy = _privacy(store, request["sessionId"])
+        agent_jobs.create(store, body, now=now, created_by=by, privacy=privacy, then=decided)
+        return get(store, identity)
     if request["kind"] == "tool_draft":
         # A request filed before drafting moved to the background has no status: it is ready.
         if request["payload"].get("status", "ready") != "ready":

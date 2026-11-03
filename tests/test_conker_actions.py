@@ -395,3 +395,84 @@ def test_three_open_requests_per_chat_and_twenty_in_all(store):
         store, tool_drafts.NewDraft(description="A digest", request_id="owner-draft-request-1")
     )
     assert mine["state"] == "open"
+
+
+# --- an approved job, its chat and its request are saved together ------------------------
+
+
+def counts(store):
+    with store._connect() as db:
+        return tuple(
+            db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("scheduled_jobs", "agent_job_sessions", "keep_results")
+        )
+
+
+def test_a_job_whose_chat_cannot_be_made_is_not_made_and_the_request_stays_open(store, monkeypatch):
+    loop, _ = build(store, [], FakeGate())
+    call(loop, native_tools.SCHEDULE, JOB, store.create_session())
+    [request] = change_requests.listing(store)
+    made = Store._create_session
+
+    def broken(self, db, *args, **kwargs):
+        made(self, db, *args, **kwargs)
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(Store, "_create_session", broken)
+    with pytest.raises(RuntimeError):
+        change_requests.approve(store, request["id"])
+    assert counts(store) == (0, 0, 0)
+    assert change_requests.get(store, request["id"])["state"] == "open"
+    monkeypatch.undo()
+    approved = change_requests.approve(store, request["id"])
+    assert counts(store) == (1, 1, 0)
+    assert agent_jobs.session_for(store, approved["result"]["jobId"])
+
+
+def test_a_job_conker_makes_is_never_left_without_its_link_to_the_chat(store, monkeypatch):
+    loop, _ = build(store, [], FakeGate())
+    session = store.create_session()
+    call(loop, native_tools.SCHEDULE, JOB, session)
+    [request] = change_requests.listing(store)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(keep, "link", broken)
+    with pytest.raises(RuntimeError):
+        change_requests.approve(store, request["id"], by="conker")
+    # Forgetting the chat turns off what Conker made in it, so no job may exist unlinked.
+    assert counts(store) == (0, 0, 0)
+    assert change_requests.get(store, request["id"])["state"] == "open"
+
+
+def test_a_request_decided_while_its_job_was_being_made_makes_no_job(store, monkeypatch):
+    loop, _ = build(store, [], FakeGate())
+    call(loop, native_tools.SCHEDULE, JOB, store.create_session())
+    [request] = change_requests.listing(store)
+    made = agent_jobs.jobs.insert
+
+    def declined_meanwhile(db, *args, **kwargs):
+        # Another writer can only get in before this one's transaction starts.
+        db.execute("UPDATE change_requests SET state='declined' WHERE id=?", (request["id"],))
+        return made(db, *args, **kwargs)
+
+    monkeypatch.setattr(agent_jobs.jobs, "insert", declined_meanwhile)
+    with pytest.raises(change_requests.ChangeRequestError):
+        change_requests.approve(store, request["id"])
+    assert counts(store) == (0, 0, 0)
+
+
+def test_the_job_limit_is_checked_again_under_the_write_lock(store, monkeypatch):
+    loop, _ = build(store, [], FakeGate())
+    for _ in range(agent_jobs.CONKER_PER_DAY):
+        kept_job(store, loop)
+    call(loop, native_tools.SCHEDULE, JOB, store.create_session())
+    [request] = change_requests.listing(store)
+    # A parallel approval took the last place after this one's first look.
+    monkeypatch.setattr(agent_jobs, "room", lambda *args, **kwargs: None)
+    with pytest.raises(change_requests.ChangeRequestError) as full:
+        change_requests.approve(store, request["id"], by="conker")
+    assert full.value.code == "job_limit"
+    assert counts(store)[0] == agent_jobs.CONKER_PER_DAY
+    assert change_requests.get(store, request["id"])["state"] == "open"
