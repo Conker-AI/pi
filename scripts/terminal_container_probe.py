@@ -133,8 +133,10 @@ else:
     while time.monotonic() < deadline:
         try:
             call(connection, "readiness")
-        except (OSError, RuntimeError):
+        except OSError:
             break
+        except RuntimeError:
+            pass
         time.sleep(0.05)
     else:
         raise AssertionError("supervisor termination did not close the gateway channel")
