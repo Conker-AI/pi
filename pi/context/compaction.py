@@ -120,9 +120,10 @@ def compact(store, sid, body):
 
             db.execute("UPDATE sessions SET summary=? WHERE id=?", (body.summary, sid))
 
-            for message_id in body.covers:
+            prior = covered(db, sid)
+            for message_id in body.covers | prior:
                 db.execute(
-                    "INSERT INTO summary_coverage VALUES(?,?,?)",
+                    "INSERT OR IGNORE INTO summary_coverage VALUES(?,?,?)",
                     (sid, revision, message_id),
                 )
 
