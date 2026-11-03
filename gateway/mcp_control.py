@@ -1,10 +1,32 @@
 """Bounded browser operations for ToolGate's remote MCP tools."""
 
+import ipaddress
 import json
 import re
+import socket
 from urllib.parse import urlsplit
 
 from .store import AuthError
+
+
+def _public_https_host(host: str) -> bool:
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        return all(
+            not (
+                address.is_private
+                or address.is_loopback
+                or address.is_link_local
+                or address.is_reserved
+                or address.is_multicast
+                or address.is_unspecified
+            )
+            for address in (
+                ipaddress.ip_address(info[4][0]) for info in infos
+            )
+        )
+    except (socket.gaierror, UnicodeError, ValueError):
+        return False
 
 TOOL_ID = r"mcp\.[a-z0-9][a-z0-9.-]{1,74}"
 
@@ -43,6 +65,7 @@ def validate_body(operation: str, body: dict) -> None:
                     and parsed.port in {None, 443}
                     and not parsed.query
                     and not parsed.fragment
+                    and _public_https_host(parsed.hostname)
                     and not any(ord(character) < 33 for character in url)
                     and "\\" not in url
                 )
