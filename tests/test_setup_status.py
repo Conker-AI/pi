@@ -457,6 +457,10 @@ def test_unreadable_setup_store_degrades_receipt_steps_instead_of_crashing(tmp_p
         assert step.state == "degraded"
         monkeypatch.undo()
         monkeypatch.setattr(setup_rehearsal, "receipt_matches_current", unreadable)
-        monkeypatch.setattr(status_receipts.setup_receipts, "current", lambda *a, **k: SimpleNamespace(state="valid"))
+        monkeypatch.setattr(
+            status_receipts.setup_receipts,
+            "current",
+            lambda *a, **k: SimpleNamespace(state="valid"),
+        )
         step = status_receipts._receipt_step(store, "rehearsal", now=now)
         assert step.state == "degraded"

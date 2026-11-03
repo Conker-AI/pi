@@ -505,12 +505,12 @@ def test_second_compaction_keeps_earlier_coverage(tmp_path):
             session,
             controls.Update(
                 expected_revision=0,
-                policy=controls.Policy(sessionInstructions="Test", messagePolicies={}, budget=budget),
+                policy=controls.Policy(
+                    sessionInstructions="Test", messagePolicies={}, budget=budget
+                ),
             ),
         )
-        for revision, (summary, message) in enumerate(
-            [("One", first), ("Two", second)], start=0
-        ):
+        for revision, (summary, message) in enumerate([("One", first), ("Two", second)], start=0):
             compaction.compact(
                 store,
                 session,
