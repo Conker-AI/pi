@@ -146,7 +146,6 @@ def record(
                         and upcoming > ended + JITTER_SECONDS
                     )
                     or (ended is None and window.usedPercent < alert["threshold"])
-                    or (ended is None and upcoming is not None)
                 )
                 if over:
                     db.execute("UPDATE plan_alerts SET reset_at=? WHERE id=?", (now, alert["id"]))
@@ -170,8 +169,9 @@ def record(
                 changes.append({"change": "raised", "alertId": identity})
             elif alert is not None:
                 db.execute(
-                    "UPDATE plan_alerts SET used_percent=MAX(used_percent, ?) WHERE id=?",
-                    (window.usedPercent, alert["id"]),
+                    "UPDATE plan_alerts SET used_percent=MAX(used_percent, ?),"
+                    " resets_at=COALESCE(resets_at, ?) WHERE id=?",
+                    (window.usedPercent, window.resetsAt, alert["id"]),
                 )
         db.commit()
     return changes

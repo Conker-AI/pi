@@ -71,6 +71,14 @@ def test_the_window_resetting_closes_the_alert_and_a_new_period_can_raise_again(
     ] == ["raised"]
 
 
+def test_a_reset_time_learned_later_still_closes_the_alert(store):
+    plan_alerts.record(store, plan(85, None), 80, now=NOW)
+    assert plan_alerts.record(store, plan(86), 80, now=NOW + 60) == []
+    friday = datetime(2026, 10, 23, 9, 30, tzinfo=UTC).timestamp()
+    changes = plan_alerts.record(store, plan(90, NEXT_FRIDAY), 80, now=friday)
+    assert [change["change"] for change in changes] == ["reset", "raised"]
+
+
 def test_a_reset_time_that_jitters_is_the_same_period(store):
     plan_alerts.record(store, plan(85, "2026-10-23T09:00:00Z"), 80, now=NOW)
     assert plan_alerts.record(store, plan(86, "2026-10-23T09:00:30Z"), 80, now=NOW + 60) == []
