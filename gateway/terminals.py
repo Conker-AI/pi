@@ -90,7 +90,7 @@ class Terminals:
                 try:
                     entry["validate"]()
                 except Exception:
-                    with contextlib.suppress(TerminalError):
+                    with contextlib.suppress(Exception):
                         entry["terminal"].close()
 
     def _watch(self):
