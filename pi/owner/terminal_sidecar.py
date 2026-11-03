@@ -168,7 +168,11 @@ class TerminalSessions:
     def close(self) -> None:
         with self.lock:
             for terminal in self.entries.values():
-                terminal.close()
+                try:
+                    terminal.close()
+                except Exception:
+                    # Keep closing the rest; the health file then reports not ready.
+                    self.cleanup_failed = True
 
 
 class HealthReporter:
@@ -196,7 +200,8 @@ class HealthReporter:
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
-            self._write()
+            with contextlib.suppress(OSError):
+                self._write()
             self.stop_event.wait(HEALTH_INTERVAL_SECONDS)
 
     def start(self) -> None:
