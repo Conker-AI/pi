@@ -212,8 +212,10 @@ def _claim(db, row, now, request_id=None):
     }
 
 
-def claim_due(store, now=None, limit=20):
+def claim_due(store, now=None, limit=20, adapter=None):
     now = time.time() if now is None else now
+    if adapter is not None:
+        reconcile_stuck(store, adapter, now=now)
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Use a limit of 1-100 jobs.")
     claimed = []
@@ -504,6 +506,20 @@ def reconcile(store, identity, adapter):
             (status, encoded, identity),
         )
         return db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()[0]
+
+
+def reconcile_stuck(store, adapter, now=None, limit=100):
+    """Retry held dispatches on each tick so a crashed worker cannot block a job forever."""
+    with store._connect() as db:
+        stuck = [
+            row["id"]
+            for row in db.execute(
+                "SELECT id FROM scheduled_runs WHERE status IN ('dispatching','outcome_unknown')"
+                " ORDER BY started_at LIMIT ?",
+                (limit,),
+            )
+        ]
+    return [reconcile(store, identity, adapter) for identity in stuck]
 
 
 def provision_budget(store, identity, adapter):
