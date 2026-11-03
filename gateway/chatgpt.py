@@ -105,7 +105,11 @@ def request(socket, method, body=None, *, transport=None):
             ):
                 raise ValueError()
             return status.model_dump(mode="json")
-    except (httpx.HTTPError, OSError, ValueError):
+    except (httpx.HTTPError, OSError):
         raise ProviderControlError(
             "ChatGPT control is unavailable. No operation was retried."
+        ) from None
+    except ValueError:
+        raise ProviderControlError(
+            "ChatGPT returned an invalid response. The operation may have taken effect; refresh status."
         ) from None
