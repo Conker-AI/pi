@@ -9,6 +9,7 @@ FIELDS = ("input_tokens", "output_tokens", "cached_tokens", "cost_usd")
 METRICS = (*FIELDS, "summed_call_ms")
 MAX_ATTEMPTS = 100
 MAX_SAFE_NUMBER = 9_007_199_254_740_991
+STALE_PENDING_SECONDS = 3600
 MAX_TOKEN_COUNT = 2**31 - 1
 ROLES = {
     "answer",
@@ -49,6 +50,11 @@ def migrate(db):
     for column, definition in EXTRA_COLUMNS.items():
         if column not in have:
             db.execute(f"ALTER TABLE research_model_calls ADD COLUMN {column} {definition}")
+    db.execute(
+        "UPDATE research_model_calls SET status='failed',ended_at=started_at,elapsed_ms=0,"
+        "failure_kind='abandoned' WHERE status='pending' AND started_at<?",
+        (time.time() - STALE_PENDING_SECONDS,),
+    )
 
 
 def _summary(db, turn_id, lane, covered):
