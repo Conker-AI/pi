@@ -438,7 +438,7 @@ def test_a_job_conker_makes_is_never_left_without_its_link_to_the_chat(store, mo
     def broken(*args, **kwargs):
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(keep, "link", broken)
+    monkeypatch.setattr(keep, "record", broken)
     with pytest.raises(RuntimeError):
         change_requests.approve(store, request["id"], by="conker")
     # Forgetting the chat turns off what Conker made in it, so no job may exist unlinked.
@@ -476,3 +476,36 @@ def test_the_job_limit_is_checked_again_under_the_write_lock(store, monkeypatch)
     assert full.value.code == "job_limit"
     assert counts(store)[0] == agent_jobs.CONKER_PER_DAY
     assert change_requests.get(store, request["id"])["state"] == "open"
+
+
+def test_a_kept_memory_whose_link_fails_stays_open_and_links_when_approved_again(
+    store, monkeypatch
+):
+    session = store.create_session()
+    request = change_requests.file(
+        store,
+        "memory",
+        "Remember",
+        "A fact",
+        {"text": "The exam is on Thursday."},
+        session_id=session,
+    )
+    sent = []
+
+    def memory(identity, text, origin="owner"):
+        # MemoryGate answers a repeated request id with the receipt it gave the first time.
+        sent.append(identity)
+        return {"memoryId": "m1", "status": "remembered"}
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(keep, "record", broken)
+    with pytest.raises(RuntimeError):
+        change_requests.approve(store, request["id"], memory=memory, by="conker")
+    assert change_requests.get(store, request["id"])["state"] == "open"
+    monkeypatch.undo()
+    change_requests.approve(store, request["id"], memory=memory, by="conker")
+    assert sent[0] == sent[1]
+    [row] = keep.listing(store, session)
+    assert (row["kind"], row["target_id"]) == ("memory", "m1")
