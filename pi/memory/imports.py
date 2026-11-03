@@ -176,11 +176,10 @@ def save(store, source: str, raw: bytes, expected: str, *, memory_configured: bo
     now = time.time()
     with store._connect() as db:
         memory = _memory(db, memory_configured)
+        db.execute("BEGIN IMMEDIATE")
         for chat in export.chats:
-            db.execute("BEGIN IMMEDIATE")
             chat_id, fresh = _known(db, source, chat)
             if not fresh:
-                db.execute("ROLLBACK")
                 counts["unchanged"] += 1
                 continue
             if chat_id is None:
@@ -232,7 +231,6 @@ def save(store, source: str, raw: bytes, expected: str, *, memory_configured: bo
                         (message_id,),
                     )
                     counts["offered"] += 1
-            db.commit()
         result = {
             "schemaVersion": 1,
             "batchId": "impb_" + uuid.uuid4().hex,
@@ -249,6 +247,7 @@ def save(store, source: str, raw: bytes, expected: str, *, memory_configured: bo
             "INSERT INTO import_batches VALUES (?,?,?,?,?,?)",
             (result["batchId"], source, expected, len(raw), now, json.dumps(result)),
         )
+        db.commit()
     return result
 
 
