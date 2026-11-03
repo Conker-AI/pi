@@ -33,7 +33,7 @@ def owner_editor_allowed(method: str, path: str, *, execution: bool = False) -> 
         # Publishing with "Let Conker use this tool" names the chat's key as well.
         # Running any published tool by hand uses the chat's key too.
         return (
-            (method == "POST" and _DRAFT_EXECUTION.fullmatch(path) is not None)
+            (method in {"GET", "POST"} and _DRAFT_EXECUTION.fullmatch(path) is not None)
             or (method == "POST" and _DRAFT_PUBLISH.fullmatch(path) is not None)
             or (method == "POST" and _TOOL_RUNS.fullmatch(path) is not None)
         )

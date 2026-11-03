@@ -73,17 +73,7 @@ def router(app, session, admit_write):
                 "automaticReplay": False,
             }
         if operation == "resize" and set(body) == {"rows", "columns"}:
-            rows, columns = body["rows"], body["columns"]
-            if (
-                not isinstance(rows, int)
-                or isinstance(rows, bool)
-                or not isinstance(columns, int)
-                or isinstance(columns, bool)
-                or not 1 <= rows <= 500
-                or not 1 <= columns <= 500
-            ):
-                raise AuthError("Terminal rows and columns must be integers from 1 to 500.", 422)
-            manager.use(owner["id"], identity, "resize", rows, columns)
+            manager.use(owner["id"], identity, "resize", body["rows"], body["columns"])
             return {"resized": True}
         if operation == "close" and not body:
             manager.use(owner["id"], identity, "close")

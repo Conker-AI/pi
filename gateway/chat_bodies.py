@@ -77,7 +77,6 @@ def check(method: str, target: str, query: bytes, body: dict | None) -> None:
                     "This request does not match the operation; nothing was sent.", 422
                 ) from None
             return
-    raise AuthError("This operation does not match the chat contract.", 404) from None
 
 
 def _query(query: bytes, allowed: set[str]) -> None:
