@@ -80,7 +80,10 @@ def _source(db, session_id, message_id, resolve):
     ).fetchone()
     if session is None or message is None:
         return "source-unavailable", None, None
-    text = json.loads(message["content"])
+    try:
+        text = json.loads(message["content"])
+    except (TypeError, ValueError):
+        return "source-changed", None, None
     if (
         message["role"] != "assistant"
         or message["status"] != "complete"
