@@ -66,6 +66,7 @@ def sse_events(response: httpx.Response) -> Iterator[dict]:
             continue
         data = line[5:].strip()
         if data == "[DONE]":
+            yield {"done": True}
             return
         if data:
             event = json.loads(data)
@@ -355,9 +356,13 @@ def collect_chat_stream(events) -> dict:
     text, annotations = [], []
     body: dict = {}
     finish = None
+    done = False
     for event in events:
         if event.get("error"):
             raise ValueError()
+        if event.get("done"):
+            done = True
+            continue
         for key in ("model", "usage"):
             if event.get(key):
                 body[key] = event[key]
@@ -373,6 +378,8 @@ def collect_chat_stream(events) -> dict:
                 live_stream.raise_if_stopped()
             annotations.extend(piece.get("annotations") or [])
             finish = choice.get("finish_reason") or finish
+    if not done:
+        raise ValueError("stream ended before [DONE]")
     message = {"role": "assistant", "content": "".join(text)}
     if annotations:
         message["annotations"] = annotations
