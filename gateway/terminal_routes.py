@@ -72,8 +72,18 @@ def router(app, session, admit_write):
                 "acceptedBytes": manager.use(owner["id"], identity, "write", data),
                 "automaticReplay": False,
             }
-        if operation == "resize" and set(body) == {"rows", "columns"}:
-            manager.use(owner["id"], identity, "resize", body["rows"], body["columns"])
+        rows, columns = body.get("rows"), body.get("columns")
+        if (
+            operation == "resize"
+            and set(body) == {"rows", "columns"}
+            and isinstance(rows, int)
+            and not isinstance(rows, bool)
+            and isinstance(columns, int)
+            and not isinstance(columns, bool)
+            and rows > 0
+            and columns > 0
+        ):
+            manager.use(owner["id"], identity, "resize", rows, columns)
             return {"resized": True}
         if operation == "close" and not body:
             manager.use(owner["id"], identity, "close")
