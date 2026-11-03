@@ -168,7 +168,8 @@ class TerminalSessions:
     def close(self) -> None:
         with self.lock:
             for terminal in self.entries.values():
-                terminal.close()
+                with contextlib.suppress(Exception):
+                    terminal.close()
 
 
 class HealthReporter:
