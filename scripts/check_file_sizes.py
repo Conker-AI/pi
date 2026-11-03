@@ -30,8 +30,16 @@ def allowlist() -> dict[str, int]:
     for line in ALLOWLIST.read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
         if line:
-            path, count = line.rsplit(maxsplit=1)
-            entries[path] = int(count)
+            parts = line.rsplit(maxsplit=1)
+            if len(parts) != 2:
+                print(f"{ALLOWLIST}: malformed entry: {line!r}")
+                sys.exit(1)
+            path, count = parts
+            try:
+                entries[path] = int(count)
+            except ValueError:
+                print(f"{ALLOWLIST}: malformed entry: {line!r}")
+                sys.exit(1)
     return entries
 
 
