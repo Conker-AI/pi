@@ -150,6 +150,7 @@ def _prepare(store, sid, root, body):
             if body.model_id not in routes:
                 raise JudgeError("unknown_model", "Unknown judge model.", 422)
             role, judges = "answer", {body.model_id}
+        judge_routes = {routes[model_id] for model_id in judges if model_id in routes}
         family = versions._view(db, sid, root)
         policy = context_controls.load(store, sid)["policy"]
         rules = policy["messagePolicies"] if policy else {}

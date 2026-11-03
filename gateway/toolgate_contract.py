@@ -43,4 +43,6 @@ def owner_editor_allowed(method: str, path: str, *, execution: bool = False) -> 
             or _DRAFT.fullmatch(path) is not None
             or _DRAFT_OWNER_READ.fullmatch(path) is not None
         )
-    return method == "POST" and _DRAFT.fullmatch(path) is not None
+    return method == "POST" and (
+        _DRAFT.fullmatch(path) is not None or _DRAFT_PUBLISH.fullmatch(path) is not None
+    )

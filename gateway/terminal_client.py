@@ -141,7 +141,11 @@ class RemoteTerminal:
     def closed(self) -> bool:
         if self._closed:
             return True
-        result = self.sidecar.call("status", id=self.identity)
+        try:
+            result = self.sidecar.call("status", id=self.identity)
+        except TerminalError:
+            self._closed = True
+            return True
         if set(result) != {"closed"} or type(result["closed"]) is not bool:
             raise TerminalError("Terminal sidecar status is invalid.")
         self._closed = result["closed"]
