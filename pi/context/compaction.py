@@ -112,6 +112,8 @@ def compact(store, sid, body):
                     (sid, current["summary"], current["source_session_id"], time.time()),
                 )
 
+            # Read the coverage before the new revision exists: it is cumulative.
+            prior = covered(db, sid)
             revision = current["revision"] + 1
             db.execute(
                 "INSERT INTO context_summary_versions VALUES(?,?,?,?,?,?)",
@@ -120,8 +122,7 @@ def compact(store, sid, body):
 
             db.execute("UPDATE sessions SET summary=? WHERE id=?", (body.summary, sid))
 
-            prior = covered(db, sid)
-            for message_id in body.covers | prior:
+            for message_id in set(body.covers) | prior:
                 db.execute(
                     "INSERT OR IGNORE INTO summary_coverage VALUES(?,?,?)",
                     (sid, revision, message_id),
