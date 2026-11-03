@@ -325,7 +325,18 @@ def _kept(store, request, by, decided) -> dict:
     if by == "conker" and request["sessionId"]:
         from pi.agents import keep
 
-        keep.record(store, request, decided["result"] or {})
+        last = None
+        for _ in range(3):
+            try:
+                keep.record(store, request, decided["result"] or {})
+                return decided
+            except Exception as error:
+                last = error
+        raise ChangeRequestError(
+            "keep_failed",
+            "The request was made but could not be linked to its chat; link it again.",
+            500,
+        ) from last
     return decided
 
 
