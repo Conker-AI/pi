@@ -95,7 +95,9 @@ class Terminals:
 
     def _watch(self):
         while not self.stop.wait(self.interval):
-            self.sweep()
+            # One failed sweep (a sidecar answering nonsense) must not end every later one.
+            with contextlib.suppress(Exception):
+                self.sweep()
 
     def close(self):
         self.stop.set()
