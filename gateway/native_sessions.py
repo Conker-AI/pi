@@ -192,6 +192,14 @@ def request(transport, action, identity=None, body=None):
                 ):
                     raise NativeSessionsError(code)
                 raise ValueError()
+            if (
+                action == "output"
+                and isinstance(value, dict)
+                and isinstance(value.get("text"), str)
+                and len(value["text"].encode("utf-8")) > 65536
+            ):
+                value["text"] = value["text"].encode("utf-8")[:65536].decode("utf-8", "ignore")
+                value["truncated"] = True
             model = {"list": Catalogue, "status": Status, "output": Output, "stop": Receipt}[action]
             result = model.model_validate(value)
             if action != "list":
