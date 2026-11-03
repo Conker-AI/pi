@@ -82,7 +82,7 @@ def _source(db, session_id, message_id, resolve):
         return "source-unavailable", None, None
     try:
         text = json.loads(message["content"])
-    except Exception:
+    except (TypeError, ValueError):
         return "source-changed", None, None
     if (
         message["role"] != "assistant"
