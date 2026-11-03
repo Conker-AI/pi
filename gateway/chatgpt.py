@@ -57,7 +57,7 @@ def validate_operation(body):
         if model is None:
             raise ValueError()
         return model.model_validate(body).model_dump(mode="json")
-    except (ValidationError, ValueError, TypeError):
+    except (ValidationError, ValueError, TypeError, AttributeError):
         raise ProviderControlError("Invalid subscription operation.") from None
 
 
