@@ -199,6 +199,8 @@ class DecisionProvider:
                 if len(response.content) > 16384:
                     raise ValueError()
                 data = response.json()
+            if not isinstance(data, dict):
+                raise ValueError()
             probabilities = data.get("probabilities")
             if (
                 data["choice"] not in choices
