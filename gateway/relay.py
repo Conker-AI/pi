@@ -11,6 +11,7 @@ but 200) passes back as Pi's own JSON. No other upstream header crosses to the b
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -26,6 +27,7 @@ from starlette.background import BackgroundTask
 from .store import AuthError
 
 CONNECT_SECONDS = 10
+UPLOAD_READ_SECONDS = 120  # the longest the browser may stall mid-body before being cut off
 MAX_JSON_BYTES = 1024 * 1024  # an answer about a file (an import preview), never the file
 MAX_ERROR_BYTES = 65536
 # Pi's names: office_exports.names() plus a version and an extension; the readable one is
@@ -80,7 +82,12 @@ class Upload:
 
     async def chunks(self):
         size, held, hasher = 0, b"", hashlib.sha256()
-        async for chunk in self.request.stream():
+        stream = self.request.stream()
+        while True:
+            try:
+                chunk = await asyncio.wait_for(stream.__anext__(), UPLOAD_READ_SECONDS)
+            except StopAsyncIteration:
+                break
             if not chunk:
                 continue
             size += len(chunk)

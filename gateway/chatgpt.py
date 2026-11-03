@@ -1,5 +1,6 @@
 """Owner-only subscription sign-in over a fixed private host socket."""
 
+import time
 from typing import Literal
 
 import httpx
@@ -94,9 +95,10 @@ def request(socket, method, body=None, *, transport=None):
             if response.headers.get("content-type", "").split(";", 1)[0] != "application/json":
                 raise ValueError()
             content = bytearray()
+            deadline = time.monotonic() + 70
             for chunk in response.iter_bytes():
                 content.extend(chunk)
-                if len(content) > 65536:
+                if len(content) > 65536 or time.monotonic() > deadline:
                     raise ValueError()
             status = Status.model_validate_json(content)
             if status.connected != bool(status.connectionId) or (
