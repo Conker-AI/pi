@@ -6,6 +6,38 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.18.1
+
+- **An approved AI job is saved in one go.** Approving an `ai_job` request writes the job, its
+  chat, the chat link, the decision and the Keep link in one transaction. A failure at any step
+  leaves the request open and nothing made (before, a job could exist with no chat, or with no
+  Keep link, so forgetting its chat did not turn it off), and the job limit is re-checked under
+  the write lock. A kept memory's Keep link is saved with its decision the same way.
+- **A webhook's payload is saved with its run.** The job worker could start the turn before the
+  payload was written; it is now written in the run's own transaction and kept until the run
+  ends, so a repeated dispatch replays the same turn instead of answering `request_conflict`.
+- **Replaying a call turn that is still running answers 409 `request_in_progress`** instead of
+  its half-finished state.
+- **Streams end honestly.** A streamed OpenAI-style answer cut off before `[DONE]` or a
+  `finish_reason` is refused instead of accepted as complete; a slow-drip ChatGPT stream has a
+  total 70 s deadline; a browser upload through the gateway times out after 120 s without data.
+- **Replies that are not JSON objects are refused as unavailable** (Claude plan, decisions,
+  ChatGPT control), and `NaN` or `Infinity` in a relayed service answer is refused. After a
+  failed POST to the ChatGPT or host provider control, the answer says the operation may have
+  taken effect; only a failed GET says nothing was retried.
+- **Terminals.** Closed terminals are evicted, so the 1000-terminal cap cannot fill up; the sweep
+  closes outside the lock and carries on past a failed close; resize takes positive integers
+  only; SIGTERM closes the sidecar's open connection, so shutdown does not hang.
+- **Smaller fixes.** Setup status reports a step degraded when the setup store cannot be read
+  instead of failing; an open plan alert gets its reset time, so it closes at the reset;
+  compaction coverage is cumulative; an artifact whose source message holds malformed JSON reads
+  as `source-changed`; research model calls still `pending` an hour after a crash are marked
+  failed at start; linking a made item to its chat is retried and otherwise answers
+  `keep_failed`; `gateway health` uses `--port`.
+- **Tests.** The audit drill's baseline runs every file a case selects (29/29 mutants caught);
+  new tests cover every project-context refusal, the attachment schema triggers, the retired
+  workflow tables under forgetting, the search excerpt cutter and the direct-provider docs.
+
 ## 0.18.0
 
 - **The owner's browser reaches the v1 chat features.** Output settings, chat title and auto name,
