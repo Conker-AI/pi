@@ -258,7 +258,9 @@ def claim_due(store, now=None, limit=20):
     return claimed
 
 
-def run_now(store, identity, request_id, now=None):
+def run_now(store, identity, request_id, now=None, with_run=None):
+    """`with_run(db, run)` writes what belongs to a new run in the run's own transaction, so the
+    worker never sees the run without it."""
     if not isinstance(request_id, str) or not 16 <= len(request_id) <= 128:
         raise ValueError("Use a stable 16-128 character request ID.")
     now = time.time() if now is None else now
@@ -275,6 +277,8 @@ def run_now(store, identity, request_id, now=None):
         run = _claim(db, row, now, request_id)
         if run is None:
             raise JobError("Resolve the current run before starting another.")
+        if with_run is not None:
+            with_run(db, run)
         db.commit()
         return {**run, "replayed": False}
 

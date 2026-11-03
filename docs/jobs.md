@@ -196,9 +196,11 @@ header (never the address or query, which the server logs) and at most 16 KB: JS
 as `{"text": ...}`. The gateway forwards it with its runtime credential; Pi gives every bad secret
 or unknown job the same 403, allows one call every 30 seconds per job (429), never starts a paused
 job or one that is still running (`started: false` with the reason), and admits one run per call.
-What the caller sent (at most 8000 characters) waits for that run and reaches the agent wrapped as
-information from outside Conker, never as instructions. The waiting copy is deleted as the run
-takes it (or after a day, or when the job's chat is forgotten); the text itself stays in the run's
+What the caller sent (at most 8000 characters) is saved in the same transaction as the run, so the
+run never starts without it, and reaches the agent wrapped as information from outside Conker,
+never as instructions. The waiting copy is kept while the run can still be dispatched again (a
+repeated dispatch sends the same text and replays the turn) and swept by the next call once the run
+has ended (or after a day, or when the job's chat is forgotten); the text itself stays in the run's
 message in the job's chat until that chat is forgotten. Once a payload arrives, the whole chat
 (and any fork of it) counts as holding outside content (docs/access.md) and none of its messages is
 sent to memory, where MemoryGate would read the caller's words as the owner's. Tools still ask
