@@ -103,7 +103,21 @@ def _current_revision(config: Config, client: httpx.Client, step: str) -> int:
 
 
 def _record(config: Config, client: httpx.Client, step: str, payload: dict) -> dict:
-    revision = _current_revision(config, client, step)
+    current = _request_json(config, client, "GET", f"/setup/receipts/{step}", missing=True)
+    existing = None
+    if current is not None:
+        try:
+            existing = Receipt.model_validate(current, strict=False)
+        except ValidationError:
+            raise SetupControlError("Pi returned an unsupported current setup receipt.") from None
+        if existing.step != step:
+            raise SetupControlError("Pi returned a mismatched current setup receipt.")
+        if (
+            existing.receiptId == payload.get("receiptId")
+            and existing.evidenceDigest == payload.get("evidenceDigest")
+        ):
+            return existing.model_dump(mode="json")
+    revision = existing.revision if existing is not None else 0
     try:
         value = ReceiptInput.model_validate({**payload, "expectedRevision": revision})
     except ValidationError:
