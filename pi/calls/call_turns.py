@@ -112,6 +112,10 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
                 raise CallError(
                     "request_conflict", "Call request identity is already bound to different input."
                 )
+            if prior["state"] in ("reserved", "transcribing", "model", "synthesizing"):
+                raise CallError(
+                    "request_in_progress", "Wait for the current request to settle before replaying it."
+                )
             return {"call": _view(db, row), "replayed": True, "audio": None, "transcription": None}
         _live(db, row)
         settings = json.loads(row["settings"])
