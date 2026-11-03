@@ -286,33 +286,13 @@ def resolve(store, session_id, request_id, providers):
             code, "Context selection failed or returned invalid IDs; no answer was dispatched."
         ) from exc
     evidence["latencyMs"] = round((time.monotonic() - started) * 1000)
-    changed = 0
-    for attempt in range(5):
-        try:
-            with store._connect() as db:
-                changed = db.execute(
-                    "UPDATE submission_context SET "
-                    "state='complete',selected=?,evidence=? WHERE request_id=? AND "
-                    "state='running'",
-                    (json.dumps(selected), json.dumps(evidence), request_id),
-                ).rowcount
-            break
-        except Exception:
-            if attempt == 4:
-                try:
-                    with store._connect() as db:
-                        db.execute(
-                            "UPDATE submission_context SET state='failed',evidence=? "
-                            "WHERE request_id=? AND state='running'",
-                            (json.dumps({"error": "selection_failed", "latencyMs": evidence["latencyMs"]}), request_id),
-                        )
-                except Exception:
-                    pass
-                raise context_controls.ContextError(
-                    "selection_interrupted",
-                    "Context selection was interrupted; its late result was not applied.",
-                )
-            time.sleep(0.1 * (attempt + 1))
+    with store._connect() as db:
+        changed = db.execute(
+            "UPDATE submission_context SET "
+            "state='complete',selected=?,evidence=? WHERE request_id=? AND "
+            "state='running'",
+            (json.dumps(selected), json.dumps(evidence), request_id),
+        ).rowcount
     if not changed:
         raise context_controls.ContextError(
             "selection_interrupted",

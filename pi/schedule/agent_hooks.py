@@ -114,42 +114,32 @@ def receive(store, job_id, token, body, now=None) -> dict:
     definition = _agent_job(store, job_id)
     if not definition.enabled:
         return {"started": False, "reason": "paused"}
-    # The gap is claimed and the caller's payload stored in one transaction before the run
-    # starts: checked first and written after, two calls at once both passed it, and a run that
-    # ended fast let both start.
-    payload = _payload(body)
-    request_id = HOOK_REQUEST + uuid.uuid4().hex
+    # The gap is claimed in one statement before the run starts: checked first and written
+    # after, two calls at once both passed it, and a run that ended fast let both start.
     with store._connect() as db:
-        db.execute("BEGIN IMMEDIATE")
         claimed = db.execute(
             "UPDATE agent_job_hooks SET last_at=? WHERE job_id=? AND token_hash=? "
             "AND (last_at IS NULL OR last_at<=?)",
             (now, job_id, row["token_hash"], now - MIN_GAP_SECONDS),
         ).rowcount
-        if not claimed:
-            db.rollback()
-            raise HookError("hook_too_soon", "Wait 30 seconds between webhook calls.", 429)
-        db.execute(
-            "INSERT INTO agent_job_events VALUES (?,?,?,?)",
-            (request_id, job_id, payload, now),
-        )
-        db.commit()
+    if not claimed:
+        raise HookError("hook_too_soon", "Wait 30 seconds between webhook calls.", 429)
+    request_id = HOOK_REQUEST + uuid.uuid4().hex
     try:
         run = jobs.run_now(store, job_id, request_id, now=now)
     except jobs.JobError:
         # A busy job started nothing, so the call does not use up the gap.
         with store._connect() as db:
-            db.execute("DELETE FROM agent_job_events WHERE run_id=?", (request_id,))
             db.execute(
                 "UPDATE agent_job_hooks SET last_at=? WHERE job_id=? AND last_at=?",
                 (row["last_at"], job_id, now),
             )
         return {"started": False, "reason": "busy"}
-    if run["id"] != request_id:
-        with store._connect() as db:
-            db.execute(
-                "UPDATE agent_job_events SET run_id=? WHERE run_id=?", (run["id"], request_id)
-            )
+    with store._connect() as db:
+        db.execute(
+            "INSERT INTO agent_job_events VALUES (?,?,?,?)",
+            (run["id"], job_id, _payload(body), now),
+        )
     return {"started": True, "runId": run["id"]}
 
 

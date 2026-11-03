@@ -51,8 +51,8 @@ def migrate(db):
         if column not in have:
             db.execute(f"ALTER TABLE research_model_calls ADD COLUMN {column} {definition}")
     db.execute(
-        "UPDATE research_model_calls SET status='failed',ended_at=started_at,elapsed_ms=0,"
-        "failure_kind='abandoned' WHERE status='pending' AND started_at<?",
+        "UPDATE research_model_calls SET status='failed',failure_kind='interrupted' "
+        "WHERE status='pending' AND started_at<?",
         (time.time() - STALE_PENDING_SECONDS,),
     )
 

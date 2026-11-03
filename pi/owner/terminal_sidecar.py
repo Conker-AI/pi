@@ -168,8 +168,11 @@ class TerminalSessions:
     def close(self) -> None:
         with self.lock:
             for terminal in self.entries.values():
-                with contextlib.suppress(Exception):
+                try:
                     terminal.close()
+                except Exception:
+                    # Keep closing the rest; the health file then reports not ready.
+                    self.cleanup_failed = True
 
 
 class HealthReporter:
