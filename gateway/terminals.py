@@ -83,14 +83,17 @@ class Terminals:
                 identity for identity, entry in self.entries.items() if entry["terminal"].closed
             ]:
                 del self.entries[identity]
-            for entry in self.entries.values():
-                if entry["terminal"].closed:
-                    continue
-                try:
-                    entry["validate"]()
-                except Exception:
-                    with contextlib.suppress(Exception):
-                        entry["terminal"].close()
+            stale = [
+                entry
+                for entry in self.entries.values()
+                if not entry["terminal"].closed
+            ]
+        for entry in stale:
+            try:
+                entry["validate"]()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    entry["terminal"].close()
 
     def _watch(self):
         while not self.stop.wait(self.interval):
