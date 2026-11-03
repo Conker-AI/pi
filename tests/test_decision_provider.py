@@ -67,6 +67,14 @@ def test_real_dispatch_uses_typed_service_and_retains_manual_privacy():
     assert result["modelId"] == "a" and len(calls) == 1
 
 
+@pytest.mark.parametrize("body", [None, [], "choice"])
+def test_a_non_object_reply_is_unavailable_not_a_crash(body):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=body))
+    _, decision = setup(transport)
+    with pytest.raises(ProviderUnavailable):
+        decision.choose("state", "pick", {"a": "A", "b": "B"})
+
+
 def test_service_failure_uses_only_explicit_helper_fallback():
     value, decision = setup(httpx.MockTransport(lambda request: httpx.Response(503)))
     result = model_roles.dispatch(
