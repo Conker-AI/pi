@@ -489,3 +489,37 @@ def test_http_routes_require_admin(tmp_path):
             },
         )
         assert response.status_code == 401
+
+
+def test_second_compaction_keeps_earlier_coverage(tmp_path):
+    """Coverage is cumulative: a later fold must not unfold messages an earlier one covered."""
+    with closing(Store(tmp_path / "pi.db")) as store:
+        session = store.create_session(summary="Original summary")
+        first = store.append_message(session, "user", "Hello")
+        second = store.append_message(session, "assistant", "Hi there!")
+        budget = controls.Budget(
+            contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
+        )
+        controls.save(
+            store,
+            session,
+            controls.Update(
+                expected_revision=0,
+                policy=controls.Policy(
+                    sessionInstructions="Test", messagePolicies={}, budget=budget
+                ),
+            ),
+        )
+        for revision, (summary, message) in enumerate([("One", first), ("Two", second)], start=0):
+            compaction.compact(
+                store,
+                session,
+                compaction.Compact(
+                    expected_policy_revision=revision + 1,
+                    expected_summary_revision=revision,
+                    summary=summary,
+                    covers=[message["id"]],
+                ),
+            )
+        view_result = compaction.view(store, session)
+        assert set(view_result["covered"]) == {first["id"], second["id"]}

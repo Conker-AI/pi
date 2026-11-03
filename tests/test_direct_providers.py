@@ -337,3 +337,15 @@ def test_registered_direct_adapter_runs_frozen_manual_role(tmp_path, stream_capt
         with pytest.raises(TurnFailed, match="unapproved substitute"):
             loop.run_turn(sid, "Second question")
         assert len(requests) == len(stream_capture["clients"]) == 1
+
+
+def test_openai_style_stream_without_done_is_not_a_complete_answer():
+    from pi.models.direct import collect_chat_stream
+
+    cut_off = [{"choices": [{"delta": {"content": "Half an ans"}}]}]
+    with pytest.raises(ValueError):
+        collect_chat_stream(iter(cut_off))
+    body = collect_chat_stream(iter([*cut_off, {"done": True}]))
+    assert body["choices"][0]["message"]["content"] == "Half an ans"
+    finished = [{"choices": [{"delta": {"content": "Whole"}, "finish_reason": "stop"}]}]
+    assert collect_chat_stream(iter(finished))["choices"][0]["message"]["content"] == "Whole"

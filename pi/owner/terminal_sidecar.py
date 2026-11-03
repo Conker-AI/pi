@@ -306,11 +306,15 @@ def serve(
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     stop = threading.Event()
     reporter = HealthReporter(health_path, sessions) if health_path is not None else None
+    connection = None
 
     def request_stop(signum, frame):
+        nonlocal connection
         del signum, frame
         stop.set()
         listener.close()
+        if connection is not None:
+            connection.close()
 
     if install_signal_handlers:
         signal.signal(signal.SIGTERM, request_stop)
@@ -321,7 +325,6 @@ def serve(
         listener.listen(4)
         if reporter is not None:
             reporter.start()
-        connection = None
         while not stop.is_set():
             try:
                 candidate, _address = listener.accept()

@@ -169,8 +169,9 @@ def record(
                 changes.append({"change": "raised", "alertId": identity})
             elif alert is not None:
                 db.execute(
-                    "UPDATE plan_alerts SET used_percent=MAX(used_percent, ?) WHERE id=?",
-                    (window.usedPercent, alert["id"]),
+                    "UPDATE plan_alerts SET used_percent=MAX(used_percent, ?),"
+                    " resets_at=COALESCE(resets_at, ?) WHERE id=?",
+                    (window.usedPercent, window.resetsAt, alert["id"]),
                 )
         db.commit()
     return changes

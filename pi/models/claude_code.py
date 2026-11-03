@@ -32,6 +32,8 @@ class ClaudeCodeProvider(ChatGPTProvider):
                 if len(result.content) > 2_000_000:
                     raise ValueError()
                 value = result.json()
+                if not isinstance(value, dict):
+                    raise ValueError()
                 if not isinstance(value.get("text"), str) or value.get("model") != model:
                     raise ValueError()
                 return Completion(

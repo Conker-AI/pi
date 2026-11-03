@@ -437,3 +437,30 @@ def test_model_activation_is_an_exact_owner_write_route(tmp_path, monkeypatch):
     assert not owner_allowed("GET", "/setup/models/activate")
     assert not owner_allowed("POST", "/setup/models/activate/anything")
     assert not runtime_allowed("POST", "/setup/models/activate")
+
+
+def test_unreadable_setup_store_degrades_receipt_steps_instead_of_crashing(tmp_path, monkeypatch):
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from pi.setup import protection as setup_protection
+    from pi.setup import rehearsal as setup_rehearsal
+    from pi.setup import status_receipts
+
+    def unreadable(*args, **kwargs):
+        raise RuntimeError("database is locked")
+
+    now = datetime.now(UTC)
+    with closing(Store(tmp_path / "pi.db")) as store:
+        monkeypatch.setattr(setup_protection, "current", unreadable)
+        step = status_receipts._receipt_step(store, "protection", now=now)
+        assert step.state == "degraded"
+        monkeypatch.undo()
+        monkeypatch.setattr(setup_rehearsal, "receipt_matches_current", unreadable)
+        monkeypatch.setattr(
+            status_receipts.setup_receipts,
+            "current",
+            lambda *a, **k: SimpleNamespace(state="valid"),
+        )
+        step = status_receipts._receipt_step(store, "rehearsal", now=now)
+        assert step.state == "degraded"

@@ -12,7 +12,7 @@ from test_background_thinking import setup
 from pi.conversation.store import Store
 from pi.models.chatgpt import ChatGPTProvider
 from pi.models.claude_code import ClaudeCodeProvider
-from pi.models.providers import Completion, Message, OllamaProvider
+from pi.models.providers import Completion, Message, OllamaProvider, ProviderUnavailable
 from pi.turns import inference_control
 from pi.turns import thinking as background_thinking
 
@@ -82,6 +82,15 @@ def test_ollama_cancel_interrupts_blocked_socket_and_releases_local_capacity():
         server.shutdown()
         server.server_close()
         join(serving)
+
+
+@pytest.mark.parametrize("body", [None, [], "text"])
+def test_claude_code_non_object_reply_is_unavailable_not_a_crash(body):
+    provider = ClaudeCodeProvider(
+        "", transport=httpx.MockTransport(lambda request: httpx.Response(200, json=body))
+    )
+    with pytest.raises(ProviderUnavailable):
+        provider.complete_bounded([Message("user", "Hi")], model="test", timeout=5)
 
 
 @pytest.mark.parametrize("adapter", [ChatGPTProvider, ClaudeCodeProvider])
