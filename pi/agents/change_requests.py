@@ -334,7 +334,7 @@ def _kept(store, request, by, decided) -> dict:
                 last = error
         raise ChangeRequestError(
             "keep_failed",
-            "The request was made but could not be linked to its chat; link it again.",
+            "The request was made, but its link to the chat could not be saved.",
             500,
         ) from last
     return decided

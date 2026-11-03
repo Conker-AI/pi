@@ -1,5 +1,6 @@
 """Owner-only subscription sign-in over a fixed private host socket."""
 
+import time
 from typing import Literal
 
 import httpx
