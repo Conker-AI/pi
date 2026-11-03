@@ -158,7 +158,7 @@ def main() -> int:
             call(connection, "readiness")
             connection.settimeout(None)
             break
-        except (FileNotFoundError, ConnectionRefusedError, socket.timeout, OSError):
+        except OSError:  # covers missing socket, refusal and timeouts
             connection.close()
             connection = None
             time.sleep(0.05)
