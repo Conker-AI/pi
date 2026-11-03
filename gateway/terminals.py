@@ -63,7 +63,8 @@ class Terminals:
                 raise TerminalError("Terminal authorization expired.") from None
             if operation not in ("read", "write", "resize", "close"):
                 raise TerminalError("Invalid terminal operation.")
-            return getattr(entry["terminal"], operation)(*args)
+            terminal = entry["terminal"]
+        return getattr(terminal, operation)(*args)
 
     def current(self, owner):
         with self.lock:
