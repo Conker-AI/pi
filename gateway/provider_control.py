@@ -147,6 +147,10 @@ def request(
                 raise ProviderControlError("Host provider status is incomplete.")
             return result.model_dump(mode="json")
     except (httpx.HTTPError, OSError, ValidationError):
+        if method == "GET":
+            raise ProviderControlError(
+                "Host provider control is unavailable; no operation was retried."
+            ) from None
         raise ProviderControlError(
-            "Host provider control is unavailable; no operation was retried."
+            "Host provider operation was not confirmed; refresh its status before retrying."
         ) from None

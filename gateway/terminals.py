@@ -78,18 +78,24 @@ class Terminals:
 
     def sweep(self):
         with self.lock:
+            for identity in [
+                identity for identity, entry in self.entries.items() if entry["terminal"].closed
+            ]:
+                del self.entries[identity]
             for entry in self.entries.values():
                 if entry["terminal"].closed:
                     continue
                 try:
                     entry["validate"]()
                 except Exception:
-                    with contextlib.suppress(TerminalError):
+                    with contextlib.suppress(Exception):
                         entry["terminal"].close()
 
     def _watch(self):
         while not self.stop.wait(self.interval):
-            self.sweep()
+            # One failed sweep (a sidecar answering nonsense) must not end every later one.
+            with contextlib.suppress(Exception):
+                self.sweep()
 
     def close(self):
         self.stop.set()

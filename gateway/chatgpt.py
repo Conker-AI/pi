@@ -57,7 +57,7 @@ def validate_operation(body):
         if model is None:
             raise ValueError()
         return model.model_validate(body).model_dump(mode="json")
-    except (ValidationError, ValueError, TypeError):
+    except (ValidationError, ValueError, TypeError, AttributeError):
         raise ProviderControlError("Invalid subscription operation.") from None
 
 
@@ -105,7 +105,11 @@ def request(socket, method, body=None, *, transport=None):
             ):
                 raise ValueError()
             return status.model_dump(mode="json")
-    except (httpx.HTTPError, OSError, ValueError):
+    except (httpx.HTTPError, OSError):
         raise ProviderControlError(
             "ChatGPT control is unavailable. No operation was retried."
+        ) from None
+    except ValueError:
+        raise ProviderControlError(
+            "ChatGPT returned an invalid response. The operation may have taken effect; refresh status."
         ) from None

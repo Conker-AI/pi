@@ -125,8 +125,12 @@ async def read_bounded(response: httpx.Response, limit: int) -> bytes:
 async def json_answer(response: httpx.Response, limit: int) -> JSONResponse:
     if media_type(response) != "application/json":
         raise unreadable()
+
+    def refuse_constant(token):
+        raise ValueError(token)
+
     try:
-        value = json.loads(await read_bounded(response, limit))
+        value = json.loads(await read_bounded(response, limit), parse_constant=refuse_constant)
     except (ValueError, UnicodeError, RecursionError):
         raise unreadable() from None
     if not isinstance(value, dict):

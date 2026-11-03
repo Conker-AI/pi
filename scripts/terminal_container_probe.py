@@ -133,8 +133,10 @@ else:
     while time.monotonic() < deadline:
         try:
             call(connection, "readiness")
-        except (OSError, RuntimeError):
+        except OSError:
             break
+        except RuntimeError:
+            pass
         time.sleep(0.05)
     else:
         raise AssertionError("supervisor termination did not close the gateway channel")
@@ -147,10 +149,21 @@ def main() -> int:
     arguments = parser.parse_args()
     path = arguments.socket
     deadline = time.monotonic() + 10
-    while not path.exists() and time.monotonic() < deadline:
-        time.sleep(0.05)
-    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    connection.connect(str(path))
+    connection = None
+    while time.monotonic() < deadline:
+        try:
+            connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            connection.settimeout(1)
+            connection.connect(str(path))
+            call(connection, "readiness")
+            connection.settimeout(None)
+            break
+        except OSError:  # covers missing socket, refusal and timeouts
+            connection.close()
+            connection = None
+            time.sleep(0.05)
+    if connection is None:
+        raise AssertionError(f"gateway socket at {path} never became live")
     with connection:
         assert call(connection, "readiness") == {
             "status": "ready",
