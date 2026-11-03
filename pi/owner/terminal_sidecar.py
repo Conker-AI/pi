@@ -197,7 +197,8 @@ class HealthReporter:
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
-            self._write()
+            with contextlib.suppress(OSError):
+                self._write()
             self.stop_event.wait(HEALTH_INTERVAL_SECONDS)
 
     def start(self) -> None:
