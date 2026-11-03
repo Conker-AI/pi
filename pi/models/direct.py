@@ -378,7 +378,8 @@ def collect_chat_stream(events) -> dict:
                 live_stream.raise_if_stopped()
             annotations.extend(piece.get("annotations") or [])
             finish = choice.get("finish_reason") or finish
-    if not done:
+    # A cut-off stream has neither; some compatible vendors end without [DONE].
+    if not done and finish is None:
         raise ValueError("stream ended before [DONE]")
     message = {"role": "assistant", "content": "".join(text)}
     if annotations:

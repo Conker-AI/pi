@@ -347,3 +347,5 @@ def test_openai_style_stream_without_done_is_not_a_complete_answer():
         collect_chat_stream(iter(cut_off))
     body = collect_chat_stream(iter([*cut_off, {"done": True}]))
     assert body["choices"][0]["message"]["content"] == "Half an ans"
+    finished = [{"choices": [{"delta": {"content": "Whole"}, "finish_reason": "stop"}]}]
+    assert collect_chat_stream(iter(finished))["choices"][0]["message"]["content"] == "Whole"
