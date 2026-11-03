@@ -291,7 +291,7 @@ def main() -> None:
             verify=context, trust_env=False, follow_redirects=False, timeout=10
         ) as client:
             response = client.get(
-                "https://localhost:8050/health", headers={"Host": urlsplit(config.origin).netloc}
+                f"https://localhost:{args.port}/health", headers={"Host": urlsplit(config.origin).netloc}
             )
             response.raise_for_status()
             print(response.text)
