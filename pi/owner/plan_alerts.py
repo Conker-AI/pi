@@ -146,6 +146,7 @@ def record(
                         and upcoming > ended + JITTER_SECONDS
                     )
                     or (ended is None and window.usedPercent < alert["threshold"])
+                    or (ended is None and upcoming is not None)
                 )
                 if over:
                     db.execute("UPDATE plan_alerts SET reset_at=? WHERE id=?", (now, alert["id"]))
