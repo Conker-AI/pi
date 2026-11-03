@@ -195,50 +195,29 @@ def listing(store, state="open", limit=50) -> list[dict]:
     return [_view(row) for row in rows]
 
 
-def _close(store, identity, state, result, now):
+def _close(store, identity, state, result, now, *, then=None):
+    """Decide an open request; `then(db)` is saved with the decision or neither is."""
     with store._connect() as db:
-        changed = db.execute(
-            "UPDATE change_requests SET state=?, result=?, decided_at=? WHERE id=? AND state='open'",
-            (
-                state,
-                json.dumps(result, ensure_ascii=False) if result is not None else None,
-                now,
-                identity,
-            ),
-        ).rowcount
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            changed = db.execute(
+                "UPDATE change_requests SET state=?, result=?, decided_at=? "
+                "WHERE id=? AND state='open'",
+                (
+                    state,
+                    json.dumps(result, ensure_ascii=False) if result is not None else None,
+                    now,
+                    identity,
+                ),
+            ).rowcount
+            if changed and then is not None:
+                then(db)
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
     if not changed:
         raise ChangeRequestError("decided", "This request was already decided.", 409)
-    return get(store, identity)
-
-
-def _claim(store, identity, now):
-    """Take an open request before making what it asks for, so a second approval or a decline
-    arriving meanwhile (a double-click, two tabs) is refused instead of making it twice."""
-    with store._connect() as db:
-        changed = db.execute(
-            "UPDATE change_requests SET state='approved', decided_at=? WHERE id=? AND state='open'",
-            (now, identity),
-        ).rowcount
-    if not changed:
-        raise ChangeRequestError("decided", "This request was already decided.", 409)
-
-
-def _reopen(store, identity):
-    """Give back a claimed request when making it failed, so the owner can approve it again."""
-    with store._connect() as db:
-        db.execute(
-            "UPDATE change_requests SET state='open', decided_at=NULL "
-            "WHERE id=? AND state='approved' AND result IS NULL",
-            (identity,),
-        )
-
-
-def _made(store, identity, result):
-    with store._connect() as db:
-        db.execute(
-            "UPDATE change_requests SET result=? WHERE id=?",
-            (json.dumps(result, ensure_ascii=False), identity),
-        )
     return get(store, identity)
 
 
@@ -279,15 +258,26 @@ def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -
         full = agent_jobs.room(store, by, now)
         if full:
             raise ChangeRequestError("job_limit", full, 409)
-        _claim(store, identity, now)
-        try:
-            job = agent_jobs.create(
-                store, body, now=now, created_by=by, privacy=_privacy(store, request["sessionId"])
-            )
-        except Exception:
-            _reopen(store, identity)
-            raise
-        return _kept(store, request, by, _made(store, identity, {"jobId": job["id"]}))
+
+        def decided(db, job):
+            # Decided in the job's own transaction: a second approval meanwhile is refused, and
+            # a failure leaves the request open with no job made.
+            if not db.execute(
+                "UPDATE change_requests SET state='approved', result=?, decided_at=? "
+                "WHERE id=? AND state='open'",
+                (json.dumps({"jobId": job["id"]}), now, identity),
+            ).rowcount:
+                raise ChangeRequestError("decided", "This request was already decided.", 409)
+            # Checked again under the write lock: two approvals at once cannot both take the
+            # last place.
+            full = agent_jobs.room_in(db, by, now, besides=job["id"])
+            if full:
+                raise ChangeRequestError("job_limit", full, 409)
+            _keep(db, request, by, {"jobId": job["id"]}, now)
+
+        privacy = _privacy(store, request["sessionId"])
+        agent_jobs.create(store, body, now=now, created_by=by, privacy=privacy, then=decided)
+        return get(store, identity)
     if request["kind"] == "tool_draft":
         # A request filed before drafting moved to the background has no status: it is ready.
         if request["payload"].get("status", "ready") != "ready":
@@ -317,27 +307,24 @@ def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -
         raise ChangeRequestError(
             "memory_unavailable", "Memory didn't answer, so nothing was saved. Try again.", 503
         ) from None
-    return _kept(store, request, by, _close(store, identity, "approved", result, now))
+    # Saved with the decision: if the link fails the request stays open and approving it again
+    # reaches the same memory, since MemoryGate answers a repeated id with what it stored.
+    return _close(
+        store,
+        identity,
+        "approved",
+        result,
+        now,
+        then=lambda db: _keep(db, request, by, result or {}, now),
+    )
 
 
-def _kept(store, request, by, decided) -> dict:
+def _keep(db, request, by, result, now) -> None:
     """Link what Conker made on its own to its chat, outside this table, for forgetting."""
     if by == "conker" and request["sessionId"]:
         from pi.agents import keep
 
-        last = None
-        for _ in range(3):
-            try:
-                keep.record(store, request, decided["result"] or {})
-                return decided
-            except Exception as error:
-                last = error
-        raise ChangeRequestError(
-            "keep_failed",
-            "The request was made, but its link to the chat could not be saved.",
-            500,
-        ) from last
-    return decided
+        keep.record(db, request, result, now)
 
 
 def saved(store, identity, draft: DraftSaved, now=None) -> dict:

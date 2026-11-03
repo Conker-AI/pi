@@ -119,15 +119,20 @@ def get_job(store, identity):
 
 
 def create(store, definition, now=None):
+    with store._connect() as db:
+        return insert(db, definition, now)
+
+
+def insert(db, definition, now=None):
+    """A new job inside the caller's transaction."""
     definition = Definition.model_validate(definition.model_dump())
     now = time.time() if now is None else now
     identity = "job_" + uuid.uuid4().hex
-    with store._connect() as db:
-        db.execute(
-            "INSERT INTO scheduled_jobs VALUES (?,1,?,?,?)",
-            (identity, definition.model_dump_json(), now, next_due(definition, now, anchor=now)),
-        )
-        return _view(_row(db, identity))
+    db.execute(
+        "INSERT INTO scheduled_jobs VALUES (?,1,?,?,?)",
+        (identity, definition.model_dump_json(), now, next_due(definition, now, anchor=now)),
+    )
+    return _view(_row(db, identity))
 
 
 def _carried(previous: Definition, definition: Definition) -> Definition:

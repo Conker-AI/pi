@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -81,20 +83,31 @@ def test_a_second_decision_while_the_job_is_made_is_refused(store, monkeypatch):
     # arriving meanwhile must not leave a job behind a declined request.
     schedule(store)
     [request] = change_requests.listing(store)
-    create, refused = agent_jobs.create, []
+    insert, refused, others = jobs.insert, [], []
 
-    def racing(*args, **kwargs):
-        for decide in (change_requests.approve, change_requests.decline):
-            with pytest.raises(change_requests.ChangeRequestError) as busy:
-                decide(store, request["id"])
-            refused.append(busy.value.status)
-        return create(*args, **kwargs)
+    def decide(how):
+        try:
+            how(store, request["id"])
+        except change_requests.ChangeRequestError as busy:
+            refused.append(busy.status)
 
-    monkeypatch.setattr(agent_jobs, "create", racing)
+    def racing(db, *args, **kwargs):
+        # Both arrive while the first approval holds the write lock, wait for it, then lose.
+        if not others:
+            for how in (change_requests.approve, change_requests.decline):
+                others.append(threading.Thread(target=decide, args=(how,)))
+                others[-1].start()
+            time.sleep(0.3)
+        return insert(db, *args, **kwargs)
+
+    monkeypatch.setattr(jobs, "insert", racing)
     approved = change_requests.approve(store, request["id"])
+    for thread in others:
+        thread.join(30)
     [job] = jobs.list_jobs(store)
     assert refused == [409, 409]
     assert approved["state"] == "approved" and approved["result"] == {"jobId": job["id"]}
+    assert change_requests.get(store, request["id"])["state"] == "approved"
 
 
 def test_a_job_that_could_not_be_made_leaves_the_request_open(store, monkeypatch):

@@ -119,11 +119,13 @@ def quiet(store, instant: float) -> bool:
     return prefs.quiet_now(preferences, datetime.fromtimestamp(instant, UTC))
 
 
-def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy=None):
+def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy=None, then=None):
     """A new AI job and its own chat. The browser can create these, never raw tool jobs.
 
     `created_by` is "conker" only for a job Conker made without the owner's approval; `privacy`
-    carries a private chat's flags to the job's own chat."""
+    carries a private chat's flags to the job's own chat. The job, its chat and whatever
+    `then(db, job)` records (the request it came from) are saved together or not at all, so a
+    failure leaves no running job that nothing points to."""
     body = AgentJobCreate.model_validate(body.model_dump())
     definition = Definition(
         name=body.name,
@@ -137,17 +139,25 @@ def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy
         createdBy=created_by,
         privacy=JobPrivacy.model_validate(privacy) if privacy else None,
     )
-    job = jobs.create(store, definition, now=now)
-    session_id = _new_session(store, definition.model_dump())
     with store._connect() as db:
-        db.execute("INSERT INTO agent_job_sessions VALUES (?,?)", (job["id"], session_id))
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            job = jobs.insert(db, definition, now)
+            session_id = _new_session(store, db, definition.model_dump())
+            db.execute("INSERT INTO agent_job_sessions VALUES (?,?)", (job["id"], session_id))
+            if then is not None:
+                then(db, job)
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
     return jobs.get_job(store, job["id"])
 
 
-def _new_session(store, definition) -> str:
+def _new_session(store, db, definition) -> str:
     flags = {key: True for key, on in (definition.get("privacy") or {}).items() if on}
-    return store.create_session(
-        title=definition["name"], agent_id=definition["agentId"], privacy=flags or None
+    return store._create_session(
+        db, title=definition["name"], agent_id=definition["agentId"], privacy=flags or None
     )
 
 
@@ -163,17 +173,23 @@ def when(instant: float, zone: str) -> str:
 
 def room(store, created_by, now=None) -> str | None:
     """Why Conker's request cannot make one more AI job now, in plain words; None when it can."""
-    now = time.time() if now is None else now
     with store._connect() as db:
-        enabled = db.execute(
-            "SELECT COUNT(*) FROM scheduled_jobs WHERE json_extract(definition,'$.target.kind')="
-            "'agent' AND json_extract(definition,'$.enabled')=1"
-        ).fetchone()[0]
-        made = db.execute(
-            "SELECT COUNT(*) FROM scheduled_jobs WHERE created_at>? "
-            "AND json_extract(definition,'$.createdBy')='conker'",
-            (now - 86400,),
-        ).fetchone()[0]
+        return room_in(db, created_by, now)
+
+
+def room_in(db, created_by, now=None, *, besides=None) -> str | None:
+    """`room` inside the caller's transaction, not counting the job `besides` it just made."""
+    now = time.time() if now is None else now
+    enabled = db.execute(
+        "SELECT COUNT(*) FROM scheduled_jobs WHERE json_extract(definition,'$.target.kind')="
+        "'agent' AND json_extract(definition,'$.enabled')=1 AND id IS NOT ?",
+        (besides,),
+    ).fetchone()[0]
+    made = db.execute(
+        "SELECT COUNT(*) FROM scheduled_jobs WHERE created_at>? "
+        "AND json_extract(definition,'$.createdBy')='conker' AND id IS NOT ?",
+        (now - 86400, besides),
+    ).fetchone()[0]
     if enabled >= MAX_ENABLED:
         return (
             f"{MAX_ENABLED} AI jobs are already on, so no new one was made. The owner can turn "
@@ -295,13 +311,15 @@ def _open_session(store, job_id, definition) -> str:
     session = store.get_session(session_id) if session_id else None
     if session is not None and session["status"] == "open":
         return session_id
-    replacement = _new_session(store, definition)
     with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        replacement = _new_session(store, db, definition)
         db.execute(
             "INSERT INTO agent_job_sessions VALUES (?,?) "
             "ON CONFLICT(job_id) DO UPDATE SET session_id=excluded.session_id",
             (job_id, replacement),
         )
+        db.commit()
     return replacement
 
 

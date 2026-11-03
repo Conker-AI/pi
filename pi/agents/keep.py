@@ -33,8 +33,9 @@ def initialize(db):
     db.executescript(SCHEMA)
 
 
-def record(store, request, result, now=None) -> None:
-    """One Keep result: the AI job made, or the memory MemoryGate stored new for it."""
+def record(db, request, result, now=None) -> None:
+    """One Keep result, inside the caller's transaction: the AI job made, or the memory
+    MemoryGate stored new for it."""
     if request["kind"] == "ai_job":
         target = result.get("jobId")
     elif request["kind"] == "memory" and result.get("status") == "remembered":
@@ -43,18 +44,17 @@ def record(store, request, result, now=None) -> None:
         return
     if not isinstance(target, str) or not target or not request.get("sessionId"):
         return
-    with store._connect() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO keep_results(request_id,session_id,kind,target_id,created_at) "
-            "VALUES (?,?,?,?,?)",
-            (
-                request["id"],
-                request["sessionId"],
-                request["kind"],
-                target,
-                time.time() if now is None else now,
-            ),
-        )
+    db.execute(
+        "INSERT OR IGNORE INTO keep_results(request_id,session_id,kind,target_id,created_at) "
+        "VALUES (?,?,?,?,?)",
+        (
+            request["id"],
+            request["sessionId"],
+            request["kind"],
+            target,
+            time.time() if now is None else now,
+        ),
+    )
 
 
 def listing(store, session_id) -> list[dict]:
