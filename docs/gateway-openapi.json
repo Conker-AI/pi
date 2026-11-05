@@ -170,6 +170,38 @@
         }
       }
     },
+    "/auth/alerts": {
+      "get": {
+        "summary": "Alerts",
+        "operationId": "alerts_auth_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/alerts/seen": {
+      "post": {
+        "summary": "Alerts Seen",
+        "operationId": "alerts_seen_auth_alerts_seen_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/host/providers": {
       "get": {
         "summary": "Host Providers",

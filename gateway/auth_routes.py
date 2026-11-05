@@ -1,4 +1,4 @@
-"""Owner sign-in: session, login, verification, logout and session revocation."""
+"""Owner sign-in: session, login, verification, logout, session revocation and wrong-password alerts."""
 
 from __future__ import annotations
 
@@ -8,7 +8,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .operations import fingerprint, json_body
-from .store import AuthError
+from .store import DEVICE_SECONDS, AuthError
+
+
+def device_cookie(session_cookie: str) -> str:
+    """The known-browser cookie lives under /auth only, which a __Host- name forbids."""
+    return "__Secure-" + session_cookie.removeprefix("__Host-") + "-device"
 
 
 def router(app, session, cookie, admit_write):
@@ -41,13 +46,15 @@ def router(app, session, cookie, admit_write):
         # FastAPI runs sync routes in a threadpool; do the expensive check there too.
         from starlette.concurrency import run_in_threadpool
 
+        device = device_cookie(app.state.config.cookie_name)
         value = await run_in_threadpool(
             app.state.auth.login,
             request.cookies.get(app.state.config.cookie_name, ""),
             body["password"],
             request.client.host if request.client else "unknown",
+            request.cookies.get(device, ""),
         )
-        return cookie(
+        response = cookie(
             JSONResponse(
                 {
                     "authenticated": True,
@@ -59,6 +66,17 @@ def router(app, session, cookie, admit_write):
             ),
             value["token"],
         )
+        # This browser signed in, so later sign-ins from it get their own attempt budget.
+        response.set_cookie(
+            device,
+            value["device"],
+            max_age=DEVICE_SECONDS,
+            secure=True,
+            httponly=True,
+            samesite="strict",
+            path="/auth",
+        )
+        return response
 
     @routes.post("/auth/verify")
     async def verify(request: Request):
@@ -122,5 +140,18 @@ def router(app, session, cookie, admit_write):
         admit_write(request, body)
         app.state.auth.revoke()
         return {"revoked": True}
+
+    @routes.get("/auth/alerts")
+    def alerts(request: Request):
+        session(request)
+        return app.state.auth.alerts()
+
+    @routes.post("/auth/alerts/seen")
+    async def alerts_seen(request: Request):
+        session(request)
+        if request.scope["query_string"] or await json_body(request, max_bytes=1024):
+            raise AuthError("Marking alerts seen takes an empty JSON object.", 422)
+        app.state.auth.alerts_seen()
+        return {"seen": True}
 
     return routes
