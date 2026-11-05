@@ -72,12 +72,12 @@ def proof(client, headers, path, body):
         "/api/pi/tasks/t/update",
         "/api/pi/tasks/t/transition",
         "/api/pi/tasks/t/archive",
-        "/api/owner/requests/r/decision",
     ],
 )
-def test_every_runtime_write_and_owner_decision_requires_exact_single_use_proof(boundary, path):
+def test_every_runtime_write_requires_exact_single_use_proof(boundary, path):
+    # Owner decisions ask for the password by ToolGate's level: test_gateway_approval_levels.py.
     client, _, headers, seen, _ = boundary
-    body = {"status": "approved"} if "/owner/" in path else {"text": "private content"}
+    body = {"text": "private content"}
     response = client.post(path, json=body, headers=headers)
     assert response.status_code == 428
     assert response.json()["detail"]["code"] == "verification_required"

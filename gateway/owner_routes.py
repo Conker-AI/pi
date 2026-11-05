@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 
+import httpx
 from fastapi import APIRouter, Request
 
+from . import approval_levels
 from .answers import continue_after
 from .operations import json_body
 from .store import AuthError
@@ -15,7 +17,7 @@ ACCESS_TOOL_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
 CARD_TEMPLATES = ("do", "send", "publish", "ship", "run", "delete", "pay", "save")
 
 
-def router(app, session, forward, admit_write):
+def router(app, session, forward, admit_write, upstream):
     routes = APIRouter()
 
     @routes.get("/api/owner/mcp/tools")
@@ -468,6 +470,25 @@ def router(app, session, forward, admit_write):
             b"",
         )
 
+    def decision_level(identity: str) -> int:
+        # ToolGate fixed the level when the request was made; reading it fails closed to the password.
+        if not app.state.config.owner_key:
+            return approval_levels.SERIOUS
+        try:
+            response = upstream(
+                "GET",
+                app.state.config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}",
+                "X-ToolGate-Owner-Key",
+                app.state.config.owner_key,
+                None,
+                b"",
+                timeout=10,
+            )
+            view = response.json() if response.status_code == 200 else None
+        except (httpx.HTTPError, OSError, ValueError):
+            return approval_levels.SERIOUS
+        return approval_levels.from_view(identity, response.status_code, view)
+
     @routes.post("/api/owner/requests/{identity}/decision")
     async def owner_decision(identity: str, request: Request):
         session(request)
@@ -483,7 +504,12 @@ def router(app, session, forward, admit_write):
             raise AuthError("Send a decision status and optional note.", 422)
         from starlette.concurrency import run_in_threadpool
 
-        admit_write(request, body)
+        if request.scope["query_string"]:
+            raise AuthError("Write operations must not include query parameters.", 422)
+        if body["status"] == "approved":
+            level = await run_in_threadpool(decision_level, identity)
+            if approval_levels.needs_password(body["status"], level):
+                admit_write(request, body)
         decided = await run_in_threadpool(
             forward,
             "POST",
