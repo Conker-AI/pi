@@ -14,6 +14,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 HASH_SLOTS = threading.BoundedSemaphore(1)
+DEVICE_SECONDS = 400 * 86400  # Browsers keep a cookie at most 400 days.
+DEVICE_ROWS = 20
+FAILURE_SECONDS = 30 * 86400
+FAILURE_ROWS = 500
 
 
 class AuthError(Exception):
@@ -83,6 +87,11 @@ class AuthStore:
                 CREATE TABLE IF NOT EXISTS owner_window (
                     id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL,
                     minutes INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS known_devices (
+                    token_hash TEXT PRIMARY KEY, created REAL NOT NULL, used REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS password_failures (
+                    at REAL NOT NULL, origin TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0);
+                CREATE INDEX IF NOT EXISTS failures_at ON password_failures(at);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
             if "verified_at" not in columns:
@@ -91,6 +100,9 @@ class AuthStore:
             columns = {row[1] for row in db.execute("PRAGMA table_info(login_attempts)")}
             if "attempt_id" not in columns:
                 db.execute("ALTER TABLE login_attempts ADD COLUMN attempt_id TEXT")
+            if "budget" not in columns:
+                # NULL is the shared budget every unknown browser draws from.
+                db.execute("ALTER TABLE login_attempts ADD COLUMN budget TEXT")
         if os.name == "posix":
             self.path.chmod(0o600)
 
@@ -128,6 +140,7 @@ class AuthStore:
             db.execute("DELETE FROM sessions")
             db.execute("DELETE FROM verification_proofs")
             db.execute("DELETE FROM login_attempts")
+            db.execute("DELETE FROM known_devices")
 
     def _idle(self, db: sqlite3.Connection) -> int:
         """Seconds a sign-in stays unlocked: the owner's choice, never past the host's ceiling."""
@@ -175,6 +188,13 @@ class AuthStore:
             (now,),
         )
         db.execute("DELETE FROM login_attempts WHERE at<=?", (now - 900,))
+        db.execute("DELETE FROM known_devices WHERE used<=?", (now - DEVICE_SECONDS,))
+        db.execute("DELETE FROM password_failures WHERE at<=?", (now - FAILURE_SECONDS,))
+        db.execute(
+            "DELETE FROM password_failures WHERE rowid NOT IN "
+            "(SELECT rowid FROM password_failures ORDER BY at DESC LIMIT ?)",
+            (FAILURE_ROWS,),
+        )
 
     def _new(self, db: sqlite3.Connection, authenticated: bool, generation: int) -> dict:
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -244,22 +264,51 @@ class AuthStore:
         )
         return value
 
-    def _check_password(self, token: str, password: str, source: str, *, authenticated: bool):
+    def _budget(self, db: sqlite3.Connection, row: dict, device: str) -> str | None:
+        """Whose attempts a password check counts against; None is the shared budget.
+
+        A signed-in session confirming an action has its own budget: it already proved the
+        password once, so strangers filling the shared budget cannot stop him approving. A
+        browser that signed in before (a known-device cookie, kept here only hashed) has its
+        own too, so a flood of wrong passwords from elsewhere cannot lock him out of signing in.
+        """
+        if row["authenticated"]:
+            return "session:" + row["id"]
+        if device and len(device) <= 128:
+            hashed = digest(device)
+            if db.execute("SELECT 1 FROM known_devices WHERE token_hash=?", (hashed,)).fetchone():
+                return "device:" + hashed
+        return None
+
+    def _check_password(
+        self, token: str, password: str, source: str, *, authenticated: bool, device: str = ""
+    ):
         self.session(token, authenticated=authenticated)
         attempt_id = secrets.token_urlsafe(24)
         with self.transaction() as db:
             self._prune(db)
-            self._session(db, token, authenticated=authenticated)
-            attempts = db.execute("SELECT count(*) FROM login_attempts").fetchone()[0]
-            local = db.execute(
-                "SELECT count(*) FROM login_attempts WHERE source=? AND at>?",
-                (digest(source), self.clock() - 300),
-            ).fetchone()[0]
-            if attempts >= 30 or local >= 5:
+            row = self._session(db, token, authenticated=authenticated)
+            budget = self._budget(db, row, device)
+            since = self.clock() - 300
+            if budget is not None:
+                own = db.execute(
+                    "SELECT count(*) FROM login_attempts WHERE budget=? AND at>?", (budget, since)
+                ).fetchone()[0]
+                blocked = own >= 5
+            else:
+                attempts = db.execute(
+                    "SELECT count(*) FROM login_attempts WHERE budget IS NULL"
+                ).fetchone()[0]
+                local = db.execute(
+                    "SELECT count(*) FROM login_attempts WHERE budget IS NULL AND source=? AND at>?",
+                    (digest(source), since),
+                ).fetchone()[0]
+                blocked = attempts >= 30 or local >= 5
+            if blocked:
                 raise AuthError("Too many password attempts. Wait fifteen minutes and retry.", 429)
             db.execute(
-                "INSERT INTO login_attempts(at,source,attempt_id) VALUES(?,?,?)",
-                (self.clock(), digest(source), attempt_id),
+                "INSERT INTO login_attempts(at,source,attempt_id,budget) VALUES(?,?,?,?)",
+                (self.clock(), digest(source), attempt_id, budget),
             )
             owner = db.execute("SELECT * FROM owner WHERE id=1").fetchone()
         if not owner:
@@ -267,13 +316,21 @@ class AuthStore:
         if len(password) > 1024 or not hmac.compare_digest(
             password_hash(password, bytes.fromhex(owner["salt"])), owner["verifier"]
         ):
+            origin = "signed_in" if authenticated else "known_device" if budget else "new_device"
+            with self.transaction() as db:
+                db.execute(
+                    "INSERT INTO password_failures(at,origin) VALUES(?,?)", (self.clock(), origin)
+                )
             raise AuthError(
                 "Password not accepted. Retry or use conker auth reset-password on the host."
             )
         return owner["generation"], attempt_id
 
-    def login(self, token: str, password: str, source: str) -> dict:
-        generation, attempt_id = self._check_password(token, password, source, authenticated=False)
+    def login(self, token: str, password: str, source: str, device: str = "") -> dict:
+        """Sign in. The result's `device` is the known-device token the browser keeps."""
+        generation, attempt_id = self._check_password(
+            token, password, source, authenticated=False, device=device
+        )
         with self.transaction() as db:
             current = db.execute("SELECT generation FROM owner WHERE id=1").fetchone()
             self._session(db, token, authenticated=False)
@@ -282,7 +339,17 @@ class AuthStore:
                 raise AuthError("Credentials changed during login. Start sign-in again.")
             db.execute("DELETE FROM sessions WHERE token_hash=?", (digest(token),))
             db.execute("DELETE FROM login_attempts WHERE attempt_id=?", (attempt_id,))
-            return self._new(db, True, generation)
+            # A fresh token every sign-in; the one presented (if any) stops counting.
+            if device and len(device) <= 128:
+                db.execute("DELETE FROM known_devices WHERE token_hash=?", (digest(device),))
+            kept, now = secrets.token_urlsafe(32), self.clock()
+            db.execute("INSERT INTO known_devices VALUES(?,?,?)", (digest(kept), now, now))
+            db.execute(
+                "DELETE FROM known_devices WHERE token_hash NOT IN "
+                "(SELECT token_hash FROM known_devices ORDER BY used DESC LIMIT ?)",
+                (DEVICE_ROWS,),
+            )
+            return {**self._new(db, True, generation), "device": kept}
 
     def verify(self, token: str, password: str, source: str, fingerprint: str) -> dict:
         generation, attempt_id = self._check_password(token, password, source, authenticated=True)
@@ -336,7 +403,9 @@ class AuthStore:
     def revoke(self, session_id: str | None = None) -> None:
         with self.transaction() as db:
             if session_id is None:
+                # Signing out everywhere also forgets every browser that signed in before.
                 db.execute("DELETE FROM sessions")
+                db.execute("DELETE FROM known_devices")
             else:
                 db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
             db.execute(
@@ -353,3 +422,30 @@ class AuthStore:
                     "WHERE authenticated=1 ORDER BY created"
                 )
             ]
+
+    def alerts(self) -> dict:
+        """Wrong passwords of the last 30 days, newest first, and how many he has not seen.
+
+        `origin` says where: `new_device` (a browser that never signed in here),
+        `known_device` (one that did) or `signed_in` (confirming an action in a signed-in tab).
+        """
+        with self.transaction() as db:
+            self._prune(db)
+            rows = db.execute(
+                "SELECT at,origin,seen FROM password_failures ORDER BY at DESC LIMIT 50"
+            ).fetchall()
+            unseen = db.execute("SELECT count(*) FROM password_failures WHERE seen=0").fetchone()
+        return {
+            "unseen": unseen[0],
+            "results": [
+                {"at": row["at"], "origin": row["origin"], "seen": bool(row["seen"])}
+                for row in rows
+            ],
+        }
+
+    def alerts_seen(self) -> None:
+        """He saw them ("That was me"); a wrong password after this alerts again."""
+        with self.transaction() as db:
+            db.execute(
+                "UPDATE password_failures SET seen=1 WHERE seen=0 AND at<=?", (self.clock(),)
+            )

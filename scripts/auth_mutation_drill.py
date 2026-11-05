@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 API = "tests/test_gateway_api.py::"
 STORE = "tests/test_gateway_store.py::"
 VERIFY = "tests/test_gateway_verification.py::"
+LOCKOUT = "tests/test_gateway_lockout.py::"
 CHAT = "tests/test_gateway_chat_routes.py::"
 LEVEL = "tests/test_gateway_approval_levels.py::"
 CHAT_WRITE = CHAT + "test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof"
@@ -131,8 +132,8 @@ CASES = [
     (
         "unlimited-password-attempts",
         "gateway/store.py",
-        "if attempts >= 30 or local >= 5:",
-        "if False:",
+        "blocked = attempts >= 30 or local >= 5",
+        "blocked = False",
         STORE + "test_failed_logins_are_rate_limited_across_restarts",
     ),
     (
@@ -220,6 +221,56 @@ CASES = [
         OWNER_CHAT + "[POST-context-items-state]",
     ),
     (
+        "own-budget-unlimited",
+        "gateway/store.py",
+        "blocked = own >= 5",
+        "blocked = False",
+        LOCKOUT + "test_a_known_browser_and_a_signed_in_tab_each_get_five_tries",
+    ),
+    (
+        "unknown-device-trusted",
+        "gateway/store.py",
+        'if db.execute("SELECT 1 FROM known_devices WHERE token_hash=?", (hashed,)).fetchone():',
+        "if True:",
+        LOCKOUT + "test_a_browser_that_signed_in_before_still_signs_in_during_a_flood",
+    ),
+    (
+        "confirmations-share-the-flood",
+        "gateway/store.py",
+        'return "session:" + row["id"]',
+        "return None",
+        LOCKOUT + "test_a_signed_in_tab_still_confirms_while_strangers_fill_the_shared_budget",
+    ),
+    (
+        "wrong-password-not-reported",
+        "gateway/store.py",
+        '"INSERT INTO password_failures(at,origin) VALUES(?,?)", (self.clock(), origin)',
+        '"SELECT 1"',
+        LOCKOUT + "test_every_wrong_password_reaches_his_alerts_until_he_has_seen_it",
+    ),
+    (
+        "raw-device-token-at-rest",
+        "gateway/store.py",
+        'VALUES(?,?,?)", (digest(kept), now, now))',
+        'VALUES(?,?,?)", (kept, now, now))',
+        LOCKOUT + "test_each_sign_in_replaces_the_device_token_and_only_its_hash_is_kept",
+    ),
+    (
+        "sign-out-everywhere-keeps-browsers",
+        "gateway/store.py",
+        '                db.execute("DELETE FROM sessions")\n                db.execute("DELETE FROM known_devices")',
+        '                db.execute("DELETE FROM sessions")',
+        LOCKOUT
+        + "test_signing_out_everywhere_or_a_new_password_forgets_every_browser[sign out everywhere]",
+    ),
+    (
+        "script-readable-device-cookie",
+        "gateway/auth_routes.py",
+        'httponly=True,\n            samesite="strict",\n            path="/auth",',
+        'httponly=False,\n            samesite="strict",\n            path="/auth",',
+        LOCKOUT + "test_sign_in_gives_the_browser_a_lasting_device_cookie_for_auth_only",
+    ),
+    (
         "serious-yes-without-password",
         "gateway/owner_routes.py",
         'if approval_levels.needs_password(body["status"], level):',
@@ -269,6 +320,7 @@ def main() -> int:
             "test_gateway_cookie_namespace.py",
             "test_gateway_chat_routes.py",
             "test_owner_chat_routes.py",
+            "test_gateway_lockout.py",
             "test_gateway_approval_levels.py",
             "test_gateway_inbox_answers.py",
             "test_gateway_mcp.py",

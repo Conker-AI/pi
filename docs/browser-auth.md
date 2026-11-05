@@ -39,12 +39,14 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | Operation | Request / result |
 | --- | --- |
 | `GET /auth/session` | Creates an anonymous cookie if necessary; returns `authenticated`, `csrf_token`, `session_id`, absolute `expires_at`, `unlock_expires_at` (null when anonymous), `setup_required`. |
-| `POST /auth/login` | JSON `{"password":"..."}`; rotates the cookie and CSRF token on success. |
+| `POST /auth/login` | JSON `{"password":"..."}`; rotates the cookie and CSRF token on success, and sets a fresh known-browser cookie (`__Secure-conker-device`, path `/auth`, 400 days). |
 | `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}` (`PUT` only for `/api/owner/tool-settings`); returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
 | `POST /auth/logout` | Revokes the current session and clears its cookie. |
 | `GET /auth/sessions` | Lists session IDs and timestamps, never bearer tokens. |
 | `POST /auth/sessions/{id}/revoke` | Empty JSON object and exact one-use password proof; revokes one session. |
-| `POST /auth/revoke-all` | Empty JSON object and exact one-use password proof; revokes every session, including the caller's. |
+| `POST /auth/revoke-all` | Empty JSON object and exact one-use password proof; revokes every session, including the caller's, and forgets every known browser. |
+| `GET /auth/alerts` | Wrong passwords of the last 30 days (at most 500 kept): `unseen` count and the newest 50 as `{at, origin, seen}`, where `origin` is `new_device`, `known_device` or `signed_in`. Never the password tried or the address. |
+| `POST /auth/alerts/seen` | Empty JSON object, no query; marks every alert so far seen. Session and CSRF, no password. |
 | `/api/pi/{path}` | Only methods and paths in `pi/api/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
 | `GET /api/owner/requests` | Reads the approval list through the dedicated ToolGate owner channel. |
 | `GET /api/owner/requests/{id}` | Reads the canonical owner-request projection for review or lost-decision reconciliation. |
@@ -85,8 +87,18 @@ verification cannot revive an expired session. Sign in again. Existing sessions
 from before this migration have no verified timestamp and must sign in again.
 
 Anonymous login sessions expire after ten minutes. Failed and in-flight password
-attempts share a durable budget across login and verification: five per source
-address per five minutes and thirty globally per fifteen minutes. A successful
+attempts are counted in durable budgets, so strangers guessing cannot lock the owner out:
+
+- A signed-in session confirming an action has its own budget: five per five minutes.
+- A browser that signed in before has its own budget for signing in: five per five
+  minutes. It is recognised by the known-browser cookie, a random token the gateway
+  keeps only hashed, replaces at every sign-in, forgets after 400 days unused and keeps
+  for at most 20 browsers. Signing out everywhere or a new password forgets them all.
+- Everyone else shares one budget: five per source address per five minutes and thirty
+  in all per fifteen minutes.
+
+Every wrong password, from any of them, is listed in `GET /auth/alerts` for the
+dashboard's Inbox, so a guess never goes unnoticed. A successful
 check removes only its own reservation, so repeated legitimate confirmations do
 not exhaust this budget. Failed checks remain counted across process restarts.
 Forwarded IP headers are not trusted. A reverse proxy therefore shares the source
