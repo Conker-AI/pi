@@ -430,7 +430,7 @@ def create_app(
     # Before the JSON control relay, whose catch-all path would take these file routes.
     app.include_router(file_routes.router(app, session, admit_write, stream_transport))
     app.include_router(service_routes.router(app, session, forward, admit_write, stream_transport))
-    app.include_router(owner_routes.router(app, session, forward, admit_write))
+    app.include_router(owner_routes.router(app, session, forward, admit_write, upstream))
     # Outside sign-in: one AI job's webhook, proven only by that job's secret (see hook_routes).
     app.include_router(hook_routes.router(app, forward))
 

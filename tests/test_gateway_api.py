@@ -317,7 +317,14 @@ def test_upstream_failure_is_explicit_and_never_retried(tmp_path, failure):
             ),
         )
         assert response.status_code in {502, 503}
-        assert len(seen) == (0 if failure == "missing_owner" else 1)
+        # One read of the request's approval level, then the decision is sent once, never again.
+        if failure == "missing_owner":
+            assert not seen
+        else:
+            assert [(r.method, r.url.path) for r in seen] == [
+                ("GET", "/v2/owner/requests/r"),
+                ("POST", "/v2/owner/requests/r/decision"),
+            ]
 
 
 def test_pi_runtime_key_has_no_owner_authority_or_future_admin_access(monkeypatch, tmp_path):
