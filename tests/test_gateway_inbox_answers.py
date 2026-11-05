@@ -44,7 +44,11 @@ def test_a_refused_decision_continues_nothing(boundary):
     body = {"status": "approved"}
     response = client.post(DECISION, json=body, headers=proof(client, headers, DECISION, body))
     assert response.status_code == 409
-    assert [request.url.host for request in seen] == ["toolgate.test"]
+    # It read the request's level (unreadable here, so the password) and then sent the decision.
+    assert [(request.method, request.url.host) for request in seen] == [
+        ("GET", "toolgate.test"),
+        ("POST", "toolgate.test"),
+    ]
 
 
 def test_picking_a_tools_buttons_needs_the_password_and_the_list(boundary):

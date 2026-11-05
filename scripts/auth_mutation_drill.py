@@ -13,6 +13,7 @@ API = "tests/test_gateway_api.py::"
 STORE = "tests/test_gateway_store.py::"
 VERIFY = "tests/test_gateway_verification.py::"
 CHAT = "tests/test_gateway_chat_routes.py::"
+LEVEL = "tests/test_gateway_approval_levels.py::"
 CHAT_WRITE = CHAT + "test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof"
 CHAT_READ = CHAT + "test_owner_reads_through_the_control_key"
 OWNER_CHAT = (
@@ -218,6 +219,34 @@ CASES = [
         "if True or owner_download_allowed(",
         OWNER_CHAT + "[POST-context-items-state]",
     ),
+    (
+        "serious-yes-without-password",
+        "gateway/owner_routes.py",
+        'if approval_levels.needs_password(body["status"], level):',
+        "if False:",
+        LEVEL + "test_a_serious_or_unreadable_level_asks_for_the_password[view0]",
+    ),
+    (
+        "missing-level-trusted-as-normal",
+        "gateway/approval_levels.py",
+        "return value if type(value) is int and value in LEVELS else SERIOUS",
+        "return value if type(value) is int and value in LEVELS else NORMAL",
+        LEVEL + "test_a_serious_or_unreadable_level_asks_for_the_password[view1]",
+    ),
+    (
+        "another-requests-level-trusted",
+        "gateway/approval_levels.py",
+        ' or view.get("id") != identity:',
+        ":",
+        LEVEL + "test_a_serious_or_unreadable_level_asks_for_the_password[view8]",
+    ),
+    (
+        "toolgate-down-trusted-as-normal",
+        "gateway/owner_routes.py",
+        "except (httpx.HTTPError, OSError, ValueError):\n            return approval_levels.SERIOUS",
+        "except (httpx.HTTPError, OSError, ValueError):\n            return approval_levels.NORMAL",
+        LEVEL + "test_a_serious_or_unreadable_level_asks_for_the_password[view13]",
+    ),
 ]
 
 
@@ -240,6 +269,9 @@ def main() -> int:
             "test_gateway_cookie_namespace.py",
             "test_gateway_chat_routes.py",
             "test_owner_chat_routes.py",
+            "test_gateway_approval_levels.py",
+            "test_gateway_inbox_answers.py",
+            "test_gateway_mcp.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:
