@@ -6,6 +6,23 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.19.0
+
+- **The gateway asks for the password only on serious approvals.** It reads each request's
+  `approval_level` from ToolGate (0.13.0) before deciding. A yes needs the password proof only at
+  level 3 (delete, pay, host controls); levels 1 and 2 need the signed-in session, and the
+  dashboard adds a red confirm for level 2. A no or a dismissal never needs it. Fails closed: if
+  ToolGate is unreachable, an older ToolGate has no level, the answer is odd or no owner key is
+  set, the level counts as serious and a yes without proof answers 428 `verification_required`.
+- **Strangers guessing the password can no longer lock the owner out.** A signed-in session
+  confirming an action and a browser that signed in before (`__Secure-conker-device`, path
+  `/auth`, kept only hashed, replaced at each sign-in, at most 20) each have their own budget of 5
+  per 5 minutes; unknown browsers share the old one. Every wrong password is recorded for 30 days
+  (at most 500); `GET /auth/alerts` returns the unseen count and the newest 50 as
+  `{at, origin, seen}`, never the password tried or the address, and `POST /auth/alerts/seen`
+  marks them seen.
+- **The images take Debian's security fixes newer than their base** (apt, CVE-2026-109518).
+
 ## 0.18.1
 
 - **An approved AI job is saved in one go.** Approving an `ai_job` request writes the job, its

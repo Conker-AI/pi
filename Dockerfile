@@ -2,8 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# DejaVu draws Cyrillic and Greek letters in exported PDFs (about 3 MB).
+# DejaVu draws Cyrillic and Greek letters in exported PDFs (about 3 MB). The upgrade takes
+# Debian security fixes newer than the base image.
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
 

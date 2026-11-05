@@ -2,6 +2,11 @@ FROM python:3.12.14-slim-trixie@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f82
 
 WORKDIR /app
 
+# Debian security fixes newer than the pinned base image.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir -p /app/pi/owner /run/conker-terminal /workspace \
     && chown 65532:65532 /run/conker-terminal /workspace \
     && chmod 0555 /app/pi /app/pi/owner \
