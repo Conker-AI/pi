@@ -54,56 +54,47 @@ def runtime_allowed(method: str, path: str) -> bool:
     return any(re.fullmatch(pattern, path) for pattern in RUNTIME_ROUTES.get(method, ()))
 
 
-# Ordinary conversation writes need a signed-in browser session (cookie, CSRF, same
-# origin) but not a fresh password proof. Their real-world effects still pass
-# ToolGate approval. Every other browser write keeps operation-bound verification.
-SESSION_ONLY_WRITES = (
-    r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
-    r"/sessions/[A-Za-z0-9_-]+/thinking/[A-Za-z0-9_-]+/cancel",
-    r"/sessions",
-    r"/sessions/[A-Za-z0-9_-]+/turns",
-    r"/sessions/[A-Za-z0-9_-]+/fork",
-    r"/turn-submissions/[A-Za-z0-9_-]+/cancel",
-    # An Auto settings proposal reads the typed draft and returns typed choices; it saves and
-    # grants nothing, and the owner sees every value before sending.
-    r"/models/auto-settings",
-    # Deciding on a proposal records a preference; it grants and runs nothing.
-    r"/proposals/[A-Za-z0-9_-]+/decision",
-    # Declining Conker's request creates nothing; reporting the Tools draft a tool request was
-    # saved as only records its id (the save itself was verified by the editor route). Drafting a
-    # tool, again or from a description, only fills a card for review, and reporting it published
-    # only records it (publishing was verified by ToolGate's route): none of them makes anything.
-    r"/change-requests/creq_[a-f0-9]{32}/(?:decline|saved|retry|published)",
-    r"/tool-drafts",
-    # Dismissing an AI job's note hides one line; the chat keeps the reply.
-    r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
-    # The owner's settings document holds preferences only (look, wording, defaults): what Conker
-    # may do lives in ToolGate and in documents that keep asking for the password.
-    r"/owner/settings",
-    # Answering Conker's question sends his message to that chat, like typing it there; any action
-    # that follows passes his access layers. Dismissing sends nothing.
-    r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
-    # Browser calls use bounded transient audio or typed turns. Neither grants new
-    # authority, and any external effect still requires ToolGate approval.
-    r"/calls/browser",
-    r"/calls/browser/call_[a-f0-9]{32}/(?:update|interrupt|end|turns)",
-    r"/calls/browser/call_[a-f0-9]{32}/audio",
-    # Previewing a ChatGPT or Claude export reads the file and saves nothing; the import itself
-    # (named by the previewed file's digest) keeps asking for the password.
-    r"/imports/(?:chatgpt|claude)/preview",
+# A signed-in browser session (cookie, CSRF, same origin, an unlock window that ends after the
+# owner's idle time) is enough for every browser write except the ones below: the sign-in already
+# proved the password, and what a session can do is ordinary and can be undone. These keep asking
+# for a password proof bound to the exact operation (ADR-0010): forgetting (cannot be undone), money
+# (budgets and spending), secrets shown once, the owner's security preferences (sign-out time, daily
+# budgets), where backups go, taking a job of Conker's as the owner's own, and the gateway's own
+# approval hand-off. Real-world effects of everything else still pass ToolGate and the owner's
+# access layers; a delete or payment approval asks for the password there (approval level 3).
+PASSWORD_WRITES = (
+    # A webhook call through the browser gateway; Pi also checks the job's own secret.
+    r"/hooks/job_[a-f0-9]{32}",
+    r"/memory/forget",
+    # Sign-out time, quiet hours, proactivity and daily budgets.
+    r"/owner/preferences",
+    # A webhook secret is shown once.
+    r"/jobs/job_[0-9a-f]{32}/hook",
+    # From then on the job's runs count as the owner's.
+    r"/jobs/job_[0-9a-f]{32}/adopt",
+    r"/jobs/runs/scheduled_[0-9a-f]{32}/(?:budget|provision-budget)",
+    # Where backups are written and how many are kept.
+    r"/setup/protection",
+    # The gateway calls this itself after ToolGate recorded the owner's decision; never the browser.
+    r"/approvals/[A-Za-z0-9_-]{1,128}/decided",
 )
 
 
+def password_write(method: str, path: str) -> bool:
+    return method == "POST" and any(re.fullmatch(pattern, path) for pattern in PASSWORD_WRITES)
+
+
 def session_only_write(method: str, path: str) -> bool:
-    return method == "POST" and any(re.fullmatch(pattern, path) for pattern in SESSION_ONLY_WRITES)
+    """A browser write the signed-in session alone may make (the gateway's routes check theirs)."""
+    return method == "POST" and not password_write(method, path)
 
 
 # The chat features of the v1 dashboard: output settings, chat names, answer families (compare by
 # retry, judge, vote, select), fact checks, branching from a message, and context editing (policy,
 # summary, compaction, decisions and threads, a new chat from a reviewed summary). Ids are exact:
 # a chat is ses_ plus 16 hex, a message msg_ plus 16 hex, a decision or thread dec_/thr_ plus 16
-# hex, a request id 16-128 safe characters. Every write keeps operation-bound verification; the
-# gateway also checks each body against Pi's own model before asking for it (gateway/chat_bodies.py).
+# hex, a request id 16-128 safe characters. Writes need the signed-in session only; the gateway
+# checks each body against Pi's own model before relaying it (gateway/chat_bodies.py).
 # Turn snapshots and context selections stay with the recovery credential.
 _CHAT = r"ses_[0-9a-f]{16}"
 _MESSAGE = r"msg_[0-9a-f]{16}"
@@ -228,20 +219,20 @@ OWNER_ROUTES = {
         r"/artifacts/from-message",
         r"/artifacts/artifact_[0-9a-f]{32}/(?:versions|restore|archive)",
         r"/jobs/job_[0-9a-f]{32}/(?:state|run)",
-        # An AI job only, never a raw tool target; creating one asks for the password.
+        # An AI job only, never a raw tool target; what it may do follows his access layers.
         r"/jobs/agent",
-        # Approving makes Conker's request real, so it asks for the password; declining doesn't.
+        # Approving makes Conker's request real: an AI job, a tool draft or a memory, each undoable.
         r"/change-requests/creq_[a-f0-9]{32}/(?:approve|decline|saved|retry|published)",
         # A tool request without a chat: it is drafted for review and makes nothing.
         r"/tool-drafts",
-        # A webhook secret is shown once; making or stopping one asks for the password.
+        # A webhook secret is shown once, so making one asks for the password; stopping one doesn't.
         r"/jobs/job_[0-9a-f]{32}/hook",
         r"/jobs/job_[0-9a-f]{32}/hook/revoke",
         # Taking a job Conker made as his own: from then on its runs count as his.
         r"/jobs/job_[0-9a-f]{32}/adopt",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
         r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
-        # The gateway, after ToolGate recorded his decision: run it, or close it. Pi grants nothing.
+        # The gateway, after ToolGate recorded the owner's decision: run it, or close it. Pi grants nothing.
         r"/approvals/[A-Za-z0-9_-]{1,128}/decided",
         r"/jobs/runs/scheduled_[0-9a-f]{32}/(?:budget|provision-budget|cancel|resume|reconcile)",
         r"/projects",
@@ -275,10 +266,11 @@ OWNER_ROUTES = {
         r"/memory/corrections",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
         r"/owner/settings",
-        # Quiet hours, proactivity, daily budgets: saving asks for the password.
+        # Sign-out time, quiet hours, proactivity, daily budgets: saving asks for the password.
         r"/owner/preferences",
         # A ChatGPT or Claude export: a preview saves nothing; an import (named by the previewed
         # file's digest) saves read-only chats and offers his words to memory as outside content.
+        # Both need the signed-in session only.
         r"/imports/(?:chatgpt|claude)/(?:preview|[0-9a-f]{64})",
     ),
 }

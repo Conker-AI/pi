@@ -1,4 +1,4 @@
-"""Owner sign-in: session, login, verification, logout, session revocation and wrong-password alerts."""
+"""Owner sign-in: session, login, activity, verification, logout, revocation and wrong-password alerts."""
 
 from __future__ import annotations
 
@@ -104,6 +104,24 @@ def router(app, session, cookie, admit_write):
             binding,
         )
 
+    @routes.post("/auth/activity")
+    async def activity(request: Request):
+        """The page saw the owner's click or key: keep the sign-in unlocked for another window.
+
+        The page sends it at most about once a minute and only on the owner's own input, so
+        polling and an open but untouched tab never keep a session alive (L-03). An expired
+        sign-in stays expired.
+        """
+        session(request)
+        body = await json_body(request, max_bytes=64)
+        if body or request.scope["query_string"]:
+            raise AuthError("Activity takes an empty operation object.", 422)
+        from starlette.concurrency import run_in_threadpool
+
+        return await run_in_threadpool(
+            app.state.auth.activity, request.cookies.get(app.state.config.cookie_name, "")
+        )
+
     @routes.post("/auth/logout")
     def logout(request: Request):
         value = session(request)
@@ -127,7 +145,8 @@ def router(app, session, cookie, admit_write):
         body = await json_body(request, max_bytes=1024)
         if body:
             raise AuthError("Session revocation takes an empty operation object.", 422)
-        admit_write(request, body)
+        # Signing out only takes access away.
+        admit_write(request, body, password=False)
         app.state.auth.revoke(identity)
         return {"revoked": True}
 
@@ -137,7 +156,8 @@ def router(app, session, cookie, admit_write):
         body = await json_body(request, max_bytes=1024)
         if body:
             raise AuthError("Session revocation takes an empty operation object.", 422)
-        admit_write(request, body)
+        # Signing out only takes access away.
+        admit_write(request, body, password=False)
         app.state.auth.revoke()
         return {"revoked": True}
 

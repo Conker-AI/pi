@@ -13,7 +13,12 @@ from gateway.mutation import apply_resource
 from pi.actions.toolgate import ToolGateClient, ToolGateUnavailable
 from pi.agents import change_requests, tool_drafts
 from pi.api import server as api
-from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
+from pi.api.browser_contract import (
+    owner_allowed,
+    password_write,
+    runtime_allowed,
+    session_only_write,
+)
 from pi.conversation.store import Store
 from tests.test_gateway_mutation import config
 
@@ -55,10 +60,14 @@ def pi(tmp_path, monkeypatch):
 def test_the_three_routes_are_owner_routes_without_a_password():
     for path in ("/tool-drafts", REQUEST + "/retry", REQUEST + "/published"):
         assert owner_allowed("POST", path) and session_only_write("POST", path)
+        assert not password_write("POST", path)
         assert not runtime_allowed("POST", path)
+    # Unlisted paths stay closed to the owner channel: a session alone opens no route.
     for path in ("/tool-drafts/x", REQUEST + "/publish", "/change-requests/creq_x/retry"):
-        assert not owner_allowed("POST", path) and not session_only_write("POST", path)
-    assert not session_only_write("POST", REQUEST + "/approve")
+        assert not owner_allowed("POST", path) and not runtime_allowed("POST", path)
+    # Approving a request is undoable too, so it needs the session and no password proof.
+    assert session_only_write("POST", REQUEST + "/approve")
+    assert not password_write("POST", REQUEST + "/approve")
 
 
 def test_a_tool_draft_without_a_chat_needs_the_owner_and_starts_drafting(pi):

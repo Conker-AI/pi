@@ -340,30 +340,36 @@ def test_the_128_mb_limit_holds_whether_declared_or_streamed(relay, monkeypatch)
     assert big.status_code == 413
 
 
-def test_an_import_needs_the_password_for_exactly_the_previewed_file(relay):
+def test_an_import_needs_only_the_session_and_exactly_the_previewed_file(relay):
     client, headers, seen, reply = relay
     reply["answer"] = lambda request: httpx.Response(200, json={"imported": True})
     path = f"/api/control/pi/imports/claude/{DIGEST}"
     sent = {**headers, "Content-Type": "application/json"}
+    # The session's CSRF token and origin are still required.
+    no_csrf = {"Origin": ORIGIN, "Content-Type": "application/json"}
+    assert client.post(path, content=EXPORT, headers=no_csrf).status_code == 403
+    foreign = {**sent, "Origin": "https://evil.test"}
+    assert client.post(path, content=EXPORT, headers=foreign).status_code == 403
+    assert client.post(path + "?x=1", content=EXPORT, headers=sent).status_code == 422
+    assert not seen
+    # No proof is asked for, and one sent anyway is neither consumed nor passed on.
     response = client.post(path, content=EXPORT, headers=sent)
-    assert response.status_code == 428 and not seen
-    # A proof for another file's import does not admit this one.
-    other = proof(client, sent, "/api/control/pi/imports/claude/" + "b" * 64, {})
-    assert client.post(path, content=EXPORT, headers=other).status_code == 428
-    checked = proof(client, sent, path, {})
-    response = client.post(path, content=EXPORT, headers=checked)
     assert response.status_code == 200 and response.json() == {"imported": True}
     [request] = seen
     assert request.content == EXPORT and request.url.path == f"/imports/claude/{DIGEST}"
     assert "x-conker-verification" not in request.headers
-    assert client.post(path, content=EXPORT, headers=checked).status_code == 428
-    # A different body under the previewed digest is refused before Pi has all of it; the proof
-    # was spent on admission, so trying again asks for the password again.
-    checked = proof(client, sent, path, {})
-    changed = client.post(path, content=EXPORT + b" ", headers=checked)
+    spare = proof(client, sent, path, {})
+    assert client.post(path, content=EXPORT, headers=spare).status_code == 200
+    assert client.post(path, content=EXPORT, headers=spare).status_code == 200
+    assert all("x-conker-verification" not in item.headers for item in seen)
+    assert len(seen) == 3
+    # A different body under the previewed digest is refused before Pi has all of it.
+    changed = client.post(path, content=EXPORT + b" ", headers=sent)
     assert changed.status_code == 409 and changed.json()["detail"]["code"] == "file_changed"
-    assert len(seen) == 1
-    assert client.post(path, content=EXPORT, headers=checked).status_code == 428
+    assert len(seen) == 3
+    client.cookies.clear()
+    assert client.post(path, content=EXPORT, headers=sent).status_code == 401
+    assert len(seen) == 3
 
 
 def test_the_import_archive_is_read_with_the_session(relay):

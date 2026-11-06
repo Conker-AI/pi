@@ -1,4 +1,4 @@
-"""Owner runs of any tool by hand: a run asks for the password, its history needs the session."""
+"""Owner runs of any tool by hand: a run and its history need the session; the tool's own approval still asks."""
 
 import hashlib
 import json
@@ -24,18 +24,13 @@ PATH = "/api/owner/tools/sandbox.run/runs"
 RUN = {"action_id": "owner_" + "a" * 32, "args": {"command": "ls"}}
 
 
-def test_a_run_needs_the_password_for_its_exact_body_and_uses_the_chats_key(boundary):
+def test_a_run_needs_only_the_session_and_uses_the_chats_key(boundary):
     _, client, headers, seen, _ = boundary
     assert client.post(PATH, json=RUN).status_code == 403  # no CSRF
-    assert client.post(PATH, json=RUN, headers=headers).status_code == 428
-    # A proof for other arguments, or for another tool, does not admit this run.
-    other = proof(client, headers, PATH, {**RUN, "args": {"command": "rm -rf /"}})
-    assert client.post(PATH, json=RUN, headers=other).status_code == 428
-    elsewhere = proof(client, headers, "/api/owner/tools/web.search/runs", RUN)
-    assert client.post(PATH, json=RUN, headers=elsewhere).status_code == 428
+    foreign = {**headers, "Origin": "https://evil.test"}
+    assert client.post(PATH, json=RUN, headers=foreign).status_code == 403
     assert not seen
-    checked = proof(client, headers, PATH, RUN)
-    response = client.post(PATH, json=RUN, headers=checked)
+    response = client.post(PATH, json=RUN, headers=headers)
     assert response.status_code == 200 and response.json() == {"ok": True}
     assert "set-cookie" not in response.headers
     [request] = seen
@@ -45,14 +40,19 @@ def test_a_run_needs_the_password_for_its_exact_body_and_uses_the_chats_key(boun
     assert request.headers["x-toolgate-owner-key"] == OWNER_KEY
     assert request.headers["x-toolgate-execution-key"] == EXECUTION_KEY
     assert "x-conker-verification" not in request.headers and "cookie" not in request.headers
-    assert client.post(PATH, json=RUN, headers=checked).status_code == 428
-    assert len(seen) == 1
+    # A proof sent anyway is not needed and not passed on.
+    spare = proof(client, headers, PATH, RUN)
+    assert client.post(PATH, json=RUN, headers=spare).status_code == 200
+    assert len(seen) == 2 and "x-conker-verification" not in seen[1].headers
+    client.cookies.clear()
+    assert client.post(PATH, json=RUN, headers=headers).status_code == 401
+    assert len(seen) == 2
 
 
 def test_resuming_an_asked_run_names_its_approval_request(boundary):
     _, client, headers, seen, _ = boundary
     resume = {**RUN, "approval_request_id": "req_0123456789"}
-    response = client.post(PATH, json=resume, headers=proof(client, headers, PATH, resume))
+    response = client.post(PATH, json=resume, headers=headers)
     assert response.status_code == 200
     assert json.loads(seen[0].content) == resume
 
@@ -98,13 +98,13 @@ def test_run_history_is_a_session_read_with_the_owner_key_alone(boundary):
 def test_toolgate_answers_pass_through_and_failures_are_explicit(boundary):
     app, client, headers, seen, mode = boundary
     mode["response"] = "timeout"
-    response = client.post(PATH, json=RUN, headers=proof(client, headers, PATH, RUN))
+    response = client.post(PATH, json=RUN, headers=headers)
     assert response.status_code == 503 and "secret" not in response.text
     mode["response"] = "redirect"
     assert client.get(PATH).status_code == 502
     app.state.config = replace(app.state.config, toolgate_execution_key="")
     mode["response"] = "ok"
-    unconfigured = client.post(PATH, json=RUN, headers=proof(client, headers, PATH, RUN))
+    unconfigured = client.post(PATH, json=RUN, headers=headers)
     assert unconfigured.status_code == 503
     assert len(seen) == 2
 
@@ -142,5 +142,5 @@ def test_a_confirmation_required_answer_reaches_the_owner_unchanged(tmp_path, mo
             headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
         )
         headers = {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
-        response = client.post(PATH, json=RUN, headers=proof(client, headers, PATH, RUN))
+        response = client.post(PATH, json=RUN, headers=headers)
         assert response.status_code == 409 and response.json() == asked

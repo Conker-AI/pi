@@ -2,7 +2,8 @@
 
 Each read and write in browser_contract.CHAT_READS / CHAT_WRITES has one case here (the coverage
 test fails otherwise). Reads need a signed-in session; writes also need CSRF, the exact origin, a
-body Pi's own model accepts, no query string and a password proof bound to that exact operation.
+body Pi's own model accepts and no query string. The signed-in session is enough: none of them
+asks for a password proof, and a proof sent anyway never reaches Pi.
 Every refusal is checked to have stopped at the gateway: the fake Pi records what reaches it.
 """
 
@@ -228,7 +229,7 @@ def test_branch_history_takes_only_its_page_parameters(gateway):
 
 
 @pytest.mark.parametrize("path,body", WRITES, ids=[name(path) for path, _ in WRITES])
-def test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof(gateway, path, body):
+def test_owner_write_needs_only_session_csrf_and_an_exact_body(gateway, path, body):
     client, anonymous, headers, proof, seen = gateway
     target = "/api/control/pi" + path
     # No session, a service key instead of a session, missing or wrong CSRF, a foreign origin.
@@ -247,27 +248,27 @@ def test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof(gateway, pa
     assert client.post("/api/pi" + path, json=body, headers=headers).status_code == 403
     for bad in malformed(path):
         assert client.post("/api/control/pi" + bad, json=body, headers=headers).status_code == 403
-    # Unknown fields, wrong values, a query string: refused even with a valid proof for them.
+    # Unknown fields, wrong values, a query string: refused, even with a proof bound to them.
     for refused in ({**body, "extra": True}, wrong(path, body), {**body, "request_id": None}):
         if refused == body:
             continue
         checked = proof(target, refused)
         assert client.post(target, json=refused, headers=checked).status_code == 422, refused
+        assert client.post(target, json=refused, headers=headers).status_code == 422, refused
     assert client.post(target, json=[body], headers=headers).status_code == 422
     assert client.post(target + "?force=1", json=body, headers=headers).status_code == 422
     assert seen == []
-    # A valid body without a proof, then with a proof bound to another body.
-    assert client.post(target, json=body, headers=headers).status_code == 428
-    other = proof(target, {**body, "extra": True})
-    assert client.post(target, json=body, headers=other).status_code == 428
-    assert seen == []
-    checked = proof(target, body)
-    answer = client.post(target, json=body, headers=checked)
+    # A valid body with the session alone is forwarded exactly; no proof is asked for.
+    answer = client.post(target, json=body, headers=headers)
     assert answer.status_code == 200 and answer.json() == {"ok": True}
     assert len(seen) == 1 and seen[0].url.path == path and seen[0].method == "POST"
     assert json.loads(seen[0].content) == body
     assert seen[0].headers["x-pi-owner-key"] == OWNER
     assert "x-pi-gateway-key" not in seen[0].headers and "cookie" not in seen[0].headers
     assert "x-conker-verification" not in seen[0].headers
-    assert client.post(target, json=body, headers=checked).status_code == 428
-    assert len(seen) == 1
+    # A proof sent anyway is not needed, not consumed and not passed on to Pi.
+    spare = proof(target, body)
+    assert client.post(target, json=body, headers=spare).status_code == 200
+    assert len(seen) == 2 and "x-conker-verification" not in seen[1].headers
+    assert client.post(target, json=body, headers=spare).status_code == 200
+    assert len(seen) == 3 and "x-conker-verification" not in seen[2].headers

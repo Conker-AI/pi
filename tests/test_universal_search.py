@@ -91,7 +91,8 @@ def test_owner_boundary():
         assert browser_contract.owner_allowed("GET", path)
         assert not browser_contract.runtime_allowed("GET", path)
     assert browser_contract.owner_allowed("POST", "/search/settings")
-    assert not browser_contract.session_only_write("POST", "/search/settings")
+    assert browser_contract.session_only_write("POST", "/search/settings")
+    assert not browser_contract.password_write("POST", "/search/settings")
 
 
 def test_settings_revision_persistence_and_unsupported_stages(tmp_path):

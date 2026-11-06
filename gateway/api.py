@@ -346,9 +346,16 @@ def create_app(
         # Upstream headers (especially cookies) never cross the browser boundary.
         return JSONResponse(data, status_code=response.status_code)
 
-    def admit_write(request: Request, body: dict) -> None:
+    def admit_write(request: Request, body: dict, *, password: bool = True) -> None:
+        """Admit a write the session's route already checked (cookie, CSRF, origin, unlock window).
+
+        `password` False: the signed-in session is enough (ADR-0010). True: it also needs a
+        single-use password proof bound to this exact method, path and body.
+        """
         if request.scope["query_string"]:
             raise AuthError("Write operations must not include query parameters.", 422)
+        if not password:
+            return
         binding = fingerprint(request.method, request.url.path, body)
         app.state.auth.consume(
             request.cookies.get(app.state.config.cookie_name, ""),

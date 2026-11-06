@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from pi.agents import inbox
 from pi.api import server as api
-from pi.api.browser_contract import owner_allowed, session_only_write
+from pi.api.browser_contract import owner_allowed, password_write, session_only_write
 from pi.conversation.store import Store
 from pi.schedule import agent_jobs, job_models, jobs
 from pi.turns.failures import TurnFailed
@@ -217,7 +217,13 @@ def test_the_browser_gets_ai_jobs_only_never_raw_tool_jobs(store, monkeypatch):
     assert owner_allowed("GET", "/jobs/agent/notes")
     note = "/jobs/agent/notes/note_" + "a" * 32 + "/dismiss"
     assert owner_allowed("POST", note) and session_only_write("POST", note)
-    assert not session_only_write("POST", "/jobs/agent")
+    # Making an AI job and dismissing a note need the session only; the webhook secret, taking a
+    # job as the owner's own keep the password.
+    assert session_only_write("POST", "/jobs/agent") and not password_write("POST", "/jobs/agent")
+    job = "/jobs/job_" + "a" * 32
+    for sensitive in (f"{job}/hook", f"{job}/adopt"):
+        assert owner_allowed("POST", sensitive)
+        assert password_write("POST", sensitive) and not session_only_write("POST", sensitive)
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
     monkeypatch.setattr(api.app.state, "admin_key", "synthetic-admin", raising=False)
     digest = hashlib.sha256(OWNER.encode()).hexdigest()

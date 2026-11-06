@@ -40,11 +40,12 @@ vault keys or deleted memories, and cannot recall an action already dispatched.
 | --- | --- |
 | `GET /auth/session` | Creates an anonymous cookie if necessary; returns `authenticated`, `csrf_token`, `session_id`, absolute `expires_at`, `unlock_expires_at` (null when anonymous), `setup_required`. |
 | `POST /auth/login` | JSON `{"password":"..."}`; rotates the cookie and CSRF token on success, and sets a fresh known-browser cookie (`__Secure-conker-device`, path `/auth`, 400 days). |
-| `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}` (`PUT` only for `/api/owner/tool-settings`); returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
+| `POST /auth/verify` | JSON `password` and `operation: {method: "POST", path: "/api/pi/...", body: {...}}` returns `verification_token`, `verification_expires_at`, `unlock_expires_at`. Requires a currently unlocked session. |
 | `POST /auth/logout` | Revokes the current session and clears its cookie. |
 | `GET /auth/sessions` | Lists session IDs and timestamps, never bearer tokens. |
-| `POST /auth/sessions/{id}/revoke` | Empty JSON object and exact one-use password proof; revokes one session. |
-| `POST /auth/revoke-all` | Empty JSON object and exact one-use password proof; revokes every session, including the caller's, and forgets every known browser. |
+| `POST /auth/sessions/{id}/revoke` | Empty JSON object, session and CSRF; revokes one session. |
+| `POST /auth/revoke-all` | Empty JSON object, session and CSRF; revokes every session, including the caller's, and forgets every known browser. |
+| `POST /auth/activity` | Empty JSON object, no query, session and CSRF; the page sends it on the owner's own clicks and keys (at most about once a minute). Restarts the unlock window and returns `unlock_expires_at`. An expired sign-in stays expired. |
 | `GET /auth/alerts` | Wrong passwords of the last 30 days (at most 500 kept): `unseen` count and the newest 50 as `{at, origin, seen}`, where `origin` is `new_device`, `known_device` or `signed_in`. Never the password tried or the address. |
 | `POST /auth/alerts/seen` | Empty JSON object, no query; marks every alert so far seen. Session and CSRF, no password. |
 | `/api/pi/{path}` | Only methods and paths in `pi/api/browser_contract.py`; forwards using `X-Pi-Gateway-Key`. |
@@ -68,8 +69,9 @@ must handle 401 by showing sign-in, 403 by reloading request verification state,
 429 by waiting, and 502/503 as explicit dependency failures. Memory notices pass
 through unchanged; they must not depend on the model's reply.
 
-Sessions lock a set time after the last successful password login or verification,
-or expire after 24 hours absolute, whichever comes first. The owner picks that unlock window
+Sessions lock a set time after the last successful password login or verification, or the
+last activity mark (`POST /auth/activity`, sent by the page on the owner's clicks and keys), or
+expire after 24 hours absolute, whichever comes first. The owner picks that unlock window
 in Settings (`idleTimeoutMinutes` in Pi's [owner preferences](owner-preferences.md): 5, 15, 30
 or 60 minutes, or 0 for the host's limit). `GATEWAY_IDLE_TIMEOUT_SECONDS` is the host's
 ceiling (integer 60–86400 seconds; default 1800): no choice can make the window longer. The
@@ -77,8 +79,8 @@ gateway learns the choice from every preferences document it relays to the brows
 a password-verified save) and keeps the last one in its database, so a restart or Pi being down
 never loosens it; until it has seen one, the ceiling applies. A save always wins; a read older
 than the one kept may only shorten the window. A new choice applies at once to every signed-in
-browser. This is a conservative password-verified window, not a claim that the server can observe human
-presence. Polling, reads, writes and client activity claims never extend it. The
+browser. The window measures time without the owner's input; the server cannot observe human presence,
+so it trusts only the explicit activity route. Polling, reads and writes never extend it (L-03). The
 frontend may additionally lock earlier on local inactivity using logout. Login
 and verification responses expose the deadline in epoch seconds so the UI can hide
 protected content on time. Server admission enforces it independently. At expiry,
@@ -108,10 +110,13 @@ No request is automatically retried after a service failure.
 
 ## Fresh verification for browser writes
 
-Every allowlisted runtime POST and every owner decision requires fresh password
-verification bound to that exact operation. This includes session creation/fork,
-turn submission/resume and task creation/update/transition/archive. Read-only
-operations, logout and session revocation do not require this additional proof.
+Signing in gives access: ordinary writes that can be undone (chats, turns, forks, tasks,
+proposals, job controls, tool runs, imports, settings that are not about security) need the
+signed-in session only. Fresh password verification bound to that exact operation is asked only
+for what cannot be undone or changes protection: the Pi writes in `PASSWORD_WRITES`
+(`pi/api/browser_contract.py`: forgetting, owner preferences with the sign-in time, job hooks and
+adoption, budgets, setup protection, approval decisions) and the gateway routes the table below
+marks "password". Approvals that delete or pay (level 3) still ask for the password at ToolGate.
 It is separate from ToolGate approval: verifying a password never grants a tool,
 changes a task revision or bypasses an approval policy.
 
@@ -168,20 +173,20 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `GET /api/control/pi/artifacts/{id}/download?format=docx\|pdf\|pptx\|xlsx\|csv\|json[&version=1..100]` | session | Pi's artifact download (`csv`, `json`: the native export of a table or a chart, diagram or media); an optional `version` picks an earlier version of the artifact |
 | `GET /api/control/pi/sessions/{sid}/messages/{mid}/download?format=docx\|pdf\|pptx\|xlsx` | session | Pi's chat answer download |
 | `POST /api/control/pi/imports/{chatgpt\|claude}/preview` | session | Pi's import preview; raw body is `conversations.json` |
-| `POST /api/control/pi/imports/{chatgpt\|claude}/{digest}` | password | Pi's import of the previewed file |
+| `POST /api/control/pi/imports/{chatgpt\|claude}/{digest}` | session | Pi's import of the previewed file |
 | `GET /api/control/pi/imports`, `/imports/chats`, `/imports/chats/{id}` | session | the JSON control relay |
 | `GET /api/control/pi/inference/usage?limit=` | session | the JSON control relay (read-only) |
 | `POST /api/control/pi/jobs/{id}/adopt` `{"expected_revision"}` | password | the JSON control relay (taking a job Conker made as the owner's own) |
 | `GET /api/host/ops`, `GET /api/host/ops/{id}` | session | the host helper's receipts |
 | `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list` |
-| `POST /api/host/ops` `{"id","operation","arguments"}` | password | the helper's actions: `backup.verify`, `services.restart`, `backup.run` |
+| `POST /api/host/ops` `{"id","operation","arguments"}` | session | the helper's actions: `backup.verify`, `services.restart`, `backup.run` |
 | `GET /api/owner/tool-settings` | session | ToolGate `GET /v2/owner/settings` |
-| `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | password (bound as `PUT`) | ToolGate `PUT /v2/owner/settings` |
+| `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | session | ToolGate `PUT /v2/owner/settings` |
 | `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |
 | `POST /api/owner/lockdown` `{"enabled": true}` | session | ToolGate `POST /v2/owner/lockdown` |
 | `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` |
 | `GET /api/owner/tools/{id}/runs?limit=1..50` | session | ToolGate `GET /v2/owner/tools/{id}/runs` (owner key) |
-| `POST /api/owner/tools/{id}/runs` `{"action_id": "owner_<32 hex>", "args", "approval_request_id"?}` | password | ToolGate `POST /v2/owner/tools/{id}/runs` (owner key and the chat's execution key) |
+| `POST /api/owner/tools/{id}/runs` `{"action_id": "owner_<32 hex>", "args", "approval_request_id"?}` | session | ToolGate `POST /v2/owner/tools/{id}/runs` (owner key and the chat's execution key) |
 
 **Files** go through one streaming relay (`gateway/relay.py`), the only routes that carry bytes
 rather than a JSON object. A download needs exactly one `format`. The relay asks Pi for no
@@ -195,27 +200,25 @@ passed back as Pi's own JSON refusal; an unreadable one is 502, Pi unreachable i
 
 **Imports** stream the raw `conversations.json` (`Content-Type: application/json`) on to Pi,
 up to 128 MB (`too_large`, 413, declared or counted); every other route keeps its own small body
-limit. A preview saves nothing, so the session is enough (it is listed in `SESSION_ONLY_WRITES`).
-An import saves chats, so it asks for the password: verify the operation
-`{"method": "POST", "path": "/api/control/pi/imports/{source}/{digest}", "body": {}}`, the
-digest in the path naming the previewed file. The proof is spent when the import is admitted;
-the gateway then hashes the body as it streams and holds back its last chunk until the hash
+limit. A preview saves nothing and an import only adds chats (they can be forgotten), so both
+need the session only; the digest in the import's path names the previewed file. Once the import
+is admitted, the gateway hashes the body as it streams and holds back its last chunk until the hash
 matches, so a different file under that digest is refused (`file_changed`, 409) before Pi has all
 of it. Pi checks the digest again.
 
 **Server actions** reach the host helper (ADR-0014) over the private provider-control socket
 (`GATEWAY_PROVIDER_CONTROL_SOCKET`, or the loopback transport). The gateway admits only the
 operations above, each with exactly its typed arguments (`services.restart` a service name,
-`backup.verify` a snapshot name, `backup.run` none; reads none), and an action's proof covers its
-whole body: id, operation and arguments. The helper's receipts and refusals
+`backup.verify` a snapshot name, `backup.run` none; reads none); actions need the session and
+CSRF, and the action id makes a retry safe. The helper's receipts and refusals
 (`{"error", "message"}`) pass back unchanged after a size cap and a check that they answer this
 request; when the helper cannot be reached, or an answer fails those checks, the gateway answers
 in the same shape, `{"error": "host_unavailable", ...}` with 503. A refusal of the browser's own
 request is `invalid_host_operation` (422).
 
 **ToolGate settings, lockdown and tool runs** use the gateway's ToolGate owner key; a run by hand
-also sends the chat's own execution key, as the editor-draft run route does, and its proof covers
-the action id and every argument. ToolGate's answers and refusals (a stale revision is 409, a tool
+also sends the chat's own execution key, as the editor-draft run route does; the action id makes
+a retry safe, and a tool that deletes or pays still asks for the password at ToolGate. ToolGate's answers and refusals (a stale revision is 409, a tool
 that asks is `CONFIRMATION_REQUIRED`, resumed with the same `action_id` and its
 `approval_request_id`) pass through as its JSON.
 

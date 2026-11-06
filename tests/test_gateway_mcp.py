@@ -1,4 +1,4 @@
-"""MCP owner operations retain session, exact proof and scoped service boundaries."""
+"""MCP owner operations: the session for most, an exact single-use password proof for the risky two."""
 
 import hashlib
 import json
@@ -32,6 +32,19 @@ WRITES = [
     (BASE + "/import", DEFINITION),
     (BASE + "/tools/mcp.echo/state", STATE),
     (BASE + "/tools/mcp.echo/access", STATE),
+]
+# Sending a vault secret to a server and letting chats use a tool need the password proof.
+PASSWORD_WRITES = [
+    (BASE + "/import", {**DEFINITION, "secret_ref": "MCP_TOKEN"}),
+    (BASE + "/tools/mcp.echo/access", STATE),
+]
+# Everything else (looking at a server, importing without a secret, switching a tool, switching
+# chat access off) needs only the signed-in session.
+SESSION_WRITES = [
+    (BASE + "/discover", {"url": DEFINITION["url"]}),
+    (BASE + "/import", DEFINITION),
+    (BASE + "/tools/mcp.echo/state", STATE),
+    (BASE + "/tools/mcp.echo/access", {**STATE, "enabled": False}),
 ]
 
 
@@ -94,27 +107,16 @@ def proof(client, headers, path, body):
     return {**headers, "X-Conker-Verification": response.json()["verification_token"]}
 
 
-@pytest.mark.parametrize("path,body", WRITES)
-def test_every_write_requires_csrf_and_exact_single_use_proof(boundary, path, body):
-    _, client, headers, seen, _ = boundary
+def refused_without_csrf(client, headers, path, body):
     for invalid_headers in (
         {},
         {**headers, "Origin": "https://elsewhere.test"},
         {**headers, "X-CSRF-Token": "wrong"},
     ):
         assert client.post(path, json=body, headers=invalid_headers).status_code == 403
-    assert client.post(path, json=body, headers=headers).status_code == 428
-    checked = proof(client, headers, path, body)
-    changed = (
-        {**body, "enabled": False}
-        if "enabled" in body
-        else {**body, "url": "https://other.test/mcp"}
-    )
-    assert client.post(path, json=changed, headers=checked).status_code == 428
-    assert not seen
-    response = client.post(path, json=body, headers=checked)
-    assert response.status_code == 200
-    assert client.post(path, json=body, headers=checked).status_code == 428
+
+
+def assert_forwarded_exactly(seen, response, path, body):
     assert len(seen) == 1
     assert seen[0].url == "http://toolgate.test" + path.replace("/api/owner/", "/v2/owner/")
     assert json.loads(seen[0].content) == body
@@ -124,6 +126,42 @@ def test_every_write_requires_csrf_and_exact_single_use_proof(boundary, path, bo
     assert PASSWORD not in seen[0].content.decode()
     assert "set-cookie" not in response.headers and "x-private" not in response.headers
     assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("path,body", PASSWORD_WRITES)
+def test_risky_writes_require_csrf_and_exact_single_use_proof(boundary, path, body):
+    _, client, headers, seen, _ = boundary
+    refused_without_csrf(client, headers, path, body)
+    assert client.post(path, json=body, headers=headers).status_code == 428
+    checked = proof(client, headers, path, body)
+    changed = (
+        {**body, "expected_digest": "c" * 64}
+        if "expected_digest" in body
+        else {**body, "url": "https://other.test/mcp"}
+    )
+    assert client.post(path, json=changed, headers=checked).status_code == 428
+    assert not seen
+    response = client.post(path, json=body, headers=checked)
+    assert response.status_code == 200
+    assert client.post(path, json=body, headers=checked).status_code == 428
+    assert_forwarded_exactly(seen, response, path, body)
+
+
+@pytest.mark.parametrize("path,body", SESSION_WRITES)
+def test_ordinary_writes_need_only_csrf_and_the_session(boundary, path, body):
+    _, client, headers, seen, _ = boundary
+    refused_without_csrf(client, headers, path, body)
+    client.cookies.clear()
+    assert client.post(path, json=body, headers=headers).status_code == 401
+    assert not seen
+
+
+@pytest.mark.parametrize("path,body", SESSION_WRITES)
+def test_ordinary_writes_forward_exactly_without_a_proof(boundary, path, body):
+    _, client, headers, seen, _ = boundary
+    response = client.post(path, json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    assert_forwarded_exactly(seen, response, path, body)
 
 
 def test_read_and_access_credentials_are_server_owned_and_cookies_never_propagate(boundary):
@@ -266,9 +304,8 @@ def test_access_proof_cannot_change_route_and_missing_credentials_fail_closed(bo
     app, client, headers, seen, _ = boundary
     path = BASE + "/tools/mcp.echo/access"
     checked = proof(client, headers, path, STATE)
-    assert (
-        client.post(BASE + "/tools/mcp.echo/state", json=STATE, headers=checked).status_code == 428
-    )
+    other = PASSWORD_WRITES[0]
+    assert client.post(other[0], json=other[1], headers=checked).status_code == 428
     app.state.config = replace(app.state.config, toolgate_execution_key="")
     assert client.get(path).status_code == 503
     assert client.post(path, json=STATE, headers=checked).status_code == 503

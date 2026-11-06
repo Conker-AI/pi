@@ -32,7 +32,13 @@ def router(app, session, admit_write):
                 )
             except provider_control.ProviderControlError:
                 raise AuthError("Invalid provider operation.", 422) from None
-            admit_write(request, body)
+            # Entering a key and the paid-model policy need the password; checking, switching to,
+            # recovering or discarding a key he already entered needs the session.
+            admit_write(
+                request,
+                body,
+                password=body["operation"] in {"stage", "paid-policy", "recover-paid-policy"},
+            )
         try:
             value = await run_in_threadpool(
                 provider_control.request,
@@ -64,7 +70,8 @@ def router(app, session, admit_write):
                 body = chatgpt.validate_operation(await json_body(request, max_bytes=1024))
             except ProviderControlError:
                 raise AuthError("Invalid subscription operation.", 422) from None
-            admit_write(request, body)
+            # Signing in to his own plan, or out of it, is undone by doing the other.
+            admit_write(request, body, password=False)
         try:
             value = await run_in_threadpool(
                 chatgpt.request,
@@ -98,7 +105,8 @@ def router(app, session, admit_write):
                     raise ValueError()
             except ValueError:
                 raise AuthError("Invalid native authentication operation.", 422) from None
-            admit_write(request, body)
+            # Signing in with API billing spends money per call; with the plan it doesn't.
+            admit_write(request, body, password=body.get("billing") == "api")
         try:
             return JSONResponse(
                 await run_in_threadpool(
@@ -132,7 +140,7 @@ def router(app, session, admit_write):
                     422,
                     code="invalid_native_session_request",
                 ) from None
-            admit_write(request, body)
+            admit_write(request, body, password=False)
         try:
             result = await run_in_threadpool(
                 native_sessions.request, app.state.provider_transport, action, identity, body
@@ -190,8 +198,8 @@ def router(app, session, admit_write):
     @routes.post("/api/host/read")
     async def host_operations(request: Request, identity: str | None = None):
         """Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)
-        with his session, and the three actions (backup.verify, services.restart, backup.run)
-        with the password proof bound to the exact body. Answers are the helper's own."""
+        and the three actions (backup.verify, services.restart, backup.run), all with his session:
+        none of them deletes or replaces anything. Answers are the helper's own."""
         from starlette.concurrency import run_in_threadpool
 
         from . import host_ops
@@ -210,8 +218,7 @@ def router(app, session, admit_write):
                 path = "/host/read" if read else "/host/ops"
                 body = host_ops.validate(await json_body(request, max_bytes=1024), read=read)
                 if not read:
-                    # An action changes the server; the proof covers its id, name and arguments.
-                    admit_write(request, body)
+                    admit_write(request, body, password=False)
             status, value = await run_in_threadpool(
                 host_ops.request,
                 app.state.provider_transport,

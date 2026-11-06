@@ -1,6 +1,7 @@
 """Owner/Gateway boundaries for text corrections; upstream memory is synthetic."""
 
 import hashlib
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -142,7 +143,9 @@ def test_validation_never_echoes_text_and_raw_body_is_bounded(http):
 
 
 @pytest.mark.parametrize("text", [BODY.text, "\x01" * 16000], ids=["ordinary", "escaped-limit"])
-def test_gateway_uses_exact_owner_proof_and_never_runtime_key(tmp_path, monkeypatch, text):
+def test_gateway_forwards_the_session_write_with_the_owner_key_and_never_runtime_key(
+    tmp_path, monkeypatch, text
+):
     from gateway import store as auth_module
 
     monkeypatch.setattr(
@@ -180,25 +183,15 @@ def test_gateway_uses_exact_owner_proof_and_never_runtime_key(tmp_path, monkeypa
         assert browser.get(path + "/pending").status_code == 200
         assert seen[-1].headers["x-pi-owner-key"] == OWNER
         assert "x-pi-gateway-key" not in seen[-1].headers and "cookie" not in seen[-1].headers
-        assert browser.post(path, json=approved, headers=headers).status_code == 428
-        proof = browser.post(
-            "/auth/verify",
-            headers=headers,
-            json={
-                "password": password,
-                "operation": {"method": "POST", "path": path, "body": approved},
-            },
-        ).json()["verification_token"]
-        verified = {**headers, "X-Conker-Verification": proof}
-        assert (
-            browser.post(
-                path, json={**BODY.model_dump(), "text": "changed"}, headers=verified
-            ).status_code
-            == 428
-        )
-        response = browser.post(path, json=approved, headers=verified)
+        # Correcting a memory is undoable: the signed-in session is enough, with no password proof.
+        assert browser.post(path, json=approved).status_code == 403
+        response = browser.post(path, json=approved, headers=headers)
         assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
-        assert browser.post(path, json=approved, headers=verified).status_code == 428
+        forwarded = seen[-1]
+        assert forwarded.url.path == PREFIX and json.loads(forwarded.content) == approved
+        assert forwarded.headers["x-pi-owner-key"] == OWNER
+        assert "x-conker-verification" not in forwarded.headers
+        assert "x-pi-gateway-key" not in forwarded.headers and "cookie" not in forwarded.headers
         assert browser.get(path + "/pending?x=1").status_code == 422
         assert browser.get("/api/pi" + PREFIX + "/pending").status_code == 403
         assert len(seen) == 2
