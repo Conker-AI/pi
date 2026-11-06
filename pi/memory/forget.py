@@ -10,7 +10,7 @@ import json
 import threading
 
 import httpx
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
@@ -22,6 +22,24 @@ class Forget(Strict):
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,128}$")
     memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
     expected_revision: int = Field(ge=1, le=2147483646)
+
+
+class ForgetItem(Strict):
+    memory_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
+    expected_revision: int = Field(ge=1, le=2147483646)
+
+
+class ForgetMany(Strict):
+    """Several memories, forgotten one at a time; item i uses request id `{request_id}-{i}`."""
+
+    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,120}$")
+    items: list[ForgetItem] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def _distinct(self):
+        if len({item.memory_id for item in self.items}) != len(self.items):
+            raise ValueError("Each memory may be listed once.")
+        return self
 
 
 class ForgetError(ServiceError):
@@ -244,3 +262,33 @@ def forget(store, client, body: Forget) -> dict:
     finally:
         with _active_lock:
             _active.discard(store.path)
+
+
+def forget_many(store, client, body: ForgetMany) -> dict:
+    """Forget each listed memory in order and stop at the first refusal.
+
+    Each item is an ordinary forget with its own request id, so repeating the same batch replays
+    the items already forgotten and goes on from the one that stopped. A refusal of the first item
+    is raised as it is; a later one returns what was forgotten and where it stopped.
+    """
+    body = ForgetMany.model_validate(body.model_dump())
+    results = []
+    for index, item in enumerate(body.items):
+        one = Forget(
+            request_id=f"{body.request_id}-{index}",
+            memory_id=item.memory_id,
+            expected_revision=item.expected_revision,
+        )
+        try:
+            results.append(forget(store, client, one))
+        except ForgetError as exc:
+            if not results:
+                raise
+            stopped = {
+                "index": index,
+                "memoryId": item.memory_id,
+                "code": exc.code,
+                "message": exc.message,
+            }
+            return {"requestId": body.request_id, "results": results, "stopped": stopped}
+    return {"requestId": body.request_id, "results": results, "stopped": None}

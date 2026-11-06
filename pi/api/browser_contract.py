@@ -65,7 +65,9 @@ def runtime_allowed(method: str, path: str) -> bool:
 PASSWORD_WRITES = (
     # A webhook call through the browser gateway; Pi also checks the job's own secret.
     r"/hooks/job_[a-f0-9]{32}",
-    r"/memory/forget",
+    r"/memory/forget(?:-many)?",
+    # An imported chat is deleted for good; it cannot be imported back.
+    r"/imports/chats/imp_[0-9a-f]{32}/delete",
     # Sign-out time, quiet hours, proactivity and daily budgets.
     r"/owner/preferences",
     # A webhook secret is shown once.
@@ -263,7 +265,7 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
         *CHAT_WRITES,
         r"/proposals/passes",
-        r"/memory/forget",
+        r"/memory/forget(?:-many)?",
         r"/memory/remember",
         r"/memory/corrections",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}/retry",
@@ -274,6 +276,8 @@ OWNER_ROUTES = {
         # file's digest) saves read-only chats and offers his words to memory as outside content.
         # Both need the signed-in session only.
         r"/imports/(?:chatgpt|claude)/(?:preview|[0-9a-f]{64})",
+        # Deleting one imported chat for good asks for the password (PASSWORD_WRITES).
+        r"/imports/chats/imp_[0-9a-f]{32}/delete",
     ),
 }
 

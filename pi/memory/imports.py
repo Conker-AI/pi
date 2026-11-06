@@ -10,7 +10,7 @@ The messages the owner wrote in the other assistant are offered to MemoryGate as
 source (import_offers), never as owner statements; the other assistant's replies stay in the
 archive only. Importing the same export again adds nothing: a chat is known by the export's chat
 id and a message by its message id, so a later export of a chat that went on adds only the new
-messages.
+messages. A chat the owner deleted (import_deletion) is skipped by every later import.
 """
 
 from __future__ import annotations
@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS import_memory_offers (
 );
 CREATE INDEX IF NOT EXISTS import_memory_offers_waiting
  ON import_memory_offers(next_at) WHERE state='pending';
+-- A chat the owner deleted (pi.memory.import_deletion): ids and counts only, never its words.
+CREATE TABLE IF NOT EXISTS imported_chat_deletions (
+ id TEXT PRIMARY KEY, source TEXT NOT NULL, export_id TEXT NOT NULL,
+ deleted_at REAL NOT NULL, messages INTEGER NOT NULL, offered INTEGER NOT NULL,
+ evidence_ids TEXT NOT NULL, UNIQUE(source, export_id)
+);
 """
 
 
@@ -90,6 +96,13 @@ def offerable(message: import_formats.Message) -> bool:
 
 
 def _known(db, source, chat):
+    """The chat's id and its messages not saved yet; a chat the owner deleted adds nothing."""
+    gone = db.execute(
+        "SELECT id FROM imported_chat_deletions WHERE source=? AND export_id=?",
+        (source, chat.export_id),
+    ).fetchone()
+    if gone is not None:
+        return gone[0], []
     row = db.execute(
         "SELECT id FROM imported_chats WHERE source=? AND export_id=?", (source, chat.export_id)
     ).fetchone()

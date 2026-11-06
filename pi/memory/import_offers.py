@@ -154,6 +154,9 @@ class Offers:
         self.store, self.client, self.clock = store, client, clock
         self.stop_event, self.wake_event = threading.Event(), threading.Event()
         self.thread = None
+        # Held for each offer, from re-reading its row to recording the answer; deleting an
+        # imported chat takes it too, so no word is sent while or after its chat is deleted.
+        self.sending = threading.Lock()
         self.paused_until = 0.0
         self.problem: str | None = None
 
@@ -167,32 +170,46 @@ class Offers:
         for row in rows:
             if self.stop_event.is_set():
                 break
-            try:
-                evidence = self.client.offer(event(row))
-            except (httpx.HTTPError, ValueError, TypeError, RecursionError) as exc:
-                code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
-                if code in (401, 403, 404, 429):
-                    self.paused_until = self.clock() + PAUSE_SECONDS
-                    self.problem = (
-                        f"MemoryGate refused the import listener (HTTP {code}). Check "
-                        "PI_MEMORYGATE_IMPORT_SOURCE and PI_MEMORYGATE_IMPORT_KEY."
-                    )
-                    break
-                refused = code is not None and 400 <= code < 500 and code not in (408, 425)
-                self._failed(row, refused, code)
-                if not refused:
-                    troubled = True
-                continue
-            with self.store._connect() as db:
-                db.execute(
-                    "UPDATE import_memory_offers SET state='sent',evidence_id=?,sent_at=?,"
-                    "error='' WHERE message_id=? AND state='pending'",
-                    (evidence, self.clock(), row["message_id"]),
-                )
-            if not troubled:
-                self.problem = None
-            sent += 1
+            with self.sending:
+                outcome = self._send(row)
+            if outcome == "paused":
+                break
+            if outcome == "failed":
+                troubled = True
+            elif outcome == "sent":
+                if not troubled:
+                    self.problem = None
+                sent += 1
         return sent
+
+    def _send(self, row) -> str:
+        with self.store._connect() as db:
+            if not db.execute(
+                "SELECT 1 FROM import_memory_offers WHERE message_id=? AND state='pending'",
+                (row["message_id"],),
+            ).fetchone():
+                return "gone"
+        try:
+            evidence = self.client.offer(event(row))
+        except (httpx.HTTPError, ValueError, TypeError, RecursionError) as exc:
+            code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            if code in (401, 403, 404, 429):
+                self.paused_until = self.clock() + PAUSE_SECONDS
+                self.problem = (
+                    f"MemoryGate refused the import listener (HTTP {code}). Check "
+                    "PI_MEMORYGATE_IMPORT_SOURCE and PI_MEMORYGATE_IMPORT_KEY."
+                )
+                return "paused"
+            refused = code is not None and 400 <= code < 500 and code not in (408, 425)
+            self._failed(row, refused, code)
+            return "refused" if refused else "failed"
+        with self.store._connect() as db:
+            db.execute(
+                "UPDATE import_memory_offers SET state='sent',evidence_id=?,sent_at=?,"
+                "error='' WHERE message_id=? AND state='pending'",
+                (evidence, self.clock(), row["message_id"]),
+            )
+        return "sent"
 
     def _failed(self, row, refused, code):
         if refused:

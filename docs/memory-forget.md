@@ -22,3 +22,13 @@ Through the browser both are owner-control operations; the write needs the owner
 password. Requires `PI_MEMORY_CORRECTION_URL`, `PI_MEMORY_CORRECTION_KEY` and
 `PI_MEMORY_CORRECTION_AGENT_ID` (see `memory-proposals.md`); without them the routes
 answer 503 `not_configured`.
+
+## Several at once
+
+`POST /memory/forget-many` with `request_id` (16-120 characters) and `items` (1-50, each
+`memory_id` and `expected_revision`, no memory twice) forgets them one at a time, in order, each
+as its own forget with request id `<request_id>-<index>`. The first refusal stops the batch: if
+nothing was forgotten yet it is answered as that refusal, otherwise the reply lists `results` and
+`stopped` (`index`, `memoryId`, `code`, `message`). Repeating the same batch replays the items
+already forgotten from Pi's receipts and goes on from the one that stopped. Through the browser it
+asks for the password once for the whole batch.

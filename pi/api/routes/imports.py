@@ -2,7 +2,8 @@
 
 The body of a preview or an import is the export's `conversations.json` itself, read in bounded
 chunks; a preview saves nothing. An import names the previewed file by its SHA-256 digest, so the
-owner's yes is for exactly the file he saw. Nothing here runs a model, a tool or a turn.
+owner's yes is for exactly the file he saw. Nothing here runs a model, a tool or a turn. Deleting
+an imported chat removes it for good (`pi.memory.import_deletion`).
 
 The router's lifespan starts the sender that offers imported words to MemoryGate's import
 listener (`pi.memory.import_offers`), after Pi's own startup and stopped before it closes.
@@ -17,7 +18,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from starlette.concurrency import run_in_threadpool
 
-from pi.memory import import_formats, import_offers, imports
+from pi.memory import import_deletion, import_formats, import_offers, imports
 
 Source = Literal["chatgpt", "claude"]
 
@@ -105,5 +106,13 @@ def router(store, offers, authorize):
         limit: int = Query(100, ge=1, le=200),
     ):
         return imports.chat(store(), chat_id, after=after, limit=limit)
+
+    @api.post("/chats/{chat_id}/delete")
+    def delete(chat_id: str = Path(pattern=r"^imp_[0-9a-f]{32}$")):
+        """Delete one imported chat for good; memories made from it stay until forgotten."""
+        sender = offers()
+        return import_deletion.delete_chat(
+            store(), chat_id, sending=sender.sending if sender is not None else None
+        )
 
     return api

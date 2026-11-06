@@ -60,6 +60,7 @@ a preview with the owner's session, an import with the password.
 | `GET /imports` | The latest imports (newest first) and the memory offers: `waiting`, `offered`, `refused`, and `problem` in plain words. |
 | `GET /imports/chats?source=&limit=&offset=` | Imported chats, latest first: `label` ("Imported from ChatGPT"), `title`, `exportId`, times, `messageCount`, `archived: true`, `readOnly: true`. |
 | `GET /imports/chats/{id}?after=&limit=` | One chat and a page of messages (`author` user or assistant, `text`, `createdAt`, `shortened`, `exportId`, and for the owner's messages `memory`: offering, offered, refused or not_offered). |
+| `POST /imports/chats/{id}/delete` | Deletes the chat for good (below). Through the browser it asks for the password. |
 
 ## Read-only, and never the owner's words
 
@@ -78,6 +79,20 @@ A chat is known by its source and the export's chat id, a message by its chat an
 message id. Importing the same file again adds nothing; a later export of a chat that went on
 adds only the new messages, after the ones already kept. Each chat is saved whole or not at all,
 so an import that stopped is finished by importing the same file again.
+
+## Deleting an imported chat
+
+`POST /imports/chats/{id}/delete` removes the chat, its messages and its waiting offers in one
+transaction with SQLite's secure delete on, then folds the write-ahead log back into the database
+(`fileScrubbed: false` if a reader held it open; the next checkpoint finishes it). What stays is a
+row in `imported_chat_deletions` with ids and counts only, never the title or the words: a repeat
+answers with the same record (`fileScrubbed: null`), and a later import of the same export counts
+the chat as unchanged instead of bringing it back. The reply says how many messages went and how
+many of the owner's messages MemoryGate already has (`offeredToMemory`, with `memoryNote`):
+memories made from them stay until the owner forgets them in Memory. The background sender holds
+a lock for each offer from re-reading its row to recording the answer, and the deletion takes the
+same lock, so no word of a chat is offered while or after it is deleted. Owner backups made before
+still hold the chat.
 
 ## Memory: outside content through MemoryGate's listener
 
@@ -115,8 +130,8 @@ not a second memory.
 ## Not yet
 
 - Gateway routes and the dashboard screens (upload, preview, confirm; imported chats in Chats).
-- Removing an imported chat, and taking its offers back from MemoryGate: Pi holds no key that can
-  invalidate listener evidence. The owner can forget those memories in MemoryGate.
+- Taking a deleted chat's offers back from MemoryGate: Pi holds no key that can invalidate listener
+  evidence. The owner forgets those memories in Memory.
 - OpenClaw and Hermes folders, skills and cron jobs from other assistants.
 - A MemoryGate import origin on its conversation route (idempotent by id, forgettable by Pi)
   would replace the listener.

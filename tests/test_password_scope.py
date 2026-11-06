@@ -19,6 +19,8 @@ RUN = "scheduled_" + "b" * 32
 PASSWORD = [
     f"/hooks/{JOB}",
     "/memory/forget",
+    "/memory/forget-many",
+    "/imports/chats/imp_" + "0" * 32 + "/delete",
     "/owner/preferences",
     f"/jobs/{JOB}/hook",
     f"/jobs/{JOB}/adopt",
@@ -48,7 +50,7 @@ def allowed(path):
 
 
 def test_the_password_list_is_exact_and_every_entry_is_a_real_route():
-    assert len(PASSWORD_WRITES) == 8
+    assert len(PASSWORD_WRITES) == 9
     for pattern in PASSWORD_WRITES:
         assert [path for path in PASSWORD if re.fullmatch(pattern, path)], pattern
     for path in PASSWORD:
@@ -69,5 +71,12 @@ def test_reads_are_never_writes():
 
 def test_lookalikes_of_a_password_route_do_not_slip_through_as_password_free():
     # A longer or shorter path is not the route; it is refused by the relay's own allowlist.
-    for path in ("/memory/forget/x", "/owner/preferences/", f"/jobs/{JOB}/hook/x"):
+    for path in (
+        "/memory/forget/x",
+        "/memory/forget-few",
+        "/owner/preferences/",
+        f"/jobs/{JOB}/hook/x",
+        "/imports/chats/imp_x/delete",
+        "/imports/chats/imp_" + "0" * 32 + "/delete/x",
+    ):
         assert not allowed(path), path

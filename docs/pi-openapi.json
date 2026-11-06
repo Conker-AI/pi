@@ -19592,6 +19592,77 @@
         }
       }
     },
+    "/memory/forget-many": {
+      "post": {
+        "summary": "Forget Memories",
+        "description": "Forget up to 50 memories one at a time; stops at the first refusal.",
+        "operationId": "forget_memories_memory_forget_many_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgetMany"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory/remember": {
       "post": {
         "summary": "Remember Memory",
@@ -20080,6 +20151,77 @@
               "minimum": 1,
               "default": 100,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports/chats/{chat_id}/delete": {
+      "post": {
+        "summary": "Delete",
+        "description": "Delete one imported chat for good; memories made from it stay until forgotten.",
+        "operationId": "delete_imports_chats__chat_id__delete_post",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^imp_[0-9a-f]{32}$",
+              "title": "Chat Id"
             }
           },
           {
@@ -27254,6 +27396,54 @@
           "expected_revision"
         ],
         "title": "Forget"
+      },
+      "ForgetItem": {
+        "properties": {
+          "memory_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$",
+            "title": "Memory Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "maximum": 2147483646.0,
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memory_id",
+          "expected_revision"
+        ],
+        "title": "ForgetItem"
+      },
+      "ForgetMany": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,120}$",
+            "title": "Request Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ForgetItem"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "items"
+        ],
+        "title": "ForgetMany",
+        "description": "Several memories, forgotten one at a time; item i uses request id `{request_id}-{i}`."
       },
       "Fork": {
         "properties": {
