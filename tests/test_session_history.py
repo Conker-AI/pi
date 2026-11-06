@@ -383,11 +383,12 @@ def test_gateway_directory_read_uses_only_scoped_runtime_credential(gateway):
     assert client.get(path).status_code == 401 and not seen
     headers = sign_in(client)
     response = client.get(
-        path + "?limit=7&q=old",
+        path + "?limit=7&q=old&archived=only&sort=name",
         headers={"X-Pi-Key": "browser-secret", "X-Pi-Gateway-Key": "browser-secret"},
     )
     assert response.status_code == 200 and len(seen) == 1
     assert seen[0].url.path == "/sessions/history" and seen[0].url.params["limit"] == "7"
+    assert seen[0].url.params["archived"] == "only" and seen[0].url.params["sort"] == "name"
     assert seen[0].headers["X-Pi-Gateway-Key"] == RUNTIME and "X-Pi-Key" not in seen[0].headers
     assert "Set-Cookie" not in response.headers
     assert client.post(path, json={}, headers=headers).status_code == 403 and len(seen) == 1
