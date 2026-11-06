@@ -46,7 +46,12 @@ def router(app, session, forward, admit_write, upstream):
         body = await json_body(request) if request.method == "POST" else None
         if body is not None:
             validate_body(operation, body)
-            admit_write(request, body)
+            # Session alone, except sending a vault secret to a server or granting a tool to chats.
+            admit_write(
+                request,
+                body,
+                password="secret_ref" in body or (operation == "access" and body["enabled"]),
+            )
         return await run_in_threadpool(
             forward,
             request.method,
@@ -90,7 +95,16 @@ def router(app, session, forward, admit_write, upstream):
                 field = "sensitive" if identity is not None else "enabled"
                 if set(body) != {field} or not isinstance(body[field], bool):
                     raise AuthError(f"Send only {field}: true or false.", 422)
-            admit_write(request, body)
+            # Narrowing needs the session only; widening what Conker may do, or the buttons that
+            # decide how firmly a tool asks, needs the password.
+            admit_write(
+                request,
+                body,
+                password=card
+                or (tool_access and body["enabled"])
+                or (identity is None and body["enabled"])
+                or (identity is not None and not tool_access and body["sensitive"] is False),
+            )
         extra = None
         if identity is None or tool_access:
             # The delegate and the tool grants are the chat's own scoped key; the owner key alone
@@ -115,7 +129,7 @@ def router(app, session, forward, admit_write, upstream):
     @routes.post("/api/owner/tools/{identity}/runs")
     async def tool_runs(identity: str, request: Request):
         """Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when
-        Conker runs it, and asks for the password; a tool that asks still makes an approval
+        Conker runs it, and needs the signed-in session; a tool that asks still makes an approval
         request (CONFIRMATION_REQUIRED), resumed with the same action_id."""
         from starlette.concurrency import run_in_threadpool
 
@@ -149,8 +163,8 @@ def router(app, session, forward, admit_write, upstream):
             if not key:
                 raise AuthError("The scoped chat execution credential is not configured.", 503)
             extra = {"X-ToolGate-Execution-Key": key}
-            # The proof covers the action id and every argument.
-            admit_write(request, body)
+            # As when Conker runs it from a chat: his access layers and approvals decide.
+            admit_write(request, body, password=False)
         elif set(params) - {"limit"} or (
             "limit" in params
             and (
@@ -243,7 +257,8 @@ def router(app, session, forward, admit_write, upstream):
                 or body["document"].get("id") != identity
             ):
                 raise AuthError("Send an editor document and its expected revision.", 422)
-            admit_write(request, body)
+            # A draft runs nothing until it is published.
+            admit_write(request, body, password=False)
         from starlette.concurrency import run_in_threadpool
 
         return await run_in_threadpool(
@@ -299,7 +314,8 @@ def router(app, session, forward, admit_write, upstream):
                 raise AuthError(
                     "Supply the exact workflow version and bounded operation fields.", 422
                 )
-            admit_write(request, body)
+            # Letting chats run a workflow widens what Conker may do; a run or a withdrawal doesn't.
+            admit_write(request, body, password=operation == "access" and body["enabled"])
         elif operation == "access":
             if (
                 set(params) != {"version", "digest"}
@@ -359,8 +375,13 @@ def router(app, session, forward, admit_write, upstream):
                 if not key:
                     raise AuthError("The scoped chat execution credential is not configured.", 503)
                 extra = {"X-ToolGate-Execution-Key": key}
-            # The password proof covers conkerMayUse with the rest of the body.
-            admit_write(request, body)
+            # Publishing to run without asking, or for Conker to use, needs the password (the proof
+            # covers the whole body); publishing to ask him first each time needs the session.
+            admit_write(
+                request,
+                body,
+                password=body["authorization"] == "auto" or bool(body.get("conkerMayUse")),
+            )
         from starlette.concurrency import run_in_threadpool
 
         return await run_in_threadpool(
@@ -380,7 +401,7 @@ def router(app, session, forward, admit_write, upstream):
     async def tool_settings(request: Request):
         """How tools run: ToolGate's owner settings document (time limits, the Terminal's
         resources, web search, the run window). A save replaces the document at the revision
-        he saw, so it asks for the password; ToolGate refuses a stale revision (409)."""
+        he saw and needs the signed-in session; ToolGate refuses a stale revision (409)."""
         from starlette.concurrency import run_in_threadpool
 
         session(request)
@@ -395,7 +416,7 @@ def router(app, session, forward, admit_write, upstream):
                 or not isinstance(body["settings"], dict)
             ):
                 raise AuthError("Send the expected revision and the settings.", 422)
-            admit_write(request, body)
+            admit_write(request, body, password=False)
         return await run_in_threadpool(
             forward,
             request.method,

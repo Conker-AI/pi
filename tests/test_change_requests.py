@@ -11,7 +11,7 @@ from test_tool_turns import FakeGate, build
 
 from pi.agents import change_requests, tool_drafts
 from pi.api import server as api
-from pi.api.browser_contract import owner_allowed, session_only_write
+from pi.api.browser_contract import owner_allowed, password_write, session_only_write
 from pi.conversation.store import Store
 from pi.schedule import agent_jobs, jobs
 from pi.turns import native_tools
@@ -252,9 +252,11 @@ def test_other_agents_get_conkers_tools_only_when_selected():
 def test_the_owner_routes_and_contract(store, monkeypatch):
     request = "/change-requests/creq_" + "a" * 32
     assert owner_allowed("GET", "/change-requests") and owner_allowed("POST", request + "/approve")
-    assert session_only_write("POST", request + "/decline") and not session_only_write(
+    # Approving makes an undoable request real; the signed-in session is enough for every verb.
+    assert session_only_write("POST", request + "/decline") and session_only_write(
         "POST", request + "/approve"
     )
+    assert not password_write("POST", request + "/approve")
     assert owner_allowed("POST", request + "/saved") and session_only_write(
         "POST", request + "/saved"
     )
@@ -413,7 +415,8 @@ def test_the_owner_adds_a_memory_by_hand_through_the_same_route(monkeypatch):
         with pytest.raises(ValueError):
             stated.Remember(request_id="r" * 16, text=text)
     assert owner_allowed("POST", "/memory/remember")
-    assert not session_only_write("POST", "/memory/remember")  # asks for the password
+    assert session_only_write("POST", "/memory/remember")  # the session alone is enough
+    assert not password_write("POST", "/memory/remember")
 
     seen = []
 

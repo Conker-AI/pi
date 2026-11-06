@@ -106,16 +106,6 @@ def boundary(tmp_path, monkeypatch):
         yield client, headers, seen, response, auth
 
 
-def proof(client, headers, path, body=BODY):
-    result = client.post(
-        "/auth/verify",
-        headers=headers,
-        json={"password": PASSWORD, "operation": {"method": "POST", "path": path, "body": body}},
-    )
-    assert result.status_code == 200, result.text
-    return {**headers, "X-Conker-Verification": result.json()["verification_token"]}
-
-
 def test_owner_only_exact_reads_do_not_launch_or_persist_output(boundary):
     client, _, seen, _, auth = boundary
     for suffix, action in [("", "list"), (f"/{ID}", "status"), (f"/{ID}/output", "output")]:
@@ -139,7 +129,7 @@ def test_owner_only_exact_reads_do_not_launch_or_persist_output(boundary):
         assert "Synthetic private output" not in "\n".join(db.iterdump())
 
 
-def test_stop_requires_csrf_exact_id_identity_and_single_use_proof(boundary):
+def test_stop_needs_csrf_the_session_and_forwards_the_exact_id_and_identity(boundary):
     client, headers, seen, _, _ = boundary
     path = f"{PREFIX}/{ID}/stop"
     assert client.post(path, json=BODY).status_code == 403
@@ -149,20 +139,18 @@ def test_stop_requires_csrf_exact_id_identity_and_single_use_proof(boundary):
         ).status_code
         == 403
     )
-    assert client.post(path, json=BODY, headers=headers).status_code == 428
-    checked = proof(client, headers, path)
-    assert client.post(f"{PREFIX}/different/stop", json=BODY, headers=checked).status_code == 428
-    assert (
-        client.post(path, json={"expectedIdentity": "b" * 64}, headers=checked).status_code == 428
-    )
     assert not seen
-    result = client.post(path, json=BODY, headers=checked)
+    # Stopping only takes something away: the session is enough, no password proof.
+    result = client.post(path, json=BODY, headers=headers)
     assert result.status_code == 200 and result.json() == payload("stop")
-    assert client.post(path, json=BODY, headers=checked).status_code == 428
     assert len(seen) == 1
     assert seen[0].url.path == f"/claude/sessions/{ID}/stop"
     assert json.loads(seen[0].content) == BODY
     assert set(seen[0].extensions["timeout"].values()) == {30}
+    assert "x-conker-verification" not in seen[0].headers
+    client.cookies.clear()
+    assert client.post(path, json=BODY, headers=headers).status_code == 401
+    assert len(seen) == 1
 
 
 @pytest.mark.parametrize(
@@ -212,16 +200,15 @@ def test_fixed_host_errors_are_preserved_without_raw_content(boundary, code):
     assert len(seen) == 1
 
 
-def test_timeout_unknown_stop_is_not_replayed_and_consumes_proof(boundary):
+def test_timeout_unknown_stop_is_not_replayed(boundary):
     client, headers, seen, response, _ = boundary
     response[0] = httpx.ReadTimeout("host-private-password")
     path = f"{PREFIX}/{ID}/stop"
-    checked = proof(client, headers, path)
-    result = client.post(path, json=BODY, headers=checked)
+    result = client.post(path, json=BODY, headers=headers)
     assert result.status_code == 503
     assert result.json()["detail"]["code"] == "native_sessions_unavailable"
     assert "host-private-password" not in result.text
-    assert client.post(path, json=BODY, headers=checked).status_code == 428
+    # The gateway sent it once and never retried; only the owner's next request sends it again.
     assert len(seen) == 1
 
 

@@ -1,4 +1,4 @@
-"""Server actions through the host helper: reads with the session, actions with the password."""
+"""Server actions through the host helper: reads and actions both need only the signed-in session."""
 
 import hashlib
 import json
@@ -164,23 +164,28 @@ def test_a_read_outside_the_allowlist_never_reaches_the_helper(host, body):
         ("backup.run", {}),
     ],
 )
-def test_actions_need_the_password_bound_to_the_exact_body(host, operation, arguments):
+def test_actions_need_only_the_session_and_forward_the_exact_body(host, operation, arguments):
     client, headers, seen, _ = host
     body = {"id": OP_ID, "operation": operation, "arguments": arguments}
-    refused = client.post("/api/host/ops", json=body, headers=headers)
-    assert refused.status_code == 428 and not seen
-    # A proof for another action, or the same action with another id, does not admit this one.
-    other = proof(client, headers, {**body, "id": "ui-other-0123456789abcdef"})
-    assert client.post("/api/host/ops", json=body, headers=other).status_code == 428
-    checked = proof(client, headers, body)
-    response = client.post("/api/host/ops", json=body, headers=checked)
+    # None of them deletes or replaces anything: CSRF, origin and the session are what is checked.
+    assert client.post("/api/host/ops", json=body).status_code == 403
+    foreign = {**headers, "Origin": "https://evil.test"}
+    assert client.post("/api/host/ops", json=body, headers=foreign).status_code == 403
+    assert client.post("/api/host/ops?force=1", json=body, headers=headers).status_code == 422
+    assert not seen
+    response = client.post("/api/host/ops", json=body, headers=headers)
     assert response.status_code == 200
     assert response.json() == receipt(OP_ID, operation, arguments)
     [wire] = seen
     assert wire.method == "POST" and wire.url.path == "/host/ops"
     assert json.loads(wire.content) == body
-    assert client.post("/api/host/ops", json=body, headers=checked).status_code == 428
-    assert len(seen) == 1
+    # A proof sent anyway is neither needed nor passed on (the transport above refuses it).
+    spare = proof(client, headers, body)
+    assert client.post("/api/host/ops", json=body, headers=spare).status_code == 200
+    assert len(seen) == 2
+    client.cookies.clear()
+    assert client.post("/api/host/ops", json=body, headers=headers).status_code == 401
+    assert len(seen) == 2
 
 
 @pytest.mark.parametrize(
@@ -197,7 +202,7 @@ def test_actions_need_the_password_bound_to_the_exact_body(host, operation, argu
         {"id": OP_ID, "operation": "backup.run", "arguments": {}, "source": "cli"},
     ],
 )
-def test_an_action_outside_the_allowlist_is_refused_before_any_proof(host, body):
+def test_an_action_outside_the_allowlist_never_reaches_the_helper(host, body):
     client, headers, seen, _ = host
     response = client.post("/api/host/ops", json=body, headers=headers)
     assert response.status_code == 422
@@ -230,7 +235,7 @@ def test_helper_refusals_pass_through_and_odd_answers_do_not(host):
     # A receipt for another action is not the answer to this one.
     action = {"id": OP_ID, "operation": "backup.run", "arguments": {}}
     reply["answer"] = lambda wire: httpx.Response(200, json=receipt(operation="services.restart"))
-    response = client.post("/api/host/ops", json=action, headers=proof(client, headers, action))
+    response = client.post("/api/host/ops", json=action, headers=headers)
     assert response.status_code == 503 and response.json()["error"] == "host_unavailable"
 
 

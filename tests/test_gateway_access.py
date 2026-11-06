@@ -1,4 +1,4 @@
-"""Owner access routes: proof-bound writes, the chat's own key as the delegate, strict bodies."""
+"""Owner access routes: widening needs a proof, narrowing the session; the chat's own key; strict bodies."""
 
 import json
 
@@ -6,28 +6,54 @@ import pytest
 from test_gateway_mcp import EXECUTION_KEY, OWNER_KEY, boundary, proof  # noqa: F401 - fixture
 
 DIGEST = "a" * 64
-WRITES = [
+# Widening what Conker may do (delegate on, a tool granted to chats, a tool no longer always
+# asking) needs the password proof; narrowing it needs only the signed-in session.
+PASSWORD_WRITES = [
     ("/api/owner/access/delegate", {"enabled": True}),
-    ("/api/owner/tools/research.search/sensitive", {"sensitive": True}),
+    ("/api/owner/tools/research.search/sensitive", {"sensitive": False}),
     ("/api/owner/tools/sandbox.run/access", {"enabled": True, "expected_digest": DIGEST}),
+]
+SESSION_WRITES = [
+    ("/api/owner/access/delegate", {"enabled": False}),
+    ("/api/owner/tools/research.search/sensitive", {"sensitive": True}),
+    ("/api/owner/tools/sandbox.run/access", {"enabled": False, "expected_digest": DIGEST}),
 ]
 
 
-@pytest.mark.parametrize("path,body", WRITES)
-def test_writes_need_the_password_proof_and_forward_exactly(boundary, path, body):
+def assert_forwarded_exactly(seen, path, body):
+    [request] = seen
+    assert request.url == "http://toolgate.test" + path.replace("/api/owner/", "/v2/owner/")
+    assert json.loads(request.content) == body
+    assert request.headers["x-toolgate-owner-key"] == OWNER_KEY
+    assert "x-conker-verification" not in request.headers
+    # Only the delegate switch and tool grants name a key, always the chat's own scoped key.
+    assert (request.headers.get("x-toolgate-execution-key") == EXECUTION_KEY) == path.endswith(
+        ("/delegate", "/access")
+    )
+
+
+@pytest.mark.parametrize("path,body", PASSWORD_WRITES)
+def test_widening_writes_need_the_password_proof_and_forward_exactly(boundary, path, body):
     _, client, headers, seen, _ = boundary
     assert client.post(path, json=body, headers=headers).status_code == 428
     assert not seen
     response = client.post(path, json=body, headers=proof(client, headers, path, body))
     assert response.status_code == 200, response.text
-    [request] = seen
-    assert request.url == "http://toolgate.test" + path.replace("/api/owner/", "/v2/owner/")
-    assert json.loads(request.content) == body
-    assert request.headers["x-toolgate-owner-key"] == OWNER_KEY
-    # Only the delegate switch and tool grants name a key, always the chat's own scoped key.
-    assert (request.headers.get("x-toolgate-execution-key") == EXECUTION_KEY) == path.endswith(
-        ("/delegate", "/access")
-    )
+    assert_forwarded_exactly(seen, path, body)
+
+
+@pytest.mark.parametrize("path,body", SESSION_WRITES)
+def test_narrowing_writes_need_only_the_session_and_forward_exactly(boundary, path, body):
+    _, client, headers, seen, _ = boundary
+    for refused in ({}, {**headers, "X-CSRF-Token": "wrong"}):
+        assert client.post(path, json=body, headers=refused).status_code == 403
+    assert not seen
+    response = client.post(path, json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    assert_forwarded_exactly(seen, path, body)
+    client.cookies.clear()
+    assert client.post(path, json=body, headers=headers).status_code == 401
+    assert len(seen) == 1
 
 
 @pytest.mark.parametrize(

@@ -14,7 +14,7 @@ PASSWORD = "local integration testing phrase"
 OWNER = "owner-control-test-key-" + "o" * 32
 
 
-def test_separate_owner_transport_exact_proof_and_no_runtime_escalation(tmp_path, monkeypatch):
+def test_separate_owner_transport_session_write_and_no_runtime_escalation(tmp_path, monkeypatch):
     monkeypatch.setattr(
         auth_module,
         "password_hash",
@@ -48,22 +48,11 @@ def test_separate_owner_transport_exact_proof_and_no_runtime_escalation(tmp_path
         assert client.get("/api/control/pi/setup/status").status_code == 200
         assert seen[-1].headers["x-pi-owner-key"] == OWNER
         body = {"expected_revision": 0, "configuration": {"test": True}}
-        assert client.post(path, json=body, headers=headers).status_code == 428
-        proof = client.post(
-            "/auth/verify",
-            headers=headers,
-            json={
-                "password": PASSWORD,
-                "operation": {"method": "POST", "path": path, "body": body},
-            },
-        )
-        checked = {**headers, "X-Conker-Verification": proof.json()["verification_token"]}
-        assert (
-            client.post(path, json={**body, "expected_revision": 1}, headers=checked).status_code
-            == 428
-        )
-        assert client.post(path, json=body, headers=checked).status_code == 200
-        assert client.post(path, json=body, headers=checked).status_code == 428
+        # Saving the model configuration is undoable: the session alone is enough.
+        assert client.post(path, json=body).status_code == 403
+        assert client.post(path, json=body, headers=headers).status_code == 200
+        assert json.loads(seen[-1].content) == body
+        assert "x-conker-verification" not in seen[-1].headers
         assert len(seen) == 3
         assert client.get("/api/pi/models/configuration").status_code == 403
         assert client.get("/api/control/pi/agents").status_code == 200
@@ -165,17 +154,21 @@ def test_typed_browser_calls_use_session_csrf_without_operation_password(tmp_pat
             == 422
         )
         assert len(seen) == 2
+        # A write that is still a password write asks before anything is relayed.
         assert (
             client.post(
-                "/api/control/pi/models/configuration",
+                "/api/control/pi/memory/forget",
                 json={"expected_revision": 1},
                 headers=headers,
             ).status_code
             == 428
         )
+        assert len(seen) == 2
 
 
-def test_companion_character_package_uses_exact_verified_large_envelope(tmp_path, monkeypatch):
+def test_companion_character_package_needs_only_the_session_and_relays_the_large_envelope(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(
         auth_module,
         "password_hash",
@@ -202,18 +195,10 @@ def test_companion_character_package_uses_exact_verified_large_envelope(tmp_path
         headers = {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
         path = "/api/control/pi/characters/companion/import"
         body = {"text": "x" * 70_000}
-        assert client.post(path, json=body, headers=headers).status_code == 428
-        proof = client.post(
-            "/auth/verify",
-            headers=headers,
-            json={
-                "password": PASSWORD,
-                "operation": {"method": "POST", "path": path, "body": body},
-            },
-        )
-        assert proof.status_code == 200
-        checked = {**headers, "X-Conker-Verification": proof.json()["verification_token"]}
-        assert client.post(path, json=body, headers=checked).status_code == 200
+        # The session alone is enough; the whole large envelope is relayed unchanged.
+        assert client.post(path, json=body).status_code == 403
+        assert client.post(path, json=body, headers=headers).status_code == 200
         assert seen[-1].headers["x-pi-owner-key"] == OWNER
+        assert "x-conker-verification" not in seen[-1].headers
         assert json.loads(seen[-1].content) == body
-        assert client.post(path, json=body, headers=checked).status_code == 428
+        assert len(seen) == 1

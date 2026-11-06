@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 import httpx
 import pytest
@@ -67,25 +68,24 @@ def verified_headers(client, headers, path, body):
     return {**headers, "X-Conker-Verification": result.json()["verification_token"]}
 
 
-def test_editor_draft_write_requires_exact_one_use_proof(gateway):
+def test_editor_draft_write_needs_only_the_session(gateway):
     client, _, seen = gateway
     path = "/api/owner/editor-drafts/example"
     assert client.get(path).status_code == 401
     headers = sign_in(client)
     body = {"expected_revision": 0, "document": {"id": "example"}}
-    assert client.post(path, json=body, headers=headers).status_code == 428
-    verified = verified_headers(client, headers, path, body)
-    assert (
-        client.post(path, json={**body, "expected_revision": 1}, headers=verified).status_code
-        == 428
-    )
-    assert client.post(path, json=body, headers=verified).status_code == 200
+    assert client.post(path, json=body).status_code == 403
+    assert client.post(path, json=body, headers={**headers, "X-CSRF-Token": "x"}).status_code == 403
+    assert client.post(path + "?force=1", json=body, headers=headers).status_code == 422
+    assert not seen
+    assert client.post(path, json=body, headers=headers).status_code == 200
     assert seen[-1].url.path == "/v2/owner/editor-drafts/example"
+    assert json.loads(seen[-1].content) == body
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
     assert "X-ToolGate-Execution-Key" not in seen[-1].headers
-    assert "cookie" not in seen[-1].headers
-    assert client.post(path, json=body, headers=verified).status_code == 428
-    assert len(seen) == 1
+    assert "cookie" not in seen[-1].headers and "x-conker-verification" not in seen[-1].headers
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    assert len(seen) == 2
 
 
 def test_editor_draft_routes_do_not_widen_to_execution_or_arbitrary_paths(gateway):
@@ -105,26 +105,57 @@ def test_editor_draft_routes_do_not_widen_to_execution_or_arbitrary_paths(gatewa
         assert result.status_code == 422
 
 
-def test_editor_publication_requires_exact_one_use_proof_and_owner_channel(gateway):
-    client, _, seen = gateway
-    path = "/api/owner/editor-drafts/example/publish"
-    headers = sign_in(client)
-    body = {
+def publication_body(**changes):
+    return {
         "expected_revision": 2,
         "expected_publication_version": 1,
         "authorization": "owner_confirmation",
+        **changes,
     }
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"authorization": "auto"},
+        {"conkerMayUse": True},
+        {"authorization": "auto", "conkerMayUse": True},
+    ],
+    ids=["auto", "conker-may-use", "both"],
+)
+def test_editor_publication_that_widens_requires_exact_one_use_proof(gateway, changes):
+    client, _, seen = gateway
+    path = "/api/owner/editor-drafts/example/publish"
+    headers = sign_in(client)
+    body = publication_body(**changes)
     assert client.post(path, json=body, headers=headers).status_code == 428
     verified = verified_headers(client, headers, path, body)
-    assert (
-        client.post(path, json={**body, "authorization": "auto"}, headers=verified).status_code
-        == 428
-    )
+    widened = {**body, "authorization": "auto", "conkerMayUse": True, "expected_revision": 3}
+    assert client.post(path, json=widened, headers=verified).status_code == 428
+    assert not seen
     assert client.post(path, json=body, headers=verified).status_code == 200
     assert seen[-1].url.path == "/v2/owner/editor-drafts/example/publish"
+    assert json.loads(seen[-1].content) == body
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    # Only letting Conker use it names the chat's own scoped key.
+    assert ("X-ToolGate-Execution-Key" in seen[-1].headers) == bool(body.get("conkerMayUse"))
+    assert client.post(path, json=body, headers=verified).status_code == 428
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize("extra", [{}, {"conkerMayUse": False}], ids=["plain", "may-use-false"])
+def test_editor_publication_to_ask_each_time_needs_only_the_session(gateway, extra):
+    client, _, seen = gateway
+    path = "/api/owner/editor-drafts/example/publish"
+    headers = sign_in(client)
+    body = publication_body(**extra)
+    assert client.post(path, json=body).status_code == 403
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    assert seen[-1].url.path == "/v2/owner/editor-drafts/example/publish"
+    assert json.loads(seen[-1].content) == body
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
     assert "X-ToolGate-Execution-Key" not in seen[-1].headers
-    assert client.post(path, json=body, headers=verified).status_code == 428
+    assert "x-conker-verification" not in seen[-1].headers
     for operation in ("publications", "validation"):
         assert client.get(f"/api/owner/editor-drafts/example/{operation}").status_code == 200
         assert (
@@ -146,24 +177,45 @@ def test_editor_catalogue_is_a_narrow_read_only_owner_route(gateway):
     assert client.post(path, json={}).status_code == 405
 
 
-@pytest.mark.parametrize(
-    "operation,fields",
-    [("access", {"enabled": True}), ("runs", {"action_id": "editor_" + "a" * 32, "args": {}})],
-)
-def test_editor_execution_operations_require_proof_and_both_host_credentials(
-    gateway, operation, fields
-):
+def execution_body(**fields):
+    return {"version": 1, "digest": "b" * 64, **fields}
+
+
+def test_editor_workflow_access_on_requires_proof_and_both_host_credentials(gateway):
     client, _, seen = gateway
     headers = sign_in(client)
-    path = f"/api/owner/editor-drafts/example/{operation}"
-    body = {"version": 1, "digest": "b" * 64, **fields}
+    path = "/api/owner/editor-drafts/example/access"
+    body = execution_body(enabled=True)
     assert client.post(path, headers=headers, json=body).status_code == 428
     verified = verified_headers(client, headers, path, body)
     assert client.post(path, headers=verified, json={**body, "version": 2}).status_code == 428
+    assert not seen
     assert client.post(path, headers=verified, json=body).status_code == 200
     assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
     assert seen[-1].headers["X-ToolGate-Execution-Key"] == "tgx_" + "e" * 40
     assert client.post(path, headers=verified, json=body).status_code == 428
+
+
+@pytest.mark.parametrize(
+    "operation,fields",
+    [
+        ("access", {"enabled": False}),
+        ("runs", {"action_id": "editor_" + "a" * 32, "args": {}}),
+    ],
+)
+def test_editor_workflow_withdrawal_and_runs_need_only_the_session(gateway, operation, fields):
+    client, _, seen = gateway
+    headers = sign_in(client)
+    path = f"/api/owner/editor-drafts/example/{operation}"
+    body = execution_body(**fields)
+    assert client.post(path, json=body).status_code == 403
+    assert not seen
+    assert client.post(path, headers=headers, json=body).status_code == 200
+    assert json.loads(seen[-1].content) == body
+    assert seen[-1].headers["X-ToolGate-Owner-Key"] == OWNER
+    assert seen[-1].headers["X-ToolGate-Execution-Key"] == "tgx_" + "e" * 40
+    assert "x-conker-verification" not in seen[-1].headers
+    assert client.post(path, headers=headers, json=body).status_code == 200
 
 
 def test_cookie_is_secure_httponly_strict_and_service_keys_do_not_authenticate(gateway):
@@ -271,10 +323,11 @@ def test_session_revocation_endpoint_and_expiry_block_proxy(gateway):
     sessions = client.get("/auth/sessions").json()["results"]
     assert len(sessions) == 1 and "token_hash" not in sessions[0] and "csrf" not in sessions[0]
     path = f"/auth/sessions/{sessions[0]['id']}/revoke"
-    assert client.post(path, json={}, headers=headers).status_code == 428
-    proof = verified_headers(client, headers, path, {})
-    assert client.post("/auth/revoke-all", json={}, headers=proof).status_code == 428
-    assert client.post(path, json={}, headers=proof).status_code == 200
+    # Signing out only takes access away: the session is enough, no password proof.
+    assert client.post(path, json={}).status_code == 403
+    assert client.post(path, json={"x": 1}, headers=headers).status_code == 422
+    assert client.post(path + "?x=1", json={}, headers=headers).status_code == 422
+    assert client.post(path, json={}, headers=headers).status_code == 200
     assert client.get("/api/pi/sessions").status_code == 401
     sign_in(client)
     auth.clock = lambda: sessions[0]["expires"] + 1000
@@ -401,15 +454,9 @@ def test_task_ledger_routes_use_runtime_authority_and_keep_csrf_boundary(gateway
         before = len(seen)
         assert client.post("/api/pi" + path, json={}).status_code == 403
         assert len(seen) == before
-        assert (
-            client.post(
-                "/api/pi" + path,
-                json={},
-                headers=verified_headers(client, headers, "/api/pi" + path, {}),
-            ).status_code
-            == 200
-        )
+        assert client.post("/api/pi" + path, json={}, headers=headers).status_code == 200
         assert seen[-1].headers["X-Pi-Gateway-Key"] == RUNTIME
+        assert "x-conker-verification" not in seen[-1].headers
         assert "X-ToolGate-Owner-Key" not in seen[-1].headers
     for path in (
         "/tasks",

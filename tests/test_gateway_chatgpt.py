@@ -29,7 +29,7 @@ def status():
     }
 
 
-def test_subscription_auth_is_owner_only_exact_single_use_verified(tmp_path, monkeypatch):
+def test_subscription_auth_is_owner_only_and_needs_only_the_session(tmp_path, monkeypatch):
     monkeypatch.setattr(
         auth_module,
         "password_hash",
@@ -67,27 +67,25 @@ def test_subscription_auth_is_owner_only_exact_single_use_verified(tmp_path, mon
         headers = {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
         assert client.get(path).status_code == 200
         body = {"operation": "login"}
-        assert client.post(path, json=body, headers=headers).status_code == 428
-        proof = client.post(
-            "/auth/verify",
-            json={
-                "password": PASSWORD,
-                "operation": {"method": "POST", "path": path, "body": body},
-            },
-            headers=headers,
-        ).json()["verification_token"]
-        checked = {**headers, "X-Conker-Verification": proof}
-        assert client.post(path, json={"operation": "models"}, headers=checked).status_code == 428
+        # Signing in to his own plan is undone by signing out: the session alone is enough.
+        assert client.post(path, json=body).status_code == 403
         assert (
             client.post(
-                path, json=body, headers={**checked, "Origin": "https://evil.test"}
+                path, json=body, headers={**headers, "Origin": "https://evil.test"}
             ).status_code
             == 403
         )
-        assert client.post(path, json=body, headers=checked).status_code == 200
-        assert client.post(path, json=body, headers=checked).status_code == 428
+        assert (
+            client.post(path, json={**body, "apiKey": "PRIVATE"}, headers=headers).status_code
+            == 422
+        )
+        assert client.post(path + "?token=secret", json=body, headers=headers).status_code == 422
+        assert len(seen) == 1  # only the earlier read reached the host
+        assert client.post(path, json=body, headers=headers).status_code == 200
+        assert client.post(path, json={"operation": "models"}, headers=headers).status_code == 200
         assert client.get(path + "?token=secret").status_code == 422
-        assert len(seen) == 2
+        assert len(seen) == 3
+        assert all("x-conker-verification" not in request.headers for request in seen)
 
 
 @pytest.mark.parametrize(

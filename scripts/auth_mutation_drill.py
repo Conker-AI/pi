@@ -15,7 +15,7 @@ VERIFY = "tests/test_gateway_verification.py::"
 LOCKOUT = "tests/test_gateway_lockout.py::"
 CHAT = "tests/test_gateway_chat_routes.py::"
 LEVEL = "tests/test_gateway_approval_levels.py::"
-CHAT_WRITE = CHAT + "test_owner_write_needs_session_csrf_exact_body_and_a_bound_proof"
+CHAT_WRITE = CHAT + "test_owner_write_needs_only_session_csrf_and_an_exact_body"
 CHAT_READ = CHAT + "test_owner_reads_through_the_control_key"
 OWNER_CHAT = (
     "tests/test_owner_chat_routes.py::test_owner_key_reaches_the_route_and_nothing_else_does"
@@ -95,9 +95,8 @@ CASES = [
         "gateway/store.py",
         (
             'if (\n            not row\n            or row["expires"] <= now\n'
-            '            or (\n                row["authenticated"]\n'
-            '                and (row["verified_at"] is None or '
-            'row["verified_at"] + idle <= now)\n            )\n        ):'
+            '            or (row["authenticated"] and (seen is None or seen + idle <= now))\n'
+            '        ):'
         ),
         "if not row:",
         STORE + "test_idle_and_absolute_expiry",

@@ -135,10 +135,10 @@ def router(app, session, admit_write, stream_transport):
     async def import_file(source: str, step: str, request: Request):
         """A ChatGPT or Claude export's `conversations.json` as the raw body, up to 128 MB.
 
-        `preview` saves nothing, so the signed-in session is enough. An import (named by the
-        previewed file's SHA-256) saves chats and offers his words to memory, so it asks for the
-        password: the proof covers this path with an empty body, the path's digest names the file,
-        and a body with another digest is refused before Pi receives all of it.
+        `preview` saves nothing. An import (named by the previewed file's SHA-256) saves read-only
+        chats and offers the owner's words to memory as outside content; both can be undone, so
+        the signed-in session is enough for either. The path's digest names the file, and a body
+        with another digest is refused before Pi receives all of it.
         """
         session(request)
         target = f"/imports/{source}/{step}"

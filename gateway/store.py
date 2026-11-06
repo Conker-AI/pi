@@ -39,13 +39,23 @@ def password_hash(password: str, salt: bytes) -> str:
         ).hex()
 
 
+def _last_seen(row) -> float | None:
+    """When the owner last proved the password or used the page in this session."""
+    seen = [value for value in (row["verified_at"], row["active_at"]) if value is not None]
+    return max(seen) if seen else None
+
+
 class AuthStore:
     """The owner's password, browser sessions and the window a sign-in stays unlocked.
 
-    `idle` is the host's ceiling (GATEWAY_IDLE_TIMEOUT_SECONDS). The owner may pick a shorter
-    window in Settings (`idleTimeoutMinutes` in Pi's owner preferences); the gateway keeps the
-    last choice it saw in this database (`owner_window`), so a restart or Pi being down never
-    loosens it. Until it has seen one, the ceiling applies.
+    A sign-in stays unlocked while he uses the page: each password (sign-in, a confirmed action)
+    and each activity mark (`activity`, which the page sends on his own clicks and keys, never on
+    polling) restarts the window; after the window without either, the session ends and he signs
+    in again. Never past `absolute` from sign-in. `idle` is the host's ceiling
+    (GATEWAY_IDLE_TIMEOUT_SECONDS). The owner may pick a shorter window in Settings
+    (`idleTimeoutMinutes` in Pi's owner preferences); the gateway keeps the last choice it saw in
+    this database (`owner_window`), so a restart or Pi being down never loosens it. Until it has
+    seen one, the ceiling applies.
     """
 
     def __init__(
@@ -97,6 +107,8 @@ class AuthStore:
             if "verified_at" not in columns:
                 # Existing sessions have no known password-verification time: fail closed.
                 db.execute("ALTER TABLE sessions ADD COLUMN verified_at REAL")
+            if "active_at" not in columns:
+                db.execute("ALTER TABLE sessions ADD COLUMN active_at REAL")
             columns = {row[1] for row in db.execute("PRAGMA table_info(login_attempts)")}
             if "attempt_id" not in columns:
                 db.execute("ALTER TABLE login_attempts ADD COLUMN attempt_id TEXT")
@@ -179,7 +191,7 @@ class AuthStore:
         now = self.clock()
         db.execute(
             "DELETE FROM sessions WHERE expires<=? OR (authenticated=1 AND "
-            "(verified_at IS NULL OR verified_at<=?))",
+            "max(coalesce(verified_at,0),coalesce(active_at,0))<=?)",
             (now, now - self._idle(db)),
         )
         db.execute(
@@ -202,7 +214,8 @@ class AuthStore:
         identity = secrets.token_urlsafe(18)
         expires = now + (self.absolute if authenticated else 600)
         db.execute(
-            "INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO sessions(token_hash,id,csrf,authenticated,generation,created,touched,"
+            "expires,verified_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (
                 digest(token),
                 identity,
@@ -244,13 +257,11 @@ class AuthStore:
         row = db.execute("SELECT * FROM sessions WHERE token_hash=?", (digest(token),)).fetchone()
         now = self.clock()
         idle = self._idle(db)
+        seen = _last_seen(row) if row else None
         if (
             not row
             or row["expires"] <= now
-            or (
-                row["authenticated"]
-                and (row["verified_at"] is None or row["verified_at"] + idle <= now)
-            )
+            or (row["authenticated"] and (seen is None or seen + idle <= now))
         ):
             raise AuthError("Session expired or revoked. Sign in again.")
         if authenticated and not row["authenticated"]:
@@ -260,9 +271,22 @@ class AuthStore:
             raise AuthError("Password changed. Sign in again.")
         value = dict(row)
         value["unlock_expires_at"] = (
-            min(row["expires"], row["verified_at"] + idle) if row["authenticated"] else None
+            min(row["expires"], seen + idle) if row["authenticated"] else None
         )
         return value
+
+    def activity(self, token: str) -> dict:
+        """The owner used the page (a click or a key): the unlock window starts again from now.
+
+        Only a live signed-in session can be kept; an expired one stays expired.
+        """
+        with self.transaction() as db:
+            row = self._session(db, token)
+            now = self.clock()
+            db.execute(
+                "UPDATE sessions SET active_at=?,touched=? WHERE id=?", (now, now, row["id"])
+            )
+            return {"unlock_expires_at": min(row["expires"], now + self._idle(db))}
 
     def _budget(self, db: sqlite3.Connection, row: dict, device: str) -> str | None:
         """Whose attempts a password check counts against; None is the shared budget.

@@ -78,11 +78,14 @@ def test_tool_settings_are_read_with_the_session_through_the_owner_key(gate):
     assert len(seen) == 1
 
 
-def test_saving_tool_settings_needs_the_password_for_the_exact_document(gate):
+def test_saving_tool_settings_needs_only_the_session_and_forwards_the_exact_document(gate):
     client, headers, seen, _ = gate
     path = "/api/owner/tool-settings"
-    assert client.put(path, json=SETTINGS, headers=headers).status_code == 428
-    # No proof is issued for it as a POST, and one for other settings does not admit this save.
+    assert client.put(path, json=SETTINGS).status_code == 403  # no CSRF
+    foreign = {**headers, "Origin": "https://evil.test"}
+    assert client.put(path, json=SETTINGS, headers=foreign).status_code == 403
+    assert client.put(path + "?x=1", json=SETTINGS, headers=headers).status_code == 422
+    # Still not a proof-bound operation: no proof is issued for it as a POST.
     as_post = client.post(
         "/auth/verify",
         headers=headers,
@@ -92,17 +95,16 @@ def test_saving_tool_settings_needs_the_password_for_the_exact_document(gate):
         },
     )
     assert as_post.status_code == 422
-    other = proof(client, headers, "PUT", path, {**SETTINGS, "expected_revision": 4})
-    assert client.put(path, json=SETTINGS, headers=other).status_code == 428
     assert not seen
-    checked = proof(client, headers, "PUT", path, SETTINGS)
-    response = client.put(path, json=SETTINGS, headers=checked)
+    response = client.put(path, json=SETTINGS, headers=headers)
     assert response.status_code == 200
     [request] = seen
     assert request.method == "PUT" and request.url.path == "/v2/owner/settings"
     assert json.loads(request.content) == SETTINGS
-    assert "x-conker-verification" not in request.headers
-    assert client.put(path, json=SETTINGS, headers=checked).status_code == 428
+    assert request.headers["x-toolgate-owner-key"] == OWNER_KEY
+    assert "x-conker-verification" not in request.headers and "cookie" not in request.headers
+    client.cookies.clear()
+    assert client.put(path, json=SETTINGS, headers=headers).status_code == 401
     assert len(seen) == 1
 
 
@@ -128,9 +130,7 @@ def test_toolgates_refusals_pass_through(gate):
     stale = {"detail": {"code": "stale_revision", "message": "Reload the settings."}}
     reply["answer"] = lambda request: httpx.Response(409, json=stale)
     path = "/api/owner/tool-settings"
-    response = client.put(
-        path, json=SETTINGS, headers=proof(client, headers, "PUT", path, SETTINGS)
-    )
+    response = client.put(path, json=SETTINGS, headers=headers)
     assert response.status_code == 409 and response.json() == stale
 
 

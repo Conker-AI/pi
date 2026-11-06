@@ -75,8 +75,9 @@ def test_exact_owner_allowlist_and_session_only_writes():
         ("POST", f"/calls/{identity}/audio"),
         ("DELETE", f"/calls/browser/{identity}"),
     ):
+        # Not on the owner list, so the gateway refuses it before any write rule applies.
         assert not owner_allowed(method, path)
-        assert not session_only_write(method, path)
+        assert not runtime_allowed(method, path)
 
 
 def test_browser_call_lifecycle_is_typed_bounded_and_reconnectable(tmp_path):

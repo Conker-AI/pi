@@ -1,6 +1,7 @@
 """Admission proofs, password budget and non-renewing server unlock windows."""
 
 import hashlib
+import json
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -16,6 +17,10 @@ from gateway.store import AuthError, AuthStore
 
 PASSWORD = "four quiet trees beside school"
 ORIGIN = "https://localhost:8050"
+# Writes that still ask for a password proof (pi/api/browser_contract.py PASSWORD_WRITES): a
+# webhook call through the runtime channel, and forgetting through the owner-control channel.
+HOOK = "/api/pi/hooks/job_" + "a" * 32
+FORGET = "/api/control/pi/memory/forget"
 
 
 @pytest.fixture
@@ -33,11 +38,18 @@ def boundary(tmp_path, monkeypatch):
 
     def upstream(request):
         seen.append(request)
-        if request.url.path == "/tasks/failure/update":
+        if request.url.path == "/hooks/job_" + "f" * 32:
             raise httpx.ReadTimeout("private upstream detail")
         return httpx.Response(200, json={"ok": True})
 
-    config = Config(ORIGIN, str(auth.path), "http://pi:8050", "r" * 32, owner_key="o" * 32)
+    config = Config(
+        ORIGIN,
+        str(auth.path),
+        "http://pi:8050",
+        "r" * 32,
+        owner_key="o" * 32,
+        pi_owner_key="p" * 32,
+    )
     with TestClient(
         create_app(config, store=auth, transport=httpx.MockTransport(upstream)), base_url=ORIGIN
     ) as client:
@@ -64,17 +76,8 @@ def proof(client, headers, path, body):
     return response.json()
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/pi/turns/t/resume",
-        "/api/pi/tasks",
-        "/api/pi/tasks/t/update",
-        "/api/pi/tasks/t/transition",
-        "/api/pi/tasks/t/archive",
-    ],
-)
-def test_every_runtime_write_requires_exact_single_use_proof(boundary, path):
+@pytest.mark.parametrize("path", [HOOK, FORGET])
+def test_every_password_write_requires_exact_single_use_proof(boundary, path):
     # Owner decisions ask for the password by ToolGate's level: test_gateway_approval_levels.py.
     client, _, headers, seen, _ = boundary
     body = {"text": "private content"}
@@ -89,6 +92,45 @@ def test_every_runtime_write_requires_exact_single_use_proof(boundary, path):
     assert len(seen) == 1
     assert "x-conker-verification" not in seen[0].headers
     assert PASSWORD not in seen[0].content.decode()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/pi/turns/t/resume",
+        "/api/pi/tasks",
+        "/api/pi/tasks/t/update",
+        "/api/pi/tasks/t/transition",
+        "/api/pi/tasks/t/archive",
+    ],
+)
+def test_task_and_resume_writes_need_only_the_signed_in_session(boundary, path):
+    """ADR-0010: these asked for a password before; the sign-in already proved it."""
+    client, _, headers, seen, _ = boundary
+    body = {"text": "private content"}
+    assert client.post(path, json=body).status_code == 403
+    assert (
+        client.post(
+            path, json=body, headers={**headers, "Origin": "https://evil.example"}
+        ).status_code
+        == 403
+    )
+    assert client.post(path + "?extra=1", json=body, headers=headers).status_code == 422
+    assert not seen
+    assert client.post(path, json=body, headers=headers).status_code == 200
+    # A proof sent anyway is neither needed nor passed on.
+    spare = {
+        **headers,
+        "X-Conker-Verification": proof(client, headers, path, body)["verification_token"],
+    }
+    assert client.post(path, json=body, headers=spare).status_code == 200
+    assert client.post(path, json=body, headers=spare).status_code == 200
+    assert len(seen) == 3
+    assert all("x-conker-verification" not in request.headers for request in seen)
+    assert all(json.loads(request.content) == body for request in seen)
+    client.cookies.clear()
+    assert client.post(path, json=body, headers=headers).status_code == 401
+    assert len(seen) == 3
 
 
 @pytest.mark.parametrize(
@@ -143,7 +185,7 @@ def test_a_chat_message_without_a_valid_request_id_never_reaches_pi(boundary, re
 
 def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary):
     client, _, headers, seen, _ = boundary
-    path = "/api/pi/tasks/s/update"
+    path = HOOK
     body = {
         "text": "private",
         "request_id": "request_identity_001",
@@ -163,7 +205,8 @@ def test_canonical_binding_covers_full_body_identity_revision_and_route(boundary
         {**body, "prefer_local": True},
     ):
         assert client.post(path, json=altered, headers=checked).status_code == 428
-    assert client.post("/api/pi/tasks/other/update", json=body, headers=checked).status_code == 428
+    other = "/api/pi/hooks/job_" + "b" * 32
+    assert client.post(other, json=body, headers=checked).status_code == 428
     assert client.post(path + "?ignored=1", json=body, headers=checked).status_code == 422
     assert not seen
     # Object key order is not authority; semantic types, arrays and all values are bound.
@@ -283,7 +326,7 @@ def test_concurrent_consumption_admits_exactly_once_and_stores_only_hashes(bound
 
 def test_upstream_unknown_result_spends_proof_without_retry(boundary):
     client, _, headers, seen, _ = boundary
-    path, body = "/api/pi/tasks/failure/update", {"text": "private"}
+    path, body = "/api/pi/hooks/job_" + "f" * 32, {"text": "private"}
     checked = {
         **headers,
         "X-Conker-Verification": proof(client, headers, path, body)["verification_token"],
