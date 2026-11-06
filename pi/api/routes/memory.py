@@ -26,6 +26,13 @@ def router(app_state, require_key, require_owner):
             app_state().store, getattr(app_state(), "memory_corrections", None), body
         )
 
+    @routes.post("/memory/forget-many", dependencies=[Depends(require_owner)])
+    def forget_memories(body: memory_forget.ForgetMany):
+        """Forget up to 50 memories one at a time; stops at the first refusal."""
+        return memory_forget.forget_many(
+            app_state().store, getattr(app_state(), "memory_corrections", None), body
+        )
+
     @routes.post("/memory/remember", dependencies=[Depends(require_owner)])
     def remember_memory(body: stated_memory.Remember):
         """Add one memory in the owner's own words; the same request id never stores it twice."""

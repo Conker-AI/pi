@@ -10,6 +10,8 @@ services:
         required: false
     environment:
       PI_DB_PATH: /data/pi.db
+      # Compose restarts Pi, so "Delete forever" can stop it and forget at the next start.
+      PI_SUPERVISED: "true"
       PI_OLLAMA_URL: http://ollama:11434
       # The only way Pi acts on the world. Without PI_TOOLGATE_KEY in .env, Pi
       # acts on nothing. Long-term memory uses the separate PI_MEMORYGATE_*

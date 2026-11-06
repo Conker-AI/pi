@@ -14,6 +14,7 @@ from pi.agents import team_execution, tool_drafts
 from pi.calls import runtime as calls
 from pi.calls import speech
 from pi.context import retrieval as context_retrieval
+from pi.conversation import forget_queue
 from pi.conversation.store import Store
 from pi.host import actions as system_actions
 from pi.host import filesystem_reads
@@ -99,7 +100,10 @@ async def lifespan(app: FastAPI):
         audio_decoder=os.environ.get("PI_AUDIO_DECODER_PATH", "").strip(),
         timeout=_seconds("PI_SPEECH_TIMEOUT_S", 30.0),
     )
-    store = Store(os.environ.get("PI_DB_PATH", "/data/pi.db"))
+    db_path = os.environ.get("PI_DB_PATH", "/data/pi.db")
+    # Chats the owner deleted forever are forgotten before anything opens the database.
+    forget_queue.run_pending(db_path)
+    store = Store(db_path)
     # A turn that was running when the process died did not finish. Saying
     # nothing would leave the owner looking at a request that vanished.
     interrupted = store.mark_interrupted_turns()

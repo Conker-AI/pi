@@ -4,6 +4,10 @@ The host operator already has database administration authority. Pi's shared API
 key does not distinguish that operator from a runtime caller, so it cannot grant
 this capability. The confirmation binds the operator to a previewed scope; it
 is not a credential.
+
+The owner's own credential (distinct from the runtime key) may ask for it through
+pi.conversation.forget_queue, which only queues the request; this same command then
+runs it in a child process at Pi's next start, before the Store opens.
 """
 
 from __future__ import annotations
@@ -153,6 +157,17 @@ def preview(path: Path | str, session_id: str) -> dict:
     with closing(_connect(Path(path).resolve(), readonly=True)) as db:
         db.execute("BEGIN")
         return _plan(db, session_id)
+
+
+def preview_many(path: Path | str, session_ids: list[str]) -> dict:
+    """Preview each session; an unknown or refused one answers its message instead of a plan."""
+    plans = {}
+    for session_id in session_ids:
+        try:
+            plans[session_id] = preview(path, session_id)
+        except ForgettingError as exc:
+            plans[session_id] = {"error": str(exc)}
+    return plans
 
 
 def _scrub(db: sqlite3.Connection) -> None:
@@ -326,13 +341,15 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--session", required=True)
         if name == "forget":
             command.add_argument("--confirm", required=True)
+    commands.add_parser("preview-many").add_argument("--session", required=True, action="append")
     args = parser.parse_args(argv)
     try:
-        result = (
-            preview(args.db, args.session)
-            if args.command == "preview"
-            else forget(args.db, args.session, args.confirm)
-        )
+        if args.command == "preview-many":
+            result = preview_many(args.db, args.session)
+        elif args.command == "preview":
+            result = preview(args.db, args.session)
+        else:
+            result = forget(args.db, args.session, args.confirm)
     except (ForgettingError, MaintenanceRequired, sqlite3.Error, OSError) as exc:
         # sqlite errors can contain data. Print only controlled errors verbatim.
         detail = (
