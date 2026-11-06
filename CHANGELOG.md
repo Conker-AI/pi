@@ -6,6 +6,23 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.20.0
+
+- **The password is asked only where it protects something.** A signed-in session is enough for
+  ordinary writes that can be undone (chat features, memory edits, imports, tool runs, drafts,
+  settings, signing in or out of a plan, server actions, revoking sessions). The password proof is
+  still required for forgetting, the owner's preferences (sign-out time, quiet hours, budgets),
+  backups' destination, job webhooks, adopting a job, scheduled budgets, entering a provider key,
+  the paid-model policy, Claude API billing, sending a vault secret, the terminal, and anything that widens what
+  Conker may do (granting a tool or workflow to chats, publishing to run without asking). Level-3
+  approvals keep asking (0.19.0). The server owns the list (`PASSWORD_WRITES`); a write without a
+  needed proof answers 428 `verification_required`.
+- **A sign-in stays unlocked while the owner uses the page.** `POST /auth/activity` (empty body),
+  which the dashboard sends on the owner's own clicks and keys, restarts the idle window; polling
+  and an untouched tab never do (L-03 stays closed). After the window (`idleTimeoutMinutes` in the
+  owner's preferences, default 15) with no password and no activity, the session ends. Never past
+  the absolute lifetime from sign-in.
+
 ## 0.19.0
 
 - **The gateway asks for the password only on serious approvals.** It reads each request's
