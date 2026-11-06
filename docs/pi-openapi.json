@@ -9543,6 +9543,76 @@
         }
       }
     },
+    "/sessions/archive": {
+      "post": {
+        "summary": "Archive Chats",
+        "operationId": "archive_chats_sessions_archive_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pi__conversation__archive__Archive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/{session_id}/title": {
       "get": {
         "summary": "Get Title",
@@ -32733,6 +32803,31 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Settings"
+      },
+      "pi__conversation__archive__Archive": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "type": "string",
+              "pattern": "^ses_[0-9a-f]{16}$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Sessions"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessions",
+          "archived"
+        ],
+        "title": "Archive"
       },
       "pi__conversation__drafts__Start": {
         "properties": {

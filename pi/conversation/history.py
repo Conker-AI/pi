@@ -20,6 +20,16 @@ MAX_PAGE_BYTES = 256 * 1024
 _ID = re.compile(r"[A-Za-z0-9_-]{1,128}", re.ASCII)
 _CURSOR = re.compile(r"h1\.([0-9a-f]{64})\.([A-Za-z0-9_-]{1,128})", re.ASCII)
 _FORGOTTEN = "(s.status='forgotten' OR f.session_id IS NOT NULL)"
+# Archived chats are hidden by default; the owner can list only them, or both.
+ARCHIVED = {"exclude": "a.session_id IS NULL", "only": "a.session_id IS NOT NULL", "include": None}
+# Each order is a key tuple and a direction; the id breaks ties so pages never overlap.
+# Name order puts untitled chats last and compares names the way people read them (casefold).
+_NAME = f"CASE WHEN {_FORGOTTEN} THEN '' ELSE history_casefold(s.title) END"
+ORDERS = {
+    "newest": (("s.created_at", "s.id"), "DESC"),
+    "oldest": (("s.created_at", "s.id"), "ASC"),
+    "name": ((f"({_NAME})=''", _NAME, "s.id"), "ASC"),
+}
 
 
 def _invalid_request():
@@ -38,24 +48,38 @@ def _unavailable():
 
 def request_arguments(params):
     """Validate the whole query, including unknown or repeated fields."""
-    if set(params) - {"q", "limit", "cursor"} or any(
+    if set(params) - {"q", "limit", "cursor", "archived", "sort"} or any(
         len(params.getlist(key)) != 1 for key in params
     ):
         _invalid_request()
     raw_limit = params.get("limit", "50")
     if not re.fullmatch(r"[0-9]{1,2}", raw_limit, re.ASCII):
         _invalid_request()
-    return {"limit": int(raw_limit), "q": params.get("q"), "cursor": params.get("cursor")}
+    return {
+        "limit": int(raw_limit),
+        "q": params.get("q"),
+        "cursor": params.get("cursor"),
+        "archived": params.get("archived", "exclude"),
+        "sort": params.get("sort", "newest"),
+    }
 
 
-def _arguments(limit, q, cursor):
+def _arguments(limit, q, cursor, archived="exclude", sort="newest"):
     if type(limit) is not int or not 1 <= limit <= 50:
+        _invalid_request()
+    if archived not in ARCHIVED or sort not in ORDERS:
         _invalid_request()
     if q is not None and (not isinstance(q, str) or len(q) > MAX_QUERY or "\x00" in q):
         _invalid_request()
     try:
         normalized = (q or "").strip().casefold()
-        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        # A cursor belongs to one search, filter and order; the default view keeps its old digest.
+        bound = (
+            normalized
+            if (archived, sort) == ("exclude", "newest")
+            else (f"{archived}\x00{sort}\x00{normalized}")
+        )
+        digest = hashlib.sha256(bound.encode("utf-8")).hexdigest()
     except UnicodeError:
         _invalid_request()
     anchor = None
@@ -110,11 +134,18 @@ def _record(row):
         "title_truncated": bool(row["title_truncated"]),
         "summary_truncated": bool(row["summary_truncated"]),
         "content_status": "forgotten" if row["status"] == "forgotten" else "available",
+        "archived_at": _time(row["archived_at"], nullable=True),
     }
 
 
-def page(store, *, limit=50, q=None, cursor=None):
-    normalized, digest, anchor = _arguments(limit, q, cursor)
+def page(store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newest"):
+    normalized, digest, anchor = _arguments(limit, q, cursor, archived, sort)
+    keys, direction = ORDERS[sort]
+    key = "(" + ",".join(keys) + ")"
+    joins = (
+        " FROM sessions s LEFT JOIN forgotten_sessions f ON f.session_id=s.id"
+        " LEFT JOIN session_archive a ON a.session_id=s.id"
+    )
     with store._connect() as db:
         db.execute("BEGIN")
         # Python casefold handles Unicode; SQLite LOWER/NOCASE handles only ASCII.
@@ -133,6 +164,8 @@ def page(store, *, limit=50, q=None, cursor=None):
             deterministic=True,
         )
         where, values = [], []
+        if ARCHIVED[archived]:
+            where.append(ARCHIVED[archived])
         if normalized:
             where.append(f"NOT {_FORGOTTEN}")
             # instr is a literal substring operation: %, _ and backslash are not patterns.
@@ -142,13 +175,13 @@ def page(store, *, limit=50, q=None, cursor=None):
             values.extend((normalized, normalized))
         if anchor is not None:
             boundary = db.execute(
-                "SELECT created_at,id FROM sessions WHERE id=?", (anchor,)
+                f"SELECT s.created_at,{','.join(keys)}{joins} WHERE s.id=?", (anchor,)
             ).fetchone()
             if boundary is None:
                 _invalid_cursor()
-            _time(boundary["created_at"])
-            where.append("(s.created_at,s.id)<(?,?)")
-            values.extend((boundary["created_at"], boundary["id"]))
+            _time(boundary[0])
+            where.append(f"{key}{'<' if direction == 'DESC' else '>'}({','.join('?' * len(keys))})")
+            values.extend(tuple(boundary)[1:])
         clause = " WHERE " + " AND ".join(where) if where else ""
         rows = db.execute(
             f"SELECT s.id,s.parent_id,s.created_at,s.closed_at,"
@@ -156,10 +189,13 @@ def page(store, *, limit=50, q=None, cursor=None):
             f"CASE WHEN {_FORGOTTEN} THEN '' ELSE history_preview(s.title,{MAX_TITLE}) END AS title,"
             f"CASE WHEN {_FORGOTTEN} THEN NULL ELSE history_preview(s.summary,{MAX_PREVIEW}) END AS summary_preview,"
             f"CASE WHEN {_FORGOTTEN} THEN 0 ELSE history_length(s.title)>{MAX_TITLE} END AS title_truncated,"
-            f"CASE WHEN {_FORGOTTEN} THEN 0 ELSE history_length(s.summary)>{MAX_PREVIEW} END AS summary_truncated "
-            "FROM sessions s LEFT JOIN forgotten_sessions f ON f.session_id=s.id"
+            f"CASE WHEN {_FORGOTTEN} THEN 0 ELSE history_length(s.summary)>{MAX_PREVIEW} END AS summary_truncated,"
+            "a.archived_at"
+            + joins
             + clause
-            + " ORDER BY s.created_at DESC,s.id DESC LIMIT ?",
+            + " ORDER BY "
+            + ",".join(f"{part} {direction}" for part in keys)
+            + " LIMIT ?",
             (*values, limit + 1),
         ).fetchall()
         results = [_record(row) for row in rows[:limit]]

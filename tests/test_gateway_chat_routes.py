@@ -46,6 +46,7 @@ WRITES = [
     ),
     (f"/sessions/{CHAT}/title", {"expected_revision": 0, "title": "Trip plan"}),
     (f"/sessions/{CHAT}/title/auto", {"expected_revision": 0}),
+    ("/sessions/archive", {"sessions": [CHAT], "archived": True}),
     (f"/sessions/{CHAT}/messages/{MESSAGE}/retry", {"request_id": REQUEST, "model_id": "m-1"}),
     (f"/sessions/{CHAT}/messages/{MESSAGE}/fact-check", {"request_id": REQUEST}),
     (
@@ -99,6 +100,7 @@ WRONG = {
     "output": {"output": {"format": "poem"}},
     "title": {"title": ""},
     "auto": {"expected_revision": -1},
+    "archive": {"sessions": ["ses_0123"]},
     "retry": {"request_id": "short"},
     "fact-check": {"request_id": "has spaces in it ok?"},
     "fork": {"expected_settings_revision": "0"},
