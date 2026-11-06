@@ -48,7 +48,7 @@ def chat_operations():
     for path, methods in api.app.openapi()["paths"].items():
         for method in methods:
             patterns = CHAT_READS if method == "get" else CHAT_WRITES
-            if path.startswith(("/sessions/{", "/context/{")) and any(
+            if path.startswith(("/sessions/", "/context/{")) and any(
                 re.fullmatch(pattern, typed(path)) for pattern in patterns
             ):
                 found.append((method.upper(), path))
@@ -97,8 +97,13 @@ def test_owner_key_reaches_the_route_and_nothing_else_does(client, method, path)
     assert call({"X-Pi-Gateway-Key": GATEWAY}) == 401
     assert call({"X-Pi-Owner-Key": "not-the-owner-key"}) == 401
     assert call({}) == 401
-    malformed = target.replace(CHAT, "ses_" + "F" * 16)
-    assert call({"X-Pi-Owner-Key": OWNER}, url=malformed) == 403
+    if CHAT in target:
+        malformed = target.replace(CHAT, "ses_" + "F" * 16)
+        assert call({"X-Pi-Owner-Key": OWNER}, url=malformed) == 403
+    else:  # chats named in the body (archive): Pi's model refuses a malformed id
+        assert (
+            call({"X-Pi-Owner-Key": OWNER}, json={**body, "sessions": ["ses_" + "F" * 16]}) == 422
+        )
     if method == "POST":
         extra = {**body, "unexpected": True}
         assert call({"X-Pi-Owner-Key": OWNER}, json=extra) == 422
