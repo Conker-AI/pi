@@ -6,6 +6,21 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.22.0
+
+- **Chats can be deleted forever.** `GET/POST /forgetting/chats` (owner control plane) previews
+  and queues chats for permanent forgetting. Each confirmation is checked against a fresh
+  preview; a chat whose sessions changed is refused, never widened. Pi then restarts and the
+  offline forgetting command erases the queued chats before the Store opens; unfinished cleanup
+  stays queued, so the Store keeps refusing to start. Needs a supervisor that restarts Pi
+  (`PI_SUPERVISED=true`); without one the route answers 409. Asks for the password in the browser.
+- **Several memories can be forgotten at once.** `POST /memory/forget-many` forgets up to 50
+  memories one at a time, each its own idempotent forget, and stops at the first refusal.
+- **An imported chat can be deleted for good.** `POST /imports/chats/{id}/delete` removes the
+  chat, its messages and its waiting offers with secure delete, keeps ids and counts only, and a
+  later import skips it. The memory sender re-checks each offer under a lock the deletion also
+  takes. Asks for the password in the browser.
+
 ## 0.21.0
 
 - **Chats can be archived and restored in bulk.** `POST /sessions/archive {sessions, archived}`
