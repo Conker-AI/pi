@@ -85,6 +85,23 @@
         }
       }
     },
+    "/auth/activity": {
+      "post": {
+        "summary": "Activity",
+        "description": "The page saw the owner's click or key: keep the sign-in unlocked for another window.\n\nThe page sends it at most about once a minute and only on the owner's own input, so\npolling and an open but untouched tab never keep a session alive (L-03). An expired\nsign-in stays expired.",
+        "operationId": "activity_auth_activity_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/logout": {
       "post": {
         "summary": "Logout",
@@ -475,7 +492,7 @@
     "/api/host/read": {
       "post": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
         "operationId": "host_operations_api_host_read_post",
         "parameters": [
           {
@@ -520,7 +537,7 @@
     "/api/host/ops": {
       "post": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
         "operationId": "host_operations_api_host_ops_post",
         "parameters": [
           {
@@ -563,7 +580,7 @@
       },
       "get": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
         "operationId": "host_operations_api_host_ops_get",
         "parameters": [
           {
@@ -608,7 +625,7 @@
     "/api/host/ops/{identity}": {
       "get": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nwith his session, and the three actions (backup.verify, services.restart, backup.run)\nwith the password proof bound to the exact body. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
         "operationId": "host_operations_api_host_ops__identity__get",
         "parameters": [
           {
@@ -905,7 +922,7 @@
     "/api/control/pi/imports/{source}/{step}": {
       "post": {
         "summary": "Import File",
-        "description": "A ChatGPT or Claude export's `conversations.json` as the raw body, up to 128 MB.\n\n`preview` saves nothing, so the signed-in session is enough. An import (named by the\npreviewed file's SHA-256) saves chats and offers his words to memory, so it asks for the\npassword: the proof covers this path with an empty body, the path's digest names the file,\nand a body with another digest is refused before Pi receives all of it.",
+        "description": "A ChatGPT or Claude export's `conversations.json` as the raw body, up to 128 MB.\n\n`preview` saves nothing. An import (named by the previewed file's SHA-256) saves read-only\nchats and offers the owner's words to memory as outside content; both can be undone, so\nthe signed-in session is enough for either. The path's digest names the file, and a body\nwith another digest is refused before Pi receives all of it.",
         "operationId": "import_file_api_control_pi_imports__source___step__post",
         "parameters": [
           {
@@ -1713,7 +1730,7 @@
     "/api/owner/tools/{identity}/runs": {
       "post": {
         "summary": "Tool Runs",
-        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and needs the signed-in session; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
         "operationId": "tool_runs_api_owner_tools__identity__runs_post",
         "parameters": [
           {
@@ -1749,7 +1766,7 @@
       },
       "get": {
         "summary": "Tool Runs",
-        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and asks for the password; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
+        "description": "Run any tool by hand, and read its recent runs. A run uses the chat's own key, as when\nConker runs it, and needs the signed-in session; a tool that asks still makes an approval\nrequest (CONFIRMATION_REQUIRED), resumed with the same action_id.",
         "operationId": "tool_runs_api_owner_tools__identity__runs_get",
         "parameters": [
           {
@@ -2146,7 +2163,7 @@
     "/api/owner/tool-settings": {
       "get": {
         "summary": "Tool Settings",
-        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw, so it asks for the password; ToolGate refuses a stale revision (409).",
+        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw and needs the signed-in session; ToolGate refuses a stale revision (409).",
         "operationId": "tool_settings_api_owner_tool_settings_get",
         "responses": {
           "200": {
@@ -2161,7 +2178,7 @@
       },
       "put": {
         "summary": "Tool Settings",
-        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw, so it asks for the password; ToolGate refuses a stale revision (409).",
+        "description": "How tools run: ToolGate's owner settings document (time limits, the Terminal's\nresources, web search, the run window). A save replaces the document at the revision\nhe saw and needs the signed-in session; ToolGate refuses a stale revision (409).",
         "operationId": "tool_settings_api_owner_tool_settings_put",
         "responses": {
           "200": {
