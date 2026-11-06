@@ -96,7 +96,7 @@ CASES = [
         (
             'if (\n            not row\n            or row["expires"] <= now\n'
             '            or (row["authenticated"] and (seen is None or seen + idle <= now))\n'
-            '        ):'
+            "        ):"
         ),
         "if not row:",
         STORE + "test_idle_and_absolute_expiry",
