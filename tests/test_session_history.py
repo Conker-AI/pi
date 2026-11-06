@@ -63,6 +63,7 @@ def test_more_than_200_chats_and_tied_timestamps_have_no_gaps_or_duplicates(stor
             "content_status",
             "title_truncated",
             "summary_truncated",
+            "archived_at",
         }
         for row in rows
     )

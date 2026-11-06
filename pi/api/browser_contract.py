@@ -116,6 +116,8 @@ CHAT_WRITES = (
     rf"/sessions/{_CHAT}/output",
     rf"/sessions/{_CHAT}/title",
     rf"/sessions/{_CHAT}/title/auto",
+    # Archive or restore up to 100 chats at once (a list state; nothing is deleted).
+    r"/sessions/archive",
     rf"/sessions/{_CHAT}/messages/{_MESSAGE}/retry",
     rf"/sessions/{_CHAT}/messages/{_MESSAGE}/fact-check",
     rf"/sessions/{_CHAT}/messages/{_MESSAGE}/fork",

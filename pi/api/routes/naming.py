@@ -1,12 +1,16 @@
-"""Chat name routes: rename, auto-name, and read the naming state."""
+"""Chat name routes: rename, auto-name, and read the naming state; archive chats from the list."""
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from pi.conversation import naming
+from pi.conversation import archive, naming
 
 
 def router(get_store, get_providers, authorize):
     routes = APIRouter(prefix="/sessions", dependencies=[Depends(authorize)])
+
+    @routes.post("/archive")
+    def archive_chats(body: archive.Archive):
+        return archive.apply(get_store(), body)
 
     @routes.get("/{session_id}/title")
     def get_title(session_id: str):

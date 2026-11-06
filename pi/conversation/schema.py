@@ -24,8 +24,16 @@ from pi.context import controls as context_controls
 from pi.context import decisions, project_context, projects, research_usage, universal_search
 from pi.context import retrieval as context_retrieval
 from pi.context import summaries as context_summaries
+from pi.conversation import (
+    archive,
+    drafts,
+    fact_checks,
+    judgements,
+    naming,
+    output_settings,
+    submissions,
+)
 from pi.conversation import citations as message_citations
-from pi.conversation import drafts, fact_checks, judgements, naming, output_settings, submissions
 from pi.conversation import forks as message_forks
 from pi.conversation import observation as session_observation
 from pi.conversation import retries as response_retries
@@ -141,6 +149,7 @@ def install(db):
     session_observation.initialize(db)
     db.executescript(output_settings.SCHEMA)
     db.executescript(naming.SCHEMA)
+    db.executescript(archive.SCHEMA)
     db.executescript(decisions.SCHEMA)
 
 

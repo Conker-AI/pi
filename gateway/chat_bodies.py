@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from pi.api.browser_contract import CHAT_READS, CHAT_WRITES
 from pi.context import compaction, controls, decisions, summaries, summary_draft
 from pi.conversation import (
+    archive,
     fact_checks,
     forks,
     judgements,
@@ -36,6 +37,7 @@ BODIES = dict(
             output_settings.Update,
             naming.Rename,
             naming.AutoName,
+            archive.Archive,
             retries.Retry,
             fact_checks.Check,
             forks.Fork,
