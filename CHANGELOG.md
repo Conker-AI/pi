@@ -6,6 +6,17 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.21.0
+
+- **Chats can be archived and restored in bulk.** `POST /sessions/archive {sessions, archived}`
+  (1-100 chat ids) archives or restores them in one call, all or nothing: an unknown id refuses the
+  whole request with 404. It is an ordinary, undoable chat write, so the signed-in session is enough.
+  Archiving hides a chat from the list; it forgets nothing. The gateway relays it at
+  `/api/control/pi/sessions/archive`.
+- **Chat history filters and sorts.** History takes `archived=exclude|only|include` (default
+  `exclude`, so archived chats leave the list) and `sort=newest|oldest|name`, and returns
+  `archived_at`.
+
 ## 0.20.0
 
 - **The password is asked only where it protects something.** A signed-in session is enough for
