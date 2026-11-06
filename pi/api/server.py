@@ -37,6 +37,7 @@ from pi.api.routes import decisions as decisions_api
 from pi.api.routes import definitions as definitions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
+from pi.api.routes import forgetting as forgetting_api
 from pi.api.routes import inbox as inbox_api
 from pi.api.routes import inference as inference_api
 from pi.api.routes import jobs as jobs_api
@@ -412,6 +413,7 @@ def health():
 
 
 app.include_router(sessions_api.router(lambda: app.state, require_key, require_admin))
+app.include_router(forgetting_api.router(lambda: app.state, require_owner))
 
 
 app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))

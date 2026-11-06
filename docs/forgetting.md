@@ -10,10 +10,30 @@ forget an individual message while keeping its derived replies.
 
 ## Owner operation
 
-This is an offline host operation, authorised by the owner's OS/database access.
-There is no deletion endpoint, model tool, or turn-loop capability. Pi's shared
-API key cannot distinguish the owner from a runtime caller, so it cannot grant
-deletion authority. The confirmation below confirms scope; it is not a password.
+Forgetting always runs offline, with every Pi process stopped. There is no model
+tool or turn-loop capability for it, and the runtime key cannot ask for it.
+
+The owner can ask from the dashboard ("Delete forever"). That path uses the owner's
+own credential (`X-Pi-Owner-Key`, distinct from the runtime key; the gateway asks
+for the password first) and forgets nothing itself:
+
+- `GET /forgetting/chats?session=ID` shows what deleting each chat reaches (counts
+  of sessions, messages, turns and approval requests, never text) and the
+  confirmation, plus the chats queued and the last results.
+- `POST /forgetting/chats {"chats": [{"session", "confirmation"}]}` checks each
+  confirmation against a fresh preview (409 `scope_changed` otherwise), writes the
+  request beside the database (`pi.db.forget-request.json`: ids only), answers 202
+  and stops Pi. At the next start, before the Store opens, Pi runs the offline
+  command below for each queued chat in a child process. A chat whose sessions
+  changed since it was confirmed is refused, never widened. Results go to
+  `pi.db.forget-result.json` (ids, states and receipt ids only).
+- It needs a supervisor that starts Pi again when it exits (Compose's restart
+  policy). Set `PI_SUPERVISED=true` there; without it the route answers 409
+  `not_supervised` and the commands below are the only way.
+- Cleanup that started and failed stays queued: the Store refuses to start until
+  it is finished, the supervisor restarts Pi, and the next start finishes it.
+
+The confirmation below confirms scope; it is not a password.
 An administrator capable of arbitrary Python or SQLite DDL already has database
 authority; SQLite triggers are not a sandbox against such an administrator.
 

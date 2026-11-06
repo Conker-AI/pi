@@ -68,6 +68,8 @@ PASSWORD_WRITES = (
     r"/memory/forget(?:-many)?",
     # An imported chat is deleted for good; it cannot be imported back.
     r"/imports/chats/imp_[0-9a-f]{32}/delete",
+    # Chats deleted forever: Pi restarts and forgets them before it opens again.
+    r"/forgetting/chats",
     # Sign-out time, quiet hours, proactivity and daily budgets.
     r"/owner/preferences",
     # A webhook secret is shown once.
@@ -211,6 +213,8 @@ OWNER_ROUTES = {
         r"/imports",
         r"/imports/chats",
         r"/imports/chats/imp_[0-9a-f]{32}",
+        # What deleting chats forever reaches (counts only) and the queued ones.
+        r"/forgetting/chats",
     ),
     "POST": (
         r"/drafts/(?:new(?:/start)?|[A-Za-z0-9_-]{1,128}(?:/tasks/[A-Za-z0-9_-]{1,128})?)",
@@ -278,6 +282,8 @@ OWNER_ROUTES = {
         r"/imports/(?:chatgpt|claude)/(?:preview|[0-9a-f]{64})",
         # Deleting one imported chat for good asks for the password (PASSWORD_WRITES).
         r"/imports/chats/imp_[0-9a-f]{32}/delete",
+        # Deleting chats forever asks for the password (PASSWORD_WRITES).
+        r"/forgetting/chats",
     ),
 }
 
