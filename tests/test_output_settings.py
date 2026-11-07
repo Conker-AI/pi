@@ -4,7 +4,10 @@ import pytest
 
 from pi.conversation import output_settings
 from pi.conversation.store import Store
+from pi.owner import settings as owner_settings
 from pi.turns import prompt_prefix
+
+LEVEL_SETTING = output_settings.LEVEL_SETTING
 
 
 @pytest.fixture
@@ -39,7 +42,12 @@ class TestOutputSettings:
         # Load should give defaults
         result = output_settings.load(store, session_id)
         assert result["revision"] == 0
-        assert result["output"] == {"format": "auto", "length": "auto", "language": "auto"}
+        assert result["output"] == {
+            "format": "auto",
+            "length": "auto",
+            "language": "auto",
+            "level": "auto",
+        }
 
         # Snapshot should be None for all auto values
         with store._connect() as db:
@@ -66,7 +74,12 @@ class TestOutputSettings:
         result = output_settings.save(store, session_id, update)
 
         assert result["revision"] == 1
-        assert result["output"] == {"format": "table", "length": "short", "language": "ru"}
+        assert result["output"] == {
+            "format": "table",
+            "length": "short",
+            "language": "ru",
+            "level": "auto",
+        }
 
         # Load should return the same
         loaded = output_settings.load(store, session_id)
@@ -169,7 +182,12 @@ class TestOutputSettings:
         # Child should inherit parent's output
         loaded = output_settings.load(store, session_id)
         assert loaded["revision"] == 1
-        assert loaded["output"] == {"format": "table", "length": "short", "language": "ru"}
+        assert loaded["output"] == {
+            "format": "table",
+            "length": "short",
+            "language": "ru",
+            "level": "auto",
+        }
 
     def test_messages_building(self):
         """Test messages builds exactly as specified."""
@@ -201,6 +219,147 @@ class TestOutputSettings:
         messages = output_settings.messages({})
         assert messages == []
 
+    @pytest.mark.parametrize("level", ["strict", "plain", "deep"])
+    def test_saved_level_reaches_snapshot_and_prompt(self, store, session_id, level):
+        """A level saved on the chat lands in the snapshot and teaches the model its rule."""
+        # Create a session
+        with store._connect() as db:
+            db.execute(
+                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", (session_id, 1234567890)
+            )
+
+        update = output_settings.Update(
+            expected_revision=0, output=output_settings.Output(level=level)
+        )
+        result = output_settings.save(store, session_id, update)
+        assert result["output"]["level"] == level
+
+        loaded = output_settings.load(store, session_id)
+        assert loaded["output"]["level"] == level
+
+        with store._connect() as db:
+            snapshot = output_settings.snapshot(db, session_id)
+            assert snapshot["level"] == level
+
+        execution = {"output": snapshot}
+        messages = output_settings.messages(execution)
+        assert len(messages) == 1
+        expected = (
+            f"Owner output settings for this chat. Language level: {output_settings.LEVELS[level]}."
+        )
+        assert messages[0].content == expected
+
+        prefix = prompt_prefix.system_messages(store, "base prompt", execution, None, None)
+        taught = [m for m in prefix if "Owner output settings" in m.content]
+        assert len(taught) == 1
+        assert f"Language level: {output_settings.LEVELS[level]}" in taught[0].content
+
+    def test_normal_level_adds_nothing(self, store, session_id):
+        """Normal saved on the chat is no rule at all: the snapshot stays None when all else Auto."""
+        # Create a session
+        with store._connect() as db:
+            db.execute(
+                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", (session_id, 1234567890)
+            )
+
+        output_settings.save(
+            store,
+            session_id,
+            output_settings.Update(
+                expected_revision=0, output=output_settings.Output(level="normal")
+            ),
+        )
+        assert output_settings.load(store, session_id)["output"]["level"] == "normal"
+
+        with store._connect() as db:
+            assert output_settings.snapshot(db, session_id) is None
+
+        assert output_settings.messages({"output": {"level": "normal"}}) == []
+
+    def test_invalid_level_refused(self, store, session_id):
+        """A value outside the level list is refused by the model."""
+        with pytest.raises(ValueError):
+            output_settings.Output(format="auto", length="auto", language="auto", level="simple")
+
+        with pytest.raises(ValueError):
+            output_settings.Update.model_validate(
+                {"expected_revision": 0, "output": {"level": "simple"}}
+            )
+
+    def test_owner_default_language_level(self, store, session_id):
+        """Level Auto follows the owner's chats.language_level; a saved level wins over it."""
+        # Create a session
+        with store._connect() as db:
+            db.execute(
+                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", (session_id, 1234567890)
+            )
+
+        revision = owner_settings.load(store)["revision"]
+
+        def choose(value):
+            nonlocal revision
+            owner_settings.save(
+                store,
+                owner_settings.Update(expected_revision=revision, values={LEVEL_SETTING: value}),
+            )
+            revision += 1
+
+        # No owner setting and Auto on the chat: Normal, nothing added.
+        with store._connect() as db:
+            assert output_settings.snapshot(db, session_id) is None
+
+        # Owner default deep, chat Auto: the snapshot resolves to deep.
+        choose("deep")
+        with store._connect() as db:
+            assert output_settings.snapshot(db, session_id) == {
+                **output_settings.AUTO,
+                "level": "deep",
+            }
+
+        # A level saved on the chat wins over the owner's default.
+        output_settings.save(
+            store,
+            session_id,
+            output_settings.Update(
+                expected_revision=0, output=output_settings.Output(level="plain")
+            ),
+        )
+        with store._connect() as db:
+            snapshot = output_settings.snapshot(db, session_id)
+            assert snapshot["level"] == "plain"
+            assert snapshot["format"] == "auto" and snapshot["language"] == "auto"
+
+        # Back to Auto on the chat, an unknown owner value means Normal: nothing added.
+        output_settings.save(
+            store,
+            session_id,
+            output_settings.Update(expected_revision=1, output=output_settings.Output()),
+        )
+        choose("bogus")
+        with store._connect() as db:
+            assert output_settings.snapshot(db, session_id) is None
+
+    def test_old_row_without_level_loads_as_auto(self, store, session_id):
+        """A row saved before the level existed loads with level Auto."""
+        # Create a session
+        with store._connect() as db:
+            db.execute(
+                "INSERT INTO sessions (id, created_at) VALUES (?, ?)", (session_id, 1234567890)
+            )
+            db.execute(
+                "INSERT INTO session_output (session_id, revision, output) VALUES (?, ?, ?)",
+                (session_id, 3, '{"format": "table", "length": "short", "language": "ru"}'),
+            )
+
+        loaded = output_settings.load(store, session_id)
+        assert loaded["revision"] == 3
+        assert loaded["output"] == {
+            "format": "table",
+            "length": "short",
+            "language": "ru",
+            "level": "auto",
+        }
+
     def test_turn_snapshot_includes_output(self, store, session_id):
         """Test the turn snapshot carries output settings."""
         # Create a session
@@ -221,7 +380,7 @@ class TestOutputSettings:
 
         execution = session_settings.execution(store, session_id)
 
-        # Should have output in execution
+        # Should have output in execution; level auto resolves to Normal, which adds no key
         assert execution["output"] == {"format": "table", "length": "short", "language": "ru"}
 
         # Test with all auto - should be None
@@ -321,14 +480,14 @@ def test_routes_accept_the_admin_and_owner_keys(http):
     admin = {"X-Pi-Key": "synthetic-admin"}
     response = client.get(f"/sessions/{session}/output", headers=admin)
     assert response.status_code == 200
-    assert response.json() == {"revision": 0, "output": output_settings.AUTO}
+    assert response.json() == {"revision": 0, "output": output_settings.AUTO_WITH_LEVEL}
     body = {
         "expected_revision": 0,
         "output": {"format": "table", "length": "short", "language": "ru"},
     }
     response = client.post(f"/sessions/{session}/output", headers=admin, json=body)
     assert response.status_code == 200
-    assert response.json() == {"revision": 1, "output": body["output"]}
+    assert response.json() == {"revision": 1, "output": {**body["output"], "level": "auto"}}
     stale = client.post(f"/sessions/{session}/output", headers=admin, json=body)
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "revision_conflict"
     assert client.get("/sessions/ses_missing/output", headers=admin).status_code == 404

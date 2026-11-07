@@ -28971,6 +28971,18 @@
             "pattern": "^(auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})$",
             "title": "Language",
             "default": "auto"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "strict",
+              "plain",
+              "normal",
+              "deep"
+            ],
+            "title": "Level",
+            "default": "auto"
           }
         },
         "additionalProperties": false,

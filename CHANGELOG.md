@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Output settings gain a language level.** A chat's output settings carry `level`
+  (`auto`/`strict`/`plain`/`normal`/`deep`) for how short and simple answers are; auto follows the
+  owner's `chats.language_level` (default normal) and normal adds no instruction. Old saved rows
+  load with `level: auto`.
+
 ## 0.23.0
 
 - **Every model input has hidden code points removed.** `pi/core/untrusted_text.py` strips
