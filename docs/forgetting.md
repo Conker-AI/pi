@@ -23,7 +23,9 @@ for the password first) and forgets nothing itself:
 - `POST /forgetting/chats {"chats": [{"session", "confirmation"}]}` checks each
   confirmation against a fresh preview (409 `scope_changed` otherwise), writes the
   request beside the database (`pi.db.forget-request.json`: ids only), answers 202
-  and stops Pi. At the next start, before the Store opens, Pi runs the offline
+  at once and stops Pi as soon as no turn, chat send or team run is in progress
+  (new ones are refused for the moment until Pi is back). At the next start,
+  before the Store opens, Pi runs the offline
   command below for each queued chat in a child process. A chat whose sessions
   changed since it was confirmed is refused, never widened. Results go to
   `pi.db.forget-result.json` (ids, states and receipt ids only).

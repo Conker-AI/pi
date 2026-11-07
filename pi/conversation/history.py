@@ -22,6 +22,8 @@ _CURSOR = re.compile(r"h1\.([0-9a-f]{64})\.([A-Za-z0-9_-]{1,128})", re.ASCII)
 _FORGOTTEN = "(s.status='forgotten' OR f.session_id IS NOT NULL)"
 # Archived chats are hidden by default; the owner can list only them, or both.
 ARCHIVED = {"exclude": "a.session_id IS NULL", "only": "a.session_id IS NOT NULL", "include": None}
+# Trashed chats are hidden from every list; the trash view lists them whatever their archive state.
+TRASHED = {"exclude": "t.session_id IS NULL", "only": "t.session_id IS NOT NULL"}
 # Each order is a key tuple and a direction; the id breaks ties so pages never overlap.
 # Name order puts untitled chats last and compares names the way people read them (casefold).
 _NAME = f"CASE WHEN {_FORGOTTEN} THEN '' ELSE history_casefold(s.title) END"
@@ -48,7 +50,7 @@ def _unavailable():
 
 def request_arguments(params):
     """Validate the whole query, including unknown or repeated fields."""
-    if set(params) - {"q", "limit", "cursor", "archived", "sort"} or any(
+    if set(params) - {"q", "limit", "cursor", "archived", "trashed", "sort"} or any(
         len(params.getlist(key)) != 1 for key in params
     ):
         _invalid_request()
@@ -60,14 +62,15 @@ def request_arguments(params):
         "q": params.get("q"),
         "cursor": params.get("cursor"),
         "archived": params.get("archived", "exclude"),
+        "trashed": params.get("trashed", "exclude"),
         "sort": params.get("sort", "newest"),
     }
 
 
-def _arguments(limit, q, cursor, archived="exclude", sort="newest"):
+def _arguments(limit, q, cursor, archived="exclude", sort="newest", trashed="exclude"):
     if type(limit) is not int or not 1 <= limit <= 50:
         _invalid_request()
-    if archived not in ARCHIVED or sort not in ORDERS:
+    if archived not in ARCHIVED or trashed not in TRASHED or sort not in ORDERS:
         _invalid_request()
     if q is not None and (not isinstance(q, str) or len(q) > MAX_QUERY or "\x00" in q):
         _invalid_request()
@@ -79,6 +82,8 @@ def _arguments(limit, q, cursor, archived="exclude", sort="newest"):
             if (archived, sort) == ("exclude", "newest")
             else (f"{archived}\x00{sort}\x00{normalized}")
         )
+        if trashed != "exclude":
+            bound += f"\x00{trashed}"
         digest = hashlib.sha256(bound.encode("utf-8")).hexdigest()
     except UnicodeError:
         _invalid_request()
@@ -135,16 +140,20 @@ def _record(row):
         "summary_truncated": bool(row["summary_truncated"]),
         "content_status": "forgotten" if row["status"] == "forgotten" else "available",
         "archived_at": _time(row["archived_at"], nullable=True),
+        "trashed_at": _time(row["trashed_at"], nullable=True),
     }
 
 
-def page(store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newest"):
-    normalized, digest, anchor = _arguments(limit, q, cursor, archived, sort)
+def page(
+    store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newest", trashed="exclude"
+):
+    normalized, digest, anchor = _arguments(limit, q, cursor, archived, sort, trashed)
     keys, direction = ORDERS[sort]
     key = "(" + ",".join(keys) + ")"
     joins = (
         " FROM sessions s LEFT JOIN forgotten_sessions f ON f.session_id=s.id"
         " LEFT JOIN session_archive a ON a.session_id=s.id"
+        " LEFT JOIN session_trash t ON t.session_id=s.id"
     )
     with store._connect() as db:
         db.execute("BEGIN")
@@ -164,7 +173,8 @@ def page(store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newe
             deterministic=True,
         )
         where, values = [], []
-        if ARCHIVED[archived]:
+        where.append(TRASHED[trashed])
+        if ARCHIVED[archived] and trashed == "exclude":
             where.append(ARCHIVED[archived])
         if normalized:
             where.append(f"NOT {_FORGOTTEN}")
@@ -190,7 +200,7 @@ def page(store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newe
             f"CASE WHEN {_FORGOTTEN} THEN NULL ELSE history_preview(s.summary,{MAX_PREVIEW}) END AS summary_preview,"
             f"CASE WHEN {_FORGOTTEN} THEN 0 ELSE history_length(s.title)>{MAX_TITLE} END AS title_truncated,"
             f"CASE WHEN {_FORGOTTEN} THEN 0 ELSE history_length(s.summary)>{MAX_PREVIEW} END AS summary_truncated,"
-            "a.archived_at"
+            "a.archived_at,t.trashed_at"
             + joins
             + clause
             + " ORDER BY "

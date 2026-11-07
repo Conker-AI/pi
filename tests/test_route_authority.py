@@ -95,7 +95,10 @@ def test_every_owner_route_under_a_chat_has_its_authorization_tests():
     reachable = {
         (method, path)
         for method, path in operations()
-        if (path.startswith(("/sessions/{", "/context/{")) or path == "/sessions/archive")
+        if (
+            path.startswith(("/sessions/{", "/context/{"))
+            or path in ("/sessions/archive", "/sessions/trash")
+        )
         and owner_allowed(method, typed(path))
     }
     assert reachable == set(CHAT_OPERATIONS) | ELSEWHERE

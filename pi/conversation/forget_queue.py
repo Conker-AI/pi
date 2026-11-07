@@ -4,7 +4,9 @@ Forgetting needs every Pi process stopped (pi.conversation.forgetting holds an e
 so the owner route forgets nothing itself. It checks the owner's confirmation against a fresh
 preview, writes the request to a file beside the database and asks the supervisor to restart Pi.
 On the next start, before the Store opens, `run_pending` runs the offline command for each chat
-in a child process, exactly as an operator would. A chat whose sessions changed since the owner
+in a child process, exactly as an operator would. The restart waits until no turn, chat send or
+team run is in progress, then holds new ones (database triggers) so none starts in the moment
+before Pi stops; the next start drops the hold. A chat whose sessions changed since the owner
 confirmed is refused, never widened. The request and result files hold ids, counts and states
 only, never a title or a word of a chat.
 
@@ -33,6 +35,27 @@ FORGET_SECONDS = 3600
 KEEP_RESULTS = 50
 DETAIL_CHARS = 300
 CHANGED = "The chat changed since you confirmed it, so nothing was deleted. Review it again."
+HOLD = "Pi is restarting to delete chats forever. Try again in a moment."
+# Work the restart waits for, and the hold that stops it starting again (table, condition).
+BUSY = {
+    "turns": "status='running'",
+    "turn_submissions": "state='preparing'",
+    "team_runs": "state='running'",
+}
+HOLDS = {
+    "forget_hold_turn_start": ("turns", "INSERT", "NEW.status='running'"),
+    "forget_hold_turn_resume": (
+        "turns",
+        "UPDATE OF status",
+        "NEW.status='running' AND OLD.status IS NOT 'running'",
+    ),
+    "forget_hold_send": ("turn_submissions", "INSERT", "NEW.state='preparing'"),
+    "forget_hold_team_run": (
+        "team_runs",
+        "UPDATE OF state",
+        "NEW.state='running' AND OLD.state IS NOT 'running'",
+    ),
+}
 _restart_once = threading.Lock()
 
 
@@ -188,6 +211,44 @@ def _forget(db: Path | str, item: dict) -> tuple[str, str | None, str]:
     return "done", json.loads(done.stdout)["id"], ""
 
 
+def _tables(conn: sqlite3.Connection) -> set[str]:
+    return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+
+def hold(db: Path | str) -> bool:
+    """When nothing is in progress, stop new work from starting; answers whether it held."""
+    try:
+        with closing(sqlite3.connect(db, timeout=5, isolation_level=None)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            tables = _tables(conn)
+            for table, busy in BUSY.items():
+                if (
+                    table in tables
+                    and conn.execute(f"SELECT 1 FROM {table} WHERE {busy}").fetchone()
+                ):
+                    conn.execute("ROLLBACK")
+                    return False
+            for name, (table, event, when) in HOLDS.items():
+                if table in tables:
+                    conn.execute(
+                        f"CREATE TRIGGER IF NOT EXISTS {name} BEFORE {event} ON {table} "
+                        f"WHEN {when} BEGIN SELECT RAISE(ABORT,'{HOLD}'); END"
+                    )
+            conn.execute("COMMIT")
+            return True
+    except sqlite3.Error:
+        return False  # busy or locked: the next check tries again
+
+
+def release(db: Path | str) -> None:
+    """Drop the hold a restart left; nothing else may run yet (called before the Store opens)."""
+    if not Path(db).exists():
+        return
+    with closing(sqlite3.connect(db, timeout=30, isolation_level=None)) as conn:
+        for name in HOLDS:
+            conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+
+
 def run_pending(db: Path | str) -> None:
     """Forget every queued chat before the Store opens; call once at startup.
 
@@ -195,6 +256,7 @@ def run_pending(db: Path | str) -> None:
     cleanup started stays queued (state retrying): the Store then refuses to start, the
     supervisor restarts Pi, and the next start finishes it.
     """
+    release(db)
     path = _request_path(db)
     for item in _read(path):
         state, receipt, detail = _forget(db, item)
@@ -205,8 +267,14 @@ def run_pending(db: Path | str) -> None:
         _write(path, [left for left in _read(path) if left["sessionId"] != item["sessionId"]])
 
 
-def restart_soon(delay: float = 1.0, grace: float = 30.0) -> None:
-    """Stop this process so the supervisor starts it again and runs the queue.
+def restart_soon(
+    db: Path | str,
+    delay: float = 1.0,
+    grace: float = 30.0,
+    poll: float = 2.0,
+    wait: float = 1800.0,
+) -> None:
+    """Stop this process, once nothing is in progress, so the supervisor runs the queue.
 
     The reply that queued the chats is sent first. Open event streams can hold a graceful
     shutdown, so the process exits on its own after `grace` seconds.
@@ -215,6 +283,11 @@ def restart_soon(delay: float = 1.0, grace: float = 30.0) -> None:
         return
 
     def stop() -> None:
+        deadline = time.monotonic() + wait
+        # shortcut: a turn still running after `wait` is taken as hung and settled as interrupted
+        # at the next start; raise `wait` if real turns ever run that long.
+        while not hold(db) and time.monotonic() < deadline:
+            time.sleep(poll)
         # A daemon watchdog: it dies with a clean shutdown and ends a stuck one.
         watchdog = threading.Timer(grace, os._exit, (0,))
         watchdog.daemon = True
