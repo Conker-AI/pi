@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.24.0
+
+- **Chats go to a Trash bin.** `POST /sessions/trash` moves chats to Trash or restores them with
+  the session alone (no password); trashed chats leave history (`trashed=only` lists them), search,
+  universal search and recall. Delete forever still asks for the password but answers 202 at once:
+  the request is queued and Pi restarts to forget offline only when no turn, submission or team run
+  holds the database.
 - **Output settings gain a language level.** A chat's output settings carry `level`
   (`auto`/`strict`/`plain`/`normal`/`deep`) for how short and simple answers are; auto follows the
   owner's `chats.language_level` (default normal) and normal adds no instruction. Old saved rows
