@@ -6,6 +6,21 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.23.0
+
+- **Every model input has hidden code points removed.** `pi/core/untrusted_text.py` strips
+  format and bidi controls, Unicode tags, variation selectors, Hangul fillers, private-use and
+  unassigned code points in `Message.__post_init__`, so memory recall, chat imports, files,
+  webhooks, project context, tool results and team handoffs are all cleaned; transcripts keep what
+  arrived. ToolGate's copy pins the same fingerprint of the removed set. Ollama and the Claude plan
+  adapter now label tool results as outside content like the other providers.
+- **After outside content, remembering always asks the owner.** In a turn that read outside
+  content, `conker.remember` files an Inbox request at every access level and the AI reviewer is
+  never asked. The owner's own typed "remember" still saves at once with Undo.
+- **A team handoff keeps the outside mark.** A role's `owner_text` is only the run's input message;
+  `outside_content` follows the step's inputs (the previous role's turns, recursively, and each
+  selected message's turn), so content one role read cannot pass as the owner's request to the next.
+
 ## 0.22.0
 
 - **Chats can be deleted forever.** `GET/POST /forgetting/chats` (owner control plane) previews
