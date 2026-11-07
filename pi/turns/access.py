@@ -18,6 +18,13 @@ imported or listener content, anything without a readable source), an attachment
 source, or his answer to Conker's question (the question and its options were written by the AI).
 Memories that are all his own (statements he typed or approved, memories made from his messages)
 leave his typed request able to approve, as in a chat without memory.
+After outside content, remembering always asks him: never the reviewer, never his loosening.
+
+A team role runs in a chat of its own whose one message Pi wrote: the owner's task, the selected
+messages and the previous role's answer. Only the task he typed is his request. The role keeps the
+outside mark of everything it was handed: the previous role's chat (and so on back) and the
+selected messages with the chat they came from, so a teammate's summary of a web page reaches the
+next role and the reviewer as outside content, never as his words.
 """
 
 from __future__ import annotations
@@ -42,6 +49,7 @@ WEBHOOK_MARK = "<webhook>"
 native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
+native_remember = "conker.remember"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -145,7 +153,35 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
             continue
         if not native(str(tool)):
             return True
-    return False
+    return _handed_outside(store, session_id, native)
+
+
+def _handed_outside(store, session_id, native):
+    """True if this chat is a team role's and anything it was handed read outside content."""
+    with store._connect() as db:
+        step = db.execute(
+            "SELECT s.source_ids,r.source_session_id,p.session_id AS previous FROM team_steps s "
+            "JOIN team_runs r ON r.id=s.run_id LEFT JOIN messages p ON p.id=s.previous_message_id "
+            "WHERE s.session_id=?",
+            (session_id,),
+        ).fetchone()
+        if step is None:
+            return False
+        # The previous role's chat (None for the first role: no rows) and each selected message.
+        handed = [
+            (step["previous"], t["id"])
+            for t in db.execute("SELECT id FROM turns WHERE session_id=?", (step["previous"],))
+        ]
+        for source in json.loads(step["source_ids"] or "[]"):
+            turn = db.execute(
+                "SELECT turn_id FROM turn_messages WHERE message_id=?", (source,)
+            ).fetchone()
+            handed.append((step["source_session_id"], turn["turn_id"] if turn else None))
+    # The previous role's own team step is checked the same way, so the mark survives every hop.
+    return any(
+        outside_content(store, chat, owner_text(store, turn) if turn else "", native, turn_id=turn)
+        for chat, turn in handed
+    )
 
 
 def _text(raw):
@@ -163,7 +199,8 @@ def owner_text(store, turn_id):
     was written by the AI, so it is no request of his. In a run of the owner's own job, only the
     job's saved instructions: Pi wrote the rest of that message (the preamble, the run's date and
     time, why it started). Nothing in a run of a job Conker made on its own: the model wrote those
-    instructions, and no owner approved them."""
+    instructions, and no owner approved them. In a team role, only the task he typed when he
+    started the run: Pi wrote the rest of the role's input."""
     with store._connect() as db:
         words = asks.answer_words(db, turn_id)
         if words is not None:
@@ -171,6 +208,14 @@ def owner_text(store, turn_id):
         run = agent_jobs.run_of(db, turn_id)
         if run is not None:
             return run.get("instructions", "") if run.get("createdBy", "owner") == "owner" else ""
+        team = db.execute(
+            "SELECT m.content FROM turns t JOIN team_steps s ON s.session_id=t.session_id "
+            "JOIN team_runs r ON r.id=s.run_id JOIN messages m ON m.id=r.input_message_id "
+            "WHERE t.id=?",
+            (turn_id,),
+        ).fetchone()
+        if team is not None:
+            return _text(team["content"])
         row = db.execute(
             "SELECT m.content FROM turn_messages t JOIN messages m ON m.id=t.message_id "
             "WHERE t.turn_id=? AND t.purpose='input' AND m.role='user'",
@@ -259,9 +304,14 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     )
     if level == "blocked":
         return None, by, ""
+    if outside and tool.id == native_remember:
+        # A memory shapes every later chat, and a page can talk the reviewer round as easily as the
+        # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
+        # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
+        return "ask", by, ""
     if level == "allow" and outside and native(tool.id):
-        # Keep after outside content (a memory, a cron job): someone else's text could be planting
-        # it, so the reviewer checks it against what he asked.
+        # Keep after outside content (a cron job): someone else's text could be planting it, so
+        # the reviewer checks it against what he asked.
         level = "ai"
     if level == "allow":
         return "run", by, REASONS[by]
