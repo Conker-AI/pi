@@ -18,6 +18,7 @@ imported or listener content, anything without a readable source), an attachment
 source, or his answer to Conker's question (the question and its options were written by the AI).
 Memories that are all his own (statements he typed or approved, memories made from his messages)
 leave his typed request able to approve, as in a chat without memory.
+After outside content, remembering always asks him: never the reviewer, never his loosening.
 
 A team role runs in a chat of its own whose one message Pi wrote: the owner's task, the selected
 messages and the previous role's answer. Only the task he typed is his request. The role keeps the
@@ -48,6 +49,7 @@ WEBHOOK_MARK = "<webhook>"
 native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
+native_remember = "conker.remember"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -302,9 +304,14 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     )
     if level == "blocked":
         return None, by, ""
+    if outside and tool.id == native_remember:
+        # A memory shapes every later chat, and a page can talk the reviewer round as easily as the
+        # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
+        # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
+        return "ask", by, ""
     if level == "allow" and outside and native(tool.id):
-        # Keep after outside content (a memory, a cron job): someone else's text could be planting
-        # it, so the reviewer checks it against what he asked.
+        # Keep after outside content (a cron job): someone else's text could be planting it, so
+        # the reviewer checks it against what he asked.
         level = "ai"
     if level == "allow":
         return "run", by, REASONS[by]
