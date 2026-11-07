@@ -2,7 +2,7 @@
 
 They are offered next to the owner's published tools and follow the same layers (chat > agent >
 tool default, see `pi.turns.access`). Remembering is Keep: allowed by default, done at once and
-listed in Inbox Handled. Scheduling asks by default: a recurring job runs instructions the model
+listed in Inbox Handled; after outside content it waits for him in the Inbox. Scheduling asks by default: a recurring job runs instructions the model
 wrote, so it is filed as a change request (`pi.agents.change_requests`) he approves in the Inbox,
 unless his settings for an agent or a chat loosen it. A tool draft is always filed: the request is
 made at once and Pi drafts it in the background (`pi.turns.tool_drafting`), so the chat answers
