@@ -53,6 +53,7 @@ def search(store, query, limit=30, cursor=None):
             FROM messages m JOIN sessions s ON s.id=m.session_id
             WHERE s.status!='forgotten' AND m.role IN ('user','assistant')
               AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=s.id)
+              AND NOT EXISTS(SELECT 1 FROM session_trash t WHERE t.session_id=s.id)
               AND json_valid(m.content) AND json_type(m.content)='text'
               AND instr(search_casefold(json_extract(m.content,'$')),?)>0
               AND search_session_eligible(s.id)

@@ -38,6 +38,7 @@ BODIES = dict(
             naming.Rename,
             naming.AutoName,
             archive.Archive,
+            archive.Trash,
             retries.Retry,
             fact_checks.Check,
             forks.Fork,

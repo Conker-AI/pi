@@ -1,8 +1,8 @@
 """Deleting chats forever from the owner's control plane (owner credential only).
 
 The reading shows what each chat's deletion reaches (counts, never text) and the confirmation
-to send back. The write checks every confirmation against a fresh preview, queues the chats and
-restarts Pi; the offline forgetting command runs them before Pi opens its database again
+to send back. The write checks every confirmation against a fresh preview, queues the chats,
+answers at once and restarts Pi when no turn is in progress; the offline forgetting command runs them before Pi opens its database again
 (pi.conversation.forget_queue). It needs a supervisor that restarts Pi (PI_SUPERVISED).
 """
 
@@ -87,7 +87,7 @@ def router(state, authorize):
         if not waiting:
             return {"state": "done", "sessions": sessions}
         forget_queue.queue(db, waiting)
-        getattr(state(), "forget_restart", forget_queue.restart_soon)()
+        getattr(state(), "forget_restart", forget_queue.restart_soon)(db)
         return JSONResponse(
             {"state": "restarting", "sessions": [item["sessionId"] for item in waiting]},
             status_code=202,

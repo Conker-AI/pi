@@ -9613,6 +9613,76 @@
         }
       }
     },
+    "/sessions/trash": {
+      "post": {
+        "summary": "Trash Chats",
+        "operationId": "trash_chats_sessions_trash_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Trash"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/{session_id}/title": {
       "get": {
         "summary": "Get Title",
@@ -32168,6 +32238,31 @@
           "note"
         ],
         "title": "TransitionTask"
+      },
+      "Trash": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "type": "string",
+              "pattern": "^ses_[0-9a-f]{16}$"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Sessions"
+          },
+          "trashed": {
+            "type": "boolean",
+            "title": "Trashed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessions",
+          "trashed"
+        ],
+        "title": "Trash"
       },
       "TurnRequest": {
         "properties": {

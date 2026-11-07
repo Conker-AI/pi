@@ -119,7 +119,7 @@ def http(conversation, monkeypatch):
         monkeypatch.setattr(
             state, "owner_key_hash", hashlib.sha256(OWNER.encode()).hexdigest(), raising=False
         )
-        monkeypatch.setattr(state, "forget_restart", lambda: restarts.append(1), raising=False)
+        monkeypatch.setattr(state, "forget_restart", lambda db: restarts.append(1), raising=False)
         client = TestClient(api.app)
         client.restarts = restarts
         yield client
@@ -204,10 +204,31 @@ def test_restart_stops_the_process_once_and_a_watchdog_ends_a_stuck_shutdown(mon
         forget_queue.os, "kill", lambda pid, sig: (signals.append(sig), killed.set())
     )
     monkeypatch.setattr(forget_queue.os, "_exit", lambda code: exited.set())
-    forget_queue.restart_soon(delay=0.01, grace=0.05)
-    forget_queue.restart_soon(delay=0.01, grace=0.05)
+    forget_queue.restart_soon(":memory:", delay=0.01, grace=0.05)
+    forget_queue.restart_soon(":memory:", delay=0.01, grace=0.05)
     assert killed.wait(5) and exited.wait(5)
     assert signals == [signal.SIGTERM]
+
+
+def test_restart_waits_until_no_turn_runs_and_holds_new_ones_until_the_next_start(
+    conversation, monkeypatch
+):
+    path, *_ = conversation
+    killed = threading.Event()
+    monkeypatch.setattr(forget_queue, "_restart_once", threading.Lock())
+    monkeypatch.setattr(forget_queue.os, "kill", lambda pid, sig: killed.set())
+    monkeypatch.setattr(forget_queue.os, "_exit", lambda code: None)
+    with closing(sqlite3.connect(path, isolation_level=None)) as db:
+        [turn] = db.execute("SELECT id FROM turns LIMIT 1").fetchone()
+        db.execute("UPDATE turns SET status='running' WHERE id=?", (turn,))
+        forget_queue.restart_soon(path, delay=0, grace=0.01, poll=0.02)
+        assert not killed.wait(0.5)  # a turn in progress is never cut off
+        db.execute("UPDATE turns SET status='complete' WHERE id=?", (turn,))
+        assert killed.wait(5)
+        with pytest.raises(sqlite3.IntegrityError, match="restarting"):
+            db.execute("UPDATE turns SET status='running' WHERE id=?", (turn,))
+        forget_queue.run_pending(path)  # the next start drops the hold
+        db.execute("UPDATE turns SET status='running' WHERE id=?", (turn,))
 
 
 def test_queue_files_hold_ids_and_states_only(conversation):
