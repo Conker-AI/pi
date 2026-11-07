@@ -23,6 +23,7 @@ import httpx
 
 from pi.conversation import citations as message_citations
 from pi.conversation import live_stream
+from pi.core.untrusted_text import strip_invisible
 from pi.models import local_settings
 from pi.models.loopback_http import verification
 from pi.turns import inference_control
@@ -40,6 +41,12 @@ class Message:
     role: str
     content: str
     images: tuple[ImageInput, ...] = ()
+
+    def __post_init__(self):
+        # Every model input is a Message, so hidden text (tags, selectors, bidi) stops here
+        # whatever it came from: chat, imports, files, memory, webhooks, projects, tools.
+        if isinstance(self.content, str):
+            object.__setattr__(self, "content", strip_invisible(self.content))
 
 
 def require_images(provider, messages):
@@ -176,6 +183,10 @@ class OllamaProvider:
     def complete_bounded(
         self, messages: list[Message], *, model: str, timeout: float
     ) -> Completion:
+        from pi.actions.evidence import project_tool_evidence  # imports Message from here
+
+        if any(m.role == "tool" for m in messages):
+            messages = project_tool_evidence(messages)
         payload = {
             "model": model,
             "messages": [

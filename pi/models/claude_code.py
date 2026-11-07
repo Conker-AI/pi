@@ -2,6 +2,7 @@
 
 import httpx
 
+from pi.actions.evidence import project_tool_evidence
 from pi.models.chatgpt import ChatGPTProvider
 from pi.models.private_transport import PrivateTransport
 from pi.models.providers import Completion, ProviderUnavailable, require_images
@@ -13,6 +14,8 @@ class ClaudeCodeProvider(ChatGPTProvider):
 
     def complete_bounded(self, messages, *, model, timeout):
         require_images(self, messages)
+        if any(m.role == "tool" for m in messages):
+            messages = project_tool_evidence(messages)
         try:
             with (
                 self.cancelable_request() as cancellation,
