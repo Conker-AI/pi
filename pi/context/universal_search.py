@@ -10,6 +10,7 @@ from pydantic import Field
 from pi.agents import profiles as agents
 from pi.content import artifacts
 from pi.context import projects
+from pi.conversation import archive
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation.search_excerpt import excerpt
@@ -86,8 +87,11 @@ def save_settings(store, body, *, semantic_available, ranking_available):
 
 
 def public_session(store, identity):
+    """A chat whose records may appear in search: not private, and not in the trash."""
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, identity)
+        if archive.trashed(db, [identity]):
+            return False
     return privacy is not None and not any(privacy.values())
 
 
@@ -122,6 +126,7 @@ def conversation_metadata(store, query):
         rows = db.execute(
             "SELECT id,title,summary FROM sessions WHERE status!='forgotten' "
             "AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=sessions.id) "
+            "AND NOT EXISTS(SELECT 1 FROM session_trash t WHERE t.session_id=sessions.id) "
             "AND search_metadata_match(title,summary) "
             "ORDER BY created_at DESC,id DESC"
         )

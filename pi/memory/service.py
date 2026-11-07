@@ -7,6 +7,7 @@ import time
 
 import httpx
 
+from pi.conversation import archive
 from pi.conversation import settings as session_settings
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
@@ -67,6 +68,47 @@ def _distinct(package):
 
 def _context_size(package):
     return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+
+
+def _without_trashed(store, package):
+    """Leave out records that cite a chat in the trash; restoring the chat brings them back."""
+    if not isinstance(package, dict):
+        return package
+
+    def text(value):
+        return value if isinstance(value, str) else None
+
+    def cited(item):
+        """(session, message) pairs of an item's citations; anything not text counts as absent."""
+        entries = item.get("citations") if isinstance(item, dict) else None
+        if not isinstance(entries, list):
+            return []
+        return [
+            (text(e.get("session_id")), text(e.get("message_id")))
+            for e in entries
+            if isinstance(e, dict)
+        ]
+
+    groups = [key for key in CONTEXT_GROUPS if isinstance(package.get(key), list)]
+    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
+    if not pairs:
+        return package
+    messages = sorted({m for _, m in pairs if m})
+    with store._connect() as db:
+        marks = ",".join("?" * len(messages))
+        owner = (
+            dict(db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages))
+            if messages
+            else {}
+        )
+        gone = archive.trashed(db, {s for s, _ in pairs if s} | set(owner.values()))
+    if not gone:
+        return package
+
+    def hidden(item):
+        return any(s in gone or owner.get(m) in gone for s, m in cited(item))
+
+    return {**package, **{key: [i for i in package[key] if not hidden(i)] for key in groups}}
 
 
 def _budget_context(package):
@@ -313,6 +355,7 @@ class Memory:
                     max_items=per_answer(self.store),
                     distinct=True,
                 )
+                package = _without_trashed(self.store, package)
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):

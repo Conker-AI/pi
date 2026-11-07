@@ -1,9 +1,10 @@
-"""Archived chats: the owner hides chats from the chat list and brings them back.
+"""Archived and trashed chats: the owner hides chats from the chat list and brings them back.
 
-Archiving is a list state only. It changes no message, turn, memory or job, so it is reversible
-and needs no password. One request sets the state of up to 100 chats in one transaction; a chat
-that does not exist or was forgotten fails the whole request, so nothing is half done. Forgetting
-a chat deletes its archive row with it.
+Both are list states only. They change no message, turn, memory or job, so they are reversible
+and need no password. An archived chat stays readable and searchable; a trashed chat is also left
+out of search and memory recall until it is restored or deleted forever (forget_queue). One
+request sets the state of up to 100 chats in one transaction; a chat that does not exist or was
+forgotten fails the whole request, so nothing is half done. Forgetting a chat deletes both rows.
 """
 
 from __future__ import annotations
@@ -21,6 +22,9 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS session_archive (
  session_id TEXT PRIMARY KEY REFERENCES sessions(id), archived_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS session_trash (
+ session_id TEXT PRIMARY KEY REFERENCES sessions(id), trashed_at REAL NOT NULL
+);
 """
 
 ChatId = Annotated[str, Field(pattern=r"^ses_[0-9a-f]{16}$")]
@@ -31,13 +35,42 @@ class Archive(Strict):
     archived: bool
 
 
+class Trash(Strict):
+    sessions: list[ChatId] = Field(min_length=1, max_length=MAX_CHATS)
+    trashed: bool
+
+
 class ArchiveError(ServiceError):
     pass
 
 
 def apply(store, body: Archive) -> dict:
     """Set every listed chat archived or active; a chat already in that state stays as it is."""
-    ids = list(dict.fromkeys(body.sessions))
+    ids = _mark(store, body.sessions, "session_archive", body.archived)
+    return {"sessions": ids, "archived": body.archived}
+
+
+def trash(store, body: Trash) -> dict:
+    """Move every listed chat to the trash or restore it; restoring keeps its archive state."""
+    ids = _mark(store, body.sessions, "session_trash", body.trashed)
+    return {"sessions": ids, "trashed": body.trashed}
+
+
+def trashed(db, session_ids) -> set[str]:
+    """The listed chats that are in the trash (none before the table exists)."""
+    ids = list(session_ids)
+    if (
+        not ids
+        or not db.execute("SELECT 1 FROM sqlite_master WHERE name='session_trash'").fetchone()
+    ):
+        return set()
+    marks = ",".join("?" * len(ids))
+    query = f"SELECT session_id FROM session_trash WHERE session_id IN ({marks})"
+    return {row[0] for row in db.execute(query, ids)}
+
+
+def _mark(store, sessions, table: str, on: bool) -> list[str]:
+    ids = list(dict.fromkeys(sessions))
     marks = ",".join("?" * len(ids))
     now = time.time()
     with store._connect() as db:
@@ -56,28 +89,29 @@ def apply(store, body: Archive) -> dict:
                 raise ArchiveError(
                     "not_found", "One of these chats no longer exists; nothing was changed.", 404
                 )
-            if body.archived:
-                # A chat archived earlier keeps its first archive time.
+            if on:
+                # A chat marked earlier keeps its first time.
                 db.executemany(
-                    "INSERT OR IGNORE INTO session_archive VALUES (?,?)",
+                    f"INSERT OR IGNORE INTO {table} VALUES (?,?)",
                     [(identity, now) for identity in ids],
                 )
             else:
                 db.executemany(
-                    "DELETE FROM session_archive WHERE session_id=?",
+                    f"DELETE FROM {table} WHERE session_id=?",
                     [(identity,) for identity in ids],
                 )
             db.commit()
         except BaseException:
             db.rollback()
             raise
-    return {"sessions": ids, "archived": body.archived}
+    return ids
 
 
 def redact(db, session_ids) -> None:
-    """Offline forgetting hook: a forgotten chat leaves no archive row; the caller owns the transaction."""
-    if db.execute("SELECT 1 FROM sqlite_master WHERE name='session_archive'").fetchone():
-        db.executemany(
-            "DELETE FROM session_archive WHERE session_id=?",
-            [(identity,) for identity in session_ids],
-        )
+    """Offline forgetting hook: a forgotten chat leaves no archive or trash row; the caller owns the transaction."""
+    for table in ("session_archive", "session_trash"):
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
+            db.executemany(
+                f"DELETE FROM {table} WHERE session_id=?",
+                [(identity,) for identity in session_ids],
+            )

@@ -22,6 +22,7 @@ TABLES = (
     "session_output",
     "summary_coverage",
     "session_archive",
+    "session_trash",
 )
 
 
@@ -77,6 +78,7 @@ def seed(store, session_id, text):
         db.execute("INSERT INTO summary_coverage VALUES(?,1,?)", (session_id, answer))
         db.execute("INSERT INTO session_titles VALUES(?,1,'auto','a',?)", (session_id, now))
         db.execute("INSERT INTO session_archive VALUES(?,?)", (session_id, now))
+        db.execute("INSERT INTO session_trash VALUES(?,?)", (session_id, now))
         db.execute(
             "INSERT INTO session_output VALUES(?,1,?)",
             (session_id, json.dumps({"format": "table", "length": "short", "language": "ru"})),
