@@ -64,6 +64,8 @@ IDS_ONLY = {
     "scheduled_run_budgets",
     # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
     "service_model_calls",
+    # Paid calls against the daily cap: provider and model ids, counts and states.
+    "paid_model_calls",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",

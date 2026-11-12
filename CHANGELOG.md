@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
+  and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
+  reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
+  as a model refusal (roles fall back) until the owner's next local day. `GET /inference/spending`
+  is the meter. New preference field with a default; preferences saved earlier read it.
+
 ## 0.24.0
 
 - **Chats go to a Trash bin.** `POST /sessions/trash` moves chats to Trash or restores them with
