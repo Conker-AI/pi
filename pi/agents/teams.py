@@ -308,7 +308,8 @@ def _unique(db, kind, name, identity=None):
         )
 
 
-def save(store, kind, definition, identity=None, revision=None, *, owner_view=False):
+def save(store, kind, definition, identity=None, revision=None, *, owner_view=False, then=None):
+    """Create or update one record; `then(db, record)` is saved with it or neither is."""
     definition = _validated(kind, definition)
     if identity is not None:
         Revision(expected_revision=revision)
@@ -339,6 +340,8 @@ def save(store, kind, definition, identity=None, revision=None, *, owner_view=Fa
                 (definition.name.casefold(), definition.model_dump_json(), now, identity),
             )
         result = _get(db, identity, kind)
+        if then is not None:
+            then(db, result)
         if owner_view:
             result = _team_view(db, result)
         db.commit()

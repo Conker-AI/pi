@@ -88,8 +88,18 @@ transaction with SQLite's secure delete on, then folds the write-ahead log back 
 row in `imported_chat_deletions` with ids and counts only, never the title or the words: a repeat
 answers with the same record (`fileScrubbed: null`), and a later import of the same export counts
 the chat as unchanged instead of bringing it back. The reply says how many messages went and how
-many of the owner's messages MemoryGate already has (`offeredToMemory`, with `memoryNote`):
-memories made from them stay until the owner forgets them in Memory. The background sender holds
+many of the owner's messages MemoryGate already has (`offeredToMemory`, with `memoryNote`).
+Those are erased in MemoryGate too: the deletion queues their evidence ids in
+`import_evidence_erasures` (ids only) in the same transaction, and the background sender calls
+`DELETE /runtime/listeners/{source}/evidence/{id}` for each before it offers anything new.
+MemoryGate blanks the evidence and removes its analyses, links and each listener memory nothing
+else supports; a memory the owner wrote keeps its text. A failure is retried with backoff, a
+refused listener pauses the sender, and an event MemoryGate does not have is kept as missing;
+each erasure goes only through the listener its words went to (another one waits, named in the
+problem);
+`GET /imports` counts both (`memory.erasing`, `memory.notFoundToErase`). A word whose offer was
+saved by MemoryGate but whose answer never reached Pi has no evidence id and cannot be erased this
+way. The background sender holds
 a lock for each offer from re-reading its row to recording the answer, and the deletion takes the
 same lock, so no word of a chat is offered while or after it is deleted. Owner backups made before
 still hold the chat.

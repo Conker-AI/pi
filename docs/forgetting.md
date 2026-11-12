@@ -158,6 +158,8 @@ it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
   is left alone, and so is everything the owner approved himself.
 - **Memory searches** Conker ran in the chat (`conker.recall`, saved in `recall_results`) are
   deleted; forgetting one memory clears every saved search result.
+- **Agents and teams Conker made on its own** in the chat are archived (the owner can restore
+  them; their stored configuration stays).
 - **AI jobs Conker made on its own** in the chat are turned off and marked `turnedOff:
   "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). The owner can turn one
   back on; that clears the mark.

@@ -20432,7 +20432,7 @@
     "/imports/chats/{chat_id}/delete": {
       "post": {
         "summary": "Delete",
-        "description": "Delete one imported chat for good; memories made from it stay until forgotten.",
+        "description": "Delete one imported chat for good; its words are erased from memory in the background.",
         "operationId": "delete_imports_chats__chat_id__delete_post",
         "parameters": [
           {

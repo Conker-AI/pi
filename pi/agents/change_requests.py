@@ -21,6 +21,9 @@ its chat (`pi.agents.keep`), so forgetting the chat can undo it.
   request id, so a retry after a lost answer never stores it twice. Approved by the owner it is
   his statement; made at once it is stored as Conker's (`origin: "conker"`) under its own key, so
   his later approval of the same request never collides with it.
+- `agent` and `team`: approving makes the agent (`profiles.create`) or the linear team
+  (`teams.save`) exactly as filed, in the same transaction as the decision
+  (`pi.agents.agent_requests`, which holds their guards).
 
 Conker keeps at most `PER_CHAT` requests open per chat and `OPEN_LIMIT` in all, so outside
 content cannot flood the Inbox; the owner's own requests (`/tool-drafts`) are not limited.
@@ -36,10 +39,11 @@ from typing import Literal
 
 from pydantic import Field
 
+from pi.core import rebuild
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
-KINDS = ("ai_job", "tool_draft", "memory")
+KINDS = ("ai_job", "tool_draft", "memory", "agent", "team")
 REQUEST_ID = r"^creq_[a-f0-9]{32}$"
 MAX_PAYLOAD = 200_000
 PER_CHAT = 3
@@ -49,17 +53,19 @@ CONKER_KEY = "-conker"
 # Terminal control characters (C0 except tab and newline, DEL, C1): titles and summaries come from
 # the model or outside content and are printed by the command line.
 CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-SCHEMA = """
+TABLE = """
 CREATE TABLE IF NOT EXISTS change_requests (
  id TEXT PRIMARY KEY,
- kind TEXT NOT NULL CHECK(kind IN ('ai_job','tool_draft','memory')),
+ kind TEXT NOT NULL CHECK(kind IN ('ai_job','tool_draft','memory','agent','team')),
  title TEXT NOT NULL, summary TEXT NOT NULL, payload TEXT NOT NULL,
  session_id TEXT REFERENCES sessions(id), turn_id TEXT,
  state TEXT NOT NULL CHECK(state IN ('open','approved','declined','failed')),
  result TEXT, created_at REAL NOT NULL, decided_at REAL
 );
-CREATE INDEX IF NOT EXISTS change_requests_open ON change_requests(state, created_at);
 """
+SCHEMA = (
+    TABLE + "CREATE INDEX IF NOT EXISTS change_requests_open ON change_requests(state, created_at);"
+)
 
 
 class ChangeRequestError(ServiceError):
@@ -78,7 +84,7 @@ class DraftSaved(Strict):
 
 class View(Strict):
     id: str = Field(pattern=REQUEST_ID)
-    kind: Literal["ai_job", "tool_draft", "memory"]
+    kind: Literal["ai_job", "tool_draft", "memory", "agent", "team"]
     title: str = Field(min_length=1, max_length=160)
     summary: str = Field(max_length=600)
     payload: dict
@@ -90,6 +96,8 @@ class View(Strict):
 
 
 def initialize(db):
+    # Agent and team kinds arrived 2026-11-12: an older table's CHECK refuses them until rebuilt.
+    rebuild.widen(db, "change_requests", TABLE, "'team'")
     db.executescript(SCHEMA)
 
 
@@ -278,6 +286,10 @@ def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -
         privacy = _privacy(store, request["sessionId"])
         agent_jobs.create(store, body, now=now, created_by=by, privacy=privacy, then=decided)
         return get(store, identity)
+    if request["kind"] in ("agent", "team"):
+        from pi.agents import agent_requests
+
+        return agent_requests.approve(store, request, by=by, now=now)
     if request["kind"] == "tool_draft":
         # A request filed before drafting moved to the background has no status: it is ready.
         if request["payload"].get("status", "ready") != "ready":
