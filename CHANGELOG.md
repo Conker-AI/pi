@@ -14,8 +14,10 @@ be a decision with visible consequences.
   loosening can, as Keep: listed in Handled, archived when the chat is forgotten.
 - **An agent can run another agent.** Conker's own tool `conker.run_agent` runs the named agent on
   the model's instructions in a chat of its own (a child of the caller's chat, memory off, no owner
-  request, outside if the caller read outside content) and returns its reply; at most depth 2, no
-  loops, 3 per turn and 30 a day (`agent_calls`, forgotten with either chat). docs/agents.md.
+  request, only "ask" of the caller's access switch, outside if the caller read outside content);
+  the caller's model reads its reply from that chat, so forgetting or trashing it removes the reply
+  too. The owner's Stop reaches the child. At most depth 2, no loops, 3 per turn and 30 a day, not
+  from team roles or AI jobs (`agent_calls`, forgotten with either chat). docs/agents.md.
 
 ## 0.24.0
 

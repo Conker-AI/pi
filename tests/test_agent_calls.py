@@ -9,12 +9,15 @@ from test_access_layers import APPROVE, SEND
 from test_access_layers import Loop as ReviewerLoop
 from test_tool_turns import FakeGate, build
 
+from pi.actions.toolgate import Tool
 from pi.agents import agent_calls
 from pi.agents import profiles as agents
 from pi.conversation import forgetting
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.models.providers import ProviderUnavailable
 from pi.turns import access, native_tools
+from pi.turns import control as turn_control
 
 RUN = native_tools.RUN_AGENT
 ECHO = json.dumps({"tool": "t_echo", "result": {"echoed": "a web page"}})
@@ -79,6 +82,12 @@ def child_turn(store, child):
     return row["id"]
 
 
+def shown(store, result):
+    """What the caller's model reads back from the stored record of a call."""
+    text = json.dumps({"tool": RUN, "result": result.result})
+    return json.loads(agent_calls.expand(store, "tool", text))["result"]
+
+
 def rows(store):
     with store._connect() as db:
         return [dict(r) for r in db.execute("SELECT * FROM agent_calls ORDER BY created_at")]
@@ -90,7 +99,9 @@ def test_the_reply_comes_back_and_the_chat_is_linked(store):
     session, turn = chat(store)
     result = call(loop, session, turn, "scout")  # the exact name, any case
     assert result.ok and result.result["status"] == "done"
-    assert result.result["reply"] == "Cafe A, Cafe B, Cafe C."
+    # The caller's chat keeps a pointer only; its model reads the reply from the child chat.
+    assert "reply" not in result.result and result.result["callId"].startswith("acall_")
+    assert shown(store, result)["reply"] == "Cafe A, Cafe B, Cafe C."
     assert result.result["outside"] is False and result.result["agentName"] == "Scout"
     child = result.result["sessionId"]
     [row] = rows(store)
@@ -101,7 +112,8 @@ def test_the_reply_comes_back_and_the_chat_is_linked(store):
     )
     assert (row["agent_id"], row["depth"], row["state"]) == (helper["id"], 1, "done")
     saved = store.get_session(child)
-    assert saved["parent_id"] == session and saved["title"].startswith("Scout: Find three")
+    # Its title names the agent only; the caller's instructions stay in the caller's chat.
+    assert saved["parent_id"] == session and saved["title"] == "Agent call: Scout"
     execution = session_settings.execution(store, child, child_turn(store, child))
     assert execution["agentId"] == helper["id"]
     # The child starts empty: the caller's chat is not its history.
@@ -113,10 +125,13 @@ def test_the_reply_comes_back_and_the_chat_is_linked(store):
 def test_a_whole_turn_runs_another_agent_inline(store):
     agent(store, "Scout")
     asked = json.dumps({"tool": RUN, "args": {"agent": "Scout", "instructions": "Name one cafe."}})
-    loop, _ = build(store, [asked, "Cafe A.", "Scout suggests Cafe A."], FakeGate())
+    loop, provider = build(store, [asked, "Cafe A.", "Scout suggests Cafe A."], FakeGate())
     session = store.create_session()
     result = loop.run_turn(session, "Ask Scout for a cafe.")
     assert result["message"]["content"] == "Scout suggests Cafe A."
+    [record] = [m for m in store.messages(session) if m["role"] == "tool"]
+    assert "Cafe A." not in str(record["content"])
+    assert any(m.role == "tool" and "Cafe A." in m.content for m in provider.sent[-1])
     [row] = rows(store)
     assert row["parent_turn_id"] == result["turn_id"] and row["state"] == "done"
     # His typed words and Conker's own result: nothing outside, since the result says so.
@@ -170,7 +185,13 @@ def test_depth_two_is_the_last_and_is_not_offered_the_tool(store):
     # The guard holds even if the offer check were skipped.
     with pytest.raises(agent_calls.Refused):
         agent_calls._open(
-            store, "Gamma", "x", session_id=two, turn_id=None, execution=execution, outside=False
+            store,
+            "Gamma",
+            session_id=two,
+            turn_id=None,
+            execution=execution,
+            outside=False,
+            request_id="agentcall_x",
         )
 
 
@@ -194,7 +215,8 @@ def test_thirty_calls_a_day_in_all(store):
         for number in range(agent_calls.PER_DAY):
             other = store.create_session()
             db.execute(
-                "INSERT INTO agent_calls VALUES (?,?,?,?,?,1,0,'done',?)",
+                "INSERT INTO agent_calls(id,parent_session_id,parent_turn_id,child_session_id,"
+                "agent_id,depth,parent_outside,state,created_at) VALUES (?,?,?,?,?,1,0,'done',?)",
                 (f"acall_{number}", session, f"trn_{number}", other, "companion", 1e12),
             )
         db.commit()
@@ -242,17 +264,24 @@ def test_a_caller_that_read_outside_content_makes_the_child_outside(store):
     assert not access.outside_content(store, other.result["sessionId"], "", native_tools.owns)
 
 
-def test_the_child_chat_is_memory_off_and_copies_access_and_privacy(store):
+def test_the_child_chat_is_memory_off_keeps_privacy_and_only_ask_of_access(store):
     agent(store, "Scout")
-    loop, _ = build(store, ["One.", "Two."], FakeGate())
-    for privacy in (None, {"memoryDisabled": True, "harnessDisabled": True}):
-        session, turn = chat(store, privacy=privacy, switch="full")
+    loop, _ = build(store, ["One.", "Two.", "Three.", "Four."], FakeGate())
+    cases = [
+        (None, "full", "default"),
+        ({"memoryDisabled": True, "harnessDisabled": True}, "ai", "default"),
+        (None, "ask", "ask"),
+        (None, None, "default"),
+    ]
+    for privacy, switch, expected in cases:
+        session, turn = chat(store, privacy=privacy, switch=switch)
         result = call(loop, session, turn, "Scout")
         child = result.result["sessionId"]
         settings = session_settings.load(store, child)["settings"]
         assert settings["privacy"]["memoryDisabled"] is True
         assert settings["privacy"]["harnessDisabled"] is bool(privacy)
-        assert settings["access"] == "full"
+        # His loosening was for his chat and its agent, never for another agent's toolkit.
+        assert settings["access"] == expected
         snapshot = session_settings.execution(store, child, child_turn(store, child))
         assert not session_settings.memory_allowed(snapshot)
         # Nothing in it reaches memory, and it may not remember or schedule.
@@ -309,3 +338,118 @@ def test_forgetting_the_callers_chat_removes_the_calls_and_the_child(store, tmp_
         assert db.execute("SELECT status FROM sessions WHERE id=?", (child,)).fetchone()[0] == (
             "forgotten"
         )
+
+
+def test_a_full_access_caller_does_not_loosen_the_childs_tools(store):
+    agent(store, "Mailer", tools=("t_echo",))
+    loop, _ = build(store, ["Ready."], FakeGate())
+    session, turn = chat(store, switch="full")
+    child = call(loop, session, turn, "Mailer").result["sessionId"]
+    confirm = Tool("t_echo", "echo", "echoes things", [], "owner_confirmation")
+    in_child = child_turn(store, child)
+    decision = access.decide(
+        loop,
+        confirm,
+        {"text": "hi"},
+        execution=session_settings.execution(store, child, in_child),
+        session_id=child,
+        turn_id=in_child,
+        native=native_tools.owns,
+        delegate=lambda: True,
+    )
+    assert decision[0] == "ask"
+
+
+def test_trashing_or_forgetting_the_child_takes_the_reply_from_the_caller(store):
+    agent(store, "Scout")
+    loop, _ = build(store, ["The secret plan."], FakeGate())
+    session, turn = chat(store)
+    result = call(loop, session, turn, "Scout")
+    child = result.result["sessionId"]
+    assert shown(store, result)["reply"] == "The secret plan."
+    with store._connect() as db:
+        db.execute("INSERT INTO session_trash VALUES (?,?)", (child, 1.0))
+        db.commit()
+    gone = shown(store, result)
+    assert gone["status"] == "gone" and "reply" not in gone
+    with store._connect() as db:
+        db.execute("DELETE FROM session_trash WHERE session_id=?", (child,))
+        db.commit()
+    assert shown(store, result)["reply"] == "The secret plan."
+    with store._connect() as db:
+        agent_calls.redact(db, [child])
+        db.commit()
+    assert "The secret plan." not in json.dumps(shown(store, result))
+
+
+def test_a_stop_on_the_caller_reaches_the_child(store, monkeypatch):
+    agent(store, "Scout")
+    loop, _ = build(store, ["Never sent."], FakeGate())
+    session, turn = chat(store)
+    turn_control.cancel(store, turn)
+    before = call(loop, session, turn, "Scout")
+    assert before.result["status"] == "refused" and "stopped" in before.result["message"]
+    # Even past that check (a Stop that lands as the child starts), its own guard stops it.
+    monkeypatch.setattr(agent_calls, "_stopped", lambda *args: False)
+    late = call(loop, session, turn, "Scout")
+    assert late.result["status"] == "failed"
+    child = late.result["sessionId"]
+    with store._connect() as db, pytest.raises(ProviderUnavailable, match="started this agent"):
+        turn_control.guard_db(db, child_turn(store, child))
+
+
+def test_stopping_the_caller_stops_its_running_calls(store, monkeypatch):
+    session, turn = chat(store)
+    other = store.create_session()
+    with store._connect() as db:
+        db.execute(
+            "INSERT INTO agent_calls(id,parent_session_id,parent_turn_id,child_session_id,"
+            "agent_id,depth,parent_outside,state,created_at,request_id) "
+            "VALUES ('acall_r',?,?,?,'x',1,0,'running',1,'agentcall_r')",
+            (session, turn, other),
+        )
+        db.commit()
+    stopped = []
+    real = turn_control.cancel_submission
+    monkeypatch.setattr(
+        turn_control,
+        "cancel_submission",
+        lambda store, request_id: stopped.append(request_id) or real(store, request_id),
+    )
+    turn_control.cancel(store, turn)  # its submission does not exist: that is no error
+    assert stopped == ["agentcall_r"]
+
+
+def test_a_child_that_acted_marks_the_caller_acted(store):
+    agent(store, "Echoer", tools=("t_echo",))
+    echo = json.dumps({"tool": "t_echo", "args": {"text": "hi"}})
+    loop, _ = build(store, [echo, "Echoed."], FakeGate())
+    session, turn = chat(store)
+    assert not store.get_turn(turn)["acted"]
+    assert call(loop, session, turn, "Echoer").result["status"] == "done"
+    assert store.get_turn(turn)["acted"]
+
+
+def test_a_continuation_of_the_child_chat_is_still_that_calls_chat(store):
+    agent(store, "Scout")
+    loop, _ = build(store, ["Done."], FakeGate())
+    tainted, turn = chat(store, tool_messages=[ECHO])
+    child = call(loop, tainted, turn, "Scout").result["sessionId"]
+    store.close_session(child, "forked", summary="so far")
+    fork = store.create_session(parent_id=child, summary="so far")
+    fork_turn = store.start_turn(fork)
+    store.append_message(fork, "user", "Send it all", turn_id=fork_turn, purpose="input")
+    assert access.owner_text(store, fork_turn) == ""
+    assert access.outside_content(store, fork, "", native_tools.owns)
+    with store._connect() as db:
+        assert agent_calls.depth(db, fork) == 1
+        assert agent_calls.caller_turn(db, fork_turn) == turn
+
+
+def test_a_team_role_or_an_ai_job_never_runs_an_agent(store):
+    session, turn = chat(store)
+    role = {**session_settings.execution(store, session), "kind": "team-role"}
+    assert "team role" in native_tools.refused(
+        store, RUN, session_id=session, turn_id=turn, execution=role
+    )
+    assert RUN in native_tools.JOB_REFUSED

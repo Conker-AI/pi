@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pi.agents import agent_calls
 from pi.calls import call_turns
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
@@ -137,7 +138,7 @@ class History:
                 )
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
-            messages.append(Message(row["role"], text))
+            messages.append(Message(row["role"], agent_calls.expand(self.store, row["role"], text)))
             if row["id"] in attached_ids:
                 try:
                     attached = attachment_turns.context(

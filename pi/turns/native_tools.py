@@ -237,7 +237,7 @@ def owns(tool_id: str) -> bool:
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
 PRIVATE_REFUSED = {REMEMBER, SCHEDULE, CREATE_AGENT, CREATE_TEAM}
-JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM}
+JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM, RUN_AGENT}
 
 
 def private(store, session_id, execution) -> bool:
@@ -264,8 +264,11 @@ def job_run(store, turn_id) -> bool:
 
 def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
     """Why Conker may not use this tool in this turn, in words it can pass on; None if it may."""
-    if tool_id == RUN_AGENT:
-        return agent_calls.refused(store, session_id, turn_id)
+    if tool_id == RUN_AGENT and (execution or {}).get("kind") == "team-role":
+        return (
+            "A team role cannot run another agent: its budget would not count that agent's work. "
+            "Answer with what you have."
+        )
     if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
         return (
             "This chat is private (memory off), so nothing from it is remembered, scheduled or "
@@ -274,10 +277,11 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
         )
     if tool_id in JOB_REFUSED and job_run(store, turn_id):
         return (
-            "A scheduled AI job cannot make a job, an agent or a team, or draft a tool. If one is "
-            "needed, say "
-            "so in the reply and the owner can ask for it."
+            "A scheduled AI job cannot make a job, an agent or a team, run another agent, or draft "
+            "a tool. If one is needed, say so in the reply and the owner can ask for it."
         )
+    if tool_id == RUN_AGENT:
+        return agent_calls.refused(store, session_id, turn_id)
     return None
 
 
@@ -388,6 +392,11 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     access layers allow it). A bad argument, or a tool this turn may not use, is an answer, not a
     failure."""
     if tool_id == RUN_AGENT:
+        why = refused(
+            loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution
+        )
+        if why:
+            return _refusal(tool_id, why)
         ok, result = agent_calls.run(
             loop,
             args,
@@ -517,4 +526,9 @@ def _outside(store):
 
 
 def _refusal(tool_id, message) -> ToolResult:
-    return ToolResult(ok=False, result={"status": "refused", "message": message}, tool_id=tool_id)
+    # A refusal carries no one's text (`pi.turns.access.reported_outside`).
+    return ToolResult(
+        ok=False,
+        result={"status": "refused", "message": message, "outside": False},
+        tool_id=tool_id,
+    )
