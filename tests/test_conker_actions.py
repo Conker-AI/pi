@@ -84,14 +84,9 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
         "conker.draft_tool",
     ]
     open_chat = store.create_session()
-    assert (
-        len(
-            native_tools.offered(
-                loop, session_settings.execution(store, open_chat), open_chat, None
-            )
-        )
-        == len(native_tools.CATALOG)
-    )
+    assert len(
+        native_tools.offered(loop, session_settings.execution(store, open_chat), open_chat, None)
+    ) == len(native_tools.CATALOG)
 
 
 def test_a_private_chat_is_refused_again_when_it_calls_them(store):
