@@ -32,7 +32,8 @@ from pi.conversation import history as session_history
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
-from pi.memory.service import _receipt_ids, without_hidden
+from pi.memory.hidden import _receipt_ids
+from pi.memory.service import without_hidden
 from pi.models.providers import Completion
 from pi.schedule import agent_jobs, job_models, proposals, tasks
 

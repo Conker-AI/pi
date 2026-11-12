@@ -15,7 +15,7 @@ from pi.conversation import history as session_history
 from pi.conversation import search as conversation_search
 from pi.conversation.forgetting import forget, preview
 from pi.conversation.store import Store
-from pi.memory.service import _without_trashed
+from pi.memory.service import without_hidden
 
 
 @pytest.fixture
@@ -64,11 +64,11 @@ def test_trashed_chats_are_hidden_from_search_and_recall(store):
         ],
         "entities": [{"id": "uncited"}, {"id": "odd", "citations": [{"session_id": [gone]}]}],
     }
-    shown = _without_trashed(store, package)
+    shown = without_hidden(store, package)
     assert [m["id"] for m in shown["memories"]] == ["kept"]
     assert shown["entities"] == package["entities"]  # malformed citations hide nothing
     trash(store, [gone], trashed=False)
-    assert _without_trashed(store, package) == package
+    assert without_hidden(store, package) == package
 
 
 def test_deleting_a_trashed_chat_forever_clears_its_trash_mark(tmp_path):

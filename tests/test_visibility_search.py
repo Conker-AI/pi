@@ -328,7 +328,7 @@ def test_memories_a_hidden_chat_rewrote_are_left_out_until_restored(store):
 
 
 def test_hidden_records_match_the_memory_service_set(store):
-    from pi.memory import service
+    from pi.memory import hidden as service
 
     binned = store.create_session(title="binned")
     said = store.append_message(binned, "user", "my needle")["id"]

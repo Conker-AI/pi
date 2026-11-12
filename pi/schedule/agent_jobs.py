@@ -77,6 +77,9 @@ CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 NOTE_ID = r"^note_[a-f0-9]{32}$"
 MAX_ENABLED = 20
 CONKER_PER_DAY = 3
+# Jobs Pi ships (`pi.schedule.rhythm`), each with a fixed id: never counted in CONKER_PER_DAY,
+# since Conker did not choose to make them.
+BUILT_IN = ("job_beca06ba345a8b3170a4d8e2473fe00f",)
 # Why a run of a job Conker made was held back (the owner's proactive budget refused it).
 HELD = {
     "quiet_hours": "it is the owner's quiet hours.",
@@ -119,13 +122,23 @@ def quiet(store, instant: float) -> bool:
     return prefs.quiet_now(preferences, datetime.fromtimestamp(instant, UTC))
 
 
-def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy=None, then=None):
+def create(
+    store,
+    body: AgentJobCreate,
+    now=None,
+    *,
+    created_by="owner",
+    privacy=None,
+    then=None,
+    identity=None,
+):
     """A new AI job and its own chat. The browser can create these, never raw tool jobs.
 
     `created_by` is "conker" only for a job Conker made without the owner's approval; `privacy`
-    carries a private chat's flags to the job's own chat. The job, its chat and whatever
-    `then(db, job)` records (the request it came from) are saved together or not at all, so a
-    failure leaves no running job that nothing points to."""
+    carries a private chat's flags to the job's own chat; `identity` names a job Pi ships
+    (`BUILT_IN`). The job, its chat and whatever `then(db, job)` records (the request it came
+    from) are saved together or not at all, so a failure leaves no running job that nothing
+    points to."""
     body = AgentJobCreate.model_validate(body.model_dump())
     definition = Definition(
         name=body.name,
@@ -142,7 +155,7 @@ def create(store, body: AgentJobCreate, now=None, *, created_by="owner", privacy
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         try:
-            job = jobs.insert(db, definition, now)
+            job = jobs.insert(db, definition, now, identity)
             session_id = _new_session(store, db, definition.model_dump())
             db.execute("INSERT INTO agent_job_sessions VALUES (?,?)", (job["id"], session_id))
             if then is not None:
@@ -187,8 +200,9 @@ def room_in(db, created_by, now=None, *, besides=None) -> str | None:
     ).fetchone()[0]
     made = db.execute(
         "SELECT COUNT(*) FROM scheduled_jobs WHERE created_at>? "
-        "AND json_extract(definition,'$.createdBy')='conker' AND id IS NOT ?",
-        (now - 86400, besides),
+        "AND json_extract(definition,'$.createdBy')='conker' AND id IS NOT ? "
+        f"AND id NOT IN ({','.join('?' * len(BUILT_IN))})",
+        (now - 86400, besides, *BUILT_IN),
     ).fetchone()[0]
     if enabled >= MAX_ENABLED:
         return (

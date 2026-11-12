@@ -2,7 +2,7 @@
 
 Records that come from a hidden chat (forgotten or in the Trash, pi.conversation.visibility) are
 left out of the library and of every detail view, by the same set recall uses
-(pi.memory.service.hidden_objects). MemoryGate's cards carry no chat, so only what that set can
+(pi.memory.hidden.hidden_objects). MemoryGate's cards carry no chat, so only what that set can
 name is left out: the evidence, analysis and memory made from a delivered message, and memories
 Conker kept from the chat. Restoring the chat brings them back.
 """
@@ -12,7 +12,7 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from pi.memory import service as memory_service
+from pi.memory.hidden import hidden_objects
 
 Kind = Literal[
     "memory", "entity", "evidence", "analysis", "episode", "observation", "pattern", "transcript"
@@ -26,7 +26,7 @@ def _hidden(service, client) -> set[tuple[str, str]]:
     if store is None:
         return set()
     with store._connect() as db:
-        found = memory_service.hidden_objects(db, (getattr(client, "agent_id", None),))
+        found = hidden_objects(db, (getattr(client, "agent_id", None),))
     return {(kind, identity) for kind, ids in found.items() for identity in ids}
 
 

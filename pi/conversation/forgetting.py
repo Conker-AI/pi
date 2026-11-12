@@ -23,7 +23,7 @@ from contextlib import closing
 from pathlib import Path
 
 from pi.actions import withdrawals
-from pi.agents import asks, change_requests, keep, retired_workflows, skills
+from pi.agents import agent_calls, asks, change_requests, keep, retired_workflows, skills
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
 from pi.context import compaction, decisions
@@ -48,6 +48,7 @@ from pi.schedule import tasks
 from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import queue as turn_queue
+from pi.turns import recall as turn_recall
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 
@@ -211,6 +212,8 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         change_requests.redact(db, plan["session_ids"])
         asks.redact(db, plan["session_ids"])
         turn_access.redact(db, plan["session_ids"])
+        agent_calls.redact(db, plan["session_ids"])
+        turn_recall.redact(db, plan["session_ids"])
         artifacts.redact(db, plan["session_ids"])
         drafts.redact(db, plan["session_ids"])
         turn_queue.redact(db, plan["session_ids"])

@@ -115,7 +115,7 @@ def _derived(agent, message_id):
 
 def hidden_records(db, agent_ids=()):
     """(kind, id) of each MemoryGate record from a hidden chat, the set recall leaves out
-    (pi.memory.service.hidden_objects; Pi's package rules keep context from importing memory).
+    (pi.memory.hidden.hidden_objects; Pi's package rules keep context from importing memory).
 
     Library cards carry no chat, so the ids are derived from each message of a hidden chat and the
     agent it went to, a memory Conker kept on its own is named by keep_results, and a memory the

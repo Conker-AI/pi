@@ -4,7 +4,6 @@ import json
 import logging
 import threading
 import time
-from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
@@ -12,6 +11,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
+from pi.memory.hidden import hidden_objects
 from pi.owner import settings as owner_settings
 
 log = logging.getLogger("pi.memory.service")
@@ -71,60 +71,6 @@ def _context_size(package):
     return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
 
 
-def _receipt_ids(agent_id: str, message_id: str) -> tuple[str, str, str]:
-    """MemoryGate's ids for one delivered message (the formula in delivery.validate_receipt):
-    the evidence record is the receipt id; its analysis and its memory derive from it."""
-    receipt = str(uuid5(NAMESPACE_URL, f"pi:{agent_id}:{message_id}"))
-    analysis = str(uuid5(NAMESPACE_URL, receipt + ":analysis"))
-    return receipt, analysis, str(uuid5(NAMESPACE_URL, receipt + ":memory"))
-
-
-def hidden_objects(db, agent_ids=()) -> dict[str, set[str]]:
-    """MemoryGate records, by kind, that come from a hidden chat (pi.conversation.visibility).
-
-    Each message Pi delivered becomes evidence, an analysis and maybe a memory whose ids derive
-    from the message id and the receiving agent, so they are found without asking MemoryGate.
-    A memory Conker kept on its own carries no chat at all: keep_results names it. Recall and
-    the owner's memory explorer both use this one set; restoring the chat empties it again.
-    """
-    found = {
-        "memory": visibility.kept_from_hidden(db, "memory"),
-        "evidence": set(),
-        "analysis": set(),
-    }
-    rows = db.execute(
-        "SELECT m.id, o.destination_agent_id FROM messages m "
-        "LEFT JOIN memory_outbox o ON o.message_id=m.id "
-        f"WHERE {visibility.hidden_sql('m.session_id')}"
-    ).fetchall()
-    for message_id, destination in rows:
-        for agent in {destination, *agent_ids} - {None, ""}:
-            evidence, analysis, memory = _receipt_ids(agent, message_id)
-            found["evidence"].add(evidence)
-            found["analysis"].add(analysis)
-            found["memory"].add(memory)
-    found["memory"] |= _rewritten_from_hidden(db)
-    return found
-
-
-def _rewritten_from_hidden(db) -> set[str]:
-    """Memories a hidden chat rewrote through a memory proposal (pi.memory.proposals).
-
-    The memory keeps its id but its text came from that chat, so it is hidden with the chat
-    while the edit was applied or may have been (applying, unknown); a pending, rejected or
-    failed proposal changed nothing. Forgetting scrubs the row to `forgotten`, so a forgotten
-    chat's edit is no longer visible here.
-    """
-    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
-        return set()
-    rows = db.execute(
-        "SELECT memory_id FROM memory_proposals "
-        "WHERE state IN ('applied','applying','unknown') "
-        f"AND {visibility.hidden_sql('session_id')}"
-    )
-    return {row[0] for row in rows}
-
-
 def without_hidden(store, package, agent_ids=()):
     """Leave out recalled records that cite a hidden chat or come from one (`hidden_objects`);
     restoring the chat brings them back."""
@@ -170,10 +116,6 @@ def without_hidden(store, package, agent_ids=()):
     if all(len(shown[key]) == len(package[key]) for key in groups):
         return package
     return {**package, **shown}
-
-
-# The name tests and older callers use; trashed and forgotten chats are one check now.
-_without_trashed = without_hidden
 
 
 def _budget_context(package):
@@ -376,19 +318,62 @@ class Memory:
         self.stop_event = threading.Event()
         self.thread = None
 
-    def _client_for(self, selected):
-        return (
-            self.client
-            if selected.get("agentId") == "companion"
-            else self.read_clients.get(selected.get("agentId"))
-        )
+    def _client(self, selected):
+        """The running agent's own read credential: its namespace, never another agent's."""
+        if selected["agentId"] == "companion":
+            return self.client
+        return self.read_clients.get(selected["agentId"])
+
+    def _where(self, selected, session_id):
+        """Retrieve arguments for the running agent's memory scope."""
+        # Turns from before agent profiles carry no configuration: the companion's default.
+        memory = (selected.get("configuration") or {}).get("memory") or COMPANION_MEMORY
+        scope = memory["scope"]
+        if scope == "owner":
+            if selected["kind"] != "companion" or selected["agentId"] != "companion":
+                raise ValueError("Owner memory is restricted to Companion.")
+            # The configured read credential still limits the namespace; this is not an
+            # administrative or cross-agent read. His switch keeps every chat to itself.
+            across = owner_settings.value(self.store, ACROSS_CHATS, True) is True
+            scope = "all" if across else "conversation"
+        return {
+            "scope": scope,
+            "session_id": session_id if scope == "conversation" else None,
+            "memory_ids": memory["memoryIds"] if scope == "selected" else [],
+        }
+
+    def search(self, turn_id, query, max_items):
+        """(package, "ok") for `conker.recall`, read as this turn's recall reads; (None, why) when
+        it may not or cannot: "disabled", "not_configured" or "unavailable". Never ranked: the
+        model chose the words."""
+        turn = self.store.get_turn(turn_id)
+        selected = session_settings.execution(self.store, turn["session_id"], turn_id)
+        if selected["kind"] == "team-role" or not session_settings.memory_allowed(selected):
+            return None, "disabled"
+        client = self._client(selected)
+        if not client:
+            return None, "not_configured"
+        if memory_store.recall_held(self.store):
+            return None, "unavailable"
+        try:
+            package = client.retrieve(
+                query,
+                **self._where(selected, turn["session_id"]),
+                max_items=max_items,
+                distinct=True,
+            )
+            return _budget_context(
+                without_hidden(self.store, package, (getattr(client, "agent_id", None),))
+            ), "ok"
+        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+            return None, "unavailable"
 
     def saved_context(self, turn_id, selected):
         """A turn's saved recall, checked again on use: a parked turn resumes after its recall,
         and a chat put in the Trash or forgotten since then must not reach the model."""
         saved = memory_store.context(self.store, turn_id)
         package = saved.get("package")
-        agent = getattr(self._client_for(selected), "agent_id", None)
+        agent = getattr(self._client(selected), "agent_id", None)
         shown = without_hidden(self.store, package, (agent,))
         return saved if shown is package else {**saved, "package": shown}
 
@@ -407,28 +392,14 @@ class Memory:
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
-        client = self._client_for(selected)
+        client = self._client(selected)
         if memory_store.recall_held(self.store):
             state = "unavailable"
         elif client:
             try:
-                # Turns from before agent profiles carry no configuration: the companion's default.
-                memory = (selected.get("configuration") or {}).get("memory") or COMPANION_MEMORY
-                scope = memory["scope"]
-                if scope == "owner":
-                    if selected["kind"] != "companion" or selected["agentId"] != "companion":
-                        raise ValueError("Owner memory is restricted to Companion.")
-                    # The configured read credential still limits the namespace; this is not an
-                    # administrative or cross-agent read. His switch keeps every chat to itself.
-                    across = owner_settings.value(self.store, ACROSS_CHATS, True) is True
-                    scope = "all" if across else "conversation"
                 package = client.retrieve(
                     query,
-                    scope=scope,
-                    session_id=(team_source or turn["session_id"])
-                    if scope == "conversation"
-                    else None,
-                    memory_ids=memory["memoryIds"] if scope == "selected" else [],
+                    **self._where(selected, team_source or turn["session_id"]),
                     max_items=per_answer(self.store),
                     distinct=True,
                 )

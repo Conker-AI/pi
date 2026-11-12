@@ -15,7 +15,8 @@ from pi.api.routes.memory_explorer import router
 from pi.conversation import archive
 from pi.conversation.forgetting import forget, preview
 from pi.conversation.store import Store
-from pi.memory.service import MemoryClient, _receipt_ids, hidden_objects, without_hidden
+from pi.memory.hidden import _receipt_ids, hidden_objects
+from pi.memory.service import MemoryClient, without_hidden
 
 AGENT = "companion-bound"
 
