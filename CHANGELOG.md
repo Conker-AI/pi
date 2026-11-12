@@ -22,6 +22,12 @@ be a decision with visible consequences.
   only, only tools the caller could use, never create or delegation tools) or a linear team of
   existing agents with a small budget. His typed words never approve one; his chat or agent
   loosening can, as Keep: listed in Handled, archived when the chat is forgotten.
+- **A Morning check-in is on by default.** When Pi starts with its scheduler it makes, once per
+  install (new or upgraded), the AI job "Morning check-in": daily 08:00 in the owner's time zone,
+  the companion says what needs him today or replies NOTHING. `createdBy: "conker"` (proactive
+  budget, quiet hours and the proactivity switch apply; never his words), fixed id
+  `job_beca06ba345a8b3170a4d8e2473fe00f`, recorded in the owner setting `rhythm.seeded`; turning it
+  off never brings it back. It does not count against Conker's own jobs a day.
 
 ## 0.24.0
 
