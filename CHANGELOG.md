@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Each tag gets a GitHub Release page and an SBOM.** The Release page's notes are the
+  version's CHANGELOG section. Every image carries an SPDX SBOM (BuildKit attestation) inside
+  the image index, and the signed build provenance covers that index digest. Check one with
+  `gh attestation verify oci://IMAGE@DIGEST --owner Conker-AI`.
+
 - **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
   and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
   reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
