@@ -15,7 +15,8 @@ tool draft, so no job makes another. Both are refused again when called. A quest
 is always allowed: it goes to his Inbox and his answer comes back to the chat as his next message
 (`pi.agents.asks`). A new agent or team (`conker.create_agent`, `conker.create_team`) asks like
 scheduling, is refused where scheduling is, and is filed with its guards by
-`pi.agents.agent_requests`.
+`pi.agents.agent_requests`. Running another agent (`conker.run_agent`) opens a chat of its own
+for it and returns its reply; its guards (depth, loops, counts) live in `pi.agents.agent_calls`.
 """
 
 from __future__ import annotations
@@ -23,16 +24,17 @@ from __future__ import annotations
 import re
 
 from pi.actions.toolgate import Tool, ToolResult
-from pi.agents import agent_requests, asks, change_requests, tool_drafts
+from pi.agents import agent_calls, agent_requests, asks, change_requests, tool_drafts
 from pi.agents.profiles import AgentError
 from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
-from pi.turns import recall
+from pi.turns import access, recall
 
 SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
 REMEMBER = "conker.remember"
 ASK = "conker.ask"
+RUN_AGENT = "conker.run_agent"
 CREATE_AGENT = "conker.create_agent"
 CREATE_TEAM = "conker.create_team"
 DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
@@ -196,6 +198,29 @@ CATALOG = (
         ],
         "owner_confirmation",
     ),
+    Tool(
+        RUN_AGENT,
+        "Run another agent",
+        "Hand a task to another of the owner's agents: it works on your instructions in a chat of "
+        "its own, with its own tools, and its reply comes back to you. Write complete "
+        "instructions; it sees nothing of this chat. Its reply is an AI's work, not the owner's "
+        "words.",
+        [
+            {
+                "name": "agent",
+                "type": "string",
+                "required": True,
+                "description": "The agent's exact name or id, e.g. Researcher",
+            },
+            {
+                "name": "instructions",
+                "type": "string",
+                "required": True,
+                "description": "Everything it needs to do the task, in at most 8000 characters",
+            },
+        ],
+        "auto",
+    ),
 )
 IDS = {tool.id for tool in CATALOG}
 
@@ -213,7 +238,7 @@ def owns(tool_id: str) -> bool:
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
 PRIVATE_REFUSED = {REMEMBER, SCHEDULE, recall.RECALL, CREATE_AGENT, CREATE_TEAM}
-JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM}
+JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM, RUN_AGENT}
 
 
 def private(store, session_id, execution) -> bool:
@@ -240,6 +265,11 @@ def job_run(store, turn_id) -> bool:
 
 def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
     """Why Conker may not use this tool in this turn, in words it can pass on; None if it may."""
+    if tool_id == RUN_AGENT and (execution or {}).get("kind") == "team-role":
+        return (
+            "A team role cannot run another agent: its budget would not count that agent's work. "
+            "Answer with what you have."
+        )
     if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
         if tool_id == recall.RECALL:
             return "This chat is private (memory off), so memory is not searched here."
@@ -250,10 +280,11 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
         )
     if tool_id in JOB_REFUSED and job_run(store, turn_id):
         return (
-            "A scheduled AI job cannot make a job, an agent or a team, or draft a tool. If one is "
-            "needed, say "
-            "so in the reply and the owner can ask for it."
+            "A scheduled AI job cannot make a job, an agent or a team, run another agent, or draft "
+            "a tool. If one is needed, say so in the reply and the owner can ask for it."
         )
+    if tool_id == RUN_AGENT:
+        return agent_calls.refused(store, session_id, turn_id)
     return None
 
 
@@ -363,6 +394,22 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     """Validate the arguments and file one change request, made real at once when `run` (his
     access layers allow it). A bad argument, or a tool this turn may not use, is an answer, not a
     failure."""
+    if tool_id == RUN_AGENT:
+        why = refused(
+            loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution
+        )
+        if why:
+            return _refusal(tool_id, why)
+        ok, result = agent_calls.run(
+            loop,
+            args,
+            session_id=session_id,
+            turn_id=turn_id,
+            execution=execution,
+            run=run,
+            outside=_outside(loop.store),
+        )
+        return ToolResult(ok=ok, result=result, tool_id=tool_id)
     why = refused(loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution)
     if why:
         return _refusal(tool_id, why)
@@ -469,6 +516,18 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
         return ToolResult(
             ok=False, result={"status": "invalid", "message": str(invalid)}, tool_id=tool_id
         )
+
+
+def _outside(store):
+    """Whether a turn has read text the owner did not write, asked as `access.decide` asks it."""
+    return lambda session_id, turn_id, execution: access.outside_content(
+        store,
+        session_id,
+        access.owner_text(store, turn_id) if turn_id else "",
+        owns,
+        turn_id=turn_id,
+        execution=execution,
+    )
 
 
 def _refusal(tool_id, message) -> ToolResult:

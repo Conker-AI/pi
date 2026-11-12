@@ -28,6 +28,12 @@ be a decision with visible consequences.
   budget, quiet hours and the proactivity switch apply; never his words), fixed id
   `job_beca06ba345a8b3170a4d8e2473fe00f`, recorded in the owner setting `rhythm.seeded`; turning it
   off never brings it back. It does not count against Conker's own jobs a day.
+- **An agent can run another agent.** Conker's own tool `conker.run_agent` runs the named agent on
+  the model's instructions in a chat of its own (a child of the caller's chat, memory off, no owner
+  request, only "ask" of the caller's access switch, outside if the caller read outside content);
+  the caller's model reads its reply from that chat, so forgetting or trashing it removes the reply
+  too. The owner's Stop reaches the child. At most depth 2, no loops, 3 per turn and 30 a day, not
+  from team roles or AI jobs (`agent_calls`, forgotten with either chat). docs/agents.md.
 
 ## 0.24.0
 
