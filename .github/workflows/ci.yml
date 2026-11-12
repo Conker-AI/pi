@@ -84,15 +84,32 @@ jobs:
         # pytest-xdist, one worker per CPU: each test uses its own temporary stores.
         run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=91
 
-      - name: Browser authority mutation drill
-        run: python scripts/auth_mutation_drill.py
+  drills:
+    # Each drill breaks guarded lines and expects the tests to notice. Run after the tests
+    # in one job they took it from 6.5 to 13.5 minutes; beside them they add no wall time.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        drill:
+          - auth_mutation_drill # browser authority
+          - audit_mutation_drill # Pi audit
+          - memory_mutation_drill # memory delivery; ran only by hand until 2026-10-13, when three anchors had gone stale
+    steps:
+      - uses: actions/checkout@v7
 
-      - name: Pi audit mutation drill
-        run: python scripts/audit_mutation_drill.py
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
 
-      - name: Memory delivery mutation drill
-        # Ran only by hand until 2026-10-13, when three of its anchors had gone stale.
-        run: python scripts/memory_mutation_drill.py
+      - name: Install
+        run: |
+          python -m pip install --quiet --upgrade pip
+          pip install --quiet -r requirements-dev.txt
+          pip install --quiet pytest httpx
+
+      - name: Mutation drill
+        run: python scripts/${{ matrix.drill }}.py
 
   contract:
     # The health contract is an HTTP contract, so it is asserted against a
