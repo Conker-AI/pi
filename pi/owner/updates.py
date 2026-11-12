@@ -18,9 +18,9 @@ from pydantic import Field
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
-VERSION = r"^\d{1,4}\.\d{1,4}\.\d{1,4}$"
+VERSION = r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$"
 RESULT_ID = r"^[0-9a-f]{32}$"
-RELEASE_URL = r"^https://github\.com/Conker-AI/conker/releases/tag/v\d{1,4}\.\d{1,4}\.\d{1,4}$"
+RELEASE_URL = r"^https://github\.com/Conker-AI/conker/releases/tag/v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$"
 # How each ending reads in the Inbox. A held update needs a restore from the snapshot.
 TITLES = {
     "applied": "Updated to {version}",

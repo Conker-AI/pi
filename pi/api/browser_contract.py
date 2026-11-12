@@ -261,7 +261,7 @@ OWNER_ROUTES = {
         r"/setup/protection",
         r"/setup/rehearsal/(?:memory-review|approval/(?:start|resume)|finalize)",
         r"/setup/receipts/(boundaries|protection)",
-        r"/updates/offers/\d{1,4}\.\d{1,4}\.\d{1,4}/dismiss",
+        r"/updates/offers/[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}/dismiss",
         r"/updates/results/[0-9a-f]{32}/dismiss",
         r"/system/inventory",
         r"/system/inventory/[A-Za-z0-9_-]{16,100}/resume",

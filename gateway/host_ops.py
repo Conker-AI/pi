@@ -19,7 +19,7 @@ from .native_sessions import _json
 OP_ID = r"[A-Za-z0-9_.:-]{16,128}"
 SERVICE = r"[a-z][a-z0-9-]{0,62}"
 SNAPSHOT = r"snapshot-\d{8}T\d{6}Z-[0-9a-f]{8}"
-VERSION = r"\d{1,4}\.\d{1,4}\.\d{1,4}"
+VERSION = r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}"
 OPERATION = r"[a-z]+(?:\.[a-z]+)+"
 # Operation -> its arguments and their patterns (conker scripts/host_ops.py OPERATIONS).
 READS = {"services.status": {}, "backup.list": {}}
