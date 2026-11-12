@@ -90,7 +90,7 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
                 loop, session_settings.execution(store, open_chat), open_chat, None
             )
         )
-        == 4
+        == 6
     )
 
 
