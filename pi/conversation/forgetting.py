@@ -46,6 +46,7 @@ from pi.conversation.store import Store
 from pi.core import migrations
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
+from pi.owner import notices
 from pi.schedule import tasks
 from pi.turns import access as turn_access
 from pi.turns import context as turn_context
@@ -209,6 +210,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # Hooks first: their payloads are found through the job's chat, which agent_jobs drops.
         agent_hooks.redact(db, plan["session_ids"])
         agent_jobs.redact(db, plan["session_ids"])
+        notices.redact(db, plan["session_ids"])
         skills.redact(db, plan["session_ids"])
         retired_workflows.redact(db, plan["session_ids"])
         change_requests.redact(db, plan["session_ids"])

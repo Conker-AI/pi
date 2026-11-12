@@ -40,6 +40,7 @@ from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions, visibility
 from pi.core.errors import ServiceError
+from pi.owner import notices
 from pi.owner import preferences as prefs
 from pi.schedule import agent_hooks, agent_triggers, jobs, proactive_budget
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
@@ -93,14 +94,10 @@ CREATE TABLE IF NOT EXISTS agent_job_sessions (
  job_id TEXT PRIMARY KEY REFERENCES scheduled_jobs(id),
  session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id)
 );
-CREATE TABLE IF NOT EXISTS agent_job_notes (
- id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, job_id TEXT NOT NULL,
- session_id TEXT NOT NULL, message_id TEXT, title TEXT NOT NULL, detail TEXT NOT NULL,
- state TEXT NOT NULL CHECK(state IN ('open','dismissed')),
- created_at REAL NOT NULL, dismissed_at REAL
-);
-CREATE INDEX IF NOT EXISTS agent_job_notes_open ON agent_job_notes(state, created_at);
 """
+# A run's note to the owner is a notice of kind `agent-job` (pi.owner.notices): subject = the run,
+# facts = {jobId, messageId}, session_id = the job's chat. Until migration 0006 notes had their
+# own table, agent_job_notes, whose ids they keep.
 
 
 class AgentJobError(ServiceError):
@@ -349,18 +346,17 @@ def summarize(text: str) -> tuple[str, str] | None:
 
 def _note(store, run_id, job_id, session_id, message_id, title, detail, now):
     with store._connect() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO agent_job_notes VALUES (?,?,?,?,?,?,?,'open',?,NULL)",
-            (
-                "note_" + uuid.uuid4().hex,
-                run_id,
-                job_id,
-                session_id,
-                message_id,
-                title,
-                detail,
-                now,
-            ),
+        # One note per run: a replayed run adds nothing.
+        notices.insert(
+            db,
+            identity="note_" + uuid.uuid4().hex,
+            kind=notices.AGENT_JOB,
+            subject=run_id,
+            title=title,
+            detail=detail,
+            session_id=session_id,
+            facts={"jobId": job_id, "messageId": message_id},
+            created_at=now,
         )
 
 
@@ -490,35 +486,36 @@ class AgentJobs:
 def redact(db, session_ids: list[str]) -> None:
     """Forget with the chat, inside the caller's forgetting transaction: a note quotes its reply.
 
-    The job itself stays; its next run starts a new chat.
+    The job itself stays; its next run starts a new chat. Its notes are notices, which
+    `notices.redact` clears. A database a Pi from before migration 0006 wrote to again (a code
+    rollback without the snapshot) can hold the old agent_job_notes table: cleared here too.
     """
-    if (
-        not session_ids
-        or not db.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_job_notes'"
-        ).fetchone()
-    ):
+    if not session_ids:
         return
     values = [(value,) for value in session_ids]
-    db.executemany("DELETE FROM agent_job_notes WHERE session_id=?", values)
-    db.executemany("DELETE FROM agent_job_sessions WHERE session_id=?", values)
+    for table in ("agent_job_notes", "agent_job_sessions"):
+        if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone():
+            db.executemany(f"DELETE FROM {table} WHERE session_id=?", values)
 
 
 def notes(store, limit=50):
     """Open notes, newest first; a note from a forgotten or trashed chat is not listed."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT n.* FROM agent_job_notes n JOIN sessions s ON s.id=n.session_id "
-            f"WHERE n.state='open' AND NOT {visibility.hidden_sql('n.session_id')} "
+            "SELECT n.* FROM notices n JOIN sessions s ON s.id=n.session_id "
+            "WHERE n.kind=? AND n.dismissed_at IS NULL "
+            f"AND NOT {visibility.hidden_sql('n.session_id')} "
             "ORDER BY n.created_at DESC LIMIT ?",
-            (limit,),
+            (notices.AGENT_JOB, limit),
         ).fetchall()
     return [
         {
             "id": row["id"],
-            "jobId": row["job_id"],
+            "jobId": notices.facts(row).get("jobId"),
             "sessionId": row["session_id"],
-            "messageId": row["message_id"],
+            "messageId": notices.facts(row).get("messageId"),
             "title": row["title"],
             "detail": row["detail"],
             "createdAt": row["created_at"],
@@ -532,11 +529,12 @@ def dismiss(store, identity, now=None):
         raise AgentJobError("not_found", "Note not found.", 404)
     with store._connect() as db:
         changed = db.execute(
-            "UPDATE agent_job_notes SET state='dismissed', dismissed_at=? "
-            "WHERE id=? AND state='open'",
-            (time.time() if now is None else now, identity),
+            "UPDATE notices SET dismissed_at=? WHERE id=? AND kind=? AND dismissed_at IS NULL",
+            (time.time() if now is None else now, identity, notices.AGENT_JOB),
         ).rowcount
-        exists = db.execute("SELECT 1 FROM agent_job_notes WHERE id=?", (identity,)).fetchone()
+        exists = db.execute(
+            "SELECT 1 FROM notices WHERE id=? AND kind=?", (identity, notices.AGENT_JOB)
+        ).fetchone()
     if not exists:
         raise AgentJobError("not_found", "Note not found.", 404)
     return {"id": identity, "dismissed": True, "changed": bool(changed)}
