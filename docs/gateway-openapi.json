@@ -492,7 +492,7 @@
     "/api/host/read": {
       "post": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the actions: backup.verify, services.restart and backup.run with his session (none of\nthem deletes or replaces anything), update.run with his password too. Answers are the\nhelper's own.",
         "operationId": "host_operations_api_host_read_post",
         "parameters": [
           {
@@ -537,7 +537,7 @@
     "/api/host/ops": {
       "post": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the actions: backup.verify, services.restart and backup.run with his session (none of\nthem deletes or replaces anything), update.run with his password too. Answers are the\nhelper's own.",
         "operationId": "host_operations_api_host_ops_post",
         "parameters": [
           {
@@ -580,7 +580,7 @@
       },
       "get": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the actions: backup.verify, services.restart and backup.run with his session (none of\nthem deletes or replaces anything), update.run with his password too. Answers are the\nhelper's own.",
         "operationId": "host_operations_api_host_ops_get",
         "parameters": [
           {
@@ -625,7 +625,7 @@
     "/api/host/ops/{identity}": {
       "get": {
         "summary": "Host Operations",
-        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the three actions (backup.verify, services.restart, backup.run), all with his session:\nnone of them deletes or replaces anything. Answers are the helper's own.",
+        "description": "Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)\nand the actions: backup.verify, services.restart and backup.run with his session (none of\nthem deletes or replaces anything), update.run with his password too. Answers are the\nhelper's own.",
         "operationId": "host_operations_api_host_ops__identity__get",
         "parameters": [
           {

@@ -263,10 +263,18 @@ def hold(db: Path | str) -> bool:
 
 
 def release(db: Path | str) -> None:
-    """Drop the hold a restart left; nothing else may run yet (called before the Store opens)."""
+    """Drop the hold a restart left; nothing else may run yet (called before the Store opens).
+
+    A database a newer Pi upgraded is refused before anything is written, as the Store refuses
+    it (`pi.core.migrations.UnknownMigration`), so startup stops before the queue runs.
+    """
     if not Path(db).exists():
         return
+    from pi.conversation import upgrades
+    from pi.core import migrations
+
     with closing(sqlite3.connect(db, timeout=30, isolation_level=None)) as conn:
+        migrations.refuse_unknown(conn, upgrades.MIGRATIONS)
         for name in HOLDS:
             conn.execute(f"DROP TRIGGER IF EXISTS {name}")
 

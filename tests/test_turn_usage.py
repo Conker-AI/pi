@@ -338,6 +338,7 @@ def test_legacy_migration_retains_old_rows_and_marks_only_new_turns_covered(tmp_
                 (old,),
             )
     with closing(sqlite3.connect(path)) as db:
+        db.execute("DROP TABLE schema_migrations")  # an older Pi had no ledger
         db.execute("DROP TRIGGER new_turn_usage_version")
         db.execute("ALTER TABLE turns DROP COLUMN usage_version")
         for column in research_usage.EXTRA_COLUMNS:

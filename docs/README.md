@@ -71,6 +71,7 @@ What works end to end in a real deployment is tracked in Conker's
 | | |
 |---|---|
 | [Recovery drill](recovery-drill.md) · [Replaying deletions](recovery-deletions.md) | Restoring Pi and keeping forgotten data forgotten |
+| [Schema migrations](migrations.md) | The upgrade ledger; a newer Pi's database is refused |
 | [Model evaluations](model-evaluations.md) | Saved helper-model evaluations |
 | [Audit repair, 2026-09-12](AUDIT_RECOVERY.md) | A historical repair record |
 

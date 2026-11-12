@@ -74,9 +74,12 @@ def check_size(limit, size):
 
 
 def initialize(db):
-    """Initialize the attachments schema and add storage column if missing."""
+    """Initialize the attachments schema."""
     db.executescript(SCHEMA)
 
+
+def add_storage(db):
+    """Migration: the storage column (database or disk), which the table's schema lacks."""
     columns = [row[1] for row in db.execute("PRAGMA table_info(attachments)").fetchall()]
     if "storage" not in columns:
         db.execute("ALTER TABLE attachments ADD COLUMN storage TEXT NOT NULL DEFAULT 'database'")

@@ -62,6 +62,8 @@ IDS_ONLY = {
     "response_retries",
     "response_versions",
     "scheduled_run_budgets",
+    # Which schema migrations ran, when, and under which Pi version.
+    "schema_migrations",
     # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
     "service_model_calls",
     # Paid calls against the daily cap: provider and model ids, counts and states.
@@ -123,6 +125,10 @@ OWNER_CONFIGURATION = {
 # Readings from the subscription runtimes: plan names, window labels and percentages, no chat.
 PROVIDER_READINGS = {"plan_alerts", "plan_usage"}
 
+# Conker updates (pi.owner.updates): versions, the public release notes from GitHub and the host
+# updater's receipts (outcome and a fixed reason), reported by the host; no chat text.
+UPDATES = {"update_offers", "update_results"}
+
 # Chats imported from a ChatGPT or Claude export (pi.memory.imports): another assistant's chats,
 # kept apart from Pi's own, so no Pi chat's text is ever in them; the batches and offers hold
 # counts, digests, ids and states; a deleted imported chat leaves only its ids and counts.
@@ -160,7 +166,7 @@ def test_every_table_is_forgotten_or_holds_no_chat_text(tmp_path):
     present = tables(tmp_path)
     code = forgetting_code()
     named = {name for name in present if re.search(rf"\b{re.escape(name)}\b", code)}
-    listed = IDS_ONLY | OWNER_CONFIGURATION | PROVIDER_READINGS | IMPORTS
+    listed = IDS_ONLY | OWNER_CONFIGURATION | PROVIDER_READINGS | IMPORTS | UPDATES
 
     unclassified = sorted(present - named - listed)
     assert not unclassified, (

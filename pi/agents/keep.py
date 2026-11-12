@@ -39,9 +39,12 @@ TARGETS = {"ai_job": "jobId", "agent": "agentId", "team": "teamId"}
 
 
 def initialize(db):
-    # Agents and teams arrived 2026-11-12: an older table's CHECK refuses them until rebuilt.
-    rebuild.widen(db, "keep_results", TABLE, "'team'")
     db.executescript(SCHEMA)
+
+
+def widen_kinds(db):
+    """Migration: agents and teams arrived 2026-11-12; an older table's CHECK refuses them."""
+    rebuild.widen(db, "keep_results", TABLE, "'team'")
 
 
 def record(db, request, result, now=None) -> None:

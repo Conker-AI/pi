@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from pi.api import startup
-from pi.conversation import output_settings
+from pi.conversation import output_settings, upgrades
 from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from pi.models import secrets
@@ -256,6 +256,7 @@ def test_startup_reports_vendor_keys_without_network(tmp_path, monkeypatch):
             api._health_cache.clear()
             health = api.health()["checks"]["provider_credentials"]
             assert health["configured"] == sorted(IDS) and health["secrets_included"] is False
+            assert api.health()["schema_migration"] == upgrades.MIGRATIONS[-1].id
             assert KEY not in json.dumps(status) + json.dumps(api.health())
 
     asyncio.run(check())
