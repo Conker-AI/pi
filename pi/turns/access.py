@@ -16,6 +16,8 @@ Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_out
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
 imported or listener content, anything without a readable source), an attachment or a project
 source, or his answer to Conker's question (the question and its options were written by the AI).
+A result of Conker's own memory search or of another agent's run counts too, unless Pi marked it
+as holding only his own words (`reported_outside`).
 Memories that are all his own (statements he typed or approved, memories made from his messages)
 leave his typed request able to approve, as in a chat without memory.
 After outside content, remembering always asks him: never the reviewer, never his loosening.
@@ -50,6 +52,12 @@ native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
 native_remember = "conker.remember"
+native_recall = "conker.recall"
+# Conker's own tools whose result can carry text the owner did not write (recalled memories,
+# another agent's reply). Pi sets `outside` on each result; anything but False counts as outside.
+reported_outside = {"conker.recall", "conker.run_agent"}
+native_create_agent = "conker.create_agent"
+native_create_team = "conker.create_team"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -152,6 +160,11 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
         if "declined" in observation and "result" not in observation:
             continue
         if not native(str(tool)):
+            return True
+        result = observation.get("result")
+        if tool in reported_outside and (
+            not isinstance(result, dict) or result.get("outside") is not False
+        ):
             return True
     return _handed_outside(store, session_id, native)
 
@@ -309,18 +322,19 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
         # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
         # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
         return "ask", by, ""
-    if level == "allow" and outside and native(tool.id):
+    if level == "allow" and outside and native(tool.id) and tool.id != native_recall:
         # Keep after outside content (a cron job): someone else's text could be planting it, so
-        # the reviewer checks it against what he asked.
+        # the reviewer checks it against what he asked. A memory search is exempt: it changes
+        # nothing, reads only what his scope allows, and its own result keeps the turn marked.
         level = "ai"
     if level == "allow":
         return "run", by, REASONS[by]
     if level == "ai":
         approved, why = reviewer.review(loop, execution, "ai", request, tool, args, outside=outside)
         return ("run", "ai_reviewer", why) if approved else ("ask", by, why)
-    if tool.id == native_schedule:
-        # A recurring job made from his words would still run instructions the model wrote:
-        # unless his settings loosened it, it waits for his approval like a tool draft.
+    if tool.id in (native_schedule, native_create_agent, native_create_team):
+        # A recurring job, an agent or a team made from his words would still carry instructions
+        # the model wrote: unless his settings loosened it, it waits for his approval.
         return "ask", by, ""
     if request.strip() and not outside and not tool.sensitive:
         approved, why = reviewer.review(loop, execution, "request", request, tool, args)

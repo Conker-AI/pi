@@ -7,8 +7,10 @@ On the next start, before the Store opens, `run_pending` runs the offline comman
 in a child process, exactly as an operator would. The restart waits until no turn, chat send or
 team run is in progress, then holds new ones (database triggers) so none starts in the moment
 before Pi stops; the next start drops the hold. A chat whose sessions changed since the owner
-confirmed is refused, never widened. The request and result files hold ids, counts and states
-only, never a title or a word of a chat.
+confirmed is refused, never widened. A run that fails for another reason stays queued and is
+tried again at the next start, up to MAX_ATTEMPTS starts; while anything waits, its chats stay in
+the trash and cannot be restored. The request and result files hold ids, counts and states only,
+never a title or a word of a chat.
 
 This module never imports the forgetting code: it only runs the command.
 """
@@ -16,6 +18,7 @@ This module never imports the forgetting code: it only runs the command.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import sqlite3
@@ -29,10 +32,12 @@ from pathlib import Path
 
 from pi.core.errors import ServiceError
 
+log = logging.getLogger("pi")
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 PREVIEW_SECONDS = 60
 FORGET_SECONDS = 3600
 KEEP_RESULTS = 50
+MAX_ATTEMPTS = 3
 DETAIL_CHARS = 300
 CHANGED = "The chat changed since you confirmed it, so nothing was deleted. Review it again."
 HOLD = "Pi is restarting to delete chats forever. Try again in a moment."
@@ -57,6 +62,8 @@ HOLDS = {
     ),
 }
 _restart_once = threading.Lock()
+# Held while the request file is read and rewritten, and while a restore checks it.
+queue_lock = threading.Lock()
 
 
 class ForgetRefused(ServiceError):
@@ -152,12 +159,27 @@ def overview(db: Path | str) -> dict:
     }
 
 
-def queue(db: Path | str, items: list[dict]) -> None:
-    """Add {sessionId, sessionIds} items; a chat already queued keeps one entry."""
-    path = _request_path(db)
-    merged = {item["sessionId"]: item for item in _read(path)}
-    merged.update({item["sessionId"]: item for item in items})
-    _write(path, list(merged.values()))
+def queue(db: Path | str, items: list[dict], *, before=None) -> None:
+    """Add {sessionId, sessionIds} items; a chat already queued keeps one entry.
+
+    `before` runs under the queue lock first (the route hides the chats there), so a restore
+    never sees them hidden but not yet queued."""
+    with queue_lock:
+        if before is not None:
+            before()
+        path = _request_path(db)
+        merged = {item["sessionId"]: item for item in _read(path)}
+        merged.update({item["sessionId"]: item for item in items})
+        _write(path, list(merged.values()))
+
+
+def pending_sessions(db: Path | str) -> set[str]:
+    """Every session a queued deletion reaches; call it holding `queue_lock`."""
+    return {
+        session
+        for item in _read(_request_path(db))
+        for session in [item["sessionId"], *item.get("sessionIds", [])]
+    }
 
 
 def _record(db: Path | str, session: str, state: str, receipt: str | None, detail: str) -> None:
@@ -249,22 +271,40 @@ def release(db: Path | str) -> None:
             conn.execute(f"DROP TRIGGER IF EXISTS {name}")
 
 
-def run_pending(db: Path | str) -> None:
+def run_pending(db: Path | str) -> bool:
     """Forget every queued chat before the Store opens; call once at startup.
 
-    A chat that cannot be forgotten is recorded as refused and dropped from the queue. One whose
-    cleanup started stays queued (state retrying): the Store then refuses to start, the
-    supervisor restarts Pi, and the next start finishes it.
+    A chat that cannot be forgotten (unknown, or changed since the owner confirmed) is recorded
+    as refused and dropped from the queue. One whose cleanup started stays queued (state
+    retrying): the Store then refuses to start, the supervisor restarts Pi, and the next start
+    finishes it. One that failed before its cleanup started (a timeout, a busy file) stays queued
+    for the next start, and is refused after MAX_ATTEMPTS starts. Answers whether any chat still
+    waits, so the caller can ask for that next start.
     """
     release(db)
     path = _request_path(db)
+    waiting = False
     for item in _read(path):
+        session = item["sessionId"]
         state, receipt, detail = _forget(db, item)
         if state == "retrying" and _unfinished(db):
-            _record(db, item["sessionId"], state, None, detail)
-            return
-        _record(db, item["sessionId"], "refused" if state == "retrying" else state, receipt, detail)
-        _write(path, [left for left in _read(path) if left["sessionId"] != item["sessionId"]])
+            _record(db, session, state, None, detail)
+            return True
+        attempts = int(item.get("attempts", 0)) + 1
+        if state == "retrying" and attempts < MAX_ATTEMPTS:
+            _record(db, session, state, None, detail)
+            _write(
+                path,
+                [
+                    {**left, "attempts": attempts} if left["sessionId"] == session else left
+                    for left in _read(path)
+                ],
+            )
+            waiting = True
+            continue
+        _record(db, session, "refused" if state == "retrying" else state, receipt, detail)
+        _write(path, [left for left in _read(path) if left["sessionId"] != session])
+    return waiting
 
 
 def restart_soon(
@@ -283,16 +323,21 @@ def restart_soon(
         return
 
     def stop() -> None:
-        deadline = time.monotonic() + wait
-        # shortcut: a turn still running after `wait` is taken as hung and settled as interrupted
-        # at the next start; raise `wait` if real turns ever run that long.
-        while not hold(db) and time.monotonic() < deadline:
-            time.sleep(poll)
-        # A daemon watchdog: it dies with a clean shutdown and ends a stuck one.
-        watchdog = threading.Timer(grace, os._exit, (0,))
-        watchdog.daemon = True
-        watchdog.start()
-        os.kill(os.getpid(), signal.SIGTERM)
+        try:
+            deadline = time.monotonic() + wait
+            # shortcut: a turn still running after `wait` is taken as hung and settled as
+            # interrupted at the next start; raise `wait` if real turns ever run that long.
+            while not hold(db) and time.monotonic() < deadline:
+                time.sleep(poll)
+            # A daemon watchdog: it dies with a clean shutdown and ends a stuck one.
+            watchdog = threading.Timer(grace, os._exit, (0,))
+            watchdog.daemon = True
+            watchdog.start()
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            # Nothing stopped: the next deletion may ask for the restart again.
+            log.exception("Pi could not restart to delete chats forever")
+            _restart_once.release()
 
     timer = threading.Timer(delay, stop)
     timer.daemon = True

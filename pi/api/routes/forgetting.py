@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import Field, StringConstraints, model_validator
 
-from pi.conversation import forget_queue
+from pi.conversation import archive, forget_queue
 from pi.core.models import Strict
 
 SESSION = r"^[A-Za-z0-9_-]{1,128}$"
@@ -86,7 +86,9 @@ def router(state, authorize):
         ]
         if not waiting:
             return {"state": "done", "sessions": sessions}
-        forget_queue.queue(db, waiting)
+        hidden = sorted({sid for item in waiting for sid in item["sessionIds"]})
+        # Queued chats leave every list at once and cannot be restored until they are gone.
+        forget_queue.queue(db, waiting, before=lambda: archive.hide(state().store, hidden))
         getattr(state(), "forget_restart", forget_queue.restart_soon)(db)
         return JSONResponse(
             {"state": "restarting", "sessions": [item["sessionId"] for item in waiting]},

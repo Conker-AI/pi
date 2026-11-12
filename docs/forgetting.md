@@ -22,7 +22,9 @@ for the password first) and forgets nothing itself:
   confirmation, plus the chats queued and the last results.
 - `POST /forgetting/chats {"chats": [{"session", "confirmation"}]}` checks each
   confirmation against a fresh preview (409 `scope_changed` otherwise), writes the
-  request beside the database (`pi.db.forget-request.json`: ids only), answers 202
+  request beside the database (`pi.db.forget-request.json`: ids only), puts every
+  session it reaches in the trash in the same step (so the chat leaves every list at
+  once; restoring it answers 409 `deletion_pending` until the deletion has run), answers 202
   at once and stops Pi as soon as no turn, chat send or team run is in progress
   (new ones are refused for the moment until Pi is back). At the next start,
   before the Store opens, Pi runs the offline
@@ -34,6 +36,9 @@ for the password first) and forgets nothing itself:
   `not_supervised` and the commands below are the only way.
 - Cleanup that started and failed stays queued: the Store refuses to start until
   it is finished, the supervisor restarts Pi, and the next start finishes it.
+- A run that fails before its cleanup starts (a timeout, a busy file) stays queued
+  as `retrying`; Pi starts once more a minute later to try again. After three
+  starts it is recorded as `refused` and the chat stays in the trash.
 
 The confirmation below confirms scope; it is not a password.
 An administrator capable of arbitrary Python or SQLite DDL already has database
@@ -156,6 +161,10 @@ it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
   apart from the chat in `keep_results`) are forgotten in MemoryGate at their current revision,
   the same way as forgetting one memory by hand. A memory MemoryGate already held before the chat
   is left alone, and so is everything the owner approved himself.
+- **Memory searches** Conker ran in the chat (`conker.recall`, saved in `recall_results`) are
+  deleted; forgetting one memory clears every saved search result.
+- **Agents and teams Conker made on its own** in the chat are archived (the owner can restore
+  them; their stored configuration stays).
 - **AI jobs Conker made on its own** in the chat are turned off and marked `turnedOff:
   "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). The owner can turn one
   back on; that clears the mark.

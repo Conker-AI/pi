@@ -141,6 +141,38 @@ lists open requests (`kind: "change-request"`). Forgetting a chat deletes its re
   `status: "refused"` with a sentence Conker passes on. The owner's own requests (`/tool-drafts`)
   are not limited.
 
+## Agents and teams (2026-11-12)
+
+Two more of Conker's tools file requests (`pi/agents/agent_requests.py`); both are
+`owner_confirmation` and ask like scheduling: his typed words never approve one (the agent or
+team would still carry instructions the model wrote, so no reviewer is asked either), only his
+chat or agent loosening does, and both are refused in a private chat and in an AI job's run.
+
+| Tool | Args | What approving makes |
+|---|---|---|
+| `conker.create_agent` (kind `agent`) | `name` (80), `role` (160), `instructions` (8000), `toolIds` (optional) | the agent (`profiles.create`): default model, `toolAccess` empty, memory `conversation` |
+| `conker.create_team` (kind `team`) | `name` (80), `objective` (2000), `roles`: 2 to 6 `{name, agent (id or exact name), instructions}` | a linear team (`teams.save`): role 1 hands its result to role 2 and so on (`result_only`, once each, after his review) |
+
+Guards, checked when filed (a refusal is `status: "refused"` with a sentence for the model):
+- `toolIds` must be tools the caller can use this turn: what ToolGate lists for Pi's key
+  (narrowed to the caller's own `toolIds` when it is not the companion) plus Conker's own tools it
+  is offered; at most 100. `conker.create_agent`, `conker.create_team` and `conker.run_agent` are
+  always left out.
+- A name already used (archived agents and teams count) or already waiting in another open request
+  is refused, and checked again on approval (409 `name_conflict`, the request stays open).
+- Each role's agent must exist and be active. The role gets that agent's tools, no memory
+  (`scope: none`), the task only as context, and 1 turn, 50,000 tokens and 25 cents; the team
+  `roles + 2` turns, `roles - 1` handoffs and the roles' token and cost sums. A zero cost limit
+  would stop the first model call, so the cap is small instead.
+- On approval the payload is checked again (memory `conversation`, no `toolAccess`, default model,
+  none of the three tools above for an agent; no role memory for a team): one that carries more is
+  `failed`. The agent or team and the decision are saved in one transaction.
+
+`result` is `{"agentId"}` or `{"teamId"}`. Undo is archiving it (Agents or Teams screen,
+`POST /agents/{id}/archive`, `POST /collaboration/teams/{id}/archive`). One made at once is a Keep
+result: listed in Handled and archived when its chat is forgotten (its stored configuration stays,
+like a job's instructions). Running a team stays the owner's.
+
 CLI parity: `conker inspect change-requests` lists open requests. `conker apply requests FILE`
 takes one of:
 - `{"operation": "approve" | "decline", "id": "creq_..."}` (a decline may carry `"reply"`);
@@ -155,3 +187,24 @@ Publishing with `conker apply tools` takes `"conkerMayUse": true` to let Conker 
 By hand: the owner adds a memory with `POST /memory/remember` (`{"request_id", "text"}`, password
 verified in the browser; `conker apply memory` with `"operation": "remember"`), which uses the same
 MemoryGate route, so a memory added by hand and one approved from a request are stored the same way.
+
+## Searching memory (2026-11-12)
+
+`conker.recall` (`pi.turns.recall`, authorization `auto`) lets the model search memory with its own
+words when the recall at the start of the answer did not bring what it needs. It reads exactly as
+that recall does (`Memory.search`): the running agent's own read credential and memory scope (the
+companion's "owner" scope follows `memory.across_chats`), forgotten memories held back, trashed
+chats left out, at most 8 items. It is never offered or run in a private chat or a team role.
+
+- What it found is saved in `recall_results`, not in the chat: the tool message keeps only
+  `recallId`, `count` and `outside`, and the model reads the full result when the history is
+  built. Forgetting any memory clears every saved result (with the other recall caches), and
+  forgetting a chat removes its results; the model then sees "cleared".
+- A result counts as outside content unless every item is the owner's own words
+  (`others_wrote`), so after a recalled note Conker or an import wrote, remembering asks him and
+  his typed request no longer approves actions. Every result of `conker.recall` (and of
+  `conker.run_agent`) carries `outside`; a missing flag counts as outside.
+- After outside content it still runs without the reviewer: it changes nothing, and its own
+  result keeps the turn marked. His "Ask me" setting for it answers with a refusal that points the
+  model to `conker.ask`.
+
