@@ -376,6 +376,22 @@ class Memory:
         self.stop_event = threading.Event()
         self.thread = None
 
+    def _client_for(self, selected):
+        return (
+            self.client
+            if selected.get("agentId") == "companion"
+            else self.read_clients.get(selected.get("agentId"))
+        )
+
+    def saved_context(self, turn_id, selected):
+        """A turn's saved recall, checked again on use: a parked turn resumes after its recall,
+        and a chat put in the Trash or forgotten since then must not reach the model."""
+        saved = memory_store.context(self.store, turn_id)
+        package = saved.get("package")
+        agent = getattr(self._client_for(selected), "agent_id", None)
+        shown = without_hidden(self.store, package, (agent,))
+        return saved if shown is package else {**saved, "package": shown}
+
     def prepare(self, turn_id, query):
         turn = self.store.get_turn(turn_id)
         selected = session_settings.execution(self.store, turn["session_id"], turn_id)
@@ -391,11 +407,7 @@ class Memory:
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
-        client = (
-            self.client
-            if selected["agentId"] == "companion"
-            else self.read_clients.get(selected["agentId"])
-        )
+        client = self._client_for(selected)
         if memory_store.recall_held(self.store):
             state = "unavailable"
         elif client:

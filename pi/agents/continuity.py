@@ -8,6 +8,7 @@ from pydantic import Field
 
 from pi.agents import profiles as agents
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.core.models import Strict
 from pi.owner import preferences as owner_preferences
 
@@ -161,6 +162,8 @@ def _item(db, entry):
 
 
 def _eligible(db, row):
+    if visibility.hidden(db, [row["session_id"]]):
+        return False
     privacy = session_settings.source_privacy(db, row["session_id"])
     return privacy is not None and not any(privacy.values())
 

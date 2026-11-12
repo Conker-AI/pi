@@ -267,3 +267,32 @@ def test_memory_rewritten_by_a_trashed_chats_applied_proposal_is_hidden(store):
     assert without_hidden(store, package, (AGENT,)) == package
     assert len(client.get("/memory/objects").json()["objects"]) == 1
     mg.close()
+
+
+def test_a_parked_turn_does_not_replay_recall_from_a_chat_trashed_since(store):
+    from pi.memory import store as memory_store
+    from pi.models.routing import Router
+    from pi.turns.loop import Loop
+
+    gone, chat = (store.create_session(title=t) for t in ("gone", "chat"))
+    turn = store.start_turn(chat)
+    store.append_message(chat, "user", "what do I drink?", turn_id=turn, purpose="input")
+    package = {
+        "memories": [
+            {"id": "m-gone", "text": "drinks green tea", "citations": [{"session_id": gone}]},
+            {"id": "m-kept", "text": "lives in Lisbon", "citations": [{"session_id": chat}]},
+        ],
+        "retrieval": {},
+    }
+    memory_store.save_context(store, turn, "complete", package)
+
+    def shown():
+        messages = Loop(store, Router())._history(chat, turn_id=turn)
+        return " ".join(str(m.content) for m in messages)
+
+    assert "green tea" in shown() and "Lisbon" in shown()
+    trash(store, [gone])
+    assert "green tea" not in shown() and "Lisbon" in shown()
+    assert memory_store.context(store, turn)["package"] == package  # receipt unchanged
+    trash(store, [gone], trashed=False)
+    assert "green tea" in shown()

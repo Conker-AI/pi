@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -329,6 +330,8 @@ def list_tasks(store, limit=50, cursor=None, session_id=None):
         if session_id:
             where.append("session_id=?")
             values.append(session_id)
+        else:
+            where.append("NOT " + visibility.hidden_sql("session_id"))
         clause = " WHERE " + " AND ".join(where) if where else ""
         rows = db.execute(
             "SELECT * FROM tasks" + clause + " ORDER BY created_at DESC,id DESC LIMIT ?",
