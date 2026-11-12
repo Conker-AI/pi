@@ -1,8 +1,14 @@
-"""Owner search over explicit public projections, never execution or raw event payloads."""
+"""Owner search over explicit public projections, never execution or raw event payloads.
+
+Nothing from a forgotten or trashed chat is listed (`pi.conversation.visibility`): not the chat,
+its tasks, activity or artifacts, the memories cited from it or saved from its messages, nor an
+agent or AI job Conker kept from it. Restoring the chat brings them back.
+"""
 
 import hashlib
 import json
 from urllib.parse import quote
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
@@ -10,9 +16,9 @@ from pydantic import Field
 from pi.agents import profiles as agents
 from pi.content import artifacts
 from pi.context import projects
-from pi.conversation import archive
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.conversation.search_excerpt import excerpt
 from pi.core.models import Strict
 from pi.models import roles as model_roles
@@ -87,12 +93,101 @@ def save_settings(store, body, *, semantic_available, ranking_available):
 
 
 def public_session(store, identity):
-    """A chat whose records may appear in search: not private, and not in the trash."""
+    """A chat whose records may appear in search: not private, not forgotten, not in the trash."""
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, identity)
-        if archive.trashed(db, [identity]):
+        if visibility.hidden(db, [identity]):
             return False
     return privacy is not None and not any(privacy.values())
+
+
+def _derived(agent, message_id):
+    """MemoryGate's ids for one delivered message (delivery.validate_receipt, MemoryGate's
+    conversation_memory): the evidence is the receipt id; its analysis and memory derive from it."""
+    receipt = str(uuid5(NAMESPACE_URL, f"pi:{agent}:{message_id}"))
+    analysis = str(uuid5(NAMESPACE_URL, receipt + ":analysis"))
+    return {
+        ("evidence", receipt),
+        ("analysis", analysis),
+        ("memory", str(uuid5(NAMESPACE_URL, receipt + ":memory"))),
+    }
+
+
+def hidden_records(db, agent_ids=()):
+    """(kind, id) of each MemoryGate record from a hidden chat, the set recall leaves out
+    (pi.memory.hidden.hidden_objects; Pi's package rules keep context from importing memory).
+
+    Library cards carry no chat, so the ids are derived from each message of a hidden chat and the
+    agent it went to, a memory Conker kept on its own is named by keep_results, and a memory the
+    chat rewrote through an applied (or maybe applied) memory proposal is hidden with the chat.
+    """
+    found = {("memory", target) for target in visibility.kept_from_hidden(db, "memory")}
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
+        rewritten = db.execute(
+            "SELECT memory_id FROM memory_proposals WHERE state IN ('applied','applying','unknown') "
+            f"AND {visibility.hidden_sql('session_id')}"
+        )
+        found |= {("memory", row[0]) for row in rewritten}
+    rows = db.execute(
+        "SELECT m.id, o.destination_agent_id FROM messages m "
+        "LEFT JOIN memory_outbox o ON o.message_id=m.id "
+        f"WHERE {visibility.hidden_sql('m.session_id')}"
+    ).fetchall()
+    for message_id, destination in rows:
+        for agent in {destination, *agent_ids} - {None, ""}:
+            found |= _derived(agent, message_id)
+    return found
+
+
+def visible_memories(store, items, agent_ids=()):
+    """`items` without the memories of a hidden chat: by `hidden_records`, or a citation of the
+    chat or of one of its messages. Malformed citations hide nothing, as in recall."""
+
+    def text(value):
+        return value if isinstance(value, str) and value else None
+
+    def cited(item):
+        entries = item.get("citations") if isinstance(item, dict) else None
+        if not isinstance(entries, list):
+            return []
+        return [
+            (text(e.get("session_id")), text(e.get("message_id")))
+            for e in entries
+            if isinstance(e, dict)
+        ]
+
+    items = list(items)
+    pairs = [pair for item in items for pair in cited(item)]
+    messages = sorted({m for _, m in pairs if m})
+    with store._connect() as db:
+        db.execute("BEGIN")
+        owner = {}
+        if messages:
+            marks = ",".join("?" * len(messages))
+            owner = dict(
+                db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages)
+            )
+        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values()))
+        records = hidden_records(db, agent_ids)
+
+    def hidden(item):
+        identity = item.get("id") if isinstance(item, dict) else None
+        return ("memory", identity) in records or any(
+            s in gone or owner.get(m) in gone for s, m in cited(item)
+        )
+
+    return [item for item in items if not hidden(item)]
+
+
+def artifact_chats(row):
+    """The chats an artifact listing names: the message it was copied from, and its task's chat."""
+    source, task = row.get("source") or {}, row.get("task") or {}
+    return {source.get("sessionId"), task.get("originSessionId")} - {None}
+
+
+def kept_from_hidden(store, kind):
+    with store._connect() as db:
+        return visibility.kept_from_hidden(db, kind)
 
 
 def record(source, identity, title, text, href, query, stage="metadata", role=None):
@@ -124,9 +219,7 @@ def conversation_metadata(store, query):
             deterministic=True,
         )
         rows = db.execute(
-            "SELECT id,title,summary FROM sessions WHERE status!='forgotten' "
-            "AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=sessions.id) "
-            "AND NOT EXISTS(SELECT 1 FROM session_trash t WHERE t.session_id=sessions.id) "
+            f"SELECT id,title,summary FROM sessions WHERE NOT {visibility.hidden_sql('sessions.id')} "
             "AND search_metadata_match(title,summary) "
             "ORDER BY created_at DESC,id DESC"
         )
@@ -207,10 +300,16 @@ def lexical(store, memory, toolgate, query, settings, stage):
                     store, session_settings.source_privacy, limit=SCAN_LIMIT + 1
                 )
                 partial = len(rows) > SCAN_LIMIT or stage == "text"
-                for row in rows[:SCAN_LIMIT]:
+                rows = rows[:SCAN_LIMIT]
+                with store._connect() as db:
+                    gone = visibility.hidden(
+                        db, {chat for row in rows for chat in artifact_chats(row)}
+                    )
+                for row in rows:
                     if (
                         row["availability"] not in {"available", "source-archived"}
                         or row["privateOrigin"]
+                        or artifact_chats(row) & gone
                     ):
                         continue
                     text = ""
@@ -250,7 +349,10 @@ def lexical(store, memory, toolgate, query, settings, stage):
             elif source == "agents":
                 rows = agents.list_agents(store)["results"]
                 partial = len(rows) > SCAN_LIMIT
+                kept = kept_from_hidden(store, "agent")
                 for row in rows[:SCAN_LIMIT]:
+                    if row["id"] in kept:
+                        continue
                     cfg = row["configuration"]
                     add(
                         source,
@@ -264,7 +366,10 @@ def lexical(store, memory, toolgate, query, settings, stage):
             elif source == "jobs":
                 rows = jobs.list_jobs(store, limit=SCAN_LIMIT + 1)
                 partial = len(rows) > SCAN_LIMIT
+                kept = kept_from_hidden(store, "ai_job")
                 for row in rows[:SCAN_LIMIT]:
+                    if row["id"] in kept:
+                        continue
                     cfg = jobs.browser_job(row).model_dump()["definition"]
                     add(
                         source,
@@ -289,7 +394,10 @@ def lexical(store, memory, toolgate, query, settings, stage):
             elif source == "activity":
                 with store._connect() as db:
                     rows = db.execute(
-                        "SELECT e.id,e.kind,e.session_id,e.task_id,e.to_status FROM activity_events e JOIN sessions s ON s.id=e.session_id WHERE s.status!='forgotten' ORDER BY e.sequence DESC LIMIT ?",
+                        "SELECT e.id,e.kind,e.session_id,e.task_id,e.to_status FROM activity_events e "
+                        "JOIN sessions s ON s.id=e.session_id "
+                        f"WHERE NOT {visibility.hidden_sql('s.id')} "
+                        "ORDER BY e.sequence DESC LIMIT ?",
                         (SCAN_LIMIT + 1,),
                     ).fetchall()
                 partial = len(rows) > SCAN_LIMIT
@@ -309,7 +417,11 @@ def lexical(store, memory, toolgate, query, settings, stage):
                     "library", {"scope": "all", "search": query[:200], "limit": 50}
                 )
                 partial = page.get("next_after") is not None or stage == "text"
+                with store._connect() as db:
+                    gone = hidden_records(db, (getattr(memory.client, "agent_id", None),))
                 for row in page["objects"]:
+                    if (row.get("type"), row["id"]) in gone:
+                        continue
                     add(
                         source,
                         row["id"],
@@ -445,7 +557,8 @@ def router(store, memory, toolgate, providers, authorize):
                     package = memory().client.retrieve(query)
                     mode = package["retrieval"].get("mode")
                     semantic = mode in {"semantic", "hybrid", "vector"}
-                    for item in package["memories"]:
+                    agent = getattr(memory().client, "agent_id", None)
+                    for item in visible_memories(store(), package["memories"], (agent,)):
                         results.append(
                             {
                                 "id": f"memory:{item['id']}:semantic",

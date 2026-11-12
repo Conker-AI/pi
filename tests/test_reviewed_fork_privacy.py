@@ -100,6 +100,12 @@ def raw(store, table, column, value):
         ]
 
 
+def session_rows(store):
+    """Every session row, hidden or not (the chat list leaves forgotten chats out)."""
+    with store._connect() as db:
+        return db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+
+
 @pytest.mark.parametrize("privacy", MODES)
 def test_reviewed_private_pins_narrow_saved_settings_without_changing_source(store, privacy):
     parent, pin = private_history(store, privacy)
@@ -230,7 +236,7 @@ def test_unsafe_reserved_snapshot_refused_atomically_before_binding(store, fork_
     assert error.value.detail["code"] == "inherited_privacy"
     with pytest.raises(agents.AgentError, match="predates inherited"):
         submissions.bind(store, request, fork_summary=fork_summary)
-    assert len(store.list_sessions()) == 2
+    assert session_rows(store) == 2
     assert store.get_session(child)["status"] == "open"
     assert store.messages(child) == store.turns(child) == []
     for table, content in before.items():
@@ -364,7 +370,7 @@ def test_unknown_inherited_sources_fail_closed_without_remote_or_child_creation(
             "UPDATE memory_outbox SET operation='delete' WHERE message_id=?", (queued["id"],)
         )
     assert memory_store.pin_destination(store, queued["id"], "default") == "default"
-    assert len(store.list_sessions()) == 2
+    assert session_rows(store) == 2
     assert store.turns(child) == []
     with store._connect() as db:
         assert db.execute("SELECT COUNT(*) FROM turn_submissions").fetchone()[0] == 0
@@ -380,7 +386,7 @@ def test_reviewed_fork_unknown_pin_rolls_back_without_closing_source(store, kind
     with pytest.raises(context.ContextError, match="unavailable"):
         reviewed(store, parent, [pin])
     assert store.get_session(parent)["status"] == "open"
-    assert len(store.list_sessions()) == 2
+    assert session_rows(store) == 2
     with store._connect() as db:
         assert db.execute("SELECT COUNT(*) FROM context_fork_requests").fetchone()[0] == 0
 
@@ -445,7 +451,7 @@ def test_legacy_double_reviewed_fork_protects_summary_and_frozen_work(store, mon
             memory_store.pin_destination(store, queued["id"], "default")
     else:
         assert memory_store.pin_destination(store, queued["id"], "default") == "default"
-    assert len(store.list_sessions()) == 3
+    assert session_rows(store) == 3
     assert store.get_session(child)["status"] == "open"
     for (table, key, value), content in before.items():
         assert raw(store, table, key, value) == content

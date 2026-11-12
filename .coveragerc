@@ -1,0 +1,10 @@
+# Coverage for CI's floor (pytest --cov --cov-fail-under=N in ci.yml).
+[run]
+source =
+    pi
+    gateway
+omit =
+    */tests/*
+
+[report]
+skip_empty = true

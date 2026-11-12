@@ -7,10 +7,11 @@ import time
 
 import httpx
 
-from pi.conversation import archive
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
+from pi.memory.hidden import hidden_objects
 from pi.owner import settings as owner_settings
 
 log = logging.getLogger("pi.memory.service")
@@ -70,8 +71,9 @@ def _context_size(package):
     return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
 
 
-def _without_trashed(store, package):
-    """Leave out records that cite a chat in the trash; restoring the chat brings them back."""
+def without_hidden(store, package, agent_ids=()):
+    """Leave out recalled records that cite a hidden chat or come from one (`hidden_objects`);
+    restoring the chat brings them back."""
     if not isinstance(package, dict):
         return package
 
@@ -90,9 +92,9 @@ def _without_trashed(store, package):
         ]
 
     groups = [key for key in CONTEXT_GROUPS if isinstance(package.get(key), list)]
-    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
-    if not pairs:
+    if not any(package[key] for key in groups):
         return package
+    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
     messages = sorted({m for _, m in pairs if m})
     with store._connect() as db:
         marks = ",".join("?" * len(messages))
@@ -101,14 +103,19 @@ def _without_trashed(store, package):
             if messages
             else {}
         )
-        gone = archive.trashed(db, {s for s, _ in pairs if s} | set(owner.values()))
-    if not gone:
-        return package
+        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values()))
+        derived = hidden_objects(db, agent_ids)
+    by_group = {"memories": derived["memory"], "evidence": derived["evidence"]}
 
-    def hidden(item):
+    def hidden(key, item):
+        if isinstance(item, dict) and text(item.get("id")) in by_group.get(key, ()):
+            return True
         return any(s in gone or owner.get(m) in gone for s, m in cited(item))
 
-    return {**package, **{key: [i for i in package[key] if not hidden(i)] for key in groups}}
+    shown = {key: [item for item in package[key] if not hidden(key, item)] for key in groups}
+    if all(len(shown[key]) == len(package[key]) for key in groups):
+        return package
+    return {**package, **shown}
 
 
 def _budget_context(package):
@@ -355,9 +362,20 @@ class Memory:
                 max_items=max_items,
                 distinct=True,
             )
-            return _budget_context(_without_trashed(self.store, package)), "ok"
+            return _budget_context(
+                without_hidden(self.store, package, (getattr(client, "agent_id", None),))
+            ), "ok"
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             return None, "unavailable"
+
+    def saved_context(self, turn_id, selected):
+        """A turn's saved recall, checked again on use: a parked turn resumes after its recall,
+        and a chat put in the Trash or forgotten since then must not reach the model."""
+        saved = memory_store.context(self.store, turn_id)
+        package = saved.get("package")
+        agent = getattr(self._client(selected), "agent_id", None)
+        shown = without_hidden(self.store, package, (agent,))
+        return saved if shown is package else {**saved, "package": shown}
 
     def prepare(self, turn_id, query):
         turn = self.store.get_turn(turn_id)
@@ -385,7 +403,7 @@ class Memory:
                     max_items=per_answer(self.store),
                     distinct=True,
                 )
-                package = _without_trashed(self.store, package)
+                package = without_hidden(self.store, package, (getattr(client, "agent_id", None),))
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):

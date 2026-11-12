@@ -9,10 +9,13 @@ Boundaries, in order of when they apply:
 - The role must be enabled by the owner; an upgrade never turns it on.
 - The daily suggestion budget and quiet hours are enforced by `proactive_budget`
   before any model call. A denied pass costs nothing and changes nothing.
-- Only user messages outside incognito, harness-disabled or forgotten chats are read.
+- Only user messages outside incognito, harness-disabled or hidden chats (forgotten or in the
+  Trash, `pi.conversation.visibility`) are read.
 - Every proposal must cite supplied message aliases; invented evidence is dropped.
 - Declines are remembered. "Never" suppresses the same idea for good, and plain
   declines for 30 days, so the owner is not asked twice.
+- A proposal from a hidden chat is not listed, decided or shown to the model (`hidden_ids`); it
+  comes back when the chat is restored.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models.providers import Message
@@ -35,6 +39,32 @@ MAX_EVIDENCE_CHARACTERS = 24_000
 MIN_EVIDENCE_MESSAGES = 3
 MAX_PER_PASS = 3
 DECLINE_MEMORY_SECONDS = 30 * 86400
+# A message the model may read in a pass (`_evidence` adds the window and "not hidden now"): the
+# owner's own words (an AI job's scheduled prompt is not something he keeps asking for) outside
+# incognito. The privacy flags and a chat's job link never change after a message is written.
+_READABLE = """m.role='user'
+   AND m.session_id NOT IN (SELECT session_id FROM agent_job_sessions)
+   AND COALESCE(pv.memory_disabled,0)=0 AND COALESCE(pv.harness_disabled,0)=0"""
+# Proposals that came from a hidden chat: one that cites its message, or one whose pass could
+# have read it (a readable message in the pass's window, the chat still visible when the pass
+# started). A chat already in the Trash or forgotten then was not read, so its messages hide
+# nothing. A chat trashed, restored and trashed again after the pass hides more than it must.
+HIDDEN = f"""
+SELECT pr.id FROM proposals pr JOIN proposal_passes p ON p.id=pr.pass_id
+WHERE EXISTS (
+  SELECT 1 FROM messages m LEFT JOIN message_privacy pv ON pv.message_id=m.id
+  WHERE m.created_at > COALESCE(p.watermark_from, 0)
+   AND m.created_at <= COALESCE(p.watermark_to, p.started_at)
+   AND {_READABLE}
+   AND {visibility.hidden_sql("m.session_id")}
+   AND m.session_id NOT IN (SELECT session_id FROM session_trash WHERE trashed_at <= p.started_at)
+   AND m.session_id NOT IN (
+    SELECT f.session_id FROM forgotten_sessions f JOIN forgetting_receipts r ON r.id=f.receipt_id
+    WHERE r.forgotten_at <= p.started_at))
+ OR EXISTS (
+  SELECT 1 FROM json_each(pr.evidence) e JOIN messages m ON m.id=e.value
+  WHERE {visibility.hidden_sql("m.session_id")})
+"""
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS proposal_passes (
@@ -104,14 +134,11 @@ def _watermark(db) -> float:
 
 def _evidence(db, since: float, until: float) -> list[dict]:
     rows = db.execute(
-        """
+        f"""
         SELECT m.id, m.session_id, m.content, m.created_at FROM messages m
-        LEFT JOIN message_privacy p ON p.message_id=m.id
-        WHERE m.role='user' AND m.created_at>? AND m.created_at<=?
-          AND m.session_id NOT IN (SELECT session_id FROM forgotten_sessions)
-          -- An AI job's scheduled prompt is not something the owner keeps asking for.
-          AND m.session_id NOT IN (SELECT session_id FROM agent_job_sessions)
-          AND COALESCE(p.memory_disabled,0)=0 AND COALESCE(p.harness_disabled,0)=0
+        LEFT JOIN message_privacy pv ON pv.message_id=m.id
+        WHERE m.created_at>? AND m.created_at<=? AND {_READABLE}
+          AND NOT {visibility.hidden_sql("m.session_id")}
         ORDER BY m.created_at, m.id LIMIT ?
         """,
         (since, until, MAX_EVIDENCE_MESSAGES),
@@ -129,15 +156,23 @@ def _evidence(db, since: float, until: float) -> list[dict]:
     return selected
 
 
+def hidden_ids(db) -> set[str]:
+    """Proposals that came from a forgotten or trashed chat; they show again once it is restored."""
+    return {row[0] for row in db.execute(HIDDEN)}
+
+
 def _suppressed(db, now: float) -> tuple[set[str], list[str]]:
     rows = db.execute(
-        "SELECT fingerprint,title,state,decided_at FROM proposals "
+        "SELECT id,fingerprint,title,state,decided_at FROM proposals "
         "WHERE state IN ('open','never') OR (state='declined' AND decided_at>?)",
         (now - DECLINE_MEMORY_SECONDS,),
     ).fetchall()
+    # A hidden chat's ideas still block asking again, but their titles never reach the model.
+    hidden = hidden_ids(db)
+    shown = [row for row in rows if row["id"] not in hidden]
     # Every never-again idea is shown to the model; recent declines fill the rest.
-    never = [row["title"] for row in rows if row["state"] == "never"]
-    declined = [row["title"] for row in rows if row["state"] == "declined"]
+    never = [row["title"] for row in shown if row["state"] == "never"]
+    declined = [row["title"] for row in shown if row["state"] == "declined"]
     titles = never[-60:] + declined[-20:]
     return {row["fingerprint"] for row in rows}, titles
 
@@ -375,11 +410,11 @@ def _view(db, row) -> dict:
     for message_id in json.loads(row["evidence"]):
         source = db.execute(
             "SELECT m.id, m.session_id, m.content, m.created_at, "
-            "m.session_id IN (SELECT session_id FROM forgotten_sessions) AS forgotten "
+            f"{visibility.hidden_sql('m.session_id')} AS hidden "
             "FROM messages m WHERE m.id=?",
             (message_id,),
         ).fetchone()
-        if source is None or source["forgotten"]:
+        if source is None or source["hidden"]:
             cited.append({"messageId": message_id, "available": False})
             continue
         text = json.loads(source["content"])
@@ -412,7 +447,8 @@ def list_proposals(store, state: str = "open", limit: int = 50) -> dict:
     with store._connect() as db:
         db.execute("BEGIN")
         rows = db.execute(
-            "SELECT * FROM proposals WHERE (?='all' OR state=?) ORDER BY created_at DESC, id LIMIT ?",
+            f"SELECT * FROM proposals WHERE (?='all' OR state=?) AND id NOT IN ({HIDDEN}) "
+            "ORDER BY created_at DESC, id LIMIT ?",
             (state, state, max(1, min(limit, 100))),
         ).fetchall()
         return {"proposals": [_view(db, row) for row in rows]}
@@ -423,7 +459,8 @@ def decide(store, proposal_id: str, body: Decision) -> dict:
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute("SELECT * FROM proposals WHERE id=?", (proposal_id,)).fetchone()
-        if row is None:
+        # A proposal from a hidden chat is not there for the owner until the chat is restored.
+        if row is None or row["id"] in hidden_ids(db):
             raise ProposalError("not_found", "Proposal not found.", 404)
         if row["state"] != "open":
             if row["state"] == state:
