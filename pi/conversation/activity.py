@@ -1,22 +1,40 @@
-"""Bounded read projections of Pi's actual turns and content-free state events."""
+"""Bounded read projections of Pi's actual turns and content-free state events.
 
-from pi.conversation import submissions
+A list that is not asked for one chat leaves out the runs and events of a hidden chat
+(pi.conversation.visibility), as the universal search's activity source does; asked for that
+chat by its id, it still lists them. Content is "forgotten" only for a chat that is forgotten or
+gone; a chat in the Trash can be restored, so its own lookups still read "available".
+"""
+
+from pi.conversation import submissions, visibility
 from pi.schedule.tasks import TaskError
 
 
-def _available(db, session_id):
-    return (
-        db.execute(
-            "SELECT 1 FROM sessions WHERE id=? AND status!='forgotten' "
+def _unavailable(db, session_ids) -> set[str]:
+    """The chats among `session_ids` whose content is gone: forgotten, or no row at all."""
+    ids = {value for value in session_ids if value}
+    if not ids:
+        return set()
+    marks = ",".join("?" * len(ids))
+    kept = {
+        row[0]
+        for row in db.execute(
+            f"SELECT id FROM sessions WHERE id IN ({marks}) AND status!='forgotten' "
             "AND id NOT IN (SELECT session_id FROM forgotten_sessions)",
-            (session_id,),
-        ).fetchone()
-        is not None
-    )
+            [*ids],
+        )
+    }
+    return ids - kept
 
 
-def _run(db, row):
+def _status(session_id, unavailable) -> str:
+    return "forgotten" if session_id in unavailable else "available"
+
+
+def _run(db, row, unavailable=None):
     # No guessed message ownership: existing messages have no turn_id association.
+    if unavailable is None:
+        unavailable = _unavailable(db, [row["session_id"]])
     value = {
         key: row[key]
         for key in ("id", "session_id", "status", "provider", "model", "started_at", "ended_at")
@@ -26,7 +44,7 @@ def _run(db, row):
         provenance="recorded",
         outputs=[],
         source={"kind": "conversation", "session_id": row["session_id"]},
-        content_status="available" if _available(db, row["session_id"]) else "forgotten",
+        content_status=_status(row["session_id"], unavailable),
     )
     action = db.execute(
         "SELECT id,state,job_id FROM tool_actions WHERE turn_id=? ORDER BY rowid DESC LIMIT 1",
@@ -66,6 +84,8 @@ def list_runs(store, limit=50, cursor=None, session_id=None, task_id=None):
         if session_id:
             where.append("session_id=?")
             values.append(session_id)
+        else:
+            where.append("NOT " + visibility.hidden_sql("session_id"))
         if task_id:
             where.append("id IN (SELECT run_id FROM task_runs WHERE task_id=?)")
             values.append(task_id)
@@ -75,8 +95,9 @@ def list_runs(store, limit=50, cursor=None, session_id=None, task_id=None):
             (*values, limit + 1),
         ).fetchall()
         page = rows[:limit]
+        unavailable = _unavailable(db, {row["session_id"] for row in page})
         return {
-            "results": [_run(db, row) for row in page],
+            "results": [_run(db, row, unavailable) for row in page],
             "next_cursor": page[-1]["id"] if len(rows) > limit else None,
         }
 
@@ -102,20 +123,18 @@ def list_events(store, limit=50, cursor=None, session_id=None, task_id=None, run
             if value:
                 where.append(field + "=?")
                 values.append(value)
+        if not session_id:
+            where.append("NOT " + visibility.hidden_sql("session_id"))
         clause = " WHERE " + " AND ".join(where) if where else ""
         rows = db.execute(
             "SELECT * FROM activity_events" + clause + " ORDER BY sequence DESC LIMIT ?",
             (*values, limit + 1),
         ).fetchall()
         page = rows[:limit]
+        unavailable = _unavailable(db, {row["session_id"] for row in page})
         return {
             "results": [
-                {
-                    **dict(row),
-                    "content_status": "available"
-                    if _available(db, row["session_id"])
-                    else "forgotten",
-                }
+                {**dict(row), "content_status": _status(row["session_id"], unavailable)}
                 for row in page
             ],
             "next_cursor": str(page[-1]["sequence"]) if len(rows) > limit else None,

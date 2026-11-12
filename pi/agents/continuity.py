@@ -11,6 +11,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.core.models import Strict
 from pi.owner import preferences as owner_preferences
+from pi.schedule import jobs
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS continuity_seen (
@@ -106,6 +107,15 @@ def initialize(db):
     db.commit()
 
 
+def _kept_hidden(db, job_id):
+    """A job Conker kept from a forgotten or trashed chat is named in that chat's words, so its
+    runs stay out of the briefing; once he adopted it (agent_jobs.adopt) it is his and shows."""
+    if job_id not in visibility.kept_from_hidden(db, "ai_job"):
+        return False
+    query = f"SELECT 1 FROM scheduled_jobs WHERE id=? AND {jobs.ADOPTED}"
+    return db.execute(query, (job_id,)).fetchone() is None
+
+
 def _item(db, entry):
     if entry["to_status"] not in STATES:
         return None
@@ -122,7 +132,7 @@ def _item(db, entry):
         run = db.execute(
             "SELECT * FROM scheduled_runs WHERE id=?", (entry["scheduled_run_id"],)
         ).fetchone()
-        if run is None:
+        if run is None or _kept_hidden(db, run["job_id"]):
             return None
         return {
             **common,

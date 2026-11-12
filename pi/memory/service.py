@@ -7,11 +7,10 @@ import time
 
 import httpx
 
+from pi.conversation import hidden_records
 from pi.conversation import settings as session_settings
-from pi.conversation import visibility
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
-from pi.memory.hidden import hidden_objects
 from pi.owner import settings as owner_settings
 
 log = logging.getLogger("pi.memory.service")
@@ -71,51 +70,21 @@ def _context_size(package):
     return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
 
 
-def without_hidden(store, package, agent_ids=()):
-    """Leave out recalled records that cite a hidden chat or come from one (`hidden_objects`);
-    restoring the chat brings them back."""
-    if not isinstance(package, dict):
-        return package
+def without_hidden(store, package, agent_ids=(), own=None):
+    """Leave out recalled records that cite a hidden chat or come from one
+    (pi.conversation.hidden_records); restoring the chat brings them back. `own` is the chat the
+    recall is for: a chat in the Trash opened by its own id still recalls its own records."""
+    return hidden_records.filter_package(store, package, agent_ids, own)
 
-    def text(value):
-        return value if isinstance(value, str) else None
 
-    def cited(item):
-        """(session, message) pairs of an item's citations; anything not text counts as absent."""
-        entries = item.get("citations") if isinstance(item, dict) else None
-        if not isinstance(entries, list):
-            return []
-        return [
-            (text(e.get("session_id")), text(e.get("message_id")))
-            for e in entries
-            if isinstance(e, dict)
-        ]
-
-    groups = [key for key in CONTEXT_GROUPS if isinstance(package.get(key), list)]
-    if not any(package[key] for key in groups):
-        return package
-    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
-    messages = sorted({m for _, m in pairs if m})
-    with store._connect() as db:
-        marks = ",".join("?" * len(messages))
-        owner = (
-            dict(db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages))
-            if messages
-            else {}
-        )
-        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values()))
-        derived = hidden_objects(db, agent_ids)
-    by_group = {"memories": derived["memory"], "evidence": derived["evidence"]}
-
-    def hidden(key, item):
-        if isinstance(item, dict) and text(item.get("id")) in by_group.get(key, ()):
-            return True
-        return any(s in gone or owner.get(m) in gone for s, m in cited(item))
-
-    shown = {key: [item for item in package[key] if not hidden(key, item)] for key in groups}
-    if all(len(shown[key]) == len(package[key]) for key in groups):
-        return package
-    return {**package, **shown}
+def _own_chat(turn, selected):
+    """The chat whose own records a turn may recall: the turn's chat, except for a team role,
+    which reads its team's source chat and may only when that chat is the turn's own."""
+    session = turn["session_id"]
+    if selected.get("kind") != "team-role":
+        return session
+    source = (selected.get("memoryRead") or {}).get("sourceSessionId")
+    return session if source == session else None
 
 
 def _budget_context(package):
@@ -362,9 +331,9 @@ class Memory:
                 max_items=max_items,
                 distinct=True,
             )
-            return _budget_context(
-                without_hidden(self.store, package, (getattr(client, "agent_id", None),))
-            ), "ok"
+            agent = getattr(client, "agent_id", None)
+            shown = without_hidden(self.store, package, (agent,), _own_chat(turn, selected))
+            return _budget_context(shown), "ok"
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             return None, "unavailable"
 
@@ -373,8 +342,12 @@ class Memory:
         and a chat put in the Trash or forgotten since then must not reach the model."""
         saved = memory_store.context(self.store, turn_id)
         package = saved.get("package")
+        if not isinstance(package, dict):
+            return saved
+        turn = self.store.get_turn(turn_id)
+        own = _own_chat(turn, selected) if turn else None
         agent = getattr(self._client(selected), "agent_id", None)
-        shown = without_hidden(self.store, package, (agent,))
+        shown = without_hidden(self.store, package, (agent,), own)
         return saved if shown is package else {**saved, "package": shown}
 
     def prepare(self, turn_id, query):
@@ -403,7 +376,12 @@ class Memory:
                     max_items=per_answer(self.store),
                     distinct=True,
                 )
-                package = without_hidden(self.store, package, (getattr(client, "agent_id", None),))
+                package = without_hidden(
+                    self.store,
+                    package,
+                    (getattr(client, "agent_id", None),),
+                    _own_chat(turn, selected),
+                )
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):

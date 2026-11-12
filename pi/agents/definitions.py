@@ -14,6 +14,7 @@ from pydantic import Field
 
 from pi.agents import profiles, skills
 from pi.context import projects
+from pi.conversation import visibility
 from pi.core.models import Strict
 from pi.schedule import jobs
 
@@ -70,7 +71,11 @@ def _collaboration(store):
             " FROM collaboration_records r"
             " WHERE r.deleted_at IS NULL AND r.kind IN ('template', 'team')"
         ).fetchall()
+        # A team kept from a forgotten or trashed chat stays out, as in its own list.
+        kept = visibility.kept_from_hidden(db, "team")
     for record in records:
+        if record["kind"] == "team" and record["id"] in kept:
+            continue
         kind = record["kind"]
         key = "templates" if kind == "template" else "teams"
         definition = json.loads(record["definition"])

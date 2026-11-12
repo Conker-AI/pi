@@ -47,8 +47,9 @@ _READABLE = """m.role='user'
    AND COALESCE(pv.memory_disabled,0)=0 AND COALESCE(pv.harness_disabled,0)=0"""
 # Proposals that came from a hidden chat: one that cites its message, or one whose pass could
 # have read it (a readable message in the pass's window, the chat still visible when the pass
-# started). A chat already in the Trash or forgotten then was not read, so its messages hide
-# nothing. A chat trashed, restored and trashed again after the pass hides more than it must.
+# started). A chat already hidden then (in the Trash, forgotten, or made from such a chat) was
+# not read, so its messages hide nothing. A chat trashed, restored and trashed again after the
+# pass hides more than it must.
 HIDDEN = f"""
 SELECT pr.id FROM proposals pr JOIN proposal_passes p ON p.id=pr.pass_id
 WHERE EXISTS (
@@ -57,10 +58,7 @@ WHERE EXISTS (
    AND m.created_at <= COALESCE(p.watermark_to, p.started_at)
    AND {_READABLE}
    AND {visibility.hidden_sql("m.session_id")}
-   AND m.session_id NOT IN (SELECT session_id FROM session_trash WHERE trashed_at <= p.started_at)
-   AND m.session_id NOT IN (
-    SELECT f.session_id FROM forgotten_sessions f JOIN forgetting_receipts r ON r.id=f.receipt_id
-    WHERE r.forgotten_at <= p.started_at))
+   AND NOT {visibility.hidden_by("m.session_id", "p.started_at")})
  OR EXISTS (
   SELECT 1 FROM json_each(pr.evidence) e JOIN messages m ON m.id=e.value
   WHERE {visibility.hidden_sql("m.session_id")})

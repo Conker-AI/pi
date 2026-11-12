@@ -19,6 +19,7 @@ from pi.agents.team_models import (
     TeamView,
     Template,
 )
+from pi.conversation import visibility
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS collaboration_records (
@@ -187,14 +188,18 @@ def owner_get(store, identity):
 
 
 def owner_list(store, limit=50, cursor=None):
+    """Teams by id, but one Conker kept from a forgotten or trashed chat (pi.conversation.
+    visibility); it stays readable by id and lists again once its chat is restored."""
     with store._connect() as db:
         db.execute("BEGIN")
         if cursor is not None:
             _get(db, cursor, "team")
+        kept = sorted(visibility.kept_from_hidden(db, "team"))
         rows = db.execute(
             "SELECT id FROM collaboration_records WHERE kind='team' AND deleted_at IS NULL "
+            f"AND id NOT IN ({','.join('?' * len(kept))}) "
             "AND (? IS NULL OR id>?) ORDER BY id LIMIT ?",
-            (cursor, cursor, limit + 1),
+            (*kept, cursor, cursor, limit + 1),
         ).fetchall()
         return TeamCollection(
             results=[_team_summary(_get(db, row["id"], "team")) for row in rows[:limit]],
@@ -246,14 +251,29 @@ def list_all(store):
         rows = db.execute(
             "SELECT id,kind FROM collaboration_records WHERE deleted_at IS NULL ORDER BY created_at,id"
         ).fetchall()
+        # A team kept from a hidden chat is left out, as in owner_list.
+        kept = visibility.kept_from_hidden(db, "team")
+        kept_agents = visibility.kept_from_hidden(db, "agent")
+        preparations = (
+            json.loads(r["snapshot"])
+            for r in db.execute(
+                "SELECT record_id,snapshot FROM collaboration_preparations ORDER BY rowid"
+            )
+            if r["record_id"] not in kept
+        )
         return {
             "templates": [_get(db, r["id"], "template") for r in rows if r["kind"] == "template"],
-            "teams": [_get(db, r["id"], "team") for r in rows if r["kind"] == "team"],
+            "teams": [
+                _get(db, r["id"], "team")
+                for r in rows
+                if r["kind"] == "team" and r["id"] not in kept
+            ],
+            # A team preparation freezes each role's agent configuration, so one that copied an
+            # agent kept from a hidden chat carries that chat's words: it is left out as well.
             "preparations": [
-                json.loads(r["snapshot"])
-                for r in db.execute(
-                    "SELECT snapshot FROM collaboration_preparations ORDER BY rowid"
-                )
+                p
+                for p in preparations
+                if not any(a.get("agentId") in kept_agents for a in p.get("agents", ()))
             ],
         }
 

@@ -8,7 +8,6 @@ agent or AI job Conker kept from it. Restoring the chat brings them back.
 import hashlib
 import json
 from urllib.parse import quote
-from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
@@ -16,6 +15,7 @@ from pydantic import Field
 from pi.agents import profiles as agents
 from pi.content import artifacts
 from pi.context import projects
+from pi.conversation import hidden_records as shared_hidden
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import visibility
@@ -101,82 +101,17 @@ def public_session(store, identity):
     return privacy is not None and not any(privacy.values())
 
 
-def _derived(agent, message_id):
-    """MemoryGate's ids for one delivered message (delivery.validate_receipt, MemoryGate's
-    conversation_memory): the evidence is the receipt id; its analysis and memory derive from it."""
-    receipt = str(uuid5(NAMESPACE_URL, f"pi:{agent}:{message_id}"))
-    analysis = str(uuid5(NAMESPACE_URL, receipt + ":analysis"))
-    return {
-        ("evidence", receipt),
-        ("analysis", analysis),
-        ("memory", str(uuid5(NAMESPACE_URL, receipt + ":memory"))),
-    }
-
-
 def hidden_records(db, agent_ids=()):
-    """(kind, id) of each MemoryGate record from a hidden chat, the set recall leaves out
-    (pi.memory.hidden.hidden_objects; Pi's package rules keep context from importing memory).
-
-    Library cards carry no chat, so the ids are derived from each message of a hidden chat and the
-    agent it went to, a memory Conker kept on its own is named by keep_results, and a memory the
-    chat rewrote through an applied (or maybe applied) memory proposal is hidden with the chat.
-    """
-    found = {("memory", target) for target in visibility.kept_from_hidden(db, "memory")}
-    if db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
-        rewritten = db.execute(
-            "SELECT memory_id FROM memory_proposals WHERE state IN ('applied','applying','unknown') "
-            f"AND {visibility.hidden_sql('session_id')}"
-        )
-        found |= {("memory", row[0]) for row in rewritten}
-    rows = db.execute(
-        "SELECT m.id, o.destination_agent_id FROM messages m "
-        "LEFT JOIN memory_outbox o ON o.message_id=m.id "
-        f"WHERE {visibility.hidden_sql('m.session_id')}"
-    ).fetchall()
-    for message_id, destination in rows:
-        for agent in {destination, *agent_ids} - {None, ""}:
-            found |= _derived(agent, message_id)
-    return found
+    """(kind, id) of each MemoryGate record from a hidden chat: the set recall leaves out
+    (pi.conversation.hidden_records). The library has no own-chat exception."""
+    found = shared_hidden.hidden_records(db, agent_ids)
+    return {(kind, identity) for kind, ids in found.items() for identity in ids}
 
 
 def visible_memories(store, items, agent_ids=()):
     """`items` without the memories of a hidden chat: by `hidden_records`, or a citation of the
     chat or of one of its messages. Malformed citations hide nothing, as in recall."""
-
-    def text(value):
-        return value if isinstance(value, str) and value else None
-
-    def cited(item):
-        entries = item.get("citations") if isinstance(item, dict) else None
-        if not isinstance(entries, list):
-            return []
-        return [
-            (text(e.get("session_id")), text(e.get("message_id")))
-            for e in entries
-            if isinstance(e, dict)
-        ]
-
-    items = list(items)
-    pairs = [pair for item in items for pair in cited(item)]
-    messages = sorted({m for _, m in pairs if m})
-    with store._connect() as db:
-        db.execute("BEGIN")
-        owner = {}
-        if messages:
-            marks = ",".join("?" * len(messages))
-            owner = dict(
-                db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages)
-            )
-        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values()))
-        records = hidden_records(db, agent_ids)
-
-    def hidden(item):
-        identity = item.get("id") if isinstance(item, dict) else None
-        return ("memory", identity) in records or any(
-            s in gone or owner.get(m) in gone for s, m in cited(item)
-        )
-
-    return [item for item in items if not hidden(item)]
+    return shared_hidden.filter_cited(store, {"memories": list(items)}, agent_ids)["memories"]
 
 
 def artifact_chats(row):

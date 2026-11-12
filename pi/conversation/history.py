@@ -10,6 +10,7 @@ import json
 import math
 import re
 
+from pi.conversation import visibility
 from pi.schedule.tasks import TaskError
 
 MAX_QUERY = 200
@@ -174,8 +175,12 @@ def page(
         )
         where, values = [], []
         where.append(TRASHED[trashed])
-        if ARCHIVED[archived] and trashed == "exclude":
-            where.append(ARCHIVED[archived])
+        if trashed == "exclude":
+            # A chat made from a hidden one (a fork of a trashed chat, a kept job's chat) is
+            # hidden with it; forgotten chats stay listed as tombstones.
+            where.append(f"({_FORGOTTEN} OR NOT {visibility.hidden_sql('s.id')})")
+            if ARCHIVED[archived]:
+                where.append(ARCHIVED[archived])
         if normalized:
             where.append(f"NOT {_FORGOTTEN}")
             # instr is a literal substring operation: %, _ and backslash are not patterns.

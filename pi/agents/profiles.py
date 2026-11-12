@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -217,12 +218,16 @@ def get(store, identity, revision=None):
 
 
 def list_agents(store):
+    """Every agent but one Conker kept from a forgotten or trashed chat (its name and
+    instructions came from that chat); it stays readable by id and lists again once restored."""
     with store._connect() as db:
         db.execute("BEGIN")
+        kept = visibility.kept_from_hidden(db, "agent")
         return AgentCollection(
             results=[
                 _get(db, row["id"])
                 for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
+                if row["id"] not in kept
             ]
         ).model_dump()
 

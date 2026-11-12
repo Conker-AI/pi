@@ -332,7 +332,9 @@ def test_actual_directory_query_is_indexed_bounded_and_read_only(store, monkeypa
         selects = [sql for sql in queries if sql.startswith("SELECT s.id")]
         assert len(selects) == 2 and all(sql.endswith("LIMIT 11") for sql in selects)
         for plan in plans:
-            assert "sessions_history_order" in plan and "TEMP B-TREE" not in plan
+            # A sort would read "USE TEMP B-TREE FOR ORDER BY"; the hidden-chat set (one UNION
+            # subquery, run once) reads "UNION USING TEMP B-TREE" and is not a sort.
+            assert "sessions_history_order" in plan and "USE TEMP B-TREE" not in plan
         assert all("FROM messages" not in sql and "memory" not in sql for sql in queries)
 
 

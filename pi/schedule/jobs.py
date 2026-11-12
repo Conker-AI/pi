@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.schedule.job_models import (
     AgentTargetSummary,
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS scheduled_run_budgets (
 CREATE UNIQUE INDEX IF NOT EXISTS scheduled_once ON scheduled_runs(job_id,scheduled_at)
  WHERE request_id IS NULL;
 """
+ADOPTED = "json_extract(definition,'$.createdBy')='owner'"  # his job, Conker kept it or not
 
 
 class JobError(ServiceError, RuntimeError):
@@ -96,11 +98,13 @@ def _view(row):
 
 def list_jobs(store, limit=None, cursor=None):
     with store._connect() as db:
-        where, values = "", []
+        # A job kept from a forgotten or trashed chat is out till restored, unless he adopted it.
+        kept = sorted(visibility.kept_from_hidden(db, "ai_job"))
+        where, values = f"WHERE (id NOT IN ({','.join('?' * len(kept))}) OR {ADOPTED})", kept
         if cursor is not None:
             position = _row(db, cursor)
-            where = "WHERE created_at>? OR (created_at=? AND id>?)"
-            values = [position["created_at"], position["created_at"], cursor]
+            where += " AND (created_at>? OR (created_at=? AND id>?))"
+            values += [position["created_at"], position["created_at"], cursor]
         suffix = " LIMIT ?" if limit is not None else ""
         if limit is not None:
             values.append(limit)
