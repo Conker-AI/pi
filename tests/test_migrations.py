@@ -5,7 +5,7 @@ from contextlib import closing
 
 import pytest
 
-from pi.conversation import upgrades
+from pi.conversation import forget_queue, forgetting, upgrades
 from pi.conversation.store import Store
 from pi.core import migrations
 from pi.core.version import VERSION
@@ -174,3 +174,39 @@ def test_a_database_from_a_newer_pi_refuses_to_start(tmp_path):
     # The lease is released on failure: a second attempt refuses the same way.
     with pytest.raises(migrations.UnknownMigration):
         Store(path)
+
+
+def newer(path):
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO schema_migrations VALUES ('0099-from-a-newer-pi', 1, '9.0.0')")
+        db.commit()
+
+
+def test_forgetting_refuses_a_newer_pis_database_before_any_write(tmp_path):
+    path = tmp_path / "pi.db"
+    store = Store(path)
+    session = store.create_session()
+    store.close()
+    newer(path)
+    with pytest.raises(forgetting.ForgettingError, match="newer Pi"):
+        forgetting.forget(path, session, "any")
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT 1 FROM sessions WHERE id=?", (session,)).fetchone()
+
+
+def test_the_startup_forget_queue_refuses_a_newer_pis_database(tmp_path):
+    path = tmp_path / "pi.db"
+    store = Store(path)
+    session = store.create_session()
+    store.close()
+    assert forget_queue.hold(path)
+    newer(path)
+    forget_queue.queue(path, [{"sessionId": session, "sessionIds": [session]}])
+    with pytest.raises(migrations.UnknownMigration, match="0099-from-a-newer-pi"):
+        forget_queue.run_pending(path)
+    # Nothing was touched: the hold stays, the chat stays queued and not forgotten.
+    with closing(sqlite3.connect(path)) as db:
+        triggers = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
+        assert set(forget_queue.HOLDS) <= triggers
+        assert db.execute("SELECT 1 FROM sessions WHERE id=?", (session,)).fetchone()
+    assert forget_queue.pending_sessions(path) == {session}

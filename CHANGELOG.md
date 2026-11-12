@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Migration ledger** (docs/migrations.md). Schema upgrades are named steps recorded in a new
+  `schema_migrations` table, each run once in one transaction with its record; the five guarded
+  start-up upgrades moved there unchanged. A database a newer Pi upgraded is refused (Pi does not
+  start, and the forget queue and the host forgetting command write nothing), so a rollback
+  across a migration needs the pre-update snapshot. `GET /health` gains `schema_migration` (the
+  last recorded id); additive field.
 - **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
   and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
   reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
