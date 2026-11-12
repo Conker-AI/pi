@@ -38,7 +38,7 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from pi.conversation import submissions
+from pi.conversation import submissions, visibility
 from pi.core.errors import ServiceError
 from pi.owner import preferences as prefs
 from pi.schedule import agent_hooks, agent_triggers, jobs, proactive_budget
@@ -491,10 +491,12 @@ def redact(db, session_ids: list[str]) -> None:
 
 
 def notes(store, limit=50):
+    """Open notes, newest first; a note from a forgotten or trashed chat is not listed."""
     with store._connect() as db:
         rows = db.execute(
             "SELECT n.* FROM agent_job_notes n JOIN sessions s ON s.id=n.session_id "
-            "WHERE n.state='open' AND s.status != 'forgotten' ORDER BY n.created_at DESC LIMIT ?",
+            f"WHERE n.state='open' AND NOT {visibility.hidden_sql('n.session_id')} "
+            "ORDER BY n.created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [

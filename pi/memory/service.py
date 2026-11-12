@@ -4,11 +4,12 @@ import json
 import logging
 import threading
 import time
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
-from pi.conversation import archive
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
 from pi.owner import settings as owner_settings
@@ -70,8 +71,63 @@ def _context_size(package):
     return len(json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8"))
 
 
-def _without_trashed(store, package):
-    """Leave out records that cite a chat in the trash; restoring the chat brings them back."""
+def _receipt_ids(agent_id: str, message_id: str) -> tuple[str, str, str]:
+    """MemoryGate's ids for one delivered message (the formula in delivery.validate_receipt):
+    the evidence record is the receipt id; its analysis and its memory derive from it."""
+    receipt = str(uuid5(NAMESPACE_URL, f"pi:{agent_id}:{message_id}"))
+    analysis = str(uuid5(NAMESPACE_URL, receipt + ":analysis"))
+    return receipt, analysis, str(uuid5(NAMESPACE_URL, receipt + ":memory"))
+
+
+def hidden_objects(db, agent_ids=()) -> dict[str, set[str]]:
+    """MemoryGate records, by kind, that come from a hidden chat (pi.conversation.visibility).
+
+    Each message Pi delivered becomes evidence, an analysis and maybe a memory whose ids derive
+    from the message id and the receiving agent, so they are found without asking MemoryGate.
+    A memory Conker kept on its own carries no chat at all: keep_results names it. Recall and
+    the owner's memory explorer both use this one set; restoring the chat empties it again.
+    """
+    found = {
+        "memory": visibility.kept_from_hidden(db, "memory"),
+        "evidence": set(),
+        "analysis": set(),
+    }
+    rows = db.execute(
+        "SELECT m.id, o.destination_agent_id FROM messages m "
+        "LEFT JOIN memory_outbox o ON o.message_id=m.id "
+        f"WHERE {visibility.hidden_sql('m.session_id')}"
+    ).fetchall()
+    for message_id, destination in rows:
+        for agent in {destination, *agent_ids} - {None, ""}:
+            evidence, analysis, memory = _receipt_ids(agent, message_id)
+            found["evidence"].add(evidence)
+            found["analysis"].add(analysis)
+            found["memory"].add(memory)
+    found["memory"] |= _rewritten_from_hidden(db)
+    return found
+
+
+def _rewritten_from_hidden(db) -> set[str]:
+    """Memories a hidden chat rewrote through a memory proposal (pi.memory.proposals).
+
+    The memory keeps its id but its text came from that chat, so it is hidden with the chat
+    while the edit was applied or may have been (applying, unknown); a pending, rejected or
+    failed proposal changed nothing. Forgetting scrubs the row to `forgotten`, so a forgotten
+    chat's edit is no longer visible here.
+    """
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_proposals'").fetchone():
+        return set()
+    rows = db.execute(
+        "SELECT memory_id FROM memory_proposals "
+        "WHERE state IN ('applied','applying','unknown') "
+        f"AND {visibility.hidden_sql('session_id')}"
+    )
+    return {row[0] for row in rows}
+
+
+def without_hidden(store, package, agent_ids=()):
+    """Leave out recalled records that cite a hidden chat or come from one (`hidden_objects`);
+    restoring the chat brings them back."""
     if not isinstance(package, dict):
         return package
 
@@ -90,9 +146,9 @@ def _without_trashed(store, package):
         ]
 
     groups = [key for key in CONTEXT_GROUPS if isinstance(package.get(key), list)]
-    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
-    if not pairs:
+    if not any(package[key] for key in groups):
         return package
+    pairs = [pair for key in groups for item in package[key] for pair in cited(item)]
     messages = sorted({m for _, m in pairs if m})
     with store._connect() as db:
         marks = ",".join("?" * len(messages))
@@ -101,14 +157,23 @@ def _without_trashed(store, package):
             if messages
             else {}
         )
-        gone = archive.trashed(db, {s for s, _ in pairs if s} | set(owner.values()))
-    if not gone:
-        return package
+        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values()))
+        derived = hidden_objects(db, agent_ids)
+    by_group = {"memories": derived["memory"], "evidence": derived["evidence"]}
 
-    def hidden(item):
+    def hidden(key, item):
+        if isinstance(item, dict) and text(item.get("id")) in by_group.get(key, ()):
+            return True
         return any(s in gone or owner.get(m) in gone for s, m in cited(item))
 
-    return {**package, **{key: [i for i in package[key] if not hidden(i)] for key in groups}}
+    shown = {key: [item for item in package[key] if not hidden(key, item)] for key in groups}
+    if all(len(shown[key]) == len(package[key]) for key in groups):
+        return package
+    return {**package, **shown}
+
+
+# The name tests and older callers use; trashed and forgotten chats are one check now.
+_without_trashed = without_hidden
 
 
 def _budget_context(package):
@@ -355,7 +420,7 @@ class Memory:
                     max_items=per_answer(self.store),
                     distinct=True,
                 )
-                package = _without_trashed(self.store, package)
+                package = without_hidden(self.store, package, (getattr(client, "agent_id", None),))
                 if self.ranker is not None and not selected.get("privacy", {}).get(
                     "harnessDisabled", False
                 ):

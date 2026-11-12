@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import Field
 
 from pi.conversation import settings as session_settings
-from pi.conversation import submissions
+from pi.conversation import submissions, visibility
 from pi.core.models import Strict
 from pi.schedule import tasks
 
@@ -128,16 +128,18 @@ def create(store, sid, message_id, body):
                 "Review the existing summary before carrying it into a message branch.",
             )
         privacy = dict(settings["settings"]["privacy"])
+        # A branch is a new chat: no word of a forgotten or trashed chat may enter it.
         for identity in prefix:
             source = db.execute(
                 "SELECT p.memory_disabled,p.harness_disabled FROM messages m "
-                "JOIN message_privacy p ON p.message_id=m.id WHERE m.id=? AND m.session_id NOT IN "
-                "(SELECT session_id FROM forgotten_sessions)",
+                "JOIN message_privacy p ON p.message_id=m.id WHERE m.id=? AND NOT "
+                + visibility.hidden_sql("m.session_id"),
                 (identity,),
             ).fetchone()
             if source is None:
                 raise tasks.TaskError(
-                    "source_unavailable", "A source is forgotten or its privacy is unknown."
+                    "source_unavailable",
+                    "A source is forgotten, in the Trash, or its privacy is unknown.",
                 )
             privacy["memoryDisabled"] |= bool(source[0])
             privacy["harnessDisabled"] |= bool(source[1])
@@ -178,6 +180,36 @@ def create(store, sid, message_id, body):
         }
 
 
+def branch_history(store, sid, limit=100, cursor=None):
+    """The branch's inherited and own messages; a hidden ancestor's messages are left out."""
+    with store._connect() as db:
+        tasks._source(db, sid)
+        rows = db.execute(
+            "SELECT i.message_id,m.session_id FROM context_inherited_messages i "
+            "LEFT JOIN messages m ON m.id=i.message_id WHERE i.session_id=? ORDER BY i.position",
+            (sid,),
+        ).fetchall()
+        # The branch opened by its own link still shows its own words, even in the Trash.
+        gone = visibility.hidden(db, {row[1] for row in rows}) - {sid}
+        ids = [row[0] for row in rows if row[1] not in gone]
+        inherited = set(ids)
+        ids += [
+            row[0]
+            for row in db.execute("SELECT id FROM messages WHERE session_id=? ORDER BY seq", (sid,))
+        ]
+    if cursor is not None and cursor not in ids:
+        raise tasks.TaskError("invalid_cursor", "Message cursor unavailable.", 422)
+    start = ids.index(cursor) + 1 if cursor else 0
+    selected = ids[start : start + limit]
+    return {
+        "results": [
+            {**store.get_message(identity), "inherited": identity in inherited}
+            for identity in selected
+        ],
+        "next_cursor": selected[-1] if start + limit < len(ids) else None,
+    }
+
+
 def router(get_store, owner):
     api = APIRouter(dependencies=[Depends(owner)])
 
@@ -187,34 +219,6 @@ def router(get_store, owner):
 
     @api.get("/sessions/{sid}/branch-history")
     def history(sid: str, limit: int = Query(100, ge=1, le=200), cursor: str | None = None):
-        store = get_store()
-        with store._connect() as db:
-            tasks._source(db, sid)
-            ids = [
-                row[0]
-                for row in db.execute(
-                    "SELECT message_id FROM context_inherited_messages WHERE session_id=? "
-                    "ORDER BY position",
-                    (sid,),
-                )
-            ]
-            inherited = set(ids)
-            ids += [
-                row[0]
-                for row in db.execute(
-                    "SELECT id FROM messages WHERE session_id=? ORDER BY seq", (sid,)
-                )
-            ]
-        if cursor is not None and cursor not in ids:
-            raise tasks.TaskError("invalid_cursor", "Message cursor unavailable.", 422)
-        start = ids.index(cursor) + 1 if cursor else 0
-        selected = ids[start : start + limit]
-        return {
-            "results": [
-                {**store.get_message(identity), "inherited": identity in inherited}
-                for identity in selected
-            ],
-            "next_cursor": selected[-1] if start + limit < len(ids) else None,
-        }
+        return branch_history(get_store(), sid, limit, cursor)
 
     return api
