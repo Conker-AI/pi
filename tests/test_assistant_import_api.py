@@ -121,6 +121,8 @@ def test_preview_then_import_through_the_owner_routes(http, store, listener):
         "waiting": 2,
         "offered": 0,
         "refused": 0,
+        "erasing": 0,
+        "notFoundToErase": 0,
         "problem": None,
     }
     # The file the owner said yes to, and no other: a changed file is refused.
@@ -251,6 +253,8 @@ def test_the_listener_refusing_pauses_every_offer_without_losing_one(store, list
         "waiting": 0,
         "offered": 1,
         "refused": 1,
+        "erasing": 0,
+        "notFoundToErase": 0,
         "problem": None,
     }
     sender.close()

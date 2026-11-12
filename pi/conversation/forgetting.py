@@ -60,9 +60,7 @@ def _connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
     if not path.is_file():
         raise ForgettingError("Database not found. Pass --db with the existing Pi database path.")
     mode = "ro" if readonly else "rw"
-    db = sqlite3.connect(
-        path.as_uri() + f"?mode={mode}", uri=True, isolation_level=None, timeout=0.2
-    )
+    db = sqlite3.connect(path.as_uri() + f"?mode={mode}", uri=True, isolation_level=None, timeout=5)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys=ON")
     return db
