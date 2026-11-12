@@ -17,7 +17,8 @@ The preference document matches the frontend configuration fields:
   "dailyBudget": {"suggestions": 4, "researchMinutes": 30, "costCents": 0},
   "idleTimeoutMinutes": 15,
   "planAlerts": {"enabled": true, "percent": 80},
-  "newChatAccess": "default"
+  "newChatAccess": "default",
+  "spendingCap": {"enabled": true, "cents": 500, "tokens": 2000000}
 }
 ```
 
@@ -30,6 +31,9 @@ entered. The gateway enforces it from every preferences document it relays and k
 one in its own database; the host's `GATEWAY_IDLE_TIMEOUT_SECONDS` (default 30 minutes) is the
 ceiling, so a longer choice and 0 both mean the host's limit, and the host's limit applies until
 the gateway has seen a document (see [browser-auth.md](browser-auth.md)).
+`spendingCap` is the daily cap over paid model calls (docs/spending-cap.md); preferences saved
+before it existed read the default.
+
 `newChatAccess` (`default`, `ask`, `ai` or `full`; preferences saved before it existed read
 `default`) is the access switch a chat the owner starts begins with. `full` lets Conker act
 without asking, so it lives here, where saving through the gateway needs the password, and not

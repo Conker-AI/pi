@@ -1,5 +1,7 @@
 # Change requests: Conker prepares, the owner verifies (2026-10-25)
 
+Every kind that waits in the Inbox, side by side: [inbox-kinds.md](inbox-kinds.md).
+
 > Since 2026-10-26 Conker's own tools follow the access layers (docs/access.md). Since 2026-10-29
 > only remembering is Keep by default (done at once, still recorded as an approved request, listed
 > in Handled); scheduling waits for the owner unless his settings for an agent or a chat loosen

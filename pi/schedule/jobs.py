@@ -123,11 +123,11 @@ def create(store, definition, now=None):
         return insert(db, definition, now)
 
 
-def insert(db, definition, now=None):
-    """A new job inside the caller's transaction."""
+def insert(db, definition, now=None, identity=None):
+    """A new job inside the caller's transaction; `identity` only for a job Pi ships."""
     definition = Definition.model_validate(definition.model_dump())
     now = time.time() if now is None else now
-    identity = "job_" + uuid.uuid4().hex
+    identity = identity or "job_" + uuid.uuid4().hex
     db.execute(
         "INSERT INTO scheduled_jobs VALUES (?,1,?,?,?)",
         (identity, definition.model_dump_json(), now, next_due(definition, now, anchor=now)),

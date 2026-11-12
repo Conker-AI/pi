@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
+  and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
+  reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
+  as a model refusal (roles fall back) until the owner's next local day. `GET /inference/spending`
+  is the meter. New preference field with a default; preferences saved earlier read it.
 - **Conker searches memory itself.** `conker.recall` (Look, allowed by default) searches memory
   under the running agent's own credential and scope, as turn recall does; never in a private chat
   or a team role. Results live in `recall_results` (cleared when any memory is forgotten, deleted
@@ -17,6 +22,12 @@ be a decision with visible consequences.
   only, only tools the caller could use, never create or delegation tools) or a linear team of
   existing agents with a small budget. His typed words never approve one; his chat or agent
   loosening can, as Keep: listed in Handled, archived when the chat is forgotten.
+- **A Morning check-in is on by default.** When Pi starts with its scheduler it makes, once per
+  install (new or upgraded), the AI job "Morning check-in": daily 08:00 in the owner's time zone,
+  the companion says what needs him today or replies NOTHING. `createdBy: "conker"` (proactive
+  budget, quiet hours and the proactivity switch apply; never his words), fixed id
+  `job_beca06ba345a8b3170a4d8e2473fe00f`, recorded in the owner setting `rhythm.seeded`; turning it
+  off never brings it back. It does not count against Conker's own jobs a day.
 - **An agent can run another agent.** Conker's own tool `conker.run_agent` runs the named agent on
   the model's instructions in a chat of its own (a child of the caller's chat, memory off, no owner
   request, only "ask" of the caller's access switch, outside if the caller read outside content);
