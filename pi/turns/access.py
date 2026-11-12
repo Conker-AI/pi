@@ -16,6 +16,8 @@ Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_out
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
 imported or listener content, anything without a readable source), an attachment or a project
 source, or his answer to Conker's question (the question and its options were written by the AI).
+A result of Conker's own memory search or of another agent's run counts too, unless Pi marked it
+as holding only his own words (`reported_outside`).
 Memories that are all his own (statements he typed or approved, memories made from his messages)
 leave his typed request able to approve, as in a chat without memory.
 After outside content, remembering always asks him: never the reviewer, never his loosening.
@@ -54,6 +56,7 @@ native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
 native_remember = "conker.remember"
+native_recall = "conker.recall"
 native_create_agent = "conker.create_agent"
 native_create_team = "conker.create_team"
 native_run_agent = "conker.run_agent"
@@ -329,9 +332,10 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
         # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
         # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
         return "ask", by, ""
-    if level == "allow" and outside and native(tool.id):
+    if level == "allow" and outside and native(tool.id) and tool.id != native_recall:
         # Keep after outside content (a cron job): someone else's text could be planting it, so
-        # the reviewer checks it against what he asked.
+        # the reviewer checks it against what he asked. A memory search is exempt: it changes
+        # nothing, reads only what his scope allows, and its own result keeps the turn marked.
         level = "ai"
     if level == "allow":
         return "run", by, REASONS[by]

@@ -28,7 +28,7 @@ from pi.agents import agent_calls, agent_requests, asks, change_requests, tool_d
 from pi.agents.profiles import AgentError
 from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
-from pi.turns import access
+from pi.turns import access, recall
 
 SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
@@ -144,6 +144,7 @@ CATALOG = (
         ],
         "auto",
     ),
+    recall.TOOL,
     Tool(
         CREATE_AGENT,
         "Create an agent",
@@ -236,7 +237,7 @@ def owns(tool_id: str) -> bool:
 
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
-PRIVATE_REFUSED = {REMEMBER, SCHEDULE, CREATE_AGENT, CREATE_TEAM}
+PRIVATE_REFUSED = {REMEMBER, SCHEDULE, recall.RECALL, CREATE_AGENT, CREATE_TEAM}
 JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM, RUN_AGENT}
 
 
@@ -270,6 +271,8 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
             "Answer with what you have."
         )
     if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
+        if tool_id == recall.RECALL:
+            return "This chat is private (memory off), so memory is not searched here."
         return (
             "This chat is private (memory off), so nothing from it is remembered, scheduled or "
             "made into an agent or team. "
@@ -410,6 +413,8 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     why = refused(loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution)
     if why:
         return _refusal(tool_id, why)
+    if tool_id == recall.RECALL:
+        return recall.call(loop, args, session_id=session_id, turn_id=turn_id, run=run)
     try:
         if tool_id == ASK:
             asked = asks.file(

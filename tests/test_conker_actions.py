@@ -85,14 +85,9 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
         "conker.run_agent",
     ]
     open_chat = store.create_session()
-    assert (
-        len(
-            native_tools.offered(
-                loop, session_settings.execution(store, open_chat), open_chat, None
-            )
-        )
-        == 7
-    )
+    assert len(
+        native_tools.offered(loop, session_settings.execution(store, open_chat), open_chat, None)
+    ) == len(native_tools.CATALOG)
 
 
 def test_a_private_chat_is_refused_again_when_it_calls_them(store):
@@ -227,8 +222,8 @@ def test_a_job_run_cannot_make_a_job_or_draft_a_tool(store):
     execution = session_settings.execution(store, session, turn)
     assert ids(native_tools.offered(loop, execution, session, turn)) == [
         "conker.ask",
+        "conker.recall",
         "conker.remember",
-        "conker.run_agent",
     ]
     for tool_id, args in (
         (native_tools.SCHEDULE, JOB),

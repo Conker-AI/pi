@@ -11,7 +11,7 @@ from pi.memory import store as memory_store
 from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import TurnContext
 from pi.turns import context as turn_context
-from pi.turns import prompt_prefix
+from pi.turns import prompt_prefix, recall
 from pi.turns import steering as turn_steering
 from pi.turns.failures import TurnFailed
 
@@ -138,7 +138,8 @@ class History:
                 )
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
-            messages.append(Message(row["role"], agent_calls.expand(self.store, row["role"], text)))
+            text = agent_calls.expand(self.store, row["role"], text)
+            messages.append(Message(row["role"], recall.expand(self.store, row["role"], text)))
             if row["id"] in attached_ids:
                 try:
                     attached = attachment_turns.context(
