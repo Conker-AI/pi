@@ -141,14 +141,18 @@ def record(store, report: Report, *, now: float | None = None) -> dict:
 
 
 def _offer(store) -> dict | None:
-    """The newest version still offered; an older open one is passed over, not shown twice."""
+    """The newest version not yet installed, unless the owner skipped it.
+
+    An older open version is passed over, also once the newest is skipped: skipping 0.10.0 never
+    brings back a 0.2.0 card the owner did not see.
+    """
     with store._connect() as db:
-        rows = db.execute(
-            "SELECT * FROM update_offers WHERE dismissed_at IS NULL AND installed_at IS NULL"
-        ).fetchall()
+        rows = db.execute("SELECT * FROM update_offers WHERE installed_at IS NULL").fetchall()
     if not rows:
         return None
     row = max(rows, key=lambda item: _key(item["version"]))
+    if row["dismissed_at"] is not None:
+        return None
     return {
         "version": row["version"],
         "title": f"Update available: {row['version']}",
@@ -225,7 +229,9 @@ def applied(store, since: float) -> list[dict]:
             "at": result["finishedAt"],
             "source": {"kind": "update-result", "resultId": result["id"]},
         }
-        for result in _results(store, "outcome = 'applied' AND finished_at >= ?", (since,))
+        for result in _results(
+            store, "dismissed_at IS NULL AND outcome = 'applied' AND finished_at >= ?", (since,)
+        )
     ]
 
 

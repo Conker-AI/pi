@@ -91,6 +91,24 @@ def test_only_the_newest_open_offer_is_shown(store):
     assert [item["version"] for item in updates.needs_you(store)] == ["0.10.0"]
 
 
+def test_skipping_the_newest_offer_never_brings_back_an_older_one(store):
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW)
+    updates.record(store, report("0.1.0", "0.10.0"), now=NOW + 60)
+    updates.dismiss_offer(store, "0.10.0", now=NOW + 120)
+    assert updates.needs_you(store) == []
+    updates.record(store, report("0.1.0", "0.10.0"), now=NOW + 86400)
+    assert updates.overview(store)["offer"] is None
+    updates.record(store, report("0.1.0", "0.11.0"), now=NOW + 2 * 86400)
+    assert updates.overview(store)["offer"]["version"] == "0.11.0"
+
+
+def test_a_dismissed_applied_update_leaves_the_handled_list(store):
+    updates.record(store, report("0.1.0", "0.2.0", [result("applied")]), now=NOW)
+    assert len(updates.applied(store, NOW - 3600)) == 1
+    updates.dismiss_result(store, RECEIPT, now=NOW + 60)
+    assert updates.applied(store, NOW - 3600) == []
+
+
 def test_running_the_offered_version_closes_its_offer(store):
     updates.record(store, report("0.1.0", "0.2.0"), now=NOW)
     updates.record(store, report("0.2.0", "0.2.0"), now=NOW + 86400)
