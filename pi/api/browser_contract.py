@@ -208,6 +208,9 @@ OWNER_ROUTES = {
         r"/plans/usage",
         # Read-only: Pi's self-check, each check's last status and the open alerts.
         r"/self-check",
+        # Conker updates: the release on offer and how updates ended. The host reports them with
+        # the recovery credential; the update itself is a gateway host action (password).
+        r"/updates",
         # Read-only: which services called a model role and what it used; never any text.
         r"/inference/usage",
         # Read-only: today's paid model calls against the daily cap; counts only.
@@ -262,6 +265,8 @@ OWNER_ROUTES = {
         r"/setup/protection",
         r"/setup/rehearsal/(?:memory-review|approval/(?:start|resume)|finalize)",
         r"/setup/receipts/(boundaries|protection)",
+        r"/updates/offers/[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}/dismiss",
+        r"/updates/results/[0-9a-f]{32}/dismiss",
         r"/system/inventory",
         r"/system/inventory/[A-Za-z0-9_-]{16,100}/resume",
         r"/system/files/listings",

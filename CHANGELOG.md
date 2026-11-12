@@ -20,6 +20,15 @@ be a decision with visible consequences.
   the `/health` checks every 5 minutes; one that stays unavailable or degraded for 15 minutes
   files an Inbox item (kind `health`), and its recovery shows in Handled (`health-recovered`).
   New `GET /self-check` and `POST /self-check/alerts/{id}/dismiss`; no change to existing routes.
+- **Conker update offers and the gateway's update action.** `/updates` keeps what the host found
+  when it checked for a newer Conker release: one offer per version (dismissing one is remembered;
+  running that version or a newer one closes it) and one result per update receipt (applied,
+  rolled back, held or failed). Only the recovery credential reports (`POST /updates/report`, the
+  host's daily check); the owner-control credential reads and dismisses. The Inbox lists the newest
+  open offer and every update that did not end applied; an applied one is handled. The gateway's
+  host action `update.run {version}` asks for the password again (428), then hands the update to
+  the host helper.
+
 - **Conker can ask for an agent or a team.** `conker.create_agent` and `conker.create_team` file
   change requests of the new kinds `agent` and `team` (the table is rebuilt once on start to allow
   them; rows kept); approving makes the agent (default model, no per-tool access, chat memory

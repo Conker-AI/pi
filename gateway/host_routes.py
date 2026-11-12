@@ -198,8 +198,9 @@ def router(app, session, admit_write):
     @routes.post("/api/host/read")
     async def host_operations(request: Request, identity: str | None = None):
         """Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)
-        and the three actions (backup.verify, services.restart, backup.run), all with his session:
-        none of them deletes or replaces anything. Answers are the helper's own."""
+        and the actions: backup.verify, services.restart and backup.run with his session (none of
+        them deletes or replaces anything), update.run with his password too. Answers are the
+        helper's own."""
         from starlette.concurrency import run_in_threadpool
 
         from . import host_ops
@@ -218,7 +219,12 @@ def router(app, session, admit_write):
                 path = "/host/read" if read else "/host/ops"
                 body = host_ops.validate(await json_body(request, max_bytes=1024), read=read)
                 if not read:
-                    admit_write(request, body, password=False)
+                    # An update replaces every service, so it asks for the password again.
+                    admit_write(
+                        request,
+                        body,
+                        password=body["operation"] in host_ops.PASSWORD_ACTIONS,
+                    )
             status, value = await run_in_threadpool(
                 host_ops.request,
                 app.state.provider_transport,

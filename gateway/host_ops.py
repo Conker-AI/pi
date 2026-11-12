@@ -19,6 +19,7 @@ from .native_sessions import _json
 OP_ID = r"[A-Za-z0-9_.:-]{16,128}"
 SERVICE = r"[a-z][a-z0-9-]{0,62}"
 SNAPSHOT = r"snapshot-\d{8}T\d{6}Z-[0-9a-f]{8}"
+VERSION = r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}"
 OPERATION = r"[a-z]+(?:\.[a-z]+)+"
 # Operation -> its arguments and their patterns (conker scripts/host_ops.py OPERATIONS).
 READS = {"services.status": {}, "backup.list": {}}
@@ -26,7 +27,11 @@ ACTIONS = {
     "backup.verify": {"snapshot": SNAPSHOT},
     "services.restart": {"service": SERVICE},
     "backup.run": {},
+    # Replaces the running release (ADR-0014; the helper stages, snapshots, verifies, rolls back).
+    "update.run": {"version": VERSION},
 }
+# Actions that ask for the password again (approval level 3): an update replaces every service.
+PASSWORD_ACTIONS = frozenset({"update.run"})
 OUTCOMES = {"working", "done", "failed", "unknown"}
 # The helper's refusals, by status: invalid (422), refused or busy (409), unknown id or route
 # (404), unavailable (503).
