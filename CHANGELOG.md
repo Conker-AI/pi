@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One notices table for plan alerts and AI job notes** (docs/inbox-kinds.md, merge 1).
+  Migration 0006 moves `plan_alerts` and `agent_job_notes` into `notices`, keeping every id, and
+  drops the two tables. Routes, response bodies, Inbox items and auth are unchanged. A database
+  this migration has run on needs the pre-update snapshot to go back to an older Pi.
 - **Migration ledger** (docs/migrations.md). Schema upgrades are named steps recorded in a new
   `schema_migrations` table, each run once in one transaction with its record; the five guarded
   start-up upgrades moved there unchanged. A database a newer Pi upgraded is refused (Pi does not

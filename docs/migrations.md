@@ -28,6 +28,14 @@ The message says what to do: run that newer Pi version again, or restore the sna
 the update. Rolling back Pi's code across a release that added a migration therefore needs the
 pre-update snapshot of the database too.
 
+## The steps
+
+- 0001 to 0005: the guarded start-up upgrades Pi ran before the ledger existed, moved unchanged.
+- 0006-notices: plan alerts and AI job notes move into one `notices` table (ids kept) and the
+  tables `plan_alerts` and `agent_job_notes` are dropped. A Pi from before the ledger started on
+  this database again would recreate those two tables empty: restore the pre-update snapshot
+  instead. Forgetting still clears an `agent_job_notes` table it finds.
+
 ## Adding a migration
 
 Append it to `MIGRATIONS` (never rename, reorder or remove an id) and keep its body safe on a

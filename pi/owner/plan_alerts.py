@@ -115,20 +115,27 @@ def record(
     Every reading is kept and an open alert still closes when its window resets; only a window
     the owner does not watch raises no new alert."""
     now = time.time() if now is None else now
-    plan = Plan.model_validate(plan)
-    if not plan.available:
+    parsed = Plan.model_validate(plan)
+    if not parsed.available:
         return []
     changes = []
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        for window in plan.windows:
+        for window in parsed.windows:
             db.execute(
                 "INSERT INTO plan_usage VALUES (?,?,?,?,?,?) ON CONFLICT(provider, window_id) "
                 "DO UPDATE SET label=excluded.label, used_percent=excluded.used_percent, "
                 "resets_at=excluded.resets_at, checked_at=excluded.checked_at",
-                (plan.provider, window.id, window.label, window.usedPercent, window.resetsAt, now),
+                (
+                    parsed.provider,
+                    window.id,
+                    window.label,
+                    window.usedPercent,
+                    window.resetsAt,
+                    now,
+                ),
             )
-            key = subject(plan.provider, window.id)
+            key = subject(parsed.provider, window.id)
             alert = db.execute(
                 "SELECT * FROM notices WHERE kind=? AND subject=? AND reset_at IS NULL",
                 (notices.PLAN, key),
@@ -152,7 +159,7 @@ def record(
             if alert is None and window.usedPercent >= threshold and _counts(window.label, windows):
                 identity = "plan_" + uuid.uuid4().hex
                 fields = {
-                    "provider": plan.provider,
+                    "provider": parsed.provider,
                     "window": window.id,
                     "label": window.label,
                     "threshold": threshold,
@@ -181,7 +188,7 @@ def record(
 
 
 def title(facts: dict, *, reset: bool) -> str:
-    provider = facts.get("provider")
+    provider = str(facts.get("provider", ""))
     name = f"{NAMES.get(provider, provider)} {facts.get('label')}"
     if reset:
         return f"{name} limit reset"

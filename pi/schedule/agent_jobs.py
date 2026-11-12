@@ -486,12 +486,13 @@ class AgentJobs:
 def redact(db, session_ids: list[str]) -> None:
     """Forget with the chat, inside the caller's forgetting transaction: a note quotes its reply.
 
-    The job itself stays; its next run starts a new chat. Its notes are notices, which
-    `notices.redact` clears. A database a Pi from before migration 0006 wrote to again (a code
+    The job itself stays; its next run starts a new chat. Its notes are notices, cleared through
+    `notices.redact`. A database a Pi from before migration 0006 wrote to again (a code
     rollback without the snapshot) can hold the old agent_job_notes table: cleared here too.
     """
     if not session_ids:
         return
+    notices.redact(db, session_ids)
     values = [(value,) for value in session_ids]
     for table in ("agent_job_notes", "agent_job_sessions"):
         if db.execute(
