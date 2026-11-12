@@ -26,10 +26,11 @@ import re
 import threading
 import time
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 import httpx
 
-from pi.memory import import_formats, imports
+from pi.memory import import_deletion, import_formats, imports
 
 log = logging.getLogger("pi.memory.import_offers")
 
@@ -63,16 +64,19 @@ class ListenerClient:
             headers={"X-MemoryGate-Listener-Key": key},
         )
 
-    def offer(self, event: dict) -> str:
-        """Send one event; the evidence id MemoryGate saved it as."""
-        with self.http.stream("POST", self.path, json=event) as response:
+    def _call(self, method: str, path: str, **kwargs):
+        with self.http.stream(method, path, **kwargs) as response:
             response.raise_for_status()
             raw = bytearray()
             for chunk in response.iter_bytes():
                 if len(raw) + len(chunk) > MAX_ANSWER_BYTES:
                     raise ValueError("MemoryGate's answer exceeded its size limit.")
                 raw.extend(chunk)
-        value = json.loads(raw)
+        return json.loads(raw)
+
+    def offer(self, event: dict) -> str:
+        """Send one event; the evidence id MemoryGate saved it as."""
+        value = self._call("POST", self.path, json=event)
         if not isinstance(value, dict):
             raise ValueError("MemoryGate returned an invalid acknowledgement.")
         evidence = value.get("evidence_id")
@@ -83,6 +87,19 @@ class ListenerClient:
         ):
             raise ValueError("MemoryGate returned an invalid acknowledgement.")
         return evidence
+
+    def erase(self, evidence_id: str) -> bool:
+        """Erase one event this listener sent, and what MemoryGate derived from it.
+
+        False when MemoryGate has no such event of this listener (nothing left to erase)."""
+        value = self._call("DELETE", f"{self.path}/evidence/{quote(evidence_id, safe='')}")
+        if (
+            not isinstance(value, dict)
+            or value.get("status") not in ("erased", "not_found")
+            or value.get("evidence_id") != evidence_id
+        ):
+            raise ValueError("MemoryGate returned an invalid erase acknowledgement.")
+        return value["status"] == "erased"
 
     def close(self):
         self.http.close()
@@ -146,6 +163,13 @@ _WAITING = (
 )
 
 
+def _refused(code) -> str:
+    return (
+        f"MemoryGate refused the import listener (HTTP {code}). Check "
+        "PI_MEMORYGATE_IMPORT_SOURCE and PI_MEMORYGATE_IMPORT_KEY."
+    )
+
+
 class Offers:
     """The background sender: one event at a time, retried with backoff, paused when the
     listener itself refuses (its key, its source, or MemoryGate's lockout)."""
@@ -159,13 +183,23 @@ class Offers:
         self.sending = threading.Lock()
         self.paused_until = 0.0
         self.problem: str | None = None
+        self.erase_problem: str | None = None
 
     def drain_once(self, limit: int = 20) -> int:
         if self.client is None or self.clock() < self.paused_until:
             return 0
+        # A deleted chat's words leave MemoryGate before any new word goes in.
+        erased = import_deletion.erase_waiting(self.store, self.client, self.clock, limit)
+        if erased.paused:
+            self.paused_until = self.clock() + PAUSE_SECONDS
+            self.problem = _refused(erased.paused)
+            return erased.done
+        self.erase_problem = erased.problem
+        if erased.done and not erased.problem:
+            self.problem = None  # the listener answered again
         with self.store._connect() as db:
             rows = db.execute(_WAITING, (self.clock(), limit)).fetchall()
-        sent = 0
+        sent = erased.done
         troubled = False
         for row in rows:
             if self.stop_event.is_set():
@@ -195,10 +229,7 @@ class Offers:
             code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             if code in (401, 403, 404, 429):
                 self.paused_until = self.clock() + PAUSE_SECONDS
-                self.problem = (
-                    f"MemoryGate refused the import listener (HTTP {code}). Check "
-                    "PI_MEMORYGATE_IMPORT_SOURCE and PI_MEMORYGATE_IMPORT_KEY."
-                )
+                self.problem = _refused(code)
                 return "paused"
             refused = code is not None and 400 <= code < 500 and code not in (408, 425)
             self._failed(row, refused, code)
@@ -263,10 +294,15 @@ def status(store, offers: Offers | None) -> dict:
         counts = dict(
             db.execute("SELECT state, COUNT(*) FROM import_memory_offers GROUP BY state").fetchall()
         )
+        erasing = dict(
+            db.execute(
+                "SELECT state, COUNT(*) FROM import_evidence_erasures GROUP BY state"
+            ).fetchall()
+        )
     configured = offers is not None and offers.client is not None
     waiting = counts.get("pending", 0)
-    problem = offers.problem if configured else None
-    if not configured and waiting:
+    problem = (offers.problem or offers.erase_problem) if configured else None
+    if not configured and (waiting or erasing.get("pending", 0)):
         problem = (
             "MemoryGate's import listener is not set up, so these wait. Set "
             "PI_MEMORYGATE_IMPORT_SOURCE and PI_MEMORYGATE_IMPORT_KEY, then restart Pi."
@@ -276,5 +312,8 @@ def status(store, offers: Offers | None) -> dict:
         "waiting": waiting,
         "offered": counts.get("sent", 0),
         "refused": counts.get("refused", 0),
+        # Words of deleted imported chats still to erase in MemoryGate, and ones it did not have.
+        "erasing": erasing.get("pending", 0),
+        "notFoundToErase": erasing.get("missing", 0),
         "problem": problem,
     }
