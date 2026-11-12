@@ -167,6 +167,28 @@ that need no confirmation (get tools) run on their own, and a tool that needs th
   tool target, and the gateway asks for the password), `GET /jobs/agent/notes` lists open notes,
   `POST /jobs/agent/notes/{id}/dismiss` hides one (signed-in session only).
 
+### The Morning check-in, on by default (2026-11-12)
+
+A fresh Conker has one AI job without the owner designing it (`pi/schedule/rhythm.py`): the
+Morning check-in, daily at 08:00 in the owner's time zone (his quiet hours' zone when it is made),
+run by the companion. Its instructions look at what needs him today (open Inbox items, open
+questions and promises, plans and dates from memory, cron jobs that failed) and tell him in a few
+lines, or reply `NOTHING`, which files nothing.
+
+- It is an ordinary AI job: listed by `GET /jobs`, edited, paused or adopted like any other. Its
+  id is fixed (`job_beca06ba345a8b3170a4d8e2473fe00f`), which is how a screen tells it came built
+  in; the owner setting `rhythm.seeded` names it too.
+- `createdBy: "conker"`: Pi wrote its instructions, so they never count as the owner's words
+  (`access.owner_text` is empty for its runs), and each run spends one suggestion of his daily
+  proactive budget, so quiet hours, his daily limit and his proactivity switch apply. While
+  proactivity is off its runs are held back (`HELD_BACK`) and the job waits, still on, for him to
+  turn proactivity on. Adopting it (`POST /jobs/{id}/adopt`) makes it his like any job Conker made.
+  Making it does not use Conker's allowance of `CONKER_PER_DAY` jobs a day.
+- Made once per install, new or upgraded, when Pi starts with its scheduler
+  (`PI_SCHEDULER_ENABLED`); without the scheduler no job runs, so none is made. `rhythm.seeded`
+  and the job's own row both record the seed, so turning it off, or resetting the settings
+  document, never brings a second one back.
+
 ### Starting from a tool (2026-10-25)
 
 An AI job with `watch` (`toolId`, `args`, `everyMinutes` 5-1440) starts when that get tool has

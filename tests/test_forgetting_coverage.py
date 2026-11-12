@@ -66,6 +66,11 @@ IDS_ONLY = {
     "schema_migrations",
     # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
     "service_model_calls",
+    # Paid calls against the daily cap: provider and model ids, counts and states.
+    "paid_model_calls",
+    # Pi's self-check: check names, statuses and the checks' fixed reason strings.
+    "self_check_alerts",
+    "self_check_state",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",

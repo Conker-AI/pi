@@ -1,5 +1,6 @@
 """Durable owner stop requests; in-flight effects must still be reconciled."""
 
+import contextlib
 import re
 import time
 
@@ -70,7 +71,20 @@ def cancel(store, turn_id):
 
     foreground_inference.cancel(store, turn_id=turn_id, requested_at=result["requested_at"])
     background_thinking.cancel_for_turn(store, turn_id)
+    _stop_calls(store, turn_id)
     return result
+
+
+def _stop_calls(store, turn_id):
+    """Stop the agents this turn started (`conker.run_agent`), and theirs in turn. Each child
+    turn's guard also checks up its chain, so one that starts after this still stops."""
+    from pi.agents import agent_calls
+    from pi.conversation import submissions
+
+    for request_id in agent_calls.running_requests(store, turn_id):
+        # Already finished, or not created yet (its guard catches it): nothing to stop here.
+        with contextlib.suppress(tasks.TaskError, submissions.SubmissionError):
+            cancel_submission(store, request_id)
 
 
 def cancel_submission(store, request_id):
@@ -110,6 +124,7 @@ def cancel_submission(store, request_id):
         from pi.turns import thinking as background_thinking
 
         background_thinking.cancel_for_turn(store, row["turn_id"])
+        _stop_calls(store, row["turn_id"])
     return result
 
 
@@ -127,6 +142,15 @@ def guard_db(db, turn_id, reply_request_id=None):
         ).fetchone()
         if not consent:
             raise ProviderUnavailable("Owner stopped this turn; completed effects are retained.")
+    from pi.agents import agent_calls
+
+    caller = agent_calls.caller_turn(db, turn_id)
+    for _ in range(agent_calls.MAX_DEPTH):
+        if not caller:
+            break
+        if db.execute("SELECT 1 FROM turn_cancellations WHERE turn_id=?", (caller,)).fetchone():
+            raise ProviderUnavailable("Owner stopped the turn that started this agent.")
+        caller = agent_calls.caller_turn(db, caller)
 
 
 def claim_reply(store, turn_id, request_id):

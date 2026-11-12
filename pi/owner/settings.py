@@ -115,3 +115,14 @@ def value_in(db, setting_id: str, default=None):
     """`value` inside the caller's transaction, for a reader that already holds a connection."""
     row = db.execute("SELECT vals FROM owner_settings WHERE singleton=1").fetchone()
     return json.loads(row["vals"]).get(setting_id, default) if row else default
+
+
+def put_in(db, setting_id: str, value) -> None:
+    """Set one value inside the caller's transaction, for a record Pi itself keeps here (a seed
+    that ran). Bumps the revision, so a screen opened before it reloads instead of dropping it."""
+    row = db.execute("SELECT revision, vals FROM owner_settings WHERE singleton=1").fetchone()
+    values = check({**json.loads(row["vals"]), setting_id: value})
+    db.execute(
+        "UPDATE owner_settings SET revision=?, vals=? WHERE singleton=1",
+        (row["revision"] + 1, json.dumps(values, ensure_ascii=False, sort_keys=True)),
+    )
