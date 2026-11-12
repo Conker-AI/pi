@@ -66,6 +66,9 @@ IDS_ONLY = {
     "service_model_calls",
     # Paid calls against the daily cap: provider and model ids, counts and states.
     "paid_model_calls",
+    # Pi's self-check: check names, statuses and the checks' fixed reason strings.
+    "self_check_alerts",
+    "self_check_state",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",

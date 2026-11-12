@@ -327,10 +327,22 @@ async def lifespan(app: FastAPI):
     )
     followups.start()
     app.state.forget_followups = followups
+    # Pi checks itself and files an Inbox card when a part stays broken (pi.owner.self_check).
+    self_checker = None
+    probe = getattr(app.state, "health_probe", None)
+    if probe is not None:
+        from pi.owner.self_check import SelfCheckWorker
+
+        self_checker = SelfCheckWorker(
+            store, probe, check_seconds=_seconds("PI_SELF_CHECK_SECONDS", 300.0)
+        )
+        self_checker.start()
     try:
         yield
     finally:
         app.state.forget_followups = None
+        if self_checker:
+            self_checker.close()
         followups.close()
         app.state.loop.drafts.close()
         app.state.loop.thinking.close()
