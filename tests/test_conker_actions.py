@@ -90,7 +90,7 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
                 loop, session_settings.execution(store, open_chat), open_chat, None
             )
         )
-        == 4
+        == len(native_tools.CATALOG)
     )
 
 
@@ -226,6 +226,7 @@ def test_a_job_run_cannot_make_a_job_or_draft_a_tool(store):
     execution = session_settings.execution(store, session, turn)
     assert ids(native_tools.offered(loop, execution, session, turn)) == [
         "conker.ask",
+        "conker.recall",
         "conker.remember",
     ]
     for tool_id, args in (
