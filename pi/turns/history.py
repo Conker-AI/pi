@@ -46,7 +46,7 @@ class History:
         )
         acknowledgement_generation = None
         if turn_id:
-            saved = memory_store.context(self.store, turn_id)
+            saved = self.memory.saved_context(turn_id, execution)
             if session_settings.memory_allowed(execution):
                 memory_prompt = memory_store.prompt_context(saved)
                 if memory_prompt:

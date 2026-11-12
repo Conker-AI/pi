@@ -7,6 +7,7 @@ import json
 import time
 
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 
 
@@ -46,17 +47,27 @@ def _live(db, row, generation=None):
         "SELECT summary,status FROM sessions WHERE id=?", (row["source_session_id"],)
     ).fetchone()
     child = db.execute("SELECT status FROM sessions WHERE id=?", (row["session_id"],)).fetchone()
-    if not source or source["status"] == "forgotten" or not child or child[0] != "open":
+    origins = [
+        origin[0]
+        for origin in db.execute(
+            "SELECT DISTINCT m.session_id FROM messages m JOIN context_inherited_messages i "
+            "ON i.message_id=m.id WHERE i.session_id=?",
+            (row["session_id"],),
+        )
+    ]
+    if (
+        not source
+        or source["status"] == "forgotten"
+        or visibility.hidden(db, [row["source_session_id"], *origins])
+        or not child
+        or child[0] != "open"
+    ):
         raise CallError("source_unavailable", "Call conversation is unavailable.")
     if _digest((source["summary"] or "").encode()) != row["summary_hash"]:
         raise CallError("source_changed", "Earlier conversation summary changed; start a new call.")
     privacy = session_settings.source_privacy(db, row["source_session_id"])
-    for origin in db.execute(
-        "SELECT DISTINCT m.session_id FROM messages m JOIN context_inherited_messages i "
-        "ON i.message_id=m.id WHERE i.session_id=?",
-        (row["session_id"],),
-    ):
-        inherited = session_settings.source_privacy(db, origin[0])
+    for origin in origins:
+        inherited = session_settings.source_privacy(db, origin)
         if inherited is None:
             raise CallError("privacy_changed", "Referenced conversation privacy is unavailable.")
         if privacy is not None:

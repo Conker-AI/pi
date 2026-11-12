@@ -24,7 +24,7 @@ from pi.content.artifact_models import (
     content,
     encoded,
 )
-from pi.conversation import citations
+from pi.conversation import citations, visibility
 from pi.core.errors import ServiceError
 
 SCHEMA = """
@@ -230,10 +230,15 @@ def get(store, identity, resolve=None):
 def list_artifacts(store, resolve=None, limit=None, cursor=None):
     with store._connect() as db:
         db.execute("BEGIN")
-        where, values = "", []
+        # A copy from, or a task in, a forgotten or trashed chat is left out (visibility).
+        where = " AND ".join(
+            f"({column} IS NULL OR NOT {visibility.hidden_sql(column)})"
+            for column in ("source_session_id", "task_session_id")
+        )
+        where, values = f"WHERE {where}", []
         if cursor is not None:
             position = _row(db, cursor)
-            where = "WHERE created_at>? OR (created_at=? AND id>?)"
+            where += " AND (created_at>? OR (created_at=? AND id>?))"
             values = [position["created_at"], position["created_at"], cursor]
         suffix = " LIMIT ?" if limit is not None else ""
         if limit is not None:

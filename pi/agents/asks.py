@@ -8,6 +8,11 @@ An option is text the AI wrote, perhaps after reading someone else's words, so a
 tapping one is marked: it never counts as his own typed request approving a matching action
 (`pi.turns.access`). Asking is always allowed, but at most `PER_CHAT` questions wait per chat and
 `OPEN_LIMIT` in all, so outside content cannot flood his Inbox.
+
+A question from a hidden chat (forgotten or in the Trash, `pi.conversation.visibility`) is not
+listed, opened, answered or dismissed, and does not count toward `OPEN_LIMIT`; it comes back when
+the chat is restored. It is not an approval: it authorizes nothing and holds no turn, so waiting
+does no harm.
 """
 
 from __future__ import annotations
@@ -18,12 +23,14 @@ import time
 import uuid
 
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 
 ASK_ID = r"^ask_[a-f0-9]{32}$"
 PER_CHAT = 3
 OPEN_LIMIT = 20
 DEFAULT_OPTIONS = ["Yes", "No"]
+VISIBLE = "NOT " + visibility.hidden_sql("session_id")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owner_asks (
  id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), turn_id TEXT,
@@ -96,8 +103,11 @@ def file(store, session_id, turn_id, question, choices, now=None) -> dict:
                 f"{waiting} questions from this chat already wait for the owner. Do not ask "
                 "another; wait for his answers."
             )
-        if db.execute("SELECT COUNT(*) FROM owner_asks WHERE state='open'").fetchone()[0] >= (
-            OPEN_LIMIT
+        if (
+            db.execute(
+                f"SELECT COUNT(*) FROM owner_asks WHERE state='open' AND {VISIBLE}"
+            ).fetchone()[0]
+            >= OPEN_LIMIT
         ):
             raise ValueError("The owner's Inbox already holds many questions. Do not ask now.")
         identity = "ask_" + uuid.uuid4().hex
@@ -120,11 +130,7 @@ def file(store, session_id, turn_id, question, choices, now=None) -> dict:
 def _row(db, identity):
     if not re.fullmatch(ASK_ID, identity or ""):
         raise AskError("not_found", "Question not found.", 404)
-    row = db.execute(
-        "SELECT * FROM owner_asks WHERE id=? AND session_id NOT IN "
-        "(SELECT session_id FROM forgotten_sessions)",
-        (identity,),
-    ).fetchone()
+    row = db.execute(f"SELECT * FROM owner_asks WHERE id=? AND {VISIBLE}", (identity,)).fetchone()
     if row is None:
         raise AskError("not_found", "Question not found.", 404)
     return row
@@ -139,8 +145,7 @@ def listing(store, limit=50) -> list[dict]:
     """Questions waiting for him, oldest first."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM owner_asks WHERE state='open' AND session_id NOT IN "
-            "(SELECT session_id FROM forgotten_sessions) ORDER BY created_at LIMIT ?",
+            f"SELECT * FROM owner_asks WHERE state='open' AND {VISIBLE} ORDER BY created_at LIMIT ?",
             (limit,),
         ).fetchall()
         return [_view(db, row) for row in rows]
@@ -170,14 +175,17 @@ def answer(store, identity, text, *, chosen, now=None) -> dict:
 def dismiss(store, identity, now=None) -> dict:
     """He doesn't want to answer: nothing goes back to the chat."""
     with store._connect() as db:
-        changed = db.execute(
-            "UPDATE owner_asks SET state='dismissed', answered_at=? WHERE id=? AND state='open'",
+        db.execute("BEGIN IMMEDIATE")
+        # A hidden chat's question is not found, so it cannot be changed while hidden.
+        if _row(db, identity)["state"] != "open":
+            raise AskError("decided", "This question was already answered.", 409)
+        db.execute(
+            "UPDATE owner_asks SET state='dismissed', answered_at=? WHERE id=?",
             (time.time() if now is None else now, identity),
-        ).rowcount
-    if not changed:
-        get(store, identity)
-        raise AskError("decided", "This question was already answered.", 409)
-    return get(store, identity)
+        )
+        view = _view(db, _row(db, identity))
+        db.commit()
+        return view
 
 
 def delivering(store, identity, request_id) -> None:

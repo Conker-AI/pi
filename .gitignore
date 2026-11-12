@@ -7,3 +7,5 @@ data/
 .test-tmp/
 **/tls.key
 **/tls.crt
+.coverage
+.coverage.*

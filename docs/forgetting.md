@@ -140,6 +140,18 @@ This patch defines and serves that contract in Pi; it does not change MemoryGate
 to fetch it, invalidate derived claims or delete its copies. Sparse citations,
 including missing Russian evidence, do not alter the meaning of a tombstone.
 
+## Hidden chats: one rule (2026-11-12)
+
+A chat that is forgotten or in the Trash is hidden, and every read path asks one module for it
+(`pi/conversation/visibility.py`): chat lists and search, the Inbox (tasks, handled actions,
+memory items), artifacts copied from a chat, project sources, proposals, recall and memory
+library views, Keep items, retries that would replay an inherited line, and calls whose source
+chat is hidden. Still shown: the Trash view, the chat opened by its own link (its turns are not
+refused), and approvals waiting for an answer. Restoring a chat from the Trash brings all of it
+back; hiding deletes nothing. A new read path that can carry a chat's words filters with
+`visibility.hidden_sql(column)` (for a column that may be empty:
+`(column IS NULL OR NOT hidden_sql(column))`) and gets a test that trashes, checks, restores.
+
 ## Limits that remain
 
 This removes content from Pi's current store, not from everywhere it has been.

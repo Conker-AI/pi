@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from pi.agents import asks, change_requests, continuity
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.owner import plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.schedule import agent_jobs
@@ -210,13 +211,13 @@ def _upcoming_items(store, now):
                 }
             )
 
-        # Open tasks (planned, in_progress, not archived, chat not forgotten or private)
+        # Open tasks (planned, in_progress, not archived, chat not hidden or private)
         task_rows = db.execute(
-            """SELECT t.*, s.title as session_title
+            f"""SELECT t.*, s.title as session_title
                FROM tasks t
                JOIN sessions s ON s.id=t.session_id
                WHERE t.status IN ('planned', 'in_progress')
-               AND t.session_id NOT IN (SELECT session_id FROM forgotten_sessions)
+               AND NOT {visibility.hidden_sql("t.session_id")}
                AND t.archived_at IS NULL
                ORDER BY t.created_at DESC LIMIT 20"""
         ).fetchall()
