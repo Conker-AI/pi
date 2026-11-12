@@ -459,10 +459,13 @@ def expand(store, role, text):
     if not isinstance(identity, str) or result.get("status") != "done":
         return text
     with store._connect() as db:
+        # The reply can sit in a continuation of the child chat (a fork made during its turn):
+        # trashing or forgetting either chat hides it.
         row = db.execute(
-            "SELECT c.reply_message_id FROM agent_calls c WHERE c.id=? "
-            "AND c.child_session_id NOT IN (SELECT session_id FROM session_trash) "
-            "AND c.child_session_id NOT IN (SELECT session_id FROM forgotten_sessions)",
+            "SELECT c.reply_message_id FROM agent_calls c JOIN messages m "
+            "ON m.id=c.reply_message_id WHERE c.id=? AND NOT EXISTS (SELECT 1 FROM ("
+            "SELECT session_id FROM session_trash UNION SELECT session_id FROM "
+            "forgotten_sessions) gone WHERE gone.session_id IN (c.child_session_id, m.session_id))",
             (identity,),
         ).fetchone()
     reply = _content(store.get_message(row[0])) if row and row[0] else None

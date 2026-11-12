@@ -376,6 +376,17 @@ def test_trashing_or_forgetting_the_child_takes_the_reply_from_the_caller(store)
         db.execute("DELETE FROM session_trash WHERE session_id=?", (child,))
         db.commit()
     assert shown(store, result)["reply"] == "The secret plan."
+    # The reply in a continuation of the child chat: trashing that chat hides it too.
+    fork = store.create_session(parent_id=child)
+    in_fork = store.append_message(fork, "assistant", "The secret plan.")["id"]
+    with store._connect() as db:
+        db.execute("UPDATE agent_calls SET reply_message_id=?", (in_fork,))
+        db.commit()
+    assert shown(store, result)["reply"] == "The secret plan."
+    with store._connect() as db:
+        db.execute("INSERT INTO session_trash VALUES (?,?)", (fork, 1.0))
+        db.commit()
+    assert shown(store, result)["status"] == "gone"
     with store._connect() as db:
         agent_calls.redact(db, [child])
         db.commit()
