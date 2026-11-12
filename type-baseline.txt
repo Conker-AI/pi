@@ -15,7 +15,7 @@ pi/agents/definitions.py 1
 pi/agents/draft_capabilities.py 4
 pi/agents/profiles.py 2
 pi/agents/skills.py 4
-pi/agents/team_execution.py 29
+pi/agents/team_execution.py 31
 pi/agents/teams.py 6
 pi/agents/workflow_drafts.py 3
 pi/api/routes/artifacts.py 7
