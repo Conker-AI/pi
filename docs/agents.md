@@ -78,6 +78,27 @@ increment; owner-enabling agent configuration does not expose embedded portraits
 voice recordings, or imported character packages through the setup/dashboard
 control plane.
 
+## One agent runs another (`conker.run_agent`, 2026-11-12)
+
+Conker's own tool `conker.run_agent` (`pi/turns/native_tools.py`, logic in
+`pi/agents/agent_calls.py`) takes `agent` (an id or the exact name, any case) and `instructions`
+(at most 8000 characters). Pi opens a new chat for that agent as a child of the caller's chat (so
+forgetting the caller's chat forgets it too; its history starts empty), runs one turn there with
+the instructions, and returns `{status: "done", agentId, agentName, sessionId, reply, truncated,
+outside, message}`; the reply is cut to 8000 characters. A failed or parked child turn answers
+`status: "failed"`, never an error. Every call is a row in `agent_calls` (caller chat and turn,
+child chat, agent, depth, whether the caller had read outside content, state).
+
+- Default access is allow (the companion gets it; another agent when it is in its `toolIds`); if
+  the owner's layers ask first, the call is refused and the model is told to use `conker.ask`.
+- The child runs with the target agent's own toolkit and access, the caller chat's access switch
+  and privacy, and memory always off: its one "user" message was written by a model.
+- No turn in a child chat has an owner request (`access.owner_text` is empty), so his words never
+  approve anything there; if the caller had read outside content, every turn in the child counts
+  as outside; the caller counts the reply as outside unless the result's `outside` is false.
+- Refused: an unknown or archived agent; the caller itself or any agent up the chain; depth past 2
+  (a depth-2 chat is not offered the tool); a fourth call in one turn; a 31st call in 24 hours.
+
 Validation (temporary SQLite stores, no live services):
 
 ```sh

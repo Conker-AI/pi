@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **An agent can run another agent.** Conker's own tool `conker.run_agent` runs the named agent on
+  the model's instructions in a chat of its own (a child of the caller's chat, memory off, no owner
+  request, outside if the caller read outside content) and returns its reply; at most depth 2, no
+  loops, 3 per turn and 30 a day (`agent_calls`, forgotten with either chat). docs/agents.md.
+
 ## 0.24.0
 
 - **Chats go to a Trash bin.** `POST /sessions/trash` moves chats to Trash or restores them with

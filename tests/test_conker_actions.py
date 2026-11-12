@@ -82,6 +82,7 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
     assert ids(native_tools.offered(loop, execution, private, None)) == [
         "conker.ask",
         "conker.draft_tool",
+        "conker.run_agent",
     ]
     open_chat = store.create_session()
     assert (
@@ -90,7 +91,7 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
                 loop, session_settings.execution(store, open_chat), open_chat, None
             )
         )
-        == 4
+        == 5
     )
 
 
@@ -227,6 +228,7 @@ def test_a_job_run_cannot_make_a_job_or_draft_a_tool(store):
     assert ids(native_tools.offered(loop, execution, session, turn)) == [
         "conker.ask",
         "conker.remember",
+        "conker.run_agent",
     ]
     for tool_id, args in (
         (native_tools.SCHEDULE, JOB),

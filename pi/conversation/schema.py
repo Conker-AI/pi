@@ -5,6 +5,7 @@ from __future__ import annotations
 from pi.actions import identities as actions
 from pi.actions import withdrawals
 from pi.agents import (
+    agent_calls,
     asks,
     change_requests,
     characters,
@@ -122,6 +123,7 @@ def install(db):
     asks.initialize(db)
     turn_access.initialize(db)
     agents.initialize(db)
+    agent_calls.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)
     db.executescript(context_controls.SCHEMA)
