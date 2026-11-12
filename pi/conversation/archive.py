@@ -14,6 +14,7 @@ from typing import Annotated
 
 from pydantic import Field
 
+from pi.conversation import forget_queue
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -51,9 +52,44 @@ def apply(store, body: Archive) -> dict:
 
 
 def trash(store, body: Trash) -> dict:
-    """Move every listed chat to the trash or restore it; restoring keeps its archive state."""
-    ids = _mark(store, body.sessions, "session_trash", body.trashed)
-    return {"sessions": ids, "trashed": body.trashed}
+    """Move every listed chat to the trash or restore it; restoring keeps its archive state.
+
+    A chat queued to be deleted forever cannot be restored: the deletion goes ahead."""
+    if body.trashed:
+        ids = _mark(store, body.sessions, "session_trash", True)
+        return {"sessions": ids, "trashed": True}
+    with forget_queue.queue_lock:
+        pending = sorted(forget_queue.pending_sessions(store.path) & set(body.sessions))
+        if pending:
+            raise ArchiveError(
+                "deletion_pending",
+                "These chats are being deleted forever and cannot be restored.",
+                409,
+                sessions=pending,
+            )
+        ids = _mark(store, body.sessions, "session_trash", False)
+    return {"sessions": ids, "trashed": False}
+
+
+def hide(store, session_ids) -> None:
+    """Put chats queued for deletion in the trash; chats that are gone already are skipped."""
+    ids = list(dict.fromkeys(session_ids))
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO session_trash "
+                f"SELECT s.id, ? FROM sessions s WHERE s.id IN ({marks}) "
+                "AND s.status!='forgotten'",
+                [time.time(), *ids],
+            )
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
 
 
 def trashed(db, session_ids) -> set[str]:
