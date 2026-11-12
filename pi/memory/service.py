@@ -311,6 +311,54 @@ class Memory:
         self.stop_event = threading.Event()
         self.thread = None
 
+    def _client(self, selected):
+        """The running agent's own read credential: its namespace, never another agent's."""
+        if selected["agentId"] == "companion":
+            return self.client
+        return self.read_clients.get(selected["agentId"])
+
+    def _where(self, selected, session_id):
+        """Retrieve arguments for the running agent's memory scope."""
+        # Turns from before agent profiles carry no configuration: the companion's default.
+        memory = (selected.get("configuration") or {}).get("memory") or COMPANION_MEMORY
+        scope = memory["scope"]
+        if scope == "owner":
+            if selected["kind"] != "companion" or selected["agentId"] != "companion":
+                raise ValueError("Owner memory is restricted to Companion.")
+            # The configured read credential still limits the namespace; this is not an
+            # administrative or cross-agent read. His switch keeps every chat to itself.
+            across = owner_settings.value(self.store, ACROSS_CHATS, True) is True
+            scope = "all" if across else "conversation"
+        return {
+            "scope": scope,
+            "session_id": session_id if scope == "conversation" else None,
+            "memory_ids": memory["memoryIds"] if scope == "selected" else [],
+        }
+
+    def search(self, turn_id, query, max_items):
+        """(package, "ok") for `conker.recall`, read as this turn's recall reads; (None, why) when
+        it may not or cannot: "disabled", "not_configured" or "unavailable". Never ranked: the
+        model chose the words."""
+        turn = self.store.get_turn(turn_id)
+        selected = session_settings.execution(self.store, turn["session_id"], turn_id)
+        if selected["kind"] == "team-role" or not session_settings.memory_allowed(selected):
+            return None, "disabled"
+        client = self._client(selected)
+        if not client:
+            return None, "not_configured"
+        if memory_store.recall_held(self.store):
+            return None, "unavailable"
+        try:
+            package = client.retrieve(
+                query,
+                **self._where(selected, turn["session_id"]),
+                max_items=max_items,
+                distinct=True,
+            )
+            return _budget_context(_without_trashed(self.store, package)), "ok"
+        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+            return None, "unavailable"
+
     def prepare(self, turn_id, query):
         turn = self.store.get_turn(turn_id)
         selected = session_settings.execution(self.store, turn["session_id"], turn_id)
@@ -326,32 +374,14 @@ class Memory:
             memory_store.save_context(self.store, turn_id, "disabled")
             return
         state, package = "not_configured", None
-        client = (
-            self.client
-            if selected["agentId"] == "companion"
-            else self.read_clients.get(selected["agentId"])
-        )
+        client = self._client(selected)
         if memory_store.recall_held(self.store):
             state = "unavailable"
         elif client:
             try:
-                # Turns from before agent profiles carry no configuration: the companion's default.
-                memory = (selected.get("configuration") or {}).get("memory") or COMPANION_MEMORY
-                scope = memory["scope"]
-                if scope == "owner":
-                    if selected["kind"] != "companion" or selected["agentId"] != "companion":
-                        raise ValueError("Owner memory is restricted to Companion.")
-                    # The configured read credential still limits the namespace; this is not an
-                    # administrative or cross-agent read. His switch keeps every chat to itself.
-                    across = owner_settings.value(self.store, ACROSS_CHATS, True) is True
-                    scope = "all" if across else "conversation"
                 package = client.retrieve(
                     query,
-                    scope=scope,
-                    session_id=(team_source or turn["session_id"])
-                    if scope == "conversation"
-                    else None,
-                    memory_ids=memory["memoryIds"] if scope == "selected" else [],
+                    **self._where(selected, team_source or turn["session_id"]),
                     max_items=per_answer(self.store),
                     distinct=True,
                 )

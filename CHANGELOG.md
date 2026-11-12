@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Conker searches memory itself.** `conker.recall` (Look, allowed by default) searches memory
+  under the running agent's own credential and scope, as turn recall does; never in a private chat
+  or a team role. Results live in `recall_results` (cleared when any memory is forgotten, deleted
+  with the chat), not in the chat's messages, and count as outside content unless every item is
+  the owner's own words.
+
 ## 0.24.0
 
 - **Chats go to a Trash bin.** `POST /sessions/trash` moves chats to Trash or restores them with

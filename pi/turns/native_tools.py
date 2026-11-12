@@ -25,6 +25,7 @@ from pi.agents import asks, change_requests, tool_drafts
 from pi.agents.profiles import AgentError
 from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
+from pi.turns import recall
 
 SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
@@ -137,6 +138,7 @@ CATALOG = (
         ],
         "auto",
     ),
+    recall.TOOL,
 )
 IDS = {tool.id for tool in CATALOG}
 
@@ -153,7 +155,7 @@ def owns(tool_id: str) -> bool:
 
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
-PRIVATE_REFUSED = {REMEMBER, SCHEDULE}
+PRIVATE_REFUSED = {REMEMBER, SCHEDULE, recall.RECALL}
 JOB_REFUSED = {SCHEDULE, DRAFT_TOOL}
 
 
@@ -182,6 +184,8 @@ def job_run(store, turn_id) -> bool:
 def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
     """Why Conker may not use this tool in this turn, in words it can pass on; None if it may."""
     if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
+        if tool_id == recall.RECALL:
+            return "This chat is private (memory off), so memory is not searched here."
         return (
             "This chat is private (memory off), so nothing from it is remembered or scheduled. "
             "Tell the owner they can do it from a chat with memory on."
@@ -302,6 +306,8 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
     why = refused(loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution)
     if why:
         return _refusal(tool_id, why)
+    if tool_id == recall.RECALL:
+        return recall.call(loop, args, session_id=session_id, turn_id=turn_id, run=run)
     try:
         if tool_id == ASK:
             asked = asks.file(
@@ -391,4 +397,9 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
 
 
 def _refusal(tool_id, message) -> ToolResult:
-    return ToolResult(ok=False, result={"status": "refused", "message": message}, tool_id=tool_id)
+    # A refusal carries no one's text (`pi.turns.access.reported_outside`).
+    return ToolResult(
+        ok=False,
+        result={"status": "refused", "message": message, "outside": False},
+        tool_id=tool_id,
+    )
