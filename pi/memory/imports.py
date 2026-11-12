@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS imported_chat_deletions (
 );
 -- MemoryGate evidence of a deleted imported chat still to erase there (import_deletion): ids only.
 CREATE TABLE IF NOT EXISTS import_evidence_erasures (
- evidence_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL,
+ evidence_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, source_key TEXT,
  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','missing')),
  attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
  error TEXT NOT NULL DEFAULT ''

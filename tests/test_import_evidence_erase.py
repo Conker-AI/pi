@@ -16,6 +16,7 @@ from pi.conversation.store import Store
 from pi.memory import import_deletion, import_offers, imports
 
 SECRET = "my bank pin is 4417 and I hide the key under the mat"
+SOURCE = "assistant-imports"
 
 
 class Clock:
@@ -69,7 +70,7 @@ def test_deleting_a_sent_chat_erases_each_word_in_memorygate(setup):
     chat_id = sent_chat(store, sender, SECRET, "I prefer tea in the morning")
     assert waiting(store) == []
 
-    receipt = import_deletion.delete_chat(store, chat_id, sending=sender.sending)
+    receipt = import_deletion.delete_chat(store, chat_id, sending=sender.sending, source_key=SOURCE)
 
     assert receipt["offeredToMemory"] == 2 and receipt["memoryNote"] == import_deletion.MEMORY_NOTE
     assert waiting(store) == [("ev-1", "pending", 0), ("ev-2", "pending", 0)]
@@ -136,24 +137,51 @@ def test_a_wrong_acknowledgement_is_not_taken_as_erased(setup):
     assert waiting(store) == [("ev-1", "pending", 1)]
 
 
-def test_erasing_comes_before_new_offers_and_an_odd_id_stays_inside_the_path(setup):
+def test_erasing_comes_before_new_offers_and_an_odd_id_is_never_sent(setup):
     store, sender, listener, _ = setup
-    chat_id = sent_chat(store, sender, SECRET)
+    chat_id = sent_chat(store, sender, SECRET, "I want a quiet desk")
     with store._connect() as db:
-        db.execute("UPDATE import_memory_offers SET evidence_id='../../memory/x'")
-    import_deletion.delete_chat(store, chat_id, sending=sender.sending)
+        db.execute("UPDATE import_memory_offers SET evidence_id='..' WHERE evidence_id='ev-2'")
+    import_deletion.delete_chat(store, chat_id, sending=sender.sending, source_key=SOURCE)
     body = raw([claude_chat("k2", "Next", turns=[("human", "I want a new desk")])])
     imports.save(store, "claude", body, imports.digest(body), memory_configured=True)
-    listener.answers = [erased("../../memory/x")]
+    listener.answers = [erased("ev-1")]
 
     assert sender.drain_once() == 2
 
-    erase, offer = listener.requests[1:]
-    assert erase.method == "DELETE"
-    assert (
-        erase.url.raw_path == b"/runtime/listeners/assistant-imports/evidence/..%2F..%2Fmemory%2Fx"
+    erase, offer = listener.requests[2:]
+    assert (erase.method, erase.url.path) == (
+        "DELETE",
+        f"/runtime/listeners/{SOURCE}/evidence/ev-1",
     )
     assert offer.method == "POST"
+    assert waiting(store) == [("..", "missing", 0)]
+
+
+def test_erasures_wait_for_the_listener_their_words_went_to(setup):
+    store, sender, listener, _ = setup
+    import_deletion.delete_chat(
+        store, sent_chat(store, sender, SECRET), sending=sender.sending, source_key="old-listener"
+    )
+    requests = len(listener.requests)
+
+    sender.drain_once()
+
+    assert len(listener.requests) == requests  # never asked of the wrong listener
+    assert waiting(store) == [("ev-1", "pending", 0)]
+    assert "another import listener" in import_offers.status(store, sender)["problem"]
+
+
+def test_an_offer_answer_that_is_not_an_evidence_id_is_not_taken(setup):
+    store, sender, listener, _ = setup
+    body = raw([claude_chat("k1", "Private", turns=[("human", SECRET)])])
+    imports.save(store, "claude", body, imports.digest(body), memory_configured=True)
+    listener.answers = [(200, {"status": "queued", "evidence_id": "../x", "job_id": "j"})]
+
+    assert sender.drain_once() == 0
+
+    with store._connect() as db:
+        assert db.execute("SELECT state FROM import_memory_offers").fetchone()[0] == "pending"
 
 
 def test_without_a_listener_the_erasures_wait_and_say_why(tmp_path):

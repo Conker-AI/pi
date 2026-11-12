@@ -95,6 +95,8 @@ Those are erased in MemoryGate too: the deletion queues their evidence ids in
 MemoryGate blanks the evidence and removes its analyses, links and each listener memory nothing
 else supports; a memory the owner wrote keeps its text. A failure is retried with backoff, a
 refused listener pauses the sender, and an event MemoryGate does not have is kept as missing;
+each erasure goes only through the listener its words went to (another one waits, named in the
+problem);
 `GET /imports` counts both (`memory.erasing`, `memory.notFoundToErase`). A word whose offer was
 saved by MemoryGate but whose answer never reached Pi has no evidence id and cannot be erased this
 way. The background sender holds

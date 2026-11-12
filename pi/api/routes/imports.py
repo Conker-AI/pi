@@ -111,8 +111,12 @@ def router(store, offers, authorize):
     def delete(chat_id: str = Path(pattern=r"^imp_[0-9a-f]{32}$")):
         """Delete one imported chat for good; its words are erased from memory in the background."""
         sender = offers()
+        client = sender.client if sender is not None else None
         receipt = import_deletion.delete_chat(
-            store(), chat_id, sending=sender.sending if sender is not None else None
+            store(),
+            chat_id,
+            sending=sender.sending if sender is not None else None,
+            source_key=client.source_key if client is not None else None,
         )
         if sender is not None:
             sender.wake()

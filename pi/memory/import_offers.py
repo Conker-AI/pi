@@ -35,6 +35,7 @@ from pi.memory import import_deletion, import_formats, imports
 log = logging.getLogger("pi.memory.import_offers")
 
 SOURCE_KEY = re.compile(r"[a-z0-9][a-z0-9_-]{1,63}")
+EVIDENCE_ID = import_deletion.EVIDENCE_ID
 MAX_ANSWER_BYTES = 16384
 # Below a person typing it: MemoryGate cannot check who wrote words in a file.
 INTEGRITY = 0.5
@@ -54,6 +55,7 @@ class ListenerClient:
                 "Set PI_MEMORYGATE_IMPORT_SOURCE to the listener's source key (2-64 lowercase "
                 "letters, digits, '-' or '_') and PI_MEMORYGATE_IMPORT_KEY to its key."
             )
+        self.source_key = source_key
         self.path = f"/runtime/listeners/{source_key}"
         self.http = httpx.Client(
             base_url=url.rstrip("/"),
@@ -83,7 +85,7 @@ class ListenerClient:
         if (
             value.get("status") not in ("queued", "accepted")
             or not isinstance(evidence, str)
-            or not 0 < len(evidence) <= 200
+            or not EVIDENCE_ID.fullmatch(evidence)
         ):
             raise ValueError("MemoryGate returned an invalid acknowledgement.")
         return evidence
@@ -302,6 +304,11 @@ def status(store, offers: Offers | None) -> dict:
     configured = offers is not None and offers.client is not None
     waiting = counts.get("pending", 0)
     problem = (offers.problem or offers.erase_problem) if configured else None
+    if problem is None and erasing.get("missing", 0):
+        problem = (
+            f"MemoryGate did not have {erasing['missing']} words of deleted imported chats. "
+            "If the import listener was changed, they may still be under the old one."
+        )
     if not configured and (waiting or erasing.get("pending", 0)):
         problem = (
             "MemoryGate's import listener is not set up, so these wait. Set "

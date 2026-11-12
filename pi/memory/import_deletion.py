@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -28,6 +29,8 @@ MEMORY_NOTE = (
     "them alone."
 )
 MAX_BACKOFF_SECONDS = 300
+# MemoryGate's evidence ids are UUIDs; anything else could not be one path segment.
+EVIDENCE_ID = re.compile(r"[A-Za-z0-9_-]{1,200}")
 
 
 def _receipt(row, scrubbed: bool | None) -> dict:
@@ -44,8 +47,11 @@ def _receipt(row, scrubbed: bool | None) -> dict:
     }
 
 
-def delete_chat(store, chat_id: str, *, sending=None) -> dict:
-    """Delete one imported chat. Repeating the request answers with the same record."""
+def delete_chat(store, chat_id: str, *, sending=None, source_key: str | None = None) -> dict:
+    """Delete one imported chat. Repeating the request answers with the same record.
+
+    `source_key` is the listener the words went to (the configured one); its erasures go only
+    through that listener, so a listener changed later cannot answer for them."""
     with sending if sending is not None else contextlib.nullcontext(), store._connect() as db:
         db.execute("PRAGMA secure_delete=ON")
         db.execute("BEGIN IMMEDIATE")
@@ -74,8 +80,9 @@ def delete_chat(store, chat_id: str, *, sending=None) -> dict:
                 )
             ]
             db.executemany(
-                "INSERT OR IGNORE INTO import_evidence_erasures(evidence_id, chat_id) VALUES (?,?)",
-                [(evidence_id, chat_id) for evidence_id in evidence],
+                "INSERT OR IGNORE INTO import_evidence_erasures(evidence_id, chat_id, source_key) "
+                "VALUES (?,?,?)",
+                [(evidence_id, chat_id, source_key) for evidence_id in evidence],
             )
             db.execute(
                 "DELETE FROM import_memory_offers WHERE message_id IN "
@@ -117,15 +124,31 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
     """Erase waiting evidence of deleted imported chats in MemoryGate, oldest first.
 
     An event MemoryGate does not have (a restore from before it was sent) is kept as missing,
-    so the count shows it; a refusal of the listener itself pauses the sender as for offers."""
+    so the count shows it; a refusal of the listener itself pauses the sender as for offers.
+    Erasures recorded for another listener wait, named in the problem, until it is set back."""
     with store._connect() as db:
         rows = db.execute(
             "SELECT evidence_id, attempts FROM import_evidence_erasures "
-            "WHERE state='pending' AND next_at<=? ORDER BY next_at, evidence_id LIMIT ?",
-            (clock(), limit),
+            "WHERE state='pending' AND next_at<=? AND (source_key IS NULL OR source_key=?) "
+            "ORDER BY next_at, evidence_id LIMIT ?",
+            (clock(), client.source_key, limit),
         ).fetchall()
-    done, problem = 0, None
+        elsewhere = db.execute(
+            "SELECT COUNT(*) FROM import_evidence_erasures WHERE state='pending' "
+            "AND source_key IS NOT NULL AND source_key<>?",
+            (client.source_key,),
+        ).fetchone()[0]
+    done = 0
+    problem = (
+        f"{elsewhere} words of deleted imported chats went to another import listener; set "
+        "PI_MEMORYGATE_IMPORT_SOURCE back to it to erase them."
+        if elsewhere
+        else None
+    )
     for evidence_id, attempts in rows:
+        if not EVIDENCE_ID.fullmatch(evidence_id):
+            _mark_missing(store, evidence_id, "not an evidence id")
+            continue
         try:
             found = client.erase(evidence_id)
         except (httpx.HTTPError, ValueError, TypeError, RecursionError) as exc:
@@ -144,16 +167,20 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
                     ),
                 )
             continue
-        with store._connect() as db:
-            if found:
+        if not found:
+            _mark_missing(store, evidence_id, "not found")
+        else:
+            with store._connect() as db:
                 db.execute(
                     "DELETE FROM import_evidence_erasures WHERE evidence_id=?", (evidence_id,)
                 )
-            else:
-                db.execute(
-                    "UPDATE import_evidence_erasures SET state='missing', error='not found' "
-                    "WHERE evidence_id=?",
-                    (evidence_id,),
-                )
         done += 1
     return Erased(done, problem=problem)
+
+
+def _mark_missing(store, evidence_id: str, reason: str) -> None:
+    with store._connect() as db:
+        db.execute(
+            "UPDATE import_evidence_erasures SET state='missing', error=? WHERE evidence_id=?",
+            (reason, evidence_id),
+        )
