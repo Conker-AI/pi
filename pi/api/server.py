@@ -65,6 +65,7 @@ from pi.api.routes import system_inventory as system_inventory_api
 from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
+from pi.api.routes import updates as updates_api
 from pi.api.startup import lifespan
 from pi.context import project_sources
 from pi.conversation import fact_checks, judgements
@@ -74,11 +75,12 @@ from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.core import errors
+from pi.core.version import VERSION
 from pi.schedule import agent_hooks, job_models
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
-SERVICE_VERSION = "0.24.0"
+SERVICE_VERSION = VERSION
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
@@ -175,6 +177,7 @@ app.include_router(continuity_api.router(lambda: app.state.store, require_admin)
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
 app.include_router(self_check_api.router(lambda: app.state.store, require_owner))
+app.include_router(updates_api.router(lambda: app.state.store, require_owner, require_admin))
 app.include_router(
     change_requests_api.router(
         lambda: app.state.store,
@@ -404,6 +407,7 @@ def health():
     result = {
         "service": "pi",
         "version": SERVICE_VERSION,
+        "schema_migration": getattr(getattr(app.state, "store", None), "schema_migration", None),
         "status": "degraded" if degraded else "ok",
         "degraded": degraded,
         "checks": checks,

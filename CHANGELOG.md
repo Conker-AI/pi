@@ -6,6 +6,17 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Migration ledger** (docs/migrations.md). Schema upgrades are named steps recorded in a new
+  `schema_migrations` table, each run once in one transaction with its record; the five guarded
+  start-up upgrades moved there unchanged. A database a newer Pi upgraded is refused (Pi does not
+  start, and the forget queue and the host forgetting command write nothing), so a rollback
+  across a migration needs the pre-update snapshot. `GET /health` gains `schema_migration` (the
+  last recorded id); additive field.
+- **Each tag gets a GitHub Release page and an SBOM.** The Release page's notes are the
+  version's CHANGELOG section. Every image carries an SPDX SBOM (BuildKit attestation) inside
+  the image index, and the signed build provenance covers that index digest. Check one with
+  `gh attestation verify oci://IMAGE@DIGEST --owner Conker-AI`.
+
 - **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
   and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
   reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
@@ -20,6 +31,15 @@ be a decision with visible consequences.
   the `/health` checks every 5 minutes; one that stays unavailable or degraded for 15 minutes
   files an Inbox item (kind `health`), and its recovery shows in Handled (`health-recovered`).
   New `GET /self-check` and `POST /self-check/alerts/{id}/dismiss`; no change to existing routes.
+- **Conker update offers and the gateway's update action.** `/updates` keeps what the host found
+  when it checked for a newer Conker release: one offer per version (dismissing one is remembered;
+  running that version or a newer one closes it) and one result per update receipt (applied,
+  rolled back, held or failed). Only the recovery credential reports (`POST /updates/report`, the
+  host's daily check); the owner-control credential reads and dismisses. The Inbox lists the newest
+  open offer and every update that did not end applied; an applied one is handled. The gateway's
+  host action `update.run {version}` asks for the password again (428), then hands the update to
+  the host helper.
+
 - **Conker can ask for an agent or a team.** `conker.create_agent` and `conker.create_team` file
   change requests of the new kinds `agent` and `team` (the table is rebuilt once on start to allow
   them; rows kept); approving makes the agent (default model, no per-tool access, chat memory

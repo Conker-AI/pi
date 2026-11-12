@@ -37,11 +37,13 @@ from pi.conversation import (
     naming,
     output_settings,
     submissions,
+    upgrades,
 )
 from pi.conversation import settings as session_settings
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.schema import FORGETTING_SCHEMA
 from pi.conversation.store import Store
+from pi.core import migrations
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.schedule import tasks
@@ -294,6 +296,11 @@ def forget(path: Path | str, session_id: str, confirmation: str) -> dict:
     if not path.is_file():
         raise ForgettingError("Database not found. Pass --db with the existing Pi database path.")
     with closing(acquire(path, exclusive=True)), closing(_connect(path)) as db:
+        try:
+            # A newer Pi's database: writing to it with this Pi's schema could damage it.
+            migrations.refuse_unknown(db, upgrades.MIGRATIONS)
+        except migrations.UnknownMigration as exc:
+            raise ForgettingError(str(exc)) from exc
         Store._migrate(db)
         db.executescript(FORGETTING_SCHEMA)
         db.executescript(session_settings.SCHEMA)
