@@ -38,8 +38,9 @@ CASES = [
     (
         "stale-recall-during-deletion",
         "pi/memory/service.py",
-        "if memory_store.recall_held(self.store):",
-        "if False:",
+        # The turn's recall, not conker.recall's search (pi.turns.recall), which holds the same way.
+        'if memory_store.recall_held(self.store):\n            state = "unavailable"',
+        'if False:\n            state = "unavailable"',
     ),
     ("hidden-memory-gap", "pi/memory/store.py", '"notices": notices,', '"notices": [],'),
     ("shutdown-releases-inflight-upload", "pi/memory/service.py", "self.thread.join()", "pass"),

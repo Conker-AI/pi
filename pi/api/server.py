@@ -53,6 +53,7 @@ from pi.api.routes import owner_preferences as owner_preferences_api
 from pi.api.routes import plan_alerts as plan_alerts_api
 from pi.api.routes import projects as projects_api
 from pi.api.routes import proposals as proposals_api
+from pi.api.routes import self_check as self_check_api
 from pi.api.routes import session_settings as session_settings_api
 from pi.api.routes import sessions as sessions_api
 from pi.api.routes import setup_status as setup_status_api
@@ -174,6 +175,7 @@ app.include_router(definitions_api.router(lambda: app.state.store, require_owner
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
+app.include_router(self_check_api.router(lambda: app.state.store, require_owner))
 app.include_router(updates_api.router(lambda: app.state.store, require_owner, require_admin))
 app.include_router(
     change_requests_api.router(
@@ -412,6 +414,10 @@ def health():
     _health_cache["result"] = result
     _health_cache["at"] = now
     return {**result, "age_seconds": 0.0}
+
+
+# Pi's self-check (pi.owner.self_check) reads the same checks in the background.
+app.state.health_probe = health
 
 
 app.include_router(sessions_api.router(lambda: app.state, require_key, require_admin))

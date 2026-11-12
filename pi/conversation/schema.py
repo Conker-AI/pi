@@ -5,6 +5,7 @@ from __future__ import annotations
 from pi.actions import identities as actions
 from pi.actions import withdrawals
 from pi.agents import (
+    agent_calls,
     asks,
     change_requests,
     characters,
@@ -48,8 +49,8 @@ from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
-from pi.models import service_inference
-from pi.owner import plan_alerts
+from pi.models import service_inference, spending_cap
+from pi.owner import plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
 from pi.owner import updates as conker_updates
@@ -71,6 +72,7 @@ from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
 from pi.turns import queue as turn_queue
+from pi.turns import recall as turn_recall
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
@@ -112,6 +114,7 @@ def install(db):
     owner_settings.initialize(db)
     db.executescript(proactive_budget.SCHEMA)
     plan_alerts.initialize(db)
+    self_check.initialize(db)
     conker_updates.initialize(db)
     agent_jobs.initialize(db)
     agent_triggers.initialize(db)
@@ -123,7 +126,9 @@ def install(db):
     tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
+    turn_recall.initialize(db)
     agents.initialize(db)
+    agent_calls.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)
     db.executescript(context_controls.SCHEMA)
@@ -135,6 +140,7 @@ def install(db):
     db.executescript(artifacts.SCHEMA)
     db.executescript(model_roles.SCHEMA)
     db.executescript(service_inference.SCHEMA)
+    db.executescript(spending_cap.SCHEMA)
     db.executescript(background_thinking.SCHEMA)
     db.executescript(jobs.SCHEMA)
     continuity.initialize(db)

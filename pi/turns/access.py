@@ -16,6 +16,8 @@ Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_out
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
 imported or listener content, anything without a readable source), an attachment or a project
 source, or his answer to Conker's question (the question and its options were written by the AI).
+A result of Conker's own memory search or of another agent's run counts too, unless Pi marked it
+as holding only his own words (`reported_outside`).
 Memories that are all his own (statements he typed or approved, memories made from his messages)
 leave his typed request able to approve, as in a chat without memory.
 After outside content, remembering always asks him: never the reviewer, never his loosening.
@@ -25,6 +27,10 @@ messages and the previous role's answer. Only the task he typed is his request. 
 outside mark of everything it was handed: the previous role's chat (and so on back) and the
 selected messages with the chat they came from, so a teammate's summary of a web page reaches the
 next role and the reviewer as outside content, never as his words.
+
+A chat one agent opened for another (`pi.agents.agent_calls`) has no owner request in any turn: its
+instructions were written by a model. It counts as outside for every turn when the caller had read
+outside content, and the caller counts the reply as outside unless the result says otherwise.
 """
 
 from __future__ import annotations
@@ -33,7 +39,7 @@ import json
 import time
 import uuid
 
-from pi.agents import asks
+from pi.agents import agent_calls, asks
 from pi.memory import store as memory_store
 from pi.schedule import agent_jobs
 from pi.turns import reviewer
@@ -50,8 +56,13 @@ native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
 native_remember = "conker.remember"
+native_recall = "conker.recall"
 native_create_agent = "conker.create_agent"
 native_create_team = "conker.create_team"
+native_run_agent = "conker.run_agent"
+# Conker's own tools whose result can carry text the owner did not write (recalled memories,
+# another agent's reply). Pi sets `outside` on each result; anything but False counts as outside.
+reported_outside = {"conker.recall", "conker.run_agent"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -116,6 +127,8 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
     with store._connect() as db:
         if turn_id and asks.answer_words(db, turn_id) is not None:
             return True
+        if agent_calls.parent_outside(db, session_id):
+            return True
         chat = (session_id, session_id)
         if db.execute(
             "SELECT 1 FROM outside_sessions WHERE session_id=? OR session_id IN (SELECT "
@@ -154,6 +167,11 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
         if "declined" in observation and "result" not in observation:
             continue
         if not native(str(tool)):
+            return True
+        result = observation.get("result")
+        if tool in reported_outside and (
+            not isinstance(result, dict) or result.get("outside") is not False
+        ):
             return True
     return _handed_outside(store, session_id, native)
 
@@ -202,8 +220,11 @@ def owner_text(store, turn_id):
     job's saved instructions: Pi wrote the rest of that message (the preamble, the run's date and
     time, why it started). Nothing in a run of a job Conker made on its own: the model wrote those
     instructions, and no owner approved them. In a team role, only the task he typed when he
-    started the run: Pi wrote the rest of the role's input."""
+    started the run: Pi wrote the rest of the role's input. Nothing in a chat one agent opened
+    for another: a model wrote its instructions, so his words never approve anything there."""
     with store._connect() as db:
+        if agent_calls.called(db, turn_id):
+            return ""
         words = asks.answer_words(db, turn_id)
         if words is not None:
             return words
@@ -311,9 +332,10 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
         # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
         # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
         return "ask", by, ""
-    if level == "allow" and outside and native(tool.id):
+    if level == "allow" and outside and native(tool.id) and tool.id != native_recall:
         # Keep after outside content (a cron job): someone else's text could be planting it, so
-        # the reviewer checks it against what he asked.
+        # the reviewer checks it against what he asked. A memory search is exempt: it changes
+        # nothing, reads only what his scope allows, and its own result keeps the turn marked.
         level = "ai"
     if level == "allow":
         return "run", by, REASONS[by]

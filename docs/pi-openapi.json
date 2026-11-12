@@ -2472,6 +2472,138 @@
         }
       }
     },
+    "/self-check": {
+      "get": {
+        "summary": "Overview",
+        "description": "Each check's last status and since when, and the open alerts.",
+        "operationId": "overview_self_check_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/self-check/alerts/{alert_id}/dismiss": {
+      "post": {
+        "summary": "Dismiss",
+        "description": "Hide an alert until its check recovers and breaks again.",
+        "operationId": "dismiss_self_check_alerts__alert_id__dismiss_post",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sc_[0-9a-f]{32}$",
+              "title": "Alert Id"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/updates": {
       "get": {
         "summary": "Overview",
@@ -2545,7 +2677,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}$",
+              "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$",
               "title": "Version"
             }
           },
@@ -11314,6 +11446,67 @@
               "title": "Limit"
             }
           },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inference/spending": {
+      "get": {
+        "summary": "Spending",
+        "description": "Today's paid model calls against the owner's daily cap; ids and counts only.",
+        "operationId": "spending_inference_spending_get",
+        "parameters": [
           {
             "name": "X-Pi-Owner-Key",
             "in": "header",
@@ -29367,6 +29560,9 @@
             ],
             "title": "Newchataccess",
             "default": "default"
+          },
+          "spendingCap": {
+            "$ref": "#/components/schemas/SpendingCap"
           }
         },
         "additionalProperties": false,
@@ -30427,7 +30623,7 @@
         "properties": {
           "version": {
             "type": "string",
-            "pattern": "^\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}$",
+            "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$",
             "title": "Version"
           },
           "notes": {
@@ -30438,7 +30634,7 @@
           "url": {
             "type": "string",
             "maxLength": 200,
-            "pattern": "^https://github\\.com/Conker-AI/conker/releases/tag/v\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}$",
+            "pattern": "^https://github\\.com/Conker-AI/conker/releases/tag/v[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$",
             "title": "Url"
           },
           "publishedAt": {
@@ -30530,7 +30726,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}$"
+                "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$"
               },
               {
                 "type": "null"
@@ -30571,7 +30767,7 @@
           },
           "version": {
             "type": "string",
-            "pattern": "^\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}$",
+            "pattern": "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$",
             "title": "Version"
           },
           "outcome": {
@@ -31539,6 +31735,35 @@
           "containers"
         ],
         "title": "SourceScopeView"
+      },
+      "SpendingCap": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "cents": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Cents"
+          },
+          "tokens": {
+            "type": "integer",
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Tokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled",
+          "cents",
+          "tokens"
+        ],
+        "title": "SpendingCap",
+        "description": "One daily cap over every paid model call (pi.models.spending_cap); either limit stops."
       },
       "StateChange": {
         "properties": {

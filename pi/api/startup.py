@@ -25,13 +25,13 @@ from pi.memory import proposals as memory_proposals
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
 from pi.models import secrets as provider_secrets
-from pi.models import service_inference
+from pi.models import service_inference, spending_cap
 from pi.models.direct import ADAPTERS as DIRECT_ADAPTERS
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import OllamaProvider
 from pi.models.routing import Router
-from pi.schedule import proposals
+from pi.schedule import proposals, rhythm
 from pi.schedule.agent_jobs import AgentJobs
 from pi.schedule.job_execution import PublishedJobs
 from pi.schedule.job_worker import JobWorker
@@ -41,6 +41,8 @@ from pi.turns.loop import Loop
 from pi.turns.queue_worker import QueueWorker
 
 log = logging.getLogger("pi")
+# Pi comes up first, then restarts once more for a chat deletion that is still queued.
+RETRY_RESTART_SECONDS = 60
 
 
 @asynccontextmanager
@@ -102,7 +104,9 @@ async def lifespan(app: FastAPI):
     )
     db_path = os.environ.get("PI_DB_PATH", "/data/pi.db")
     # Chats the owner deleted forever are forgotten before anything opens the database.
-    forget_queue.run_pending(db_path)
+    if forget_queue.run_pending(db_path) and forget_queue.supervised():
+        # A deletion that failed for a passing reason is tried at the next start (bounded).
+        forget_queue.restart_soon(db_path, delay=RETRY_RESTART_SECONDS)
     store = Store(db_path)
     # A turn that was running when the process died did not finish. Saying
     # nothing would leave the owner looking at a request that vanished.
@@ -231,6 +235,16 @@ async def lifespan(app: FastAPI):
     app.state.service_key_hashes = service_keys
     app.state.store = store
     app.state.local = local
+    # Every paid call passes the owner's daily cap (pi.models.spending_cap).
+    spending_cap.recover_interrupted(store)
+    hosted, direct_providers = spending_cap.wrap(
+        store,
+        hosted,
+        configured_direct_providers(
+            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
+        ),
+        [adapter.name for _, adapter in DIRECT_ADAPTERS],
+    )
     app.state.hosted = hosted
     app.state.provider_credentials = sorted(
         name
@@ -246,9 +260,7 @@ async def lifespan(app: FastAPI):
     app.state.router = Router(
         local_provider=local,
         hosted_provider=hosted,
-        providers=configured_direct_providers(
-            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
-        ),
+        providers=direct_providers,
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
     from pi.memory.ranking import ConfiguredMemoryRanker
@@ -272,6 +284,11 @@ async def lifespan(app: FastAPI):
             memory.close()
             store.close()
             raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
+        # The daily rhythm Pi ships, made once per install where jobs can run.
+        try:
+            rhythm.seed(store)
+        except Exception:
+            log.exception("Could not make the built-in Morning check-in; Pi runs without it.")
         scheduler = JobWorker(store, app.state.job_executor)
         scheduler.start()
     queue_worker = None
@@ -312,10 +329,22 @@ async def lifespan(app: FastAPI):
     )
     followups.start()
     app.state.forget_followups = followups
+    # Pi checks itself and files an Inbox card when a part stays broken (pi.owner.self_check).
+    self_checker = None
+    probe = getattr(app.state, "health_probe", None)
+    if probe is not None:
+        from pi.owner.self_check import SelfCheckWorker
+
+        self_checker = SelfCheckWorker(
+            store, probe, check_seconds=_seconds("PI_SELF_CHECK_SECONDS", 300.0)
+        )
+        self_checker.start()
     try:
         yield
     finally:
         app.state.forget_followups = None
+        if self_checker:
+            self_checker.close()
         followups.close()
         app.state.loop.drafts.close()
         app.state.loop.thinking.close()

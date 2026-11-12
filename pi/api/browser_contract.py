@@ -206,11 +206,15 @@ OWNER_ROUTES = {
         # Read-only: plan usage in percent per window, for the dashboard's Home. Dismissing an
         # alert stays with the recovery credential.
         r"/plans/usage",
+        # Read-only: Pi's self-check, each check's last status and the open alerts.
+        r"/self-check",
         # Conker updates: the release on offer and how updates ended. The host reports them with
         # the recovery credential; the update itself is a gateway host action (password).
         r"/updates",
         # Read-only: which services called a model role and what it used; never any text.
         r"/inference/usage",
+        # Read-only: today's paid model calls against the daily cap; counts only.
+        r"/inference/spending",
         # The Settings screen: the owner's settings document and his preferences.
         r"/owner/settings",
         r"/owner/preferences",
@@ -276,6 +280,8 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
         *CHAT_WRITES,
         r"/proposals/passes",
+        # Hiding one self-check alert; the session alone is enough.
+        r"/self-check/alerts/sc_[0-9a-f]{32}/dismiss",
         r"/memory/forget(?:-many)?",
         r"/memory/remember",
         r"/memory/corrections",

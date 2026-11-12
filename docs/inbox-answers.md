@@ -1,5 +1,7 @@
 # Inbox answers
 
+Every kind that waits in the Inbox, side by side: [inbox-kinds.md](inbox-kinds.md).
+
 The owner answers in his Inbox, often once or twice a day. His answer continues the work; it does
 not wait for him to open the chat.
 
