@@ -41,6 +41,8 @@ from pi.turns.loop import Loop
 from pi.turns.queue_worker import QueueWorker
 
 log = logging.getLogger("pi")
+# Pi comes up first, then restarts once more for a chat deletion that is still queued.
+RETRY_RESTART_SECONDS = 60
 
 
 @asynccontextmanager
@@ -102,7 +104,9 @@ async def lifespan(app: FastAPI):
     )
     db_path = os.environ.get("PI_DB_PATH", "/data/pi.db")
     # Chats the owner deleted forever are forgotten before anything opens the database.
-    forget_queue.run_pending(db_path)
+    if forget_queue.run_pending(db_path) and forget_queue.supervised():
+        # A deletion that failed for a passing reason is tried at the next start (bounded).
+        forget_queue.restart_soon(db_path, delay=RETRY_RESTART_SECONDS)
     store = Store(db_path)
     # A turn that was running when the process died did not finish. Saying
     # nothing would leave the owner looking at a request that vanished.

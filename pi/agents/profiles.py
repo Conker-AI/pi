@@ -252,7 +252,8 @@ def _unique_name(db, configuration, identity=None):
         )
 
 
-def create(store, configuration: AgentInput):
+def create(store, configuration: AgentInput, *, then=None):
+    """A new agent; `then(db, agent)` is saved with it or neither is."""
     configuration = AgentInput.model_validate(configuration.model_dump())
     if configuration.memory.scope == "owner":
         raise AgentError(
@@ -264,6 +265,8 @@ def create(store, configuration: AgentInput):
         identity = "agent_" + uuid.uuid4().hex
         _insert(db, identity, "agent", configuration, time.time())
         result = _get(db, identity)
+        if then is not None:
+            then(db, result)
         db.commit()
     return result
 

@@ -11,6 +11,12 @@ be a decision with visible consequences.
   reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
   as a model refusal (roles fall back) until the owner's next local day. `GET /inference/spending`
   is the meter. New preference field with a default; preferences saved earlier read it.
+- **Conker can ask for an agent or a team.** `conker.create_agent` and `conker.create_team` file
+  change requests of the new kinds `agent` and `team` (the table is rebuilt once on start to allow
+  them; rows kept); approving makes the agent (default model, no per-tool access, chat memory
+  only, only tools the caller could use, never create or delegation tools) or a linear team of
+  existing agents with a small budget. His typed words never approve one; his chat or agent
+  loosening can, as Keep: listed in Handled, archived when the chat is forgotten.
 
 ## 0.24.0
 

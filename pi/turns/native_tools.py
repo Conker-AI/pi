@@ -13,7 +13,9 @@ chat (memory off, or inheriting it) is never offered remembering or scheduling: 
 what was said there into memory or into a job. A run of an AI job is never offered scheduling or a
 tool draft, so no job makes another. Both are refused again when called. A question (`conker.ask`)
 is always allowed: it goes to his Inbox and his answer comes back to the chat as his next message
-(`pi.agents.asks`).
+(`pi.agents.asks`). A new agent or team (`conker.create_agent`, `conker.create_team`) asks like
+scheduling, is refused where scheduling is, and is filed with its guards by
+`pi.agents.agent_requests`.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from __future__ import annotations
 import re
 
 from pi.actions.toolgate import Tool, ToolResult
-from pi.agents import asks, change_requests, tool_drafts
+from pi.agents import agent_requests, asks, change_requests, tool_drafts
 from pi.agents.profiles import AgentError
 from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
@@ -30,6 +32,8 @@ SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
 REMEMBER = "conker.remember"
 ASK = "conker.ask"
+CREATE_AGENT = "conker.create_agent"
+CREATE_TEAM = "conker.create_team"
 DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
 
 CATALOG = (
@@ -137,6 +141,59 @@ CATALOG = (
         ],
         "auto",
     ),
+    Tool(
+        CREATE_AGENT,
+        "Create an agent",
+        "Ask for a new agent (a helper with its own role, instructions and tools). It exists only "
+        "once the owner approves it, unless their settings let it be made at once; the result says "
+        "which. It can only get tools you can use now, never tools to create or call agents.",
+        [
+            {
+                "name": "name",
+                "type": "string",
+                "required": True,
+                "description": "Short unique name",
+            },
+            {"name": "role", "type": "string", "required": True, "description": "One line"},
+            {
+                "name": "instructions",
+                "type": "string",
+                "required": True,
+                "description": "How the agent works, in full",
+            },
+            {
+                "name": "toolIds",
+                "type": "array",
+                "required": False,
+                "description": "Ids of tools you can use now that it should get",
+            },
+        ],
+        "owner_confirmation",
+    ),
+    Tool(
+        CREATE_TEAM,
+        "Create a team",
+        "Ask for a team of existing agents working in order: each role hands its result to the "
+        "next. It exists only once the owner approves it, unless their settings let it be made at "
+        "once; the result says which. Running a team stays the owner's.",
+        [
+            {
+                "name": "name",
+                "type": "string",
+                "required": True,
+                "description": "Short unique name",
+            },
+            {"name": "objective", "type": "string", "required": True, "description": "Its goal"},
+            {
+                "name": "roles",
+                "type": "array",
+                "required": True,
+                "description": '2 to 6 roles in order: [{"name", "agent" (id or exact name), '
+                '"instructions"}]',
+            },
+        ],
+        "owner_confirmation",
+    ),
 )
 IDS = {tool.id for tool in CATALOG}
 
@@ -153,8 +210,8 @@ def owns(tool_id: str) -> bool:
 
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
-PRIVATE_REFUSED = {REMEMBER, SCHEDULE}
-JOB_REFUSED = {SCHEDULE, DRAFT_TOOL}
+PRIVATE_REFUSED = {REMEMBER, SCHEDULE, CREATE_AGENT, CREATE_TEAM}
+JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM}
 
 
 def private(store, session_id, execution) -> bool:
@@ -183,12 +240,14 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
     """Why Conker may not use this tool in this turn, in words it can pass on; None if it may."""
     if tool_id in PRIVATE_REFUSED and private(store, session_id, execution):
         return (
-            "This chat is private (memory off), so nothing from it is remembered or scheduled. "
+            "This chat is private (memory off), so nothing from it is remembered, scheduled or "
+            "made into an agent or team. "
             "Tell the owner they can do it from a chat with memory on."
         )
     if tool_id in JOB_REFUSED and job_run(store, turn_id):
         return (
-            "A scheduled AI job cannot make another job or draft a tool. If one is needed, say "
+            "A scheduled AI job cannot make a job, an agent or a team, or draft a tool. If one is "
+            "needed, say "
             "so in the reply and the owner can ask for it."
         )
     return None
@@ -266,7 +325,8 @@ def _done(loop, request, tool_id) -> ToolResult:
             "status": "done",
             "requestId": request["id"],
             "made": decided["result"],
-            "message": (
+            "message": agent_requests.made(request)
+            or (
                 f"Remembered: \u201c{request['payload']['text'][:140]}\u201d. The chat shows the owner a quiet note with Undo, "
                 "and it is in Memory, where they can forget it."
                 if request["kind"] == "memory"
@@ -348,6 +408,21 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
                 turn_id=turn_id,
             )
             return _done(loop, request, tool_id) if run else _filed(request, tool_id)
+        if tool_id in (CREATE_AGENT, CREATE_TEAM):
+            request = (
+                agent_requests.file_agent(
+                    loop.store,
+                    args,
+                    agent_requests.visible(loop, execution, {t.id for t in catalog(execution)}),
+                    session_id=session_id,
+                    turn_id=turn_id,
+                )
+                if tool_id == CREATE_AGENT
+                else agent_requests.file_team(
+                    loop.store, args, session_id=session_id, turn_id=turn_id
+                )
+            )
+            return _done(loop, request, tool_id) if run else _filed(request, tool_id)
         if tool_id == DRAFT_TOOL:
             description = _text(args, "description", 4000)
             request = tool_drafts.file(
@@ -382,7 +457,7 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             turn_id=turn_id,
         )
         return _done(loop, request, tool_id) if run else _filed(request, tool_id)
-    except change_requests.Full as full:
+    except (change_requests.Full, agent_requests.Refused) as full:
         return _refusal(tool_id, str(full))
     except ValueError as invalid:
         return ToolResult(
