@@ -40,6 +40,7 @@ import time
 import uuid
 
 from pi.agents import agent_calls, asks
+from pi.conversation import visibility
 from pi.memory import store as memory_store
 from pi.schedule import agent_jobs
 from pi.turns import reviewer
@@ -269,7 +270,9 @@ def record(store, *, session_id, turn_id, action_id, tool_id, decided_by, reason
 def handled(store, since):
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM handled_actions WHERE created_at>=? ORDER BY created_at DESC LIMIT 200",
+            "SELECT * FROM handled_actions WHERE created_at>=? "
+            f"AND NOT {visibility.hidden_sql('session_id')} "
+            "ORDER BY created_at DESC LIMIT 200",
             (since,),
         ).fetchall()
     return [
