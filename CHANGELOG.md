@@ -6,6 +6,14 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Memory proposals are retired** (docs/inbox-kinds.md, merge 2). `GET /inbox` no longer lists
+  kind `memory`, and the admin-key routes `/memory-proposals` (list, create, get, `/decision`,
+  `/reconcile`) are gone from the API and docs/pi-openapi.json. No Pi code, dashboard or CLI used
+  them; the owner corrects memory through `/memory/corrections`, and Conker's "remember" is a
+  change request. The `memory_proposals` table stays so forgetting a chat or a memory still
+  scrubs old rows (`pi/memory/proposals.py`). Contract change: the OpenAPI component names
+  `pi__content__artifact_models__Create` and `pi__schedule__proposals__Decision` become
+  `Create` and `Decision` now that nothing else shares those names.
 - **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
   and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
   reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused

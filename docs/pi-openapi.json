@@ -8210,360 +8210,6 @@
         }
       }
     },
-    "/memory-proposals": {
-      "get": {
-        "summary": "Listing",
-        "operationId": "listing_memory_proposals_get",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create",
-        "operationId": "create_memory_proposals_post",
-        "parameters": [
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/pi__memory__proposals__Create"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/memory-proposals/{identity}": {
-      "get": {
-        "summary": "Get",
-        "operationId": "get_memory_proposals__identity__get",
-        "parameters": [
-          {
-            "name": "identity",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Identity"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/memory-proposals/{identity}/decision": {
-      "post": {
-        "summary": "Decide",
-        "operationId": "decide_memory_proposals__identity__decision_post",
-        "parameters": [
-          {
-            "name": "identity",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Identity"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/pi__memory__proposals__Decision"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/memory-proposals/{identity}/reconcile": {
-      "post": {
-        "summary": "Reconcile",
-        "operationId": "reconcile_memory_proposals__identity__reconcile_post",
-        "parameters": [
-          {
-            "name": "identity",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Identity"
-            }
-          },
-          {
-            "name": "X-Pi-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Key"
-            }
-          },
-          {
-            "name": "X-Pi-Gateway-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Pi-Gateway-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/team-runs/from-team/{team_id}": {
       "post": {
         "summary": "Start",
@@ -10119,7 +9765,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__content__artifact_models__Create"
+                "$ref": "#/components/schemas/Create"
               }
             }
           }
@@ -20697,7 +20343,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__schedule__proposals__Decision"
+                "$ref": "#/components/schemas/Decision"
               }
             }
           }
@@ -26688,6 +26334,70 @@
         ],
         "title": "Conversation"
       },
+      "Create": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "content": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Text"
+              },
+              {
+                "$ref": "#/components/schemas/Code"
+              },
+              {
+                "$ref": "#/components/schemas/Media"
+              },
+              {
+                "$ref": "#/components/schemas/Table"
+              },
+              {
+                "$ref": "#/components/schemas/Diagram"
+              },
+              {
+                "$ref": "#/components/schemas/Chart"
+              }
+            ],
+            "title": "Content",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "chart": "#/components/schemas/Chart",
+                "code": "#/components/schemas/Code",
+                "diagram": "#/components/schemas/Diagram",
+                "html": "#/components/schemas/Text",
+                "markdown": "#/components/schemas/Text",
+                "media": "#/components/schemas/Media",
+                "table": "#/components/schemas/Table"
+              }
+            }
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^tsk_[0-9a-f]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "content"
+        ],
+        "title": "Create"
+      },
       "CreateTask": {
         "properties": {
           "outcome": {
@@ -26804,6 +26514,25 @@
           "status"
         ],
         "title": "Decided"
+      },
+      "Decision": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "decline",
+              "never"
+            ],
+            "title": "Decision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "Decision"
       },
       "Decline": {
         "properties": {
@@ -33044,70 +32773,6 @@
         ],
         "title": "Archive"
       },
-      "pi__content__artifact_models__Create": {
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Title"
-          },
-          "content": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Text"
-              },
-              {
-                "$ref": "#/components/schemas/Code"
-              },
-              {
-                "$ref": "#/components/schemas/Media"
-              },
-              {
-                "$ref": "#/components/schemas/Table"
-              },
-              {
-                "$ref": "#/components/schemas/Diagram"
-              },
-              {
-                "$ref": "#/components/schemas/Chart"
-              }
-            ],
-            "title": "Content",
-            "discriminator": {
-              "propertyName": "kind",
-              "mapping": {
-                "chart": "#/components/schemas/Chart",
-                "code": "#/components/schemas/Code",
-                "diagram": "#/components/schemas/Diagram",
-                "html": "#/components/schemas/Text",
-                "markdown": "#/components/schemas/Text",
-                "media": "#/components/schemas/Media",
-                "table": "#/components/schemas/Table"
-              }
-            }
-          },
-          "taskId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^tsk_[0-9a-f]{32}$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Taskid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "title",
-          "content"
-        ],
-        "title": "Create"
-      },
       "pi__content__artifact_models__Privacy": {
         "properties": {
           "memoryDisabled": {
@@ -33784,91 +33449,6 @@
         ],
         "title": "Retry"
       },
-      "pi__memory__proposals__Create": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{16,128}$",
-            "title": "Request Id"
-          },
-          "session_id": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Session Id"
-          },
-          "memory_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_.:-]{1,200}$",
-            "title": "Memory Id"
-          },
-          "expected_memory_revision": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Memory Revision"
-          },
-          "text": {
-            "type": "string",
-            "maxLength": 16000,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "reason": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Reason"
-          },
-          "basis": {
-            "type": "string",
-            "enum": [
-              "stated",
-              "inferred"
-            ],
-            "title": "Basis"
-          },
-          "source_message_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "minItems": 1,
-            "title": "Source Message Ids"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id",
-          "session_id",
-          "memory_id",
-          "expected_memory_revision",
-          "text",
-          "reason",
-          "basis",
-          "source_message_ids"
-        ],
-        "title": "Create"
-      },
-      "pi__memory__proposals__Decision": {
-        "properties": {
-          "decision": {
-            "type": "string",
-            "enum": [
-              "apply",
-              "reject"
-            ],
-            "title": "Decision"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "decision"
-        ],
-        "title": "Decision"
-      },
       "pi__models__auto_settings__Request": {
         "properties": {
           "text": {
@@ -34011,25 +33591,6 @@
           "proposed"
         ],
         "title": "Request"
-      },
-      "pi__schedule__proposals__Decision": {
-        "properties": {
-          "decision": {
-            "type": "string",
-            "enum": [
-              "accept",
-              "decline",
-              "never"
-            ],
-            "title": "Decision"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "decision"
-        ],
-        "title": "Decision"
       },
       "pi__setup__models__Selection": {
         "properties": {
