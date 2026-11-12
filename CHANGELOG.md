@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Migration ledger** (docs/migrations.md). Schema upgrades are named steps recorded in a new
+  `schema_migrations` table, each run once in one transaction with its record; the five guarded
+  start-up upgrades moved there unchanged. A database a newer Pi upgraded is refused (Pi does not
+  start, and the forget queue and the host forgetting command write nothing), so a rollback
+  across a migration needs the pre-update snapshot. `GET /health` gains `schema_migration` (the
+  last recorded id); additive field.
 - **Each tag gets a GitHub Release page and an SBOM.** The Release page's notes are the
   version's CHANGELOG section. Every image carries an SPDX SBOM (BuildKit attestation) inside
   the image index, and the signed build provenance covers that index digest. Check one with

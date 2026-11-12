@@ -29,13 +29,15 @@ from pi.actions import identities as actions
 from pi.agents import profiles as agents
 from pi.calls import call_turns
 from pi.context import research_usage
-from pi.conversation import chat_preferences, schema, submissions, visibility
+from pi.conversation import chat_preferences, schema, submissions, upgrades, visibility
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.message_view import MESSAGE_LOOKUP, _message_with_attachments
 from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
+from pi.core import migrations
+from pi.core.version import VERSION
 from pi.owner import preferences as owner_preferences
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
@@ -66,12 +68,15 @@ class Store:
                         "Forgetting cleanup is unfinished. Stop Pi and rerun the same "
                         "forgetting command before starting it."
                     )
+                # Before anything is written: a newer Pi's database stays as it left it.
+                migrations.refuse_unknown(db, upgrades.MIGRATIONS)
                 db.execute("PRAGMA journal_mode=WAL")
                 db.execute("PRAGMA foreign_keys=ON")
                 db.executescript(SCHEMA)
-                self._migrate(db)
                 db.executescript(FORGETTING_SCHEMA)
                 schema.install(db)
+                migrations.apply(db, upgrades.MIGRATIONS, VERSION)
+                self.schema_migration = migrations.last(db)
         except BaseException:
             self.close()
             raise
@@ -80,37 +85,8 @@ class Store:
         """Release the lifetime lease only after all turns have stopped."""
         self._release()
 
-    @staticmethod
-    def _migrate(db: sqlite3.Connection) -> None:
-        """Add columns a newer Pi expects to a database an older one created.
-
-        CREATE TABLE IF NOT EXISTS silently does nothing when the table already
-        exists, so a new column would be missing on every install that ever ran
-        an earlier version - and the failure would appear as a write error long
-        after the upgrade.
-        """
-        have = {row["name"] for row in db.execute("PRAGMA table_info(turns)")}
-        for column in (
-            "route_tier",
-            "route_reason",
-            "approval_request_id",
-            "approval_tool_id",
-            "approval_args",
-            "approval_expires_at",
-            "approval_intent",
-        ):
-            if column not in have:
-                db.execute(f"ALTER TABLE turns ADD COLUMN {column} TEXT")
-        if "acted" not in have:
-            db.execute("ALTER TABLE turns ADD COLUMN acted INTEGER NOT NULL DEFAULT 0")
-        if "usage_version" not in have:
-            # Existing turns remain NULL: their unrecorded earlier calls cannot
-            # be reconstructed from a final completion's counters.
-            db.execute("ALTER TABLE turns ADD COLUMN usage_version INTEGER")
-        db.execute(
-            "CREATE TRIGGER IF NOT EXISTS new_turn_usage_version AFTER INSERT ON turns "
-            "BEGIN UPDATE turns SET usage_version=1 WHERE id=NEW.id; END"
-        )
+    # The offline forgetting command adds the turn columns before Pi has opened the database.
+    _migrate = staticmethod(upgrades.turn_columns)
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
