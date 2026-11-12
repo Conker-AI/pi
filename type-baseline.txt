@@ -9,6 +9,7 @@ gateway/provider_control.py 1
 gateway/setup_control.py 6
 gateway/store.py 1
 gateway/terminals.py 1
+pi/agents/agent_calls.py 4
 pi/agents/agent_requests.py 1
 pi/agents/definitions.py 1
 pi/agents/draft_capabilities.py 4
@@ -64,7 +65,7 @@ pi/schedule/proposals.py 3
 pi/setup/models.py 4
 pi/setup/rehearsal.py 2
 pi/setup/status_steps.py 5
-pi/turns/history.py 27
+pi/turns/history.py 28
 pi/turns/loop.py 12
 pi/turns/model_calls.py 26
 pi/turns/native_tools.py 2
