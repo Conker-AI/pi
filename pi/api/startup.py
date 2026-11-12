@@ -31,7 +31,7 @@ from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import OllamaProvider
 from pi.models.routing import Router
-from pi.schedule import proposals
+from pi.schedule import proposals, rhythm
 from pi.schedule.agent_jobs import AgentJobs
 from pi.schedule.job_execution import PublishedJobs
 from pi.schedule.job_worker import JobWorker
@@ -284,6 +284,11 @@ async def lifespan(app: FastAPI):
             memory.close()
             store.close()
             raise RuntimeError("Scheduled execution requires a scoped ToolGate credential.")
+        # The daily rhythm Pi ships, made once per install where jobs can run.
+        try:
+            rhythm.seed(store)
+        except Exception:
+            log.exception("Could not make the built-in Morning check-in; Pi runs without it.")
         scheduler = JobWorker(store, app.state.job_executor)
         scheduler.start()
     queue_worker = None

@@ -78,6 +78,39 @@ increment; owner-enabling agent configuration does not expose embedded portraits
 voice recordings, or imported character packages through the setup/dashboard
 control plane.
 
+## One agent runs another (`conker.run_agent`, 2026-11-12)
+
+Conker's own tool `conker.run_agent` (`pi/turns/native_tools.py`, logic in
+`pi/agents/agent_calls.py`) takes `agent` (an id or the exact name, any case) and `instructions`
+(at most 8000 characters). Pi opens a new chat for that agent as a child of the caller's chat (so
+forgetting the caller's chat forgets it too; its history starts empty), runs one turn there with
+the instructions, and returns `{status: "done", callId, agentId, agentName, sessionId, outside,
+message}`. The caller's chat stores only that pointer: each time its history is built, the model
+gets the child's reply (cut to 8000 characters) read from the child chat, so forgetting or
+trashing the child chat takes the reply away from the caller too ("gone"). The child chat's title
+is "Agent call: <name>", never the instructions. A failed or parked child turn answers
+`status: "failed"`, never an error. Every call is a row in `agent_calls` (caller chat and turn,
+child chat, agent, depth, whether the caller had read outside content, state, the child's
+submission and reply message).
+
+- Default access is allow (the companion gets it; another agent when it is in its `toolIds`); if
+  the owner's layers ask first, the call is refused and the model is told to use `conker.ask`.
+- The child runs with the target agent's own toolkit and access, the caller chat's privacy, and
+  memory always off: its one "user" message was written by a model. Of the caller chat's access
+  switch only "ask" carries over; AI or Full was his loosening for that chat, never for another
+  agent's toolkit, so the child starts at "default".
+- The owner's Stop on the caller's turn stops every call it started (and theirs): Pi stops the
+  running child turns, and each guard in a child turn checks the turns up its chain. A child that
+  acted marks the caller's turn acted.
+- A continuation of a child chat (an automatic or reviewed fork) is still that call's chat: depth,
+  the chain, no owner request and outside carry over.
+- No turn in a child chat has an owner request (`access.owner_text` is empty), so his words never
+  approve anything there; if the caller had read outside content, every turn in the child counts
+  as outside; the caller counts the reply as outside unless the result's `outside` is false.
+- Refused: an unknown or archived agent; the caller itself or any agent up the chain; depth past 2
+  (a depth-2 chat is not offered the tool); a fourth call in one turn; a 31st call in 24 hours;
+  a team role's turn (its budget would not meter the child) and a run of an AI job.
+
 Validation (temporary SQLite stores, no live services):
 
 ```sh

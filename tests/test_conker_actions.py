@@ -82,6 +82,7 @@ def test_a_private_chat_is_not_offered_remembering_or_scheduling(store):
     assert ids(native_tools.offered(loop, execution, private, None)) == [
         "conker.ask",
         "conker.draft_tool",
+        "conker.run_agent",
     ]
     open_chat = store.create_session()
     assert len(

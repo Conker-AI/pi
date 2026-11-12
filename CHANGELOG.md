@@ -22,6 +22,18 @@ be a decision with visible consequences.
   only, only tools the caller could use, never create or delegation tools) or a linear team of
   existing agents with a small budget. His typed words never approve one; his chat or agent
   loosening can, as Keep: listed in Handled, archived when the chat is forgotten.
+- **A Morning check-in is on by default.** When Pi starts with its scheduler it makes, once per
+  install (new or upgraded), the AI job "Morning check-in": daily 08:00 in the owner's time zone,
+  the companion says what needs him today or replies NOTHING. `createdBy: "conker"` (proactive
+  budget, quiet hours and the proactivity switch apply; never his words), fixed id
+  `job_beca06ba345a8b3170a4d8e2473fe00f`, recorded in the owner setting `rhythm.seeded`; turning it
+  off never brings it back. It does not count against Conker's own jobs a day.
+- **An agent can run another agent.** Conker's own tool `conker.run_agent` runs the named agent on
+  the model's instructions in a chat of its own (a child of the caller's chat, memory off, no owner
+  request, only "ask" of the caller's access switch, outside if the caller read outside content);
+  the caller's model reads its reply from that chat, so forgetting or trashing it removes the reply
+  too. The owner's Stop reaches the child. At most depth 2, no loops, 3 per turn and 30 a day, not
+  from team roles or AI jobs (`agent_calls`, forgotten with either chat). docs/agents.md.
 
 ## 0.24.0
 
