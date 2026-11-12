@@ -312,9 +312,16 @@ async def lifespan(app: FastAPI):
     )
     followups.start()
     app.state.forget_followups = followups
+    # One Inbox card when a part breaks and stays broken; the owner's setting turns it off.
+    from pi.api.health_probes import probes as health_probes
+    from pi.owner.health_watch import HealthWatchWorker
+
+    health_worker = HealthWatchWorker(store, lambda: health_probes(app.state))
+    health_worker.start()
     try:
         yield
     finally:
+        health_worker.close()
         app.state.forget_followups = None
         followups.close()
         app.state.loop.drafts.close()

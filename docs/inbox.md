@@ -4,7 +4,7 @@ Inbox is a read-only view of everything that happened and everything that needs 
 
 ## Four Parts
 
-**Needs you** contains items that require owner decisions: awaiting tool approvals, open companion suggestions, pending memory proposals, and continuity items needing attention (blocked, failed, approval, budget, uncertain, interrupted), [plan usage alerts](plan-alerts.md), and Conker's [change requests](change-requests.md), tool requests included while they draft or wait for an answer to the drafter's question. Conker's [questions to the owner](inbox-answers.md) appear as kind `ask`. Urgent items appear first, then oldest first.
+**Needs you** contains items that require owner decisions: awaiting tool approvals, open companion suggestions, pending memory proposals, and continuity items needing attention (blocked, failed, approval, budget, uncertain, interrupted), [plan usage alerts](plan-alerts.md), [health watch](health-watch.md) cards (kind `attention`) for a part that stopped working, and Conker's [change requests](change-requests.md), tool requests included while they draft or wait for an answer to the drafter's question. Conker's [questions to the owner](inbox-answers.md) appear as kind `ask`. Urgent items appear first, then oldest first.
 
 **Handled** shows completed work since the start of the owner's local day: completed tasks, runs, and jobs, and plan windows that reset. Items are listed newest first, limited to 50.
 

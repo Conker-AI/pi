@@ -57,6 +57,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Access: chat, agent, tool](access.md) · [Change requests](change-requests.md) | Who decides each action, and Conker's requests the owner verifies |
 | [Owner preferences](owner-preferences.md) · [Owner settings](owner-settings.md) · [Continuity](continuity.md) · [Notifications](continuity-notifications.md) · [Inbox](inbox.md) · [Inbox answers](inbox-answers.md) | How Conker follows up and what needs the owner |
 | [Plan usage alerts](plan-alerts.md) | A heads-up when a ChatGPT or Claude plan passes the owner's level, and when it resets |
+| [Health watch](health-watch.md) | One Inbox card when a part of Conker stops working, closed when it works again |
 | [Calls](calls.md) · [Speech adapters](speech-adapters.md) | Voice |
 
 ## The machine

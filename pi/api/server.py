@@ -38,6 +38,7 @@ from pi.api.routes import definitions as definitions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import forgetting as forgetting_api
+from pi.api.routes import health_watch as health_watch_api
 from pi.api.routes import inbox as inbox_api
 from pi.api.routes import inference as inference_api
 from pi.api.routes import jobs as jobs_api
@@ -173,6 +174,7 @@ app.include_router(definitions_api.router(lambda: app.state.store, require_owner
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
+app.include_router(health_watch_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     change_requests_api.router(
         lambda: app.state.store,

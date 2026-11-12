@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Health watch.** Every 15 minutes Pi checks ToolGate, web search (ToolGate's search service),
+  MemoryGate, memory saving and the answer model's provider, from their health signals only (no
+  model call, no search). Two failures in a row file one Inbox card (`kind: "attention"`, source
+  `health-alert`) with a plain reason; working again closes it and lists it as handled ("fixed at
+  14:20"). `GET /health-watch`, `POST /health-watch/alerts/{id}/dismiss` (recovery credential);
+  owner setting `server.health_watch`, on by default. New tables `health_checks`, `health_alerts`.
+
 ## 0.24.0
 
 - **Chats go to a Trash bin.** `POST /sessions/trash` moves chats to Trash or restores them with

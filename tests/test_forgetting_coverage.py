@@ -118,6 +118,9 @@ OWNER_CONFIGURATION = {
 # Readings from the subscription runtimes: plan names, window labels and percentages, no chat.
 PROVIDER_READINGS = {"plan_alerts", "plan_usage"}
 
+# The health watch (pi.owner.health_watch): which check failed, when, and a reason Pi wrote.
+HEALTH_WATCH = {"health_alerts", "health_checks"}
+
 # Chats imported from a ChatGPT or Claude export (pi.memory.imports): another assistant's chats,
 # kept apart from Pi's own, so no Pi chat's text is ever in them; the batches and offers hold
 # counts, digests, ids and states; a deleted imported chat leaves only its ids and counts.
@@ -154,7 +157,7 @@ def test_every_table_is_forgotten_or_holds_no_chat_text(tmp_path):
     present = tables(tmp_path)
     code = forgetting_code()
     named = {name for name in present if re.search(rf"\b{re.escape(name)}\b", code)}
-    listed = IDS_ONLY | OWNER_CONFIGURATION | PROVIDER_READINGS | IMPORTS
+    listed = IDS_ONLY | OWNER_CONFIGURATION | PROVIDER_READINGS | HEALTH_WATCH | IMPORTS
 
     unclassified = sorted(present - named - listed)
     assert not unclassified, (
