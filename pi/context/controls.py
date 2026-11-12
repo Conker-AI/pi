@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -253,12 +254,17 @@ def history(store, identity):
             "WHERE session_id=? ORDER BY position",
             (identity,),
         ).fetchall()
-    rows = []
-    for item in inherited:
-        row = store.get_message(item[0])
+        rows = [store.get_message(item[0]) for item in inherited]
+        # A pin from a forgotten or trashed chat is left out, not an error: restoring brings it back.
+        gone = visibility.hidden(db, {row["session_id"] for row in rows if row}) - {identity}
+    kept = []
+    for row in rows:
+        if row is not None and row["session_id"] in gone:
+            continue
         if row is None or row.get("content_status") == "forgotten":
             raise ContextError("unavailable_pin", "An inherited source was forgotten.")
-        rows.append(row)
+        kept.append(row)
+    rows = kept
     from pi.conversation import versions as response_versions
 
     own = store.messages(identity)

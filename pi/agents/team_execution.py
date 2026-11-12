@@ -12,7 +12,7 @@ from pi.agents import teams as collaboration
 from pi.agents.team_models import Finish, Start, Step
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
-from pi.conversation import submissions
+from pi.conversation import submissions, visibility
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 
@@ -134,7 +134,7 @@ def _session(db, parent, privacy):
 
 def _source(db, identity, session_id):
     privacy = session_settings.source_privacy(db, session_id)
-    if privacy is None or privacy["incognito"]:
+    if privacy is None or privacy["incognito"] or visibility.hidden(db, [session_id]):
         _error("private_source", "Select available messages without privacy exclusions.")
     row = db.execute(
         "SELECT m.*,p.memory_disabled,p.harness_disabled FROM messages m "
@@ -404,6 +404,9 @@ def execute(store, runtime, identity, body):
             previous_message, parent = receipt["final_message_id"], last["session_id"]
         elif body.handoffId is not None or body.conditionReviewed:
             _error("initial_role", "The first role has no incoming handoff.")
+        # Each role is its own chat: a forgotten or trashed chat's words are never handed on.
+        if visibility.hidden(db, [run["source_session_id"], run["root_session_id"], parent]):
+            _error("source_unavailable", "A chat this role reads is forgotten or in the Trash.")
         for source in role["context"]["sourceIds"]:
             _source(db, source, run["source_session_id"])
         sid = _session(db, parent, snapshot["base"]["privacy"])

@@ -1,7 +1,14 @@
-"""Live project metadata from Pi-owned sources, with authoritative privacy."""
+"""Live project metadata from Pi-owned sources, with authoritative privacy.
+
+A source whose chat is forgotten or in the Trash resolves to nothing: the project shows it as
+an unavailable reference without its title, and a chat that selected it is refused
+(project_source_unavailable) before its words reach a model. The link itself is kept, so
+restoring the chat brings the source back.
+"""
 
 from pi.content import attachments
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 
 
 def resolve(store, reference):
@@ -24,6 +31,8 @@ def resolve_db(db, reference):
             return None
         session_id = task["session_id"]
     elif kind == "file":
+        if visibility.hidden(db, [reference.get("sessionId")]):
+            return None
         return attachments.project_source(
             db,
             reference.get("sessionId"),
@@ -33,6 +42,8 @@ def resolve_db(db, reference):
     else:
         # File provenance needs an attachment store; a filesystem path or
         # a client-provided session label cannot establish it.
+        return None
+    if visibility.hidden(db, [session_id]):
         return None
     session = db.execute("SELECT title,status FROM sessions WHERE id=?", (session_id,)).fetchone()
     privacy = session_settings.source_privacy(db, session_id) if session else None

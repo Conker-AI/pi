@@ -287,7 +287,8 @@ def test_forgetting_scrubs_promoted_source_options_and_fences_replay(tmp_path):
         with pytest.raises(drafts.DraftError, match="unavailable"):
             drafts.save(store, sid, drafts.Save(expected_revision=1, text=secret))
         assert drafts.load_new(store)["text"] == ""
-        assert len(store.list_sessions()) == 1
+        with store._connect() as db:  # the replay made no second chat; the list hides this one
+            assert db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
     for file in tmp_path.glob("forget.db*"):
         assert secret.encode() not in file.read_bytes()
 

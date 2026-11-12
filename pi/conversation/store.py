@@ -29,7 +29,7 @@ from pi.actions import identities as actions
 from pi.agents import profiles as agents
 from pi.calls import call_turns
 from pi.context import research_usage
-from pi.conversation import chat_preferences, schema, submissions
+from pi.conversation import chat_preferences, schema, submissions, visibility
 from pi.conversation import citations as message_citations
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
@@ -217,7 +217,9 @@ class Store:
     def list_sessions(self, limit: int = 50) -> list[dict]:
         with self._connect() as db:
             rows = db.execute(
-                "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
+                f"SELECT * FROM sessions WHERE NOT {visibility.hidden_sql('id')} "
+                "ORDER BY created_at DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
 
