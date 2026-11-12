@@ -25,7 +25,7 @@ from pi.memory import proposals as memory_proposals
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
 from pi.models import secrets as provider_secrets
-from pi.models import service_inference
+from pi.models import service_inference, spending_cap
 from pi.models.direct import ADAPTERS as DIRECT_ADAPTERS
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
@@ -235,6 +235,16 @@ async def lifespan(app: FastAPI):
     app.state.service_key_hashes = service_keys
     app.state.store = store
     app.state.local = local
+    # Every paid call passes the owner's daily cap (pi.models.spending_cap).
+    spending_cap.recover_interrupted(store)
+    hosted, direct_providers = spending_cap.wrap(
+        store,
+        hosted,
+        configured_direct_providers(
+            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
+        ),
+        [adapter.name for _, adapter in DIRECT_ADAPTERS],
+    )
     app.state.hosted = hosted
     app.state.provider_credentials = sorted(
         name
@@ -250,9 +260,7 @@ async def lifespan(app: FastAPI):
     app.state.router = Router(
         local_provider=local,
         hosted_provider=hosted,
-        providers=configured_direct_providers(
-            provider_environment, timeout=_seconds("PI_HOSTED_TIMEOUT_S", 180.0)
-        ),
+        providers=direct_providers,
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
     from pi.memory.ranking import ConfiguredMemoryRanker

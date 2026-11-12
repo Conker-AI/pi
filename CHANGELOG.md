@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
+  and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
+  reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
+  as a model refusal (roles fall back) until the owner's next local day. `GET /inference/spending`
+  is the meter. New preference field with a default; preferences saved earlier read it.
 - **Conker searches memory itself.** `conker.recall` (Look, allowed by default) searches memory
   under the running agent's own credential and scope, as turn recall does; never in a private chat
   or a team role. Results live in `recall_results` (cleared when any memory is forgotten, deleted

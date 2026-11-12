@@ -52,6 +52,17 @@ class DailyBudget(Strict):
     costCents: int = Field(ge=0, le=100000)
 
 
+class SpendingCap(Strict):
+    """One daily cap over every paid model call (pi.models.spending_cap); either limit stops."""
+
+    enabled: bool
+    cents: int = Field(ge=0, le=100000)
+    tokens: int = Field(ge=0, le=100_000_000)
+
+
+DEFAULT_SPENDING_CAP = {"enabled": True, "cents": 500, "tokens": 2_000_000}
+
+
 class PlanAlerts(Strict):
     enabled: bool
     percent: int = Field(ge=50, le=100)
@@ -72,6 +83,8 @@ class OwnerPreferences(Strict):
     planAlerts: PlanAlerts = Field(default_factory=lambda: PlanAlerts(enabled=True, percent=80))
     # Added 2026-10-29: the access switch a chat the owner starts begins with.
     newChatAccess: Literal["default", "ask", "ai", "full"] = "default"
+    # Added 2026-11-12: the daily cap over paid model calls.
+    spendingCap: SpendingCap = Field(default_factory=lambda: SpendingCap(**DEFAULT_SPENDING_CAP))
 
     @field_validator("idleTimeoutMinutes")
     @classmethod
@@ -99,6 +112,7 @@ DEFAULT = {
     "idleTimeoutMinutes": 15,
     "planAlerts": {"enabled": True, "percent": 80},
     "newChatAccess": "default",
+    "spendingCap": DEFAULT_SPENDING_CAP,
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owner_preferences (
