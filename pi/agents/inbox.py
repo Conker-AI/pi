@@ -94,10 +94,10 @@ def _needs_memory_items(store):
     items = []
     with store._connect() as db:
         rows = db.execute(
-            """SELECT mp.*, s.title as session_title FROM memory_proposals mp
+            f"""SELECT mp.*, s.title as session_title FROM memory_proposals mp
                LEFT JOIN sessions s ON s.id=mp.session_id
                WHERE mp.state='pending'
-               AND mp.session_id NOT IN (SELECT session_id FROM forgotten_sessions)
+               AND NOT {visibility.hidden_sql("mp.session_id")}
                ORDER BY mp.created_at"""
         ).fetchall()
 

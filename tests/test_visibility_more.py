@@ -148,3 +148,22 @@ def test_call_stops_while_its_source_chat_is_in_the_trash(store):
         send(1)
     trash(store, [source], trashed=False)
     send(2)
+
+
+def test_inbox_leaves_out_a_memory_proposal_of_a_trashed_chat(store):
+    gone = store.create_session(title="gone")
+    with store._connect() as db:
+        db.execute(
+            "INSERT INTO memory_proposals VALUES "
+            "(?,?,'h','mem','agent',1,NULL,'text','why','owner','[]','pending',NULL,1)",
+            ("mpr_" + "c" * 32, gone),
+        )
+
+    def memory():
+        return [i["id"] for i in inbox.inbox(store)["needsYou"] if i["kind"] == "memory"]
+
+    assert memory() == ["mpr_" + "c" * 32]
+    trash(store, [gone])
+    assert memory() == []
+    trash(store, [gone], trashed=False)
+    assert memory() == ["mpr_" + "c" * 32]

@@ -271,7 +271,7 @@ def handled(store, since):
     with store._connect() as db:
         rows = db.execute(
             "SELECT * FROM handled_actions WHERE created_at>=? "
-            f"AND NOT {visibility.hidden_sql('session_id')} "
+            f"AND (session_id IS NULL OR NOT {visibility.hidden_sql('session_id')}) "
             "ORDER BY created_at DESC LIMIT 200",
             (since,),
         ).fetchall()
