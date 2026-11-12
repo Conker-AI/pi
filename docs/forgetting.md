@@ -152,6 +152,26 @@ back; hiding deletes nothing. A new read path that can carry a chat's words filt
 `visibility.hidden_sql(column)` (for a column that may be empty:
 `(column IS NULL OR NOT hidden_sql(column))`) and gets a test that trashes, checks, restores.
 
+Follow-ups (2026-11-13):
+
+- A chat made from a hidden chat is hidden with it: every fork, message branch, call, team role
+  or agent call below it (`sessions.parent_id`, all the way down; they carry its title, summary
+  or words), and the chat of an AI job Conker kept from it while the job is still Conker's. Once
+  the owner adopts the job (`createdBy` owner) it is his: listed, running, its chat and notes
+  shown. Only the chats he put in the Trash are in the Trash view.
+- Agents, teams, AI jobs and team preparations Conker kept from a hidden chat leave every owner
+  list (`/agents`, `/teams`, `/collaboration`, `/jobs`, `/definitions`, briefing items); each still
+  answers by its own id.
+- Recall is re-checked on use: a saved `conker.recall` result, a parked turn's saved recall and a
+  retry (refused with `retry_source_unavailable` when its saved input recalled a now-hidden chat).
+  A turn inside a trashed chat, opened by its link, keeps that chat's own memories; a forgotten
+  chat is never exempt. One copy of the rule: `pi/conversation/hidden_records.py`.
+- A proposal pass reads no chat hidden when it started (the tree included), so those chats hide
+  none of its ideas (`visibility.hidden_by`).
+- Activity reads "forgotten" only for a forgotten chat; a trashed chat's own runs read "available".
+- Decision: an agent-call chat ("Agent call: <name>") of an agent kept from a hidden chat stays
+  under its visible caller, which recorded the call and owns that name.
+
 ## Limits that remain
 
 This removes content from Pi's current store, not from everywhere it has been.
