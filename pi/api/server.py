@@ -64,6 +64,7 @@ from pi.api.routes import system_inventory as system_inventory_api
 from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
+from pi.api.routes import updates as updates_api
 from pi.api.startup import lifespan
 from pi.context import project_sources
 from pi.conversation import fact_checks, judgements
@@ -173,6 +174,7 @@ app.include_router(definitions_api.router(lambda: app.state.store, require_owner
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
 app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
+app.include_router(updates_api.router(lambda: app.state.store, require_owner, require_admin))
 app.include_router(
     change_requests_api.router(
         lambda: app.state.store,

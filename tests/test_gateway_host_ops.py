@@ -1,4 +1,5 @@
-"""Server actions through the host helper: reads and actions both need only the signed-in session."""
+"""Server actions through the host helper: reads and most actions need only the signed-in session;
+an update asks for the password again."""
 
 import hashlib
 import json
@@ -247,3 +248,47 @@ def test_without_a_helper_the_screen_reads_the_helpers_refusal_shape(tmp_path):
     with pytest.raises(host_ops.HostOpsError) as refused:
         host_ops.request(None, "", "GET", "/host/ops")
     assert (refused.value.status, refused.value.code) == (503, "host_unavailable")
+
+
+def test_an_update_asks_for_the_password_and_reaches_the_helper_only_with_its_proof(host):
+    client, headers, seen, _ = host
+    body = {
+        "id": "ui-update-0123456789abcdef",
+        "operation": "update.run",
+        "arguments": {"version": "0.25.0"},
+    }
+    asked = client.post("/api/host/ops", json=body, headers=headers)
+    assert asked.status_code == 428
+    assert asked.json()["detail"]["code"] == "verification_required"
+    assert seen == []  # nothing reached the host before the password
+    started = client.post("/api/host/ops", json=body, headers=proof(client, headers, body))
+    assert started.status_code == 200, started.text
+    assert started.json()["operation"] == "update.run"
+    assert json.loads(seen[0].content) == body and seen[0].url.path == "/host/ops"
+
+
+def test_a_proof_for_one_version_does_not_start_another(host):
+    client, headers, seen, _ = host
+    body = {
+        "id": "ui-update-0123456789abcdef",
+        "operation": "update.run",
+        "arguments": {"version": "0.25.0"},
+    }
+    other = {**body, "arguments": {"version": "0.26.0"}}
+    response = client.post("/api/host/ops", json=other, headers=proof(client, headers, body))
+    assert response.status_code in (403, 428)
+    assert seen == []
+
+
+@pytest.mark.parametrize("version", ["v0.25.0", "0.25", "0.25.0-rc1", "../0.25.0", ""])
+def test_an_update_names_an_exact_release_version(host, version):
+    client, headers, seen, _ = host
+    body = {
+        "id": "ui-update-0123456789abcdef",
+        "operation": "update.run",
+        "arguments": {"version": version},
+    }
+    response = client.post("/api/host/ops", json=body, headers=headers)
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_host_operation"
+    assert seen == []

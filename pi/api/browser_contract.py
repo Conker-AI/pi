@@ -206,6 +206,9 @@ OWNER_ROUTES = {
         # Read-only: plan usage in percent per window, for the dashboard's Home. Dismissing an
         # alert stays with the recovery credential.
         r"/plans/usage",
+        # Conker updates: the release on offer and how updates ended. The host reports them with
+        # the recovery credential; the update itself is a gateway host action (password).
+        r"/updates",
         # Read-only: which services called a model role and what it used; never any text.
         r"/inference/usage",
         # The Settings screen: the owner's settings document and his preferences.
@@ -258,6 +261,8 @@ OWNER_ROUTES = {
         r"/setup/protection",
         r"/setup/rehearsal/(?:memory-review|approval/(?:start|resume)|finalize)",
         r"/setup/receipts/(boundaries|protection)",
+        r"/updates/offers/\d{1,4}\.\d{1,4}\.\d{1,4}/dismiss",
+        r"/updates/results/[0-9a-f]{32}/dismiss",
         r"/system/inventory",
         r"/system/inventory/[A-Za-z0-9_-]{16,100}/resume",
         r"/system/files/listings",
