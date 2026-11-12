@@ -115,18 +115,55 @@ def test_the_day_is_the_owners_local_day(store):
     spending_cap.settle(store, identity, Completion("a", "m", "openai", 500, 500))
     spending_cap.admit(store, "openai", "gpt-paid", now=NOON)  # yesterday's use is not today's
     assert spending_cap.status(store, now=yesterday)["reached"] == ["tokens"]
-    assert spending_cap.status(store, now=NOON)["used"]["tokens"] == 0
+    assert spending_cap.status(store, now=NOON)["used"]["tokens"] == 1  # today's hold only
 
 
-def test_a_call_that_reports_no_tokens_is_estimated_and_a_failed_one_counts_nothing(store):
+def test_a_call_that_reports_no_tokens_is_estimated_and_a_failed_one_keeps_its_input(store):
     spending_cap.Capped(Paid(tokens=(None, None)), store, lambda m: True).complete(
         [Message(role="user", content="y" * 400)], model="m"
     )
     with pytest.raises(ProviderUnavailable):
         ask(spending_cap.Capped(Paid(fail=True), store, lambda model: True))
     used = spending_cap.status(store)["used"]
-    assert used["tokens"] == (400 + len("answer")) // spending_cap.CHARS_PER_TOKEN
-    assert (used["estimatedTokenCalls"], used["failedCalls"], used["calls"]) == (1, 1, 2)
+    answered = (400 + len("answer")) // spending_cap.CHARS_PER_TOKEN
+    assert used["tokens"] == answered + 400 // spending_cap.CHARS_PER_TOKEN  # it may be billed
+    assert (used["estimatedTokenCalls"], used["failedCalls"], used["calls"]) == (2, 1, 2)
+
+
+class Refusing(Paid):
+    def complete_bounded(self, messages, *, model, timeout):
+        raise ModelUnusable("gpt-paid: HTTP 404")
+
+
+def test_a_model_refusal_counts_nothing(store):
+    with pytest.raises(ModelUnusable):
+        ask(spending_cap.Capped(Refusing(), store, lambda model: True))
+    used = spending_cap.status(store)["used"]
+    assert (used["tokens"], used["failedCalls"]) == (0, 1)
+
+
+def test_calls_in_flight_hold_their_input_so_they_cannot_all_pass(store):
+    set_cap(store, tokens=250)
+    long = [Message(role="user", content="z" * 800)]  # 200 tokens held each
+    spending_cap.admit(store, "openai", "gpt-paid", long)
+    spending_cap.admit(store, "openai", "gpt-paid", long)  # 200 < 250: admitted
+    with pytest.raises(spending_cap.CapReached):
+        spending_cap.admit(store, "openai", "gpt-paid", long)  # 400 held: stopped
+
+
+def test_a_ledger_that_cannot_be_read_pauses_paid_calls_as_a_model_refusal(store):
+    with store._connect() as db:
+        db.execute("UPDATE owner_preferences SET preferences='not json'")
+    paid = Paid()
+    with pytest.raises(spending_cap.CapUnavailable) as paused:
+        ask(spending_cap.Capped(paid, store, lambda model: True))
+    assert isinstance(paused.value, ModelUnusable) and paid.calls == []
+
+
+def test_the_wrapper_does_not_recurse_before_it_is_built():
+    bare = spending_cap.Capped.__new__(spending_cap.Capped)
+    with pytest.raises(AttributeError):
+        bare._adapter  # noqa: B018
 
 
 def test_a_call_that_is_not_paid_is_neither_checked_nor_counted(store):
@@ -165,7 +202,8 @@ class OpenRouter:
 
 def test_only_paid_openrouter_models_and_direct_keys_are_capped():
     paid = spending_cap.openrouter_paid(OpenRouter())
-    assert not paid("free-model") and paid("paid-model") and paid("unlisted")
+    # An unlisted model is refused by the adapter itself before anything is sent.
+    assert not paid("free-model") and paid("paid-model") and not paid("unlisted")
     assert not spending_cap.openrouter_paid(OpenRouter(allow_paid=False))("paid-model")
     subscription, direct = object(), Paid()
     hosted, providers = spending_cap.wrap(

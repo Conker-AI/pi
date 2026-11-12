@@ -6,8 +6,12 @@ owner preferences) has two limits for his local day: money, from the cost the pr
 and tokens, which every paid call counts (direct keys report no price, and a price is never
 guessed). Once either is reached, the next paid call is refused before it is sent; the refusal
 is a model refusal, so a role moves on to its fallback (a free or local model) instead of
-failing. A call already running when the cap is reached finishes and is counted, so a day can
-end a little over the cap, by at most the calls that were in flight.
+failing. A call holds its input's tokens (estimated from its length) from admission, so calls
+in flight together cannot all pass under the cap; its output and price are counted when it
+ends, so a day can end over the cap by at most the answers that were in flight. A call that
+fails after it was sent keeps the input hold (it may have been billed); one the provider refused
+as a model refusal counts nothing. If the ledger itself cannot be read, paid calls are refused
+(fail closed) the same way.
 
 Subscriptions (ChatGPT, Claude) are flat-rate and local models are free: they are not counted.
 The ledger holds provider and model ids, counts and states, never a prompt or an answer.
@@ -19,7 +23,7 @@ import secrets
 import time
 from datetime import UTC, datetime
 
-from pi.models.openrouter import PaidModelRefused
+from pi.models.openrouter import ModelUnusable, PaidModelRefused
 from pi.owner import preferences as prefs
 
 KEEP_DAYS = 40
@@ -42,6 +46,13 @@ REACHED = (
 
 class CapReached(PaidModelRefused):
     """The owner's daily cap is reached: no paid call is sent until his next local day."""
+
+
+class CapUnavailable(PaidModelRefused):
+    """The ledger could not be read or written, so no paid call is sent (fail closed)."""
+
+
+UNAVAILABLE = "Pi could not check today's spending cap, so paid models are paused for now."
 
 
 def _preferences(db) -> prefs.OwnerPreferences:
@@ -99,9 +110,18 @@ def status(store, *, now: datetime | None = None) -> dict:
     }
 
 
-def admit(store, provider: str, model: str, *, now: datetime | None = None) -> str:
-    """Write down a paid call before it is sent, or refuse it when today's cap is reached."""
-    now = now or datetime.now(UTC)
+def admit(store, provider: str, model: str, messages=(), *, now: datetime | None = None) -> str:
+    """Write down a paid call before it is sent, holding its input's tokens, or refuse it when
+    today's cap is reached. Any failure to check is a refusal too (CapUnavailable)."""
+    try:
+        return _admit(store, provider, model, _estimate(messages, ""), now or datetime.now(UTC))
+    except CapReached:
+        raise
+    except Exception as exc:
+        raise CapUnavailable(UNAVAILABLE) from exc
+
+
+def _admit(store, provider: str, model: str, held: int, now: datetime) -> str:
     identity = "pmc_" + secrets.token_hex(12)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -111,9 +131,9 @@ def admit(store, provider: str, model: str, *, now: datetime | None = None) -> s
             if _reached(preferences.spendingCap, _used(db, day)):
                 raise CapReached(REACHED)
             db.execute(
-                "INSERT INTO paid_model_calls(id, day, provider, model, state, started_at) "
-                "VALUES (?,?,?,?,'running',?)",
-                (identity, day, provider, model[:200], now.timestamp()),
+                "INSERT INTO paid_model_calls(id, day, provider, model, state, tokens, "
+                "tokens_estimated, started_at) VALUES (?,?,?,?,'running',?,1,?)",
+                (identity, day, provider, model[:200], held, now.timestamp()),
             )
             db.execute(
                 "DELETE FROM paid_model_calls WHERE started_at<? AND state!='running'",
@@ -131,10 +151,13 @@ def _estimate(messages, text: str) -> int:
     return max(1, chars // CHARS_PER_TOKEN)
 
 
-def settle(store, identity: str, completion=None, messages=()) -> None:
-    """Count a finished call; a failed one (completion None) counts what is known: nothing."""
-    if completion is None:
+def settle(store, identity: str, completion=None, messages=(), *, refused: bool = False) -> None:
+    """Count a finished call. A failed one (completion None) keeps its input hold, since it may
+    have been billed; one the provider refused as a model refusal counts nothing."""
+    if completion is None and refused:
         values = ("failed", None, 0, 0)
+    elif completion is None:
+        values = ("failed", None, _estimate(messages, ""), 1)
     else:
         reported = [completion.input_tokens, completion.output_tokens]
         known = all(isinstance(value, int) and value >= 0 for value in reported)
@@ -154,6 +177,7 @@ def settle(store, identity: str, completion=None, messages=()) -> None:
 def recover_interrupted(store) -> int:
     """At startup: a call that was running when Pi stopped did not report; mark it failed."""
     with store._connect() as db:
+        # The input hold stays: the call may have been billed.
         return db.execute(
             "UPDATE paid_model_calls SET state='failed', finished_at=? WHERE state='running'",
             (time.time(),),
@@ -172,6 +196,8 @@ class Capped:
         self._paid = paid
 
     def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)  # never recurse before __init__ ran (copy, pickle)
         return getattr(self._adapter, name)
 
     def complete(self, messages, *, model: str):
@@ -180,11 +206,14 @@ class Capped:
     def complete_bounded(self, messages, *, model: str, timeout: float):
         if not self._paid(model):
             return self._adapter.complete_bounded(messages, model=model, timeout=timeout)
-        identity = admit(self._store, self._adapter.name, model)
+        identity = admit(self._store, self._adapter.name, model, messages)
         try:
             completion = self._adapter.complete_bounded(messages, model=model, timeout=timeout)
+        except ModelUnusable:
+            settle(self._store, identity, refused=True)
+            raise
         except BaseException:
-            settle(self._store, identity)
+            settle(self._store, identity, messages=messages)
             raise
         settle(self._store, identity, completion, messages)
         return completion
@@ -199,8 +228,9 @@ def openrouter_paid(adapter):
         try:
             info = adapter.catalogue().get(model)
         except Exception:
-            return True
-        return info is None or not info.is_free
+            return True  # the adapter reads the catalogue again; count it as paid
+        # A model missing from the catalogue is refused by the adapter before anything is sent.
+        return info is not None and not info.is_free
 
     return paid
 

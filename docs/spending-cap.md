@@ -5,10 +5,10 @@ quiet hours). Code: `pi/models/spending_cap.py`.
 
 ## What counts
 
-- OpenRouter models that are not listed as free (a model missing from the catalogue counts as
-  paid), when paid models are on (`PI_ALLOW_PAID_MODELS`).
+- OpenRouter models that are not listed as free, when paid models are on
+  (`PI_ALLOW_PAID_MODELS`). If the catalogue cannot be read, the call counts as paid.
 - The direct-key providers (OpenAI, Anthropic, Gemini, xAI, Mistral, DeepSeek, Groq).
-- Not counted: subscriptions (ChatGPT, Claude: flat-rate, shown as plan usage), local models
+- Not counted: voice (`PI_SPEECH_KEY`), subscriptions (ChatGPT, Claude: flat-rate, shown as plan usage), local models
   (Ollama) and free OpenRouter models.
 
 Every caller goes through the same adapters, so the cap covers chat turns, model roles,
@@ -35,9 +35,17 @@ token) and marked estimated.
 Before a paid call is sent, Pi checks the day's totals. When either limit is reached the call is
 refused with a model refusal (`CapReached`, a `PaidModelRefused`): a role moves on to its
 fallback, so a free or local fallback keeps answering, and nothing paid is sent until the next
-local day. A call already running finishes and is counted, so a day can end over the cap by at
-most the calls that were in flight. A failed call counts nothing; one that was running when Pi
-stopped is marked failed at the next start.
+local day. If Pi cannot read its ledger, paid calls are refused the same way (`CapUnavailable`).
+
+Each call holds its input's tokens (estimated from its length) from the moment it is admitted,
+so calls in flight together cannot all pass under the cap; its output and price are added when
+it ends, so a day can end over the cap by at most the answers that were in flight. A call that
+fails after it was sent keeps its input hold, since it may have been billed; a model refusal
+(the provider said the model will not serve) counts nothing. A call running when Pi stopped is
+marked failed at the next start and keeps its hold.
+
+The money limit binds only where the provider reports a price (OpenRouter). For direct keys the
+token limit is the stop: 2M tokens of an expensive model can cost more than $5.
 
 ## The meter
 
