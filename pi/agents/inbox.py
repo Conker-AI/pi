@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from pi.agents import asks, change_requests, continuity
 from pi.conversation import settings as session_settings
-from pi.owner import plan_alerts
+from pi.owner import plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.schedule import agent_jobs
 
@@ -344,6 +344,7 @@ def inbox(store, *, now=None):
     needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store, approval_turns))
     needs_you.extend(plan_alerts.needs_you(store))
+    needs_you.extend(self_check.needs_you(store))
     needs_you.extend(change_requests.needs_you(store))
     needs_you.extend(asks.needs_you(store))
     needs_you.extend(agent_jobs.needs_you(store))
@@ -352,7 +353,9 @@ def inbox(store, *, now=None):
     needs_you = needs_you[:50]  # Limit to 50
 
     handled = sorted(
-        _handled_items(store, day_start) + plan_alerts.resets(store, day_start),
+        _handled_items(store, day_start)
+        + plan_alerts.resets(store, day_start)
+        + self_check.recovered(store, day_start),
         key=lambda item: item["at"],
         reverse=True,
     )[:50]
