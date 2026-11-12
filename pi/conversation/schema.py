@@ -49,7 +49,7 @@ from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.models import service_inference
-from pi.owner import plan_alerts
+from pi.owner import plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
 from pi.schedule import (
@@ -111,6 +111,7 @@ def install(db):
     owner_settings.initialize(db)
     db.executescript(proactive_budget.SCHEMA)
     plan_alerts.initialize(db)
+    self_check.initialize(db)
     agent_jobs.initialize(db)
     agent_triggers.initialize(db)
     agent_hooks.initialize(db)

@@ -64,6 +64,9 @@ IDS_ONLY = {
     "scheduled_run_budgets",
     # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
     "service_model_calls",
+    # Pi's self-check: check names, statuses and the checks' fixed reason strings.
+    "self_check_alerts",
+    "self_check_state",
     "session_observations",
     "steering_discarded_answers",
     "system_actions",
