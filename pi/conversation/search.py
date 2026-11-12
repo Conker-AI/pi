@@ -1,10 +1,13 @@
-"""Literal owner search over retained public conversation text, with exact IDs."""
+"""Literal owner search over retained public conversation text, with exact IDs.
+
+A forgotten or trashed chat is never searched (`pi.conversation.visibility`)."""
 
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from pi.conversation import settings as session_settings
+from pi.conversation import visibility
 from pi.conversation.search_excerpt import excerpt
 
 
@@ -51,9 +54,9 @@ def search(store, query, limit=30, cursor=None):
             SELECT m.id,m.session_id,m.seq,m.role,m.created_at,s.title,
                    search_excerpt(json_extract(m.content,'$')) AS excerpt
             FROM messages m JOIN sessions s ON s.id=m.session_id
-            WHERE s.status!='forgotten' AND m.role IN ('user','assistant')
-              AND NOT EXISTS(SELECT 1 FROM forgotten_sessions f WHERE f.session_id=s.id)
-              AND NOT EXISTS(SELECT 1 FROM session_trash t WHERE t.session_id=s.id)
+            WHERE m.role IN ('user','assistant') AND NOT """
+            + visibility.hidden_sql("s.id")
+            + r"""
               AND json_valid(m.content) AND json_type(m.content)='text'
               AND instr(search_casefold(json_extract(m.content,'$')),?)>0
               AND search_session_eligible(s.id)

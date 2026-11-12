@@ -53,6 +53,7 @@ from pi.models import service_inference, spending_cap
 from pi.owner import plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
+from pi.owner import updates as conker_updates
 from pi.schedule import (
     agent_hooks,
     agent_jobs,
@@ -114,6 +115,7 @@ def install(db):
     db.executescript(proactive_budget.SCHEMA)
     plan_alerts.initialize(db)
     self_check.initialize(db)
+    conker_updates.initialize(db)
     agent_jobs.initialize(db)
     agent_triggers.initialize(db)
     agent_hooks.initialize(db)

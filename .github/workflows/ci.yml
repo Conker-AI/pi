@@ -73,9 +73,16 @@ jobs:
         # docs/*-openapi.json are the API reference; written by hand once, they fell months behind.
         run: python scripts/export_openapi.py --check
 
+      - name: Types
+        # pyright basic mode (pyrightconfig.json). Errors that predate the check are counted
+        # per file in type-baseline.txt; a count may only go down.
+        run: python scripts/check_types.py
+
       - name: Tests
+        # The coverage floor is the coverage measured when it arrived, rounded down, so it
+        # only stops coverage from falling (.coveragerc names what is measured).
         # pytest-xdist, one worker per CPU: each test uses its own temporary stores.
-        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto
+        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=91
 
       - name: Browser authority mutation drill
         run: python scripts/auth_mutation_drill.py

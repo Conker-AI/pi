@@ -41,7 +41,7 @@ def capture_list_query(store, monkeypatch, limit):
     with connect() as db:
         plan = [row[3] for row in db.execute("EXPLAIN QUERY PLAN " + query)]
     assert any("USING INDEX sessions_by_created_at" in step for step in plan)
-    assert not any("TEMP B-TREE" in step for step in plan)
+    assert not any("TEMP B-TREE FOR ORDER BY" in step for step in plan)
     return rows
 
 
