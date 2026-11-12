@@ -129,6 +129,7 @@ IMPORTS = {
     "import_batches",
     "import_memory_offers",
     "imported_chat_deletions",
+    "import_evidence_erasures",
 }
 
 
