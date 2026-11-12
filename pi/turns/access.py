@@ -50,6 +50,8 @@ native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
 native_remember = "conker.remember"
+native_create_agent = "conker.create_agent"
+native_create_team = "conker.create_team"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS handled_actions (
@@ -318,9 +320,9 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     if level == "ai":
         approved, why = reviewer.review(loop, execution, "ai", request, tool, args, outside=outside)
         return ("run", "ai_reviewer", why) if approved else ("ask", by, why)
-    if tool.id == native_schedule:
-        # A recurring job made from his words would still run instructions the model wrote:
-        # unless his settings loosened it, it waits for his approval like a tool draft.
+    if tool.id in (native_schedule, native_create_agent, native_create_team):
+        # A recurring job, an agent or a team made from his words would still carry instructions
+        # the model wrote: unless his settings loosened it, it waits for his approval.
         return "ask", by, ""
     if request.strip() and not outside and not tool.sensitive:
         approved, why = reviewer.review(loop, execution, "request", request, tool, args)

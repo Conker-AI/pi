@@ -161,6 +161,8 @@ it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
   apart from the chat in `keep_results`) are forgotten in MemoryGate at their current revision,
   the same way as forgetting one memory by hand. A memory MemoryGate already held before the chat
   is left alone, and so is everything the owner approved himself.
+- **Agents and teams Conker made on its own** in the chat are archived (the owner can restore
+  them; their stored configuration stays).
 - **AI jobs Conker made on its own** in the chat are turned off and marked `turnedOff:
   "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). The owner can turn one
   back on; that clears the mark.
