@@ -73,11 +73,30 @@ def test_a_dismissed_alert_stays_hidden_until_the_check_recovers_and_breaks_agai
     assert self_check.record(store, {"speech": degraded}, now=LATER + 900) == []
     assert self_check.needs_you(store) == []
     self_check.record(store, {"speech": UP}, now=LATER + 1000)
+    assert self_check.recovered(store, T0) == []  # a dismissed alert's recovery stays quiet
     self_check.record(store, {"speech": degraded}, now=LATER + 1100)
-    [again] = self_check.record(store, {"speech": degraded}, now=LATER * 2)
+    [again] = self_check.record(store, {"speech": degraded}, now=LATER + 2000)
     assert again["change"] == "raised" and len(self_check.needs_you(store)) == 1
     with pytest.raises(self_check.SelfCheckError):
         self_check.dismiss(store, "sc_" + "0" * 32)
+
+
+def test_a_restart_gives_a_broken_check_its_full_wait_again(store):
+    self_check.record(store, {"memory": DOWN}, now=T0)
+    back = T0 + self_check.STALE_SECONDS + 1  # Pi was stopped in between
+    assert self_check.record(store, {"memory": DOWN}, now=back) == []
+    assert self_check.record(store, {"memory": DOWN}, now=back + 600) == []
+    [_] = self_check.record(store, {"memory": DOWN}, now=back + self_check.PERSIST_SECONDS)
+    assert self_check.needs_you(store)[0]["since"] == back
+
+
+def test_an_alert_for_a_check_no_longer_reported_closes(store):
+    self_check.record(store, {"old_check": DOWN}, now=T0)
+    [raised] = self_check.record(store, {"old_check": DOWN}, now=LATER)
+    assert self_check.record(store, {}, now=LATER + 60) == []  # an empty probe closes nothing
+    [closed] = self_check.record(store, {"memory": UP}, now=LATER + 120)
+    assert closed == {"change": "cleared", "alertId": raised["alertId"]}
+    assert self_check.needs_you(store) == []
 
 
 def test_rows_hold_names_statuses_and_short_reasons_only(store):

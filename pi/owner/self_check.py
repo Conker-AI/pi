@@ -5,8 +5,9 @@ local and hosted models, voice, ToolGate, the clean-up after deleted chats). A c
 `unavailable` or `degraded` for PERSIST_SECONDS raises one alert, an Inbox card saying what is
 broken and since when; a blip shorter than that raises nothing. When the check works again the
 alert closes and the Inbox's handled list says so. The owner may dismiss an alert; it stays
-hidden until that check recovers and breaks again. An `unknown` status (a provider that is
-configured but not proven) is not an alert.
+hidden until that check recovers and breaks again, and its recovery is not announced. After a
+stop longer than STALE_SECONDS, a broken check starts its wait again. An `unknown` status (a
+provider that is configured but not proven) is not an alert.
 
 It covers what Pi can see from inside: if Pi itself is down, nothing here runs. The rows hold
 check names, statuses and the checks' fixed reason strings, never a chat or a key.
@@ -44,6 +45,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS self_check_alerts_one_open
 """
 BROKEN = {"unavailable", "degraded"}
 PERSIST_SECONDS = 900.0
+# A gap this long since the last check means Pi was stopped; a check broken before the stop
+# starts its 15 minutes again, so a restart does not raise an alert at once.
+STALE_SECONDS = 1800.0
 REASON_CHARS = 200
 NAME_CHARS = 64
 NAMES = {
@@ -80,7 +84,8 @@ def _one(db, name: str, check: dict, now: float) -> dict | None:
     broken = status in BROKEN
     state = db.execute("SELECT * FROM self_check_state WHERE check_name=?", (name,)).fetchone()
     # `since` is when the check last went from working to broken or back.
-    same = state is not None and (state["status"] in BROKEN) == broken
+    fresh = state is not None and now - state["checked_at"] < STALE_SECONDS
+    same = fresh and (state["status"] in BROKEN) == broken
     since = state["since"] if same else now
     db.execute(
         "INSERT INTO self_check_state VALUES (?,?,?,?) ON CONFLICT(check_name) "
@@ -110,6 +115,17 @@ def _one(db, name: str, check: dict, now: float) -> dict | None:
     return None
 
 
+def _close_gone(db, seen: set, now: float) -> list[dict]:
+    """A check that is no longer reported (renamed or removed by an update) closes its alert."""
+    rows = db.execute(
+        "SELECT id, check_name FROM self_check_alerts WHERE cleared_at IS NULL"
+    ).fetchall()
+    gone = [row["id"] for row in rows if row["check_name"] not in seen]
+    for identity in gone:
+        db.execute("UPDATE self_check_alerts SET cleared_at=? WHERE id=?", (now, identity))
+    return [{"change": "cleared", "alertId": identity} for identity in gone]
+
+
 def record(store, checks: dict, *, now: float | None = None) -> list[dict]:
     """Keep each check's state; raise, update or close alerts. Returns what changed."""
     now = time.time() if now is None else now
@@ -117,11 +133,15 @@ def record(store, checks: dict, *, now: float | None = None) -> list[dict]:
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         try:
+            seen = set()
             for name, check in checks.items():
                 if isinstance(name, str) and isinstance(check, dict):
+                    seen.add(name[:NAME_CHARS])
                     change = _one(db, name[:NAME_CHARS], check, now)
                     if change is not None:
                         changes.append(change)
+            if seen:
+                changes.extend(_close_gone(db, seen, now))
             db.commit()
         except BaseException:
             db.rollback()
@@ -158,7 +178,7 @@ def recovered(store, since: float) -> list[dict]:
     """Alerts that closed since a moment (the owner's day), newest first."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM self_check_alerts WHERE cleared_at >= ? "
+            "SELECT * FROM self_check_alerts WHERE cleared_at >= ? AND dismissed_at IS NULL "
             "ORDER BY cleared_at DESC LIMIT 50",
             (since,),
         ).fetchall()
