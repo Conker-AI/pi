@@ -187,3 +187,24 @@ Publishing with `conker apply tools` takes `"conkerMayUse": true` to let Conker 
 By hand: the owner adds a memory with `POST /memory/remember` (`{"request_id", "text"}`, password
 verified in the browser; `conker apply memory` with `"operation": "remember"`), which uses the same
 MemoryGate route, so a memory added by hand and one approved from a request are stored the same way.
+
+## Searching memory (2026-11-12)
+
+`conker.recall` (`pi.turns.recall`, authorization `auto`) lets the model search memory with its own
+words when the recall at the start of the answer did not bring what it needs. It reads exactly as
+that recall does (`Memory.search`): the running agent's own read credential and memory scope (the
+companion's "owner" scope follows `memory.across_chats`), forgotten memories held back, trashed
+chats left out, at most 8 items. It is never offered or run in a private chat or a team role.
+
+- What it found is saved in `recall_results`, not in the chat: the tool message keeps only
+  `recallId`, `count` and `outside`, and the model reads the full result when the history is
+  built. Forgetting any memory clears every saved result (with the other recall caches), and
+  forgetting a chat removes its results; the model then sees "cleared".
+- A result counts as outside content unless every item is the owner's own words
+  (`others_wrote`), so after a recalled note Conker or an import wrote, remembering asks him and
+  his typed request no longer approves actions. Every result of `conker.recall` (and of
+  `conker.run_agent`) carries `outside`; a missing flag counts as outside.
+- After outside content it still runs without the reviewer: it changes nothing, and its own
+  result keeps the turn marked. His "Ask me" setting for it answers with a refusal that points the
+  model to `conker.ask`.
+

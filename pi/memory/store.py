@@ -215,11 +215,13 @@ def recall_held(store):
 def invalidate_recall(db):
     """Historical briefings lack IDs; invalidate derived recall, never conversation text."""
     from pi.turns import context as turn_context
+    from pi.turns import recall as turn_recall
 
     changed = db.execute(
         "UPDATE memory_contexts SET package=NULL,status='redacted' WHERE package IS NOT NULL"
     ).rowcount
     turn_context.redact_recall(db)
+    turn_recall.clear(db)
     return changed
 
 

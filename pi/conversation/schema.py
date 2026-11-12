@@ -70,6 +70,7 @@ from pi.turns import access as turn_access
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
 from pi.turns import queue as turn_queue
+from pi.turns import recall as turn_recall
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
@@ -121,6 +122,7 @@ def install(db):
     tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
+    turn_recall.initialize(db)
     agents.initialize(db)
     db.executescript(projects.SCHEMA)
     db.executescript(project_context.SCHEMA)
