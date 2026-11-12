@@ -210,6 +210,8 @@ OWNER_ROUTES = {
         r"/self-check",
         # Read-only: which services called a model role and what it used; never any text.
         r"/inference/usage",
+        # Read-only: today's paid model calls against the daily cap; counts only.
+        r"/inference/spending",
         # The Settings screen: the owner's settings document and his preferences.
         r"/owner/settings",
         r"/owner/preferences",

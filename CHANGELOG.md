@@ -6,11 +6,20 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **One daily cap over every paid model call** (docs/spending-cap.md). OpenRouter's paid models
+  and the direct-key providers pass a cap in owner preferences (`spendingCap`: money from the
+  reported cost and tokens, default $5 and 2M tokens a day); once reached, paid calls are refused
+  as a model refusal (roles fall back) until the owner's next local day. `GET /inference/spending`
+  is the meter. New preference field with a default; preferences saved earlier read it.
+- **Conker searches memory itself.** `conker.recall` (Look, allowed by default) searches memory
+  under the running agent's own credential and scope, as turn recall does; never in a private chat
+  or a team role. Results live in `recall_results` (cleared when any memory is forgotten, deleted
+  with the chat), not in the chat's messages, and count as outside content unless every item is
+  the owner's own words.
 - **Pi tells the owner when it is broken** (docs/self-check.md). A background self-check reads
   the `/health` checks every 5 minutes; one that stays unavailable or degraded for 15 minutes
   files an Inbox item (kind `health`), and its recovery shows in Handled (`health-recovered`).
   New `GET /self-check` and `POST /self-check/alerts/{id}/dismiss`; no change to existing routes.
-
 - **Conker can ask for an agent or a team.** `conker.create_agent` and `conker.create_team` file
   change requests of the new kinds `agent` and `team` (the table is rebuilt once on start to allow
   them; rows kept); approving makes the agent (default model, no per-tool access, chat memory

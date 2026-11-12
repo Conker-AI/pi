@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from pi.models import service_inference
+from pi.models import service_inference, spending_cap
 
 
 def router(app_state, require_owner):
@@ -34,5 +34,10 @@ def router(app_state, require_owner):
     def usage(limit: int = Query(default=50, ge=1, le=200)):
         """Recent service calls and the last day's totals; no prompt or answer text."""
         return service_inference.usage(app_state().store, limit)
+
+    @routes.get("/spending", dependencies=[Depends(require_owner)])
+    def spending():
+        """Today's paid model calls against the owner's daily cap; ids and counts only."""
+        return spending_cap.status(app_state().store)
 
     return routes
