@@ -83,6 +83,10 @@ class ProbeReceipt(Strict):
 
 def initialize(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMA)
+
+
+def add_operation(db: sqlite3.Connection) -> None:
+    """Migration: the operation column, for a table an older Pi created without it."""
     columns = {row[1] for row in db.execute("PRAGMA table_info(setup_model_probe_requests)")}
     if "operation" not in columns:
         db.execute(

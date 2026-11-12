@@ -256,6 +256,7 @@ def test_startup_reports_vendor_keys_without_network(tmp_path, monkeypatch):
             api._health_cache.clear()
             health = api.health()["checks"]["provider_credentials"]
             assert health["configured"] == sorted(IDS) and health["secrets_included"] is False
+            assert api.health()["schema_migration"] == "0005-keep-result-agent-team"
             assert KEY not in json.dumps(status) + json.dumps(api.health())
 
     asyncio.run(check())

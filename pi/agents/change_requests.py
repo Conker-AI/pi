@@ -96,9 +96,12 @@ class View(Strict):
 
 
 def initialize(db):
-    # Agent and team kinds arrived 2026-11-12: an older table's CHECK refuses them until rebuilt.
-    rebuild.widen(db, "change_requests", TABLE, "'team'")
     db.executescript(SCHEMA)
+
+
+def widen_kinds(db):
+    """Migration: agent and team kinds arrived 2026-11-12; an older table's CHECK refuses them."""
+    rebuild.widen(db, "change_requests", TABLE, "'team'")
 
 
 def _view(row) -> dict:

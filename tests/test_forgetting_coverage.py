@@ -62,6 +62,8 @@ IDS_ONLY = {
     "response_retries",
     "response_versions",
     "scheduled_run_budgets",
+    # Which schema migrations ran, when, and under which Pi version.
+    "schema_migrations",
     # A service's model call: service, role, model, usage. Pi never keeps its prompt or answer.
     "service_model_calls",
     "session_observations",

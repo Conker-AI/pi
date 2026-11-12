@@ -73,11 +73,12 @@ from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
 from pi.core import errors
+from pi.core.version import VERSION
 from pi.schedule import agent_hooks, job_models
 from pi.turns import queue as turn_queue
 from pi.turns import steering as turn_steering
 
-SERVICE_VERSION = "0.24.0"
+SERVICE_VERSION = VERSION
 HEALTHY = {"ok", "not_configured"}
 HEALTH_CACHE_SECONDS = 5.0
 
@@ -402,6 +403,7 @@ def health():
     result = {
         "service": "pi",
         "version": SERVICE_VERSION,
+        "schema_migration": getattr(getattr(app.state, "store", None), "schema_migration", None),
         "status": "degraded" if degraded else "ok",
         "degraded": degraded,
         "checks": checks,

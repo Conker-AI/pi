@@ -350,6 +350,7 @@ def test_an_older_database_keeps_its_rows_and_takes_the_new_kinds(tmp_path):
     Store(path).close()
     db = sqlite3.connect(path)
     db.executescript(
+        "DROP TABLE schema_migrations;"  # an older Pi had no ledger
         "DROP TABLE change_requests; DROP TABLE keep_results;"
         + OLD_REQUESTS
         + "INSERT INTO sessions(id,created_at) VALUES ('s1',1);"
