@@ -80,6 +80,10 @@ class MutationError(ValueError):
     pass
 
 
+# After the write was sent, or once the service answered 2xx, it may already have been made.
+MAYBE_DONE = " It may already have been made; check its current state before trying again."
+
+
 @dataclass(frozen=True)
 class Mutation:
     method: str
@@ -410,26 +414,37 @@ def apply_resource(
                 )
             content_type = response.headers.get("content-type", "")
             if content_type.split(";", 1)[0].strip().lower() != "application/json":
-                raise MutationError(f"{service} returned a non-JSON mutation response.")
+                raise MutationError(
+                    f"{service} returned a non-JSON mutation response." + MAYBE_DONE
+                )
             declared = response.headers.get("content-length")
             if declared and (not declared.isdigit() or int(declared) > response_limit):
-                raise MutationError(f"{service} mutation response exceeded {limit_label}.")
+                raise MutationError(
+                    f"{service} mutation response exceeded {limit_label}." + MAYBE_DONE
+                )
             body = bytearray()
             for chunk in response.iter_bytes():
                 body.extend(chunk)
                 if len(body) > response_limit:
-                    raise MutationError(f"{service} mutation response exceeded {limit_label}.")
+                    raise MutationError(
+                        f"{service} mutation response exceeded {limit_label}." + MAYBE_DONE
+                    )
     except MutationError:
         raise
-    except (httpx.HTTPError, OSError):
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        # Never reached the service: nothing was written.
         raise MutationError(f"{service} {resource} mutation is unavailable.") from None
+    except (httpx.HTTPError, OSError):
+        raise MutationError(
+            f"{service} {resource} mutation got no complete answer." + MAYBE_DONE
+        ) from None
 
     try:
         value = json.loads(body.decode("utf-8", errors="strict"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        raise MutationError(f"{service} returned invalid mutation JSON.") from None
+        raise MutationError(f"{service} returned invalid mutation JSON." + MAYBE_DONE) from None
     if not isinstance(value, dict):
-        raise MutationError(f"{service} returned an unsupported mutation response.")
+        raise MutationError(f"{service} returned an unsupported mutation response." + MAYBE_DONE)
     if resource == "approvals":
         # As in the Inbox: his decision continues the work once ToolGate recorded it.
         from .answers import continue_after
