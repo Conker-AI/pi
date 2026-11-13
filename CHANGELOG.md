@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **The gateway's /health asks the terminal sidecar** (`gateway/api.py`). It said "Isolated
+  terminal sidecar ready" whenever a terminal was configured; the readiness read at start was never
+  used again. Each health check now asks the sidecar, and one that stopped answering (its channel
+  is never reconnected) shows as `owner_terminal: unavailable` and the gateway as degraded.
+
 - **The first-run rehearsal stays done after you use Conker** (`pi/setup/rehearsal.py`). Its
   receipt named the newest conversation, so the next chat turned the rehearsal back to "ready"
   and the setup step to degraded. A receipt now holds while its own conversation (the newest one

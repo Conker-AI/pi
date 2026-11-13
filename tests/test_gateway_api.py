@@ -416,6 +416,31 @@ def test_health_is_honest_when_dependencies_are_unavailable(gateway):
     assert "csrf" not in health.text and OWNER not in health.text
 
 
+def test_health_asks_the_terminal_sidecar_each_time(gateway):
+    from pi.owner.terminal import TerminalError
+
+    class Sidecar:
+        answering = True
+
+        def readiness(self):
+            if not self.answering:
+                raise TerminalError("Terminal sidecar channel is unavailable.")
+            return {"status": "ready", "active": 0, "capacity": 1, "secretsIncluded": False}
+
+        def close(self):
+            pass
+
+    client, _, _ = gateway
+    sidecar = Sidecar()
+    client.app.state.terminals = Sidecar()
+    client.app.state.terminal_sidecar = sidecar
+    assert client.get("/health").json()["checks"]["owner_terminal"]["status"] == "ok"
+    sidecar.answering = False
+    health = client.get("/health").json()
+    assert health["checks"]["owner_terminal"]["status"] == "unavailable"
+    assert "owner_terminal" in health["degraded"] and health["status"] == "degraded"
+
+
 def test_owner_detail_and_bounded_list_pagination_keep_dedicated_authority(gateway):
     client, _, seen = gateway
     assert client.get("/api/owner/requests/request_1").status_code == 401
