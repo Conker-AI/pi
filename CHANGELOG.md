@@ -10,6 +10,14 @@ be a decision with visible consequences.
   Migration 0006 moves `plan_alerts` and `agent_job_notes` into `notices`, keeping every id, and
   drops the two tables. Routes, response bodies, Inbox items and auth are unchanged. A database
   this migration has run on needs the pre-update snapshot to go back to an older Pi.
+- **Memory proposals are retired** (docs/inbox-kinds.md, merge 2). `GET /inbox` no longer lists
+  kind `memory`, and the admin-key routes `/memory-proposals` (list, create, get, `/decision`,
+  `/reconcile`) are gone from the API and docs/pi-openapi.json. No Pi code, dashboard or CLI used
+  them; the owner corrects memory through `/memory/corrections`, and Conker's "remember" is a
+  change request. The `memory_proposals` table stays so forgetting a chat or a memory still
+  scrubs old rows (`pi/memory/proposals.py`). Contract change: the OpenAPI component names
+  `pi__content__artifact_models__Create` and `pi__schedule__proposals__Decision` become
+  `Create` and `Decision` now that nothing else shares those names.
 - **Migration ledger** (docs/migrations.md). Schema upgrades are named steps recorded in a new
   `schema_migrations` table, each run once in one transaction with its record; the five guarded
   start-up upgrades moved there unchanged. A database a newer Pi upgraded is refused (Pi does not

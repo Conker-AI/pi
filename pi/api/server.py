@@ -43,7 +43,6 @@ from pi.api.routes import inference as inference_api
 from pi.api.routes import jobs as jobs_api
 from pi.api.routes import memory as memory_api
 from pi.api.routes import memory_edits as memory_edits_api
-from pi.api.routes import memory_proposals as memory_proposals_api
 from pi.api.routes import model_evaluations as model_evaluations_api
 from pi.api.routes import model_profiles as model_profiles_api
 from pi.api.routes import model_roles as model_roles_api
@@ -228,13 +227,6 @@ app.include_router(
         lambda: getattr(app.state, "memory_corrections", None),
         lambda: getattr(getattr(app.state, "memory", None), "client", None),
         require_owner,
-    )
-)
-app.include_router(
-    memory_proposals_api.router(
-        lambda: app.state.store,
-        lambda: getattr(app.state, "memory_corrections", None),
-        require_admin,
     )
 )
 app.include_router(
