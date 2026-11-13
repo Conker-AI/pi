@@ -501,7 +501,7 @@ class Loop(ModelCalls, History, Replies):
                             "memory": self.memory.status(session_id, turn_id),
                         }
                     actions.record(self.store, action, outcome)
-                    ran = outcome.ok
+                    ran = outcome.changed
                     observation = json.dumps(
                         {"tool": call.tool_id, "result": outcome.result}, ensure_ascii=False
                     )

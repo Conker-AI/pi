@@ -134,6 +134,8 @@ def call(loop, args, *, session_id, turn_id, run=True) -> ToolResult:
         db.commit()
     return ToolResult(
         ok=True,
+        # A search changes nothing; a failed answer after it is a failed turn, not acted.
+        acted=False,
         result={
             "status": "found" if count else "none",
             "recallId": identity,

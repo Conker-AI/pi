@@ -6,6 +6,18 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A skipped update stays skipped when its release comes back** (`pi/owner/updates.py`).
+  Withdrawing an offer newer than the latest release no longer deletes one the owner dismissed.
+- **An update that rolled back is offered again** (`pi/owner/updates.py`). An offer marked
+  installed by a check that ran mid-update reopens when a later report runs an older version and
+  still names it as the latest, unless the owner dismissed it.
+- **A memory search alone no longer marks a turn acted** (`pi/turns/recall.py`, `loop.py`), and
+  `conker.run_agent` marks it acted only when the agent it ran acted. A failed answer after them
+  is a failed turn, so the chat takes new messages.
+- **A call stopped before its agent ran leaves no empty chat** (`pi/agents/agent_calls.py`). The
+  empty "Agent call" chat and its call row are removed when the caller was stopped or the child
+  turn never started.
+
 - **A parked approval that expires ends** (`pi/turns/decision_sweep.py`). ToolGate keeps an
   approval it let expire as pending, so a parked chat turn or AI job waited for ever. Five minutes
   after `approval_expires_at`, and only when ToolGate still answers "pending", Pi ends the turn: the

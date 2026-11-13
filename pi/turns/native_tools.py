@@ -409,7 +409,9 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             run=run,
             outside=_outside(loop.store),
         )
-        return ToolResult(ok=ok, result=result, tool_id=tool_id)
+        # Acted only if the child acted (`agent_calls.run` then marked this turn) or it already was.
+        acted = bool((loop.store.get_turn(turn_id) or {}).get("acted")) if turn_id else False
+        return ToolResult(ok=ok, result=result, tool_id=tool_id, acted=acted)
     why = refused(loop.store, tool_id, session_id=session_id, turn_id=turn_id, execution=execution)
     if why:
         return _refusal(tool_id, why)

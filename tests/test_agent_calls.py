@@ -12,12 +12,13 @@ from test_tool_turns import FakeGate, build
 from pi.actions.toolgate import Tool
 from pi.agents import agent_calls
 from pi.agents import profiles as agents
-from pi.conversation import forgetting
+from pi.conversation import forgetting, submissions
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
 from pi.turns import access, native_tools
 from pi.turns import control as turn_control
+from pi.turns.failures import ActedWithoutReply, TurnFailed
 
 RUN = native_tools.RUN_AGENT
 ECHO = json.dumps({"tool": "t_echo", "result": {"echoed": "a web page"}})
@@ -439,6 +440,52 @@ def test_a_child_that_acted_marks_the_caller_acted(store):
     assert not store.get_turn(turn)["acted"]
     assert call(loop, session, turn, "Echoer").result["status"] == "done"
     assert store.get_turn(turn)["acted"]
+
+
+def test_a_caller_turn_is_acted_only_when_its_child_acted(store):
+    agent(store, "Echoer", tools=("t_echo",))
+    agent(store, "Writer", tools=())
+    echo = json.dumps({"tool": "t_echo", "args": {"text": "hi"}})
+
+    def ask(name):
+        return json.dumps({"tool": RUN, "args": {"agent": name, "instructions": "Go."}})
+
+    down = ProviderUnavailable("down")
+    loop, _ = build(store, [ask("Echoer"), echo, "Echoed.", down], FakeGate())
+    acted = store.create_session()
+    with pytest.raises(ActedWithoutReply):
+        loop.run_turn(acted, "Ask Echoer.")
+    assert [(t["status"], t["acted"]) for t in store.turns(acted)] == [("acted_no_reply", 1)]
+    # A child that only wrote text changed nothing: the caller's failed answer is a failed turn.
+    loop, _ = build(store, [ask("Writer"), "Some text.", down], FakeGate())
+    quiet = store.create_session()
+    with pytest.raises(TurnFailed) as caught:
+        loop.run_turn(quiet, "Ask Writer.")
+    assert not isinstance(caught.value, ActedWithoutReply)
+    assert [(t["status"], t["acted"]) for t in store.turns(quiet)] == [("failed", 0)]
+    with store._connect() as db:
+        assert not submissions._busy(db, quiet)
+
+
+def test_a_call_that_never_ran_leaves_no_empty_chat(store, monkeypatch):
+    agent(store, "Scout")
+    loop, _ = build(store, [], FakeGate())
+    session, turn = chat(store)
+    turn_control.cancel(store, turn)
+    stopped = call(loop, session, turn, "Scout")
+    assert stopped.result["status"] == "refused" and "stopped" in stopped.result["message"]
+    assert [s["id"] for s in store.list_sessions()] == [session] and rows(store) == []
+    # The child turn failing before its instructions were stored leaves no chat either.
+    fresh, fresh_turn = chat(store)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("could not reserve")
+
+    monkeypatch.setattr(loop, "run_turn", broken)
+    failed = call(loop, fresh, fresh_turn, "Scout")
+    assert not failed.ok and failed.result["status"] == "failed"
+    assert failed.result["outside"] is False and "sessionId" not in failed.result
+    assert {s["id"] for s in store.list_sessions()} == {session, fresh} and rows(store) == []
 
 
 def test_a_continuation_of_the_child_chat_is_still_that_calls_chat(store):

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import sqlite3
 import time
 import uuid
 
@@ -301,6 +302,31 @@ def _finish(store, identity, state, reply_message_id=None):
         db.commit()
 
 
+def _discard(store, identity, child) -> bool:
+    """Take back a call whose child chat never got a message or a turn: the chat, its settings,
+    its change counter and the call row go together. Such a chat holds nothing to forget (its
+    title is the agent's name). Anything else that refers to it keeps the chat (foreign keys
+    refuse) and the call stays as failed."""
+    try:
+        with store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute(
+                "SELECT 1 FROM messages WHERE session_id=? UNION ALL "
+                "SELECT 1 FROM turns WHERE session_id=? LIMIT 1",
+                (child, child),
+            ).fetchone():
+                db.rollback()
+                return False
+            db.execute("DELETE FROM agent_calls WHERE id=?", (identity,))
+            for table in ("session_settings", "session_observations"):
+                db.execute(f"DELETE FROM {table} WHERE session_id=?", (child,))
+            db.execute("DELETE FROM sessions WHERE id=?", (child,))
+            db.commit()
+    except sqlite3.IntegrityError:
+        return False
+    return True
+
+
 def _stopped(store, turn_id) -> bool:
     """Whether the owner stopped this turn or any turn up its chain of calls."""
     with store._connect() as db:
@@ -397,12 +423,21 @@ def run(loop, args, *, session_id, turn_id, execution, run, outside):
         return _refusal("No agent can be started from this chat. Answer with what you have.")
     name = agent["configuration"]["name"]
     if _stopped(store, turn_id):
-        _finish(store, identity, "failed")
+        # No empty "Agent call" chat is left in his Chats.
+        if not _discard(store, identity, child):
+            _finish(store, identity, "failed")
         return _refusal("The owner stopped this turn, so no agent was run.")
     # A child's failure is an answer to the caller, never a crash: what Pi stored says how it went.
     with contextlib.suppress(Exception):
         loop.run_turn(child, instructions, request_id=request_id)
     turn, status, final, reply = _answer(store, request_id)
+    if turn is None and _discard(store, identity, child):
+        # Its turn never started, so nothing ran and there is no chat to show.
+        return False, {
+            "status": "failed",
+            "message": f"{name} could not be started. Tell the owner, or answer without it.",
+            "outside": False,
+        }
     if turn and turn_id and (store.get_turn(turn) or {}).get("acted"):
         # What the child did, the caller's turn did.
         store.mark_acted(turn_id)
