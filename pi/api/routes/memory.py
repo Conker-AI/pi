@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from pi.core.models import described
 from pi.memory import forget as memory_forget
+from pi.memory import memory_replies as replies
 from pi.memory import stated as stated_memory
 
 
 def router(app_state, require_key, require_owner):
     routes = APIRouter()
 
-    @routes.get("/memory/forget-pending", dependencies=[Depends(require_owner)])
+    @routes.get(
+        "/memory/forget-pending",
+        dependencies=[Depends(require_owner)],
+        responses=described(replies.MemoryForgetPending),
+    )
     def pending_memory_forget():
         return memory_forget.pending(app_state().store)
 
@@ -19,21 +25,33 @@ def router(app_state, require_key, require_owner):
     def preview_memory_forget(memory_id: str):
         return memory_forget.preview(getattr(app_state(), "memory_corrections", None), memory_id)
 
-    @routes.post("/memory/forget", dependencies=[Depends(require_owner)])
+    @routes.post(
+        "/memory/forget",
+        dependencies=[Depends(require_owner)],
+        responses=described(replies.MemoryForgetReceipt),
+    )
     def forget_memory(body: memory_forget.Forget):
         """Remove one memory everywhere it is stored. The source chat is kept."""
         return memory_forget.forget(
             app_state().store, getattr(app_state(), "memory_corrections", None), body
         )
 
-    @routes.post("/memory/forget-many", dependencies=[Depends(require_owner)])
+    @routes.post(
+        "/memory/forget-many",
+        dependencies=[Depends(require_owner)],
+        responses=described(replies.MemoryForgetManyResult),
+    )
     def forget_memories(body: memory_forget.ForgetMany):
         """Forget up to 50 memories one at a time; stops at the first refusal."""
         return memory_forget.forget_many(
             app_state().store, getattr(app_state(), "memory_corrections", None), body
         )
 
-    @routes.post("/memory/remember", dependencies=[Depends(require_owner)])
+    @routes.post(
+        "/memory/remember",
+        dependencies=[Depends(require_owner)],
+        responses=described(replies.MemoryRemembered),
+    )
     def remember_memory(body: stated_memory.Remember):
         """Add one memory in the owner's own words; the same request id never stores it twice."""
         return stated_memory.remember(getattr(app_state(), "memory_corrections", None), body)

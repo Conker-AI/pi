@@ -15,7 +15,8 @@ from fastapi.responses import JSONResponse
 from pydantic import Field, StringConstraints, model_validator
 
 from pi.conversation import archive, forget_queue
-from pi.core.models import Strict
+from pi.conversation import forget_replies as replies
+from pi.core.models import Strict, described
 
 SESSION = r"^[A-Za-z0-9_-]{1,128}$"
 SessionId = Annotated[str, StringConstraints(pattern=SESSION)]
@@ -49,7 +50,7 @@ def _plans(db, sessions: list[str]) -> dict:
 def router(state, authorize):
     routes = APIRouter(prefix="/forgetting", dependencies=[Depends(authorize)])
 
-    @routes.get("/chats")
+    @routes.get("/chats", responses=described(replies.ChatForgetOverview))
     def overview(session: Annotated[list[SessionId] | None, Query(max_length=50)] = None):
         """What deleting each named chat reaches, and the chats queued or finished."""
         db = state().store.path
@@ -58,7 +59,10 @@ def router(state, authorize):
         chats = [forget_queue.summary(sid, plan) for sid, plan in plans.items()]
         return {**forget_queue.overview(db), "chats": chats}
 
-    @routes.post("/chats")
+    @routes.post(
+        "/chats",
+        responses={**described(replies.ChatForgetDone), 202: {"model": replies.ChatForgetQueued}},
+    )
     def delete(body: ForgetChats):
         """Delete chats forever: queue them and restart Pi, which forgets them before it opens."""
         if not forget_queue.supervised():

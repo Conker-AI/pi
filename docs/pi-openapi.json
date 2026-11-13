@@ -8354,7 +8354,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionPending"
+                }
               }
             }
           },
@@ -8423,7 +8425,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionPreview"
+                }
               }
             }
           },
@@ -8493,7 +8497,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionStatus"
+                }
               }
             }
           },
@@ -8562,7 +8568,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionStatus"
+                }
               }
             }
           },
@@ -12932,7 +12940,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryLibraryPage"
+                }
               }
             }
           },
@@ -19724,7 +19734,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetOverview"
+                }
               }
             }
           },
@@ -19793,9 +19805,21 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetDone"
+                }
               }
             }
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetQueued"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "description": "Validation Error",
@@ -19853,7 +19877,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetPending"
+                }
               }
             }
           },
@@ -19993,7 +20019,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetReceipt"
+                }
               }
             }
           },
@@ -20064,7 +20092,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetManyResult"
+                }
               }
             }
           },
@@ -20135,7 +20165,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryRemembered"
+                }
               }
             }
           },
@@ -27268,6 +27300,194 @@
         ],
         "title": "ChartRow"
       },
+      "ChatForgetDone": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "done",
+            "title": "State"
+          },
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "sessions"
+        ],
+        "title": "ChatForgetDone",
+        "description": "200: every named chat was already forgotten, so nothing was queued."
+      },
+      "ChatForgetOverview": {
+        "properties": {
+          "supervised": {
+            "type": "boolean",
+            "title": "Supervised"
+          },
+          "pending": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pending"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ChatForgetResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ChatForgetPlan"
+            },
+            "type": "array",
+            "title": "Chats"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "supervised",
+          "pending",
+          "results",
+          "chats"
+        ],
+        "title": "ChatForgetOverview"
+      },
+      "ChatForgetPlan": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "sessionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessionids"
+          },
+          "messages": {
+            "type": "integer",
+            "title": "Messages"
+          },
+          "turns": {
+            "type": "integer",
+            "title": "Turns"
+          },
+          "approvalRequests": {
+            "type": "integer",
+            "title": "Approvalrequests"
+          },
+          "confirmation": {
+            "type": "string",
+            "title": "Confirmation"
+          },
+          "alreadyForgotten": {
+            "type": "boolean",
+            "title": "Alreadyforgotten"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "sessionIds",
+          "messages",
+          "turns",
+          "approvalRequests",
+          "confirmation",
+          "alreadyForgotten"
+        ],
+        "title": "ChatForgetPlan",
+        "description": "What deleting one named chat reaches (forget_queue.summary) and the confirmation to send."
+      },
+      "ChatForgetQueued": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "restarting",
+            "title": "State"
+          },
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "sessions"
+        ],
+        "title": "ChatForgetQueued",
+        "description": "202: the chats are queued and Pi restarts to forget them before it opens again."
+      },
+      "ChatForgetResult": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "refused",
+              "retrying"
+            ],
+            "title": "State"
+          },
+          "receiptId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiptid"
+          },
+          "finishedAt": {
+            "type": "number",
+            "title": "Finishedat"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "state",
+          "receiptId",
+          "finishedAt",
+          "detail"
+        ],
+        "title": "ChatForgetResult",
+        "description": "How a queued chat ended at a start (forget_queue._record); `receiptId` only when done."
+      },
       "Check": {
         "properties": {
           "request_id": {
@@ -30642,6 +30862,611 @@
           "description"
         ],
         "title": "Media"
+      },
+      "MemoryCorrectionPending": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryCorrectionWaiting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "pending"
+        ],
+        "title": "MemoryCorrectionPending",
+        "description": "The one correction whose outcome is not settled yet, or null."
+      },
+      "MemoryCorrectionPreview": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "sourceType": {
+            "type": "string",
+            "title": "Sourcetype"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "memoryId",
+          "revision",
+          "text",
+          "sourceType",
+          "confidence"
+        ],
+        "title": "MemoryCorrectionPreview",
+        "description": "The exact current text and revision of a memory the owner is about to correct."
+      },
+      "MemoryCorrectionStatus": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "previousRevision": {
+            "type": "integer",
+            "title": "Previousrevision"
+          },
+          "payloadHash": {
+            "type": "string",
+            "title": "Payloadhash"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applying",
+              "unknown",
+              "applied",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "indexing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "indexed",
+                  "degraded"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexing"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "cachedPackagesCleared": {
+            "type": "integer",
+            "title": "Cachedpackagescleared"
+          },
+          "sourceConversationKept": {
+            "type": "boolean",
+            "const": true,
+            "title": "Sourceconversationkept"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "requestId",
+          "memoryId",
+          "previousRevision",
+          "payloadHash",
+          "status",
+          "revision",
+          "indexing",
+          "errorCode",
+          "cachedPackagesCleared",
+          "sourceConversationKept"
+        ],
+        "title": "MemoryCorrectionStatus",
+        "description": "One correction; `revision` and `indexing` come from MemoryGate's receipt once applied."
+      },
+      "MemoryCorrectionWaiting": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "title": "Expectedrevision"
+          },
+          "payloadHash": {
+            "type": "string",
+            "title": "Payloadhash"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applying",
+              "unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "expectedRevision",
+          "payloadHash",
+          "status"
+        ],
+        "title": "MemoryCorrectionWaiting"
+      },
+      "MemoryForgetManyResult": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryForgetReceipt"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "stopped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryForgetStop"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "results",
+          "stopped"
+        ],
+        "title": "MemoryForgetManyResult"
+      },
+      "MemoryForgetPending": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryForgetWaiting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "pending"
+        ],
+        "title": "MemoryForgetPending",
+        "description": "The forget request whose outcome is not settled yet (recall is paused), or null."
+      },
+      "MemoryForgetReceipt": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "status": {
+            "type": "string",
+            "const": "forgotten",
+            "title": "Status"
+          },
+          "indexRemoval": {
+            "type": "string",
+            "enum": [
+              "removed",
+              "degraded",
+              "pending"
+            ],
+            "title": "Indexremoval"
+          },
+          "cachedPackagesCleared": {
+            "type": "integer",
+            "title": "Cachedpackagescleared"
+          },
+          "sourceConversationKept": {
+            "type": "boolean",
+            "const": true,
+            "title": "Sourceconversationkept"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "status",
+          "indexRemoval",
+          "cachedPackagesCleared",
+          "sourceConversationKept"
+        ],
+        "title": "MemoryForgetReceipt",
+        "description": "`indexRemoval` is MemoryGate's word, checked before any receipt is stored (forget.py)."
+      },
+      "MemoryForgetStop": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "index",
+          "memoryId",
+          "code",
+          "message"
+        ],
+        "title": "MemoryForgetStop",
+        "description": "Where a batch stopped: the item's position, its memory and the refusal."
+      },
+      "MemoryForgetWaiting": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "revision"
+        ],
+        "title": "MemoryForgetWaiting"
+      },
+      "MemoryLibraryCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "entity",
+              "evidence",
+              "analysis",
+              "episode",
+              "observation",
+              "pattern",
+              "transcript"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          },
+          "preview_truncated": {
+            "type": "boolean",
+            "title": "Preview Truncated"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "available_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Fields"
+          },
+          "memory_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Type"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "do_not_generalize": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Do Not Generalize"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "hypothesis_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis Confidence"
+          },
+          "connections": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Connections"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "preview",
+          "preview_truncated",
+          "title",
+          "status",
+          "confidence",
+          "available_fields",
+          "connections"
+        ],
+        "title": "MemoryLibraryCard",
+        "description": "One record of MemoryGate's library page (its `memory_explorer.card` plus `connections`).\n\nThe keys from `memory_type` to `valid_until` come only on a memory, `hypothesis` and\n`hypothesis_confidence` only on an observation. `confidence` is a word on a memory and a\nnumber on an analysis, episode or pattern; records without one send null."
+      },
+      "MemoryLibraryPage": {
+        "properties": {
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryLibraryCard"
+            },
+            "type": "array",
+            "title": "Objects"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "scope": {
+            "type": "string",
+            "const": "all",
+            "title": "Scope"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          },
+          "search_mode": {
+            "type": "string",
+            "title": "Search Mode"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "objects",
+          "total",
+          "scope",
+          "next_after",
+          "search_mode",
+          "instruction"
+        ],
+        "title": "MemoryLibraryPage",
+        "description": "`total` counts the whole scope, less this page's records from a hidden chat."
+      },
+      "MemoryRemembered": {
+        "properties": {
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "remembered",
+              "already_remembered"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryId",
+          "status"
+        ],
+        "title": "MemoryRemembered"
       },
       "MemoryReviewInput": {
         "properties": {
