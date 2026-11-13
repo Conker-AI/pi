@@ -441,6 +441,26 @@ def test_health_asks_the_terminal_sidecar_each_time(gateway):
     assert "owner_terminal" in health["degraded"] and health["status"] == "degraded"
 
 
+def test_health_shares_one_upstream_check_for_a_while(gateway, monkeypatch):
+    from gateway import api as gateway_api
+
+    client, _, seen = gateway
+
+    def asked():
+        return [r for r in seen if r.url.path in {"/health", "/v2/owner/requests"}]
+
+    first = client.get("/health").json()
+    assert len(asked()) == 2
+    for _ in range(20):
+        again = client.get("/health").json()
+    # No sign-in on /health: twenty hits make no more calls to Pi or ToolGate.
+    assert len(asked()) == 2
+    assert again["checked_at"] == first["checked_at"] and again["age_seconds"] >= 0
+    monkeypatch.setattr(gateway_api, "HEALTH_SECONDS", 0.0)
+    client.get("/health")
+    assert len(asked()) == 4
+
+
 def test_owner_detail_and_bounded_list_pagination_keep_dedicated_authority(gateway):
     client, _, seen = gateway
     assert client.get("/api/owner/requests/request_1").status_code == 401

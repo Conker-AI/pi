@@ -5,6 +5,8 @@ from __future__ import annotations
 import hmac
 import os
 import re
+import threading
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -154,6 +156,19 @@ class Config:
             os.environ.get("GATEWAY_PROVIDER_CONTROL_URL", ""),
             os.environ.get("GATEWAY_PROVIDER_CONTROL_KEY", ""),
         )
+
+
+HEALTH_SECONDS = 10.0  # how long /health reuses its Pi and ToolGate checks
+
+
+class _ServiceChecks:
+    """The last Pi and ToolGate checks /health made, and when (monotonic and wall clock)."""
+
+    def __init__(self):
+        self.checks: dict = {}
+        self.at = float("-inf")
+        self.when = ""
+        self.lock = threading.Lock()
 
 
 def _terminal_check(app) -> dict:
@@ -375,6 +390,49 @@ def create_app(
             binding,
         )
 
+    services = _ServiceChecks()
+
+    def service_checks() -> tuple[dict, float, str]:
+        """Pi's and ToolGate's state, asked at most once per `HEALTH_SECONDS`: /health has no
+        sign-in, so a flood of hits shares one pair of upstream calls instead of each making
+        its own (callers that arrive while a check runs wait for it and reuse it)."""
+        with services.lock:
+            now = time.monotonic()
+            if now - services.at >= HEALTH_SECONDS:
+                checks = {}
+                for name, url, header, key in (
+                    (
+                        "runtime",
+                        app.state.config.pi_url.rstrip("/") + "/health",
+                        "X-Pi-Gateway-Key",
+                        app.state.config.pi_key,
+                    ),
+                    (
+                        "owner_channel",
+                        app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
+                        "X-ToolGate-Owner-Key",
+                        app.state.config.owner_key,
+                    ),
+                ):
+                    if not key:
+                        checks[name] = {
+                            "status": "not_configured",
+                            "reason": "Provision the owner channel on the host",
+                        }
+                        continue
+                    try:
+                        result = upstream("GET", url, header, key, None, b"", timeout=3)
+                        value = result.json()
+                        status = value.get("status", "unknown") if name == "runtime" else "ok"
+                        checks[name] = {
+                            "status": status if result.status_code == 200 else "unavailable"
+                        }
+                    except (httpx.HTTPError, ValueError, AttributeError):
+                        checks[name] = {"status": "unavailable"}
+                services.checks, services.when = checks, datetime.now(UTC).isoformat()
+                services.at = time.monotonic()
+            return dict(services.checks), round(time.monotonic() - services.at, 3), services.when
+
     @app.get("/health")
     def health():
         checks = {
@@ -386,33 +444,8 @@ def create_app(
             }
         }
         checks["owner_terminal"] = _terminal_check(app)
-        for name, url, header, key in (
-            (
-                "runtime",
-                app.state.config.pi_url.rstrip("/") + "/health",
-                "X-Pi-Gateway-Key",
-                app.state.config.pi_key,
-            ),
-            (
-                "owner_channel",
-                app.state.config.toolgate_url.rstrip("/") + "/v2/owner/requests",
-                "X-ToolGate-Owner-Key",
-                app.state.config.owner_key,
-            ),
-        ):
-            if not key:
-                checks[name] = {
-                    "status": "not_configured",
-                    "reason": "Provision the owner channel on the host",
-                }
-                continue
-            try:
-                result = upstream("GET", url, header, key, None, b"", timeout=3)
-                value = result.json()
-                status = value.get("status", "unknown") if name == "runtime" else "ok"
-                checks[name] = {"status": status if result.status_code == 200 else "unavailable"}
-            except (httpx.HTTPError, ValueError, AttributeError):
-                checks[name] = {"status": "unavailable"}
+        upstreams, age, when = service_checks()
+        checks.update(upstreams)
         degraded = sorted(
             name
             for name, value in checks.items()
@@ -424,8 +457,8 @@ def create_app(
             "status": "degraded" if degraded else "ok",
             "checks": checks,
             "degraded": degraded,
-            "checked_at": datetime.now(UTC).isoformat(),
-            "age_seconds": 0.0,
+            "checked_at": when,
+            "age_seconds": age,
         }
 
     @app.get("/api/diagnostics")
