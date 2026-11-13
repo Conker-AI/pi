@@ -9291,7 +9291,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutputDocument"
+                }
               }
             }
           },
@@ -9368,7 +9370,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutputDocument"
+                }
               }
             }
           },
@@ -9811,7 +9815,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -9888,7 +9894,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -9967,7 +9975,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -30465,6 +30475,25 @@
         "type": "object",
         "title": "Output"
       },
+      "OutputDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "output": {
+            "$ref": "#/components/schemas/Output"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "output"
+        ],
+        "title": "OutputDocument",
+        "description": "A chat's saved output settings and their revision (D-01)."
+      },
       "OwnerPreferences": {
         "properties": {
           "quietHours": {
@@ -34058,6 +34087,54 @@
           "hours"
         ],
         "title": "Timing"
+      },
+      "TitleDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "title",
+          "source",
+          "modelId"
+        ],
+        "title": "TitleDocument",
+        "description": "A chat's name and how it got it (D-01): `source` is None until it is named."
       },
       "ToolWatch": {
         "properties": {
