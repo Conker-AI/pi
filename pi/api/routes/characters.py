@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from pi.agents import character_replies as replies
 from pi.agents import characters
+from pi.core.models import described
 
 
 def router(store, authorize):
@@ -39,33 +41,33 @@ def router(store, authorize):
         raw = await body(request)
         return await run_in_threadpool(lambda: execute(fn, agent_id, parse(raw, model)))
 
-    @routes.get("/{agent_id}")
+    @routes.get("/{agent_id}", responses=described(replies.CharacterRecord))
     def get(agent_id: str, revision: int | None = Query(default=None, ge=1)):
         return execute(characters.get, agent_id, revision)
 
-    @routes.put("/{agent_id}")
+    @routes.put("/{agent_id}", responses=described(replies.CharacterSaved))
     async def save(agent_id: str, request: Request):
         return await write(characters.save, agent_id, request, characters.Save)
 
-    @routes.post("/{agent_id}/save")
+    @routes.post("/{agent_id}/save", responses=described(replies.CharacterSaved))
     async def browser_save(agent_id: str, request: Request):
         return await write(characters.save, agent_id, request, characters.Save)
 
-    @routes.get("/{agent_id}/history")
+    @routes.get("/{agent_id}/history", responses=described(replies.CharacterHistory))
     def history(agent_id: str):
         return execute(
             lambda current, selected: {"results": characters.history(current, selected)}, agent_id
         )
 
-    @routes.get("/{agent_id}/export")
+    @routes.get("/{agent_id}/export", responses=described(replies.CharacterPackage))
     def export(agent_id: str, revision: int | None = Query(default=None, ge=1)):
         return execute(characters.export, agent_id, revision)
 
-    @routes.post("/{agent_id}/import")
+    @routes.post("/{agent_id}/import", responses=described(replies.CharacterImportDraft))
     async def import_draft(agent_id: str, request: Request):
         return await write(characters.import_draft, agent_id, request, characters.Import)
 
-    @routes.post("/{agent_id}/restore")
+    @routes.post("/{agent_id}/restore", responses=described(replies.CharacterSaved))
     async def restore(agent_id: str, request: Request):
         return await write(characters.restore, agent_id, request, characters.Restore)
 

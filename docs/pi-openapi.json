@@ -3637,7 +3637,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterRecord"
+                }
               }
             }
           },
@@ -3704,7 +3706,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -3773,7 +3777,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -3842,7 +3848,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterHistory"
+                }
               }
             }
           },
@@ -3928,7 +3936,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterPackage"
+                }
               }
             }
           },
@@ -3997,7 +4007,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterImportDraft"
+                }
               }
             }
           },
@@ -4066,7 +4078,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -26408,6 +26422,756 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Channels"
+      },
+      "CharacterActivities": {
+        "properties": {
+          "idle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle"
+          },
+          "listening": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listening"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking"
+          },
+          "speaking": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaking"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idle",
+          "listening",
+          "thinking",
+          "speaking"
+        ],
+        "title": "CharacterActivities"
+      },
+      "CharacterAppearance": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Description"
+          },
+          "inset": {
+            "type": "number",
+            "maximum": 25.0,
+            "minimum": 12.5,
+            "title": "Inset"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterAsset"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Assets"
+          },
+          "activities": {
+            "$ref": "#/components/schemas/CharacterActivities"
+          },
+          "expressions": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterExpression"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Expressions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "inset",
+          "assets",
+          "activities",
+          "expressions"
+        ],
+        "title": "CharacterAppearance"
+      },
+      "CharacterAsset": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "title": "Kind"
+          },
+          "src": {
+            "type": "string",
+            "maxLength": 12582912,
+            "title": "Src"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "src"
+        ],
+        "title": "CharacterAsset"
+      },
+      "CharacterDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "value"
+        ],
+        "title": "CharacterDetail"
+      },
+      "CharacterEmotions": {
+        "properties": {
+          "neutral": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Neutral"
+          },
+          "happy": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Happy"
+          },
+          "thinking": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Thinking"
+          },
+          "concerned": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Concerned"
+          },
+          "celebrating": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Celebrating"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "neutral",
+          "happy",
+          "thinking",
+          "concerned",
+          "celebrating"
+        ],
+        "title": "CharacterEmotions"
+      },
+      "CharacterExamples": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Prompt"
+          },
+          "focus": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Focus"
+          },
+          "character": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Character"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt",
+          "focus",
+          "character"
+        ],
+        "title": "CharacterExamples"
+      },
+      "CharacterExpression": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Instruction"
+          },
+          "assetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assetid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "instruction",
+          "assetId"
+        ],
+        "title": "CharacterExpression"
+      },
+      "CharacterHistory": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterVersion"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "CharacterHistory"
+      },
+      "CharacterImportDraft": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile",
+          "note"
+        ],
+        "title": "CharacterImportDraft",
+        "description": "POST /characters/{agent_id}/import: a draft to review; nothing is saved."
+      },
+      "CharacterMode": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Text"
+          },
+          "voice": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Voice"
+          },
+          "expressiveness": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Expressiveness"
+          },
+          "motion": {
+            "type": "boolean",
+            "title": "Motion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "voice",
+          "expressiveness",
+          "motion"
+        ],
+        "title": "CharacterMode"
+      },
+      "CharacterModes": {
+        "properties": {
+          "default": {
+            "type": "string",
+            "enum": [
+              "focus",
+              "character"
+            ],
+            "title": "Default"
+          },
+          "focus": {
+            "$ref": "#/components/schemas/CharacterMode"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CharacterMode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "default",
+          "focus",
+          "character"
+        ],
+        "title": "CharacterModes"
+      },
+      "CharacterPackage": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "conker-character",
+            "title": "Format"
+          },
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "format",
+          "version",
+          "character"
+        ],
+        "title": "CharacterPackage",
+        "description": "GET /characters/{agent_id}/export: a Conker v1 character package."
+      },
+      "CharacterProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mood": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Mood"
+          },
+          "personality": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Personality"
+          },
+          "speakingStyle": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Speakingstyle"
+          },
+          "speakingPreset": {
+            "type": "string",
+            "enum": [
+              "warm",
+              "direct",
+              "curious",
+              "custom"
+            ],
+            "title": "Speakingpreset"
+          },
+          "portrait": {
+            "type": "string",
+            "maxLength": 3145728,
+            "title": "Portrait"
+          },
+          "renderer": {
+            "type": "string",
+            "enum": [
+              "static",
+              "live-2d",
+              "live-3d"
+            ],
+            "title": "Renderer"
+          },
+          "face": {
+            "type": "string",
+            "enum": [
+              "sprout",
+              "round",
+              "cat"
+            ],
+            "title": "Face"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "green",
+              "soft",
+              "graphite"
+            ],
+            "title": "Tone"
+          },
+          "emotions": {
+            "$ref": "#/components/schemas/CharacterEmotions"
+          },
+          "studio": {
+            "$ref": "#/components/schemas/CharacterStudio"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "mood",
+          "personality",
+          "speakingStyle",
+          "speakingPreset",
+          "portrait",
+          "renderer",
+          "face",
+          "tone",
+          "emotions",
+          "studio"
+        ],
+        "title": "CharacterProfile"
+      },
+      "CharacterRecord": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "revision",
+          "profile"
+        ],
+        "title": "CharacterRecord",
+        "description": "GET /characters/{agent_id}: the current or a chosen revision; revision 0 and no profile\nbefore the first save."
+      },
+      "CharacterSaved": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "revision",
+          "profile"
+        ],
+        "title": "CharacterSaved",
+        "description": "A save or restore: the new revision with the profile it holds."
+      },
+      "CharacterStudio": {
+        "properties": {
+          "soul": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Soul"
+          },
+          "backstory": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Backstory"
+          },
+          "relationship": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Relationship"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterDetail"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Details"
+          },
+          "examples": {
+            "$ref": "#/components/schemas/CharacterExamples"
+          },
+          "appearance": {
+            "$ref": "#/components/schemas/CharacterAppearance"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/CharacterVoice"
+          },
+          "modes": {
+            "$ref": "#/components/schemas/CharacterModes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "soul",
+          "backstory",
+          "relationship",
+          "details",
+          "examples",
+          "appearance",
+          "voice",
+          "modes"
+        ],
+        "title": "CharacterStudio"
+      },
+      "CharacterVersion": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "created_at",
+          "restored_from"
+        ],
+        "title": "CharacterVersion"
+      },
+      "CharacterVoice": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "design",
+              "reference"
+            ],
+            "title": "Source"
+          },
+          "engine": {
+            "type": "string",
+            "const": "qwen3-tts",
+            "title": "Engine"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Description"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "English",
+              "Chinese",
+              "Japanese",
+              "Korean",
+              "German",
+              "French",
+              "Russian",
+              "Portuguese",
+              "Spanish",
+              "Italian"
+            ],
+            "title": "Language"
+          },
+          "pronunciation": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Pronunciation"
+          },
+          "transcript": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Transcript"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterVoiceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "engine",
+          "description",
+          "language",
+          "pronunciation",
+          "transcript",
+          "reference"
+        ],
+        "title": "CharacterVoice"
+      },
+      "CharacterVoiceReference": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "src": {
+            "type": "string",
+            "maxLength": 12582912,
+            "title": "Src"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "src"
+        ],
+        "title": "CharacterVoiceReference"
       },
       "Chart": {
         "properties": {
