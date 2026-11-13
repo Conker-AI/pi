@@ -23,6 +23,7 @@ import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
+from starlette.requests import ClientDisconnect
 
 from .store import AuthError
 
@@ -60,6 +61,15 @@ def unavailable() -> AuthError:
     )
 
 
+def stalled() -> AuthError:
+    """The browser stopped sending (or went away) mid-upload: Pi was fine and saved nothing."""
+    return AuthError(
+        "The upload stopped before it finished. Nothing was saved; try again.",
+        408,
+        code="upload_incomplete",
+    )
+
+
 def unreadable() -> AuthError:
     return AuthError("Pi returned an unexpected answer. Check its logs before retrying.", 502)
 
@@ -88,6 +98,8 @@ class Upload:
                 chunk = await asyncio.wait_for(stream.__anext__(), UPLOAD_READ_SECONDS)
             except StopAsyncIteration:
                 break
+            except (TimeoutError, ClientDisconnect):
+                raise self.refuse(stalled()) from None
             if not chunk:
                 continue
             size += len(chunk)
@@ -193,6 +205,9 @@ async def relay(
             content=upload.chunks() if upload is not None else None,
         )
         response = await client.send(outgoing, stream=True)
+    except asyncio.CancelledError:
+        await client.aclose()
+        raise
     except Exception:
         await client.aclose()
         if upload is not None and upload.refusal is not None:
