@@ -148,8 +148,16 @@ be a decision with visible consequences.
   It now also covers every chat below a hidden one, the chat of a kept AI job until it is adopted,
   kept agents, teams and jobs, recall results and retries, and a turn in a trashed chat keeps its
   own memories. (#210)
-- **Owner settings, preferences and model configuration describe their replies** in OpenAPI, so
-  generated clients can type them; what Pi sends is unchanged. (#229)
+- **Owner routes describe their replies in OpenAPI** (D-01), so generated clients can type them;
+  what Pi sends is unchanged (`responses=described(...)` documents a reply, it never re-validates
+  or filters it): owner settings, preferences and model configuration (#229), search (#233),
+  Inbox questions, change requests and handled actions (#235), chat name and output (#236),
+  characters (#237), plan usage and setup (#238), skills and tool drafts (#239), chat imports
+  (#240), the memory library, corrections, forget, remember and delete forever (#242). Contract
+  change: `GET /system/files/roots` declares the two shapes it sends, chosen by `mode`
+  (`RootCatalogue` becomes a union; the bytes sent are the same) (#241); some existing model
+  classes got clearer component names (`ChangeRequestView`, `Character*`), the old names stay as
+  aliases.
 - **Forgetting a chat forgets its ToolGate tool records** (gap 9). The chat's approval request and
   action ids are queued with the forgetting (`toolgate_forgets`, ids only); once Pi runs again it
   asks ToolGate to forget them (`POST /v2/agent/forget`, toolgate#105) and retries anything still
