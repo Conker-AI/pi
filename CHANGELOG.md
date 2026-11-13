@@ -153,7 +153,8 @@ be a decision with visible consequences.
   or filters it): owner settings, preferences and model configuration (#229), search (#233),
   Inbox questions, change requests and handled actions (#235), chat name and output (#236),
   characters (#237), plan usage and setup (#238), skills and tool drafts (#239), chat imports
-  (#240), the memory library, corrections, forget, remember and delete forever (#242). Contract
+  (#240), the memory library, corrections, forget, remember and delete forever (#242), the chat
+  itself: session, settings, context, summary and the new-chat draft (#244). Contract
   change: `GET /system/files/roots` declares the two shapes it sends, chosen by `mode`
   (`RootCatalogue` becomes a union; the bytes sent are the same) (#241); some existing model
   classes got clearer component names (`ChangeRequestView`, `Character*`), the old names stay as
