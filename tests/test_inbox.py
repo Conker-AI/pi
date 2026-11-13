@@ -112,8 +112,8 @@ def test_approval_in_needs_you(tmp_path):
         assert private["source"]["turnId"] == turn2
 
 
-def test_proposals_and_memory(tmp_path):
-    """An open proposal and a pending memory proposal appear; decided ones do not."""
+def test_suggestions_listed_and_retired_memory_proposals_not(tmp_path):
+    """An open suggestion appears; memory proposals (retired 2026-11-12) and decided ones do not."""
     path = tmp_path / "pi.db"
     with closing(Store(path)) as store:
         # Create open proposal
@@ -141,7 +141,7 @@ def test_proposals_and_memory(tmp_path):
                     "noticed",
                     "suggestion",
                     "if_approved",
-                    "evidence",
+                    "[]",  # message ids, as proposals.run_pass stores them
                     "open",
                     1699900000.0,
                 ),
@@ -158,12 +158,12 @@ def test_proposals_and_memory(tmp_path):
                     "noticed",
                     "suggestion",
                     "if_approved",
-                    "evidence",
+                    "[]",  # message ids, as proposals.run_pass stores them
                     "declined",
                     1699900000.0,
                 ),
             )
-            # Pending memory proposal
+            # A pending memory proposal left from before the kind was retired
             sid = store.create_session(title="Memory test")
             db.execute(
                 """INSERT INTO memory_proposals
@@ -186,7 +186,7 @@ def test_proposals_and_memory(tmp_path):
                     1699900000.0,
                 ),
             )
-            # Decided memory proposal should not appear
+            # And a decided one
             db.execute(
                 """INSERT INTO memory_proposals
                    (id, session_id, payload_hash, memory_id, agent_id, expected_revision,
@@ -213,17 +213,13 @@ def test_proposals_and_memory(tmp_path):
         result = inbox.inbox(store, now=now)
 
         needs_you = result["needsYou"]
-        assert len(needs_you) == 2
+        assert len(needs_you) == 1
 
         proposal = next(item for item in needs_you if item["kind"] == "suggestion")
         assert proposal["id"] == "prop1"
         assert proposal["title"] == "Test suggestion"
         assert proposal["source"]["kind"] == "proposal"
-
-        memory = next(item for item in needs_you if item["kind"] == "memory")
-        assert memory["id"] == "mem1"
-        assert memory["title"] == "Memory change to review"
-        assert memory["source"]["kind"] == "memory-proposal"
+        assert not [item for item in needs_you if item["kind"] == "memory"]
 
 
 def test_urgent_item_sorts_first(tmp_path):

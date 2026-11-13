@@ -49,7 +49,6 @@ pi/memory/edits.py 16
 pi/memory/import_formats.py 6
 pi/memory/import_offers.py 3
 pi/memory/imports.py 1
-pi/memory/proposals.py 13
 pi/memory/ranking.py 2
 pi/memory/service.py 5
 pi/models/chatgpt.py 4
@@ -58,7 +57,6 @@ pi/models/direct.py 11
 pi/models/evaluations.py 4
 pi/models/openrouter.py 2
 pi/models/roles.py 7
-pi/owner/plan_alerts.py 6
 pi/owner/self_check.py 2
 pi/schedule/agent_jobs.py 2
 pi/schedule/jobs.py 1

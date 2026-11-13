@@ -111,10 +111,12 @@ nothing real):
   model call): "“<name>” is live. Want me to run it now?" It goes to the chat the conversation
   continues in after a fork, waits while the chat is answering, and is not repeated.
 
-Other owner routes: `GET /change-requests`, `GET /change-requests/{id}`, `POST .../approve` (password
-verified; jobs and memories), `POST .../saved` with `{"draftId": ...}` (tool requests only; the
-owner's password-verified save in Tools already happened, so this records the id and needs only the
-signed-in session), `POST .../decline` (signed-in session only).
+Other owner routes, each needing only the signed-in session: `GET /change-requests`,
+`GET /change-requests/{id}`, `POST .../approve` (jobs, memories, agents and teams),
+`POST .../saved` with `{"draftId": ...}` (tool requests only; the save in Tools already happened,
+so this records the id), `POST .../decline`. A request from a chat that is forgotten or in the
+Trash is not listed and answers 404 on every route until the chat is restored; one with no chat
+(the owner's own) always shows. An unknown kind is refused (`unknown_kind`), never made.
 `GET /tools` lists Conker's own tools first, so the owner sees everything the AI can call. The Inbox
 lists open requests (`kind: "change-request"`). Forgetting a chat deletes its requests.
 

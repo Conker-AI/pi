@@ -10,7 +10,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.owner import plan_alerts, self_check, updates
 from pi.owner import preferences as owner_preferences
-from pi.schedule import agent_jobs
+from pi.schedule import agent_jobs, proposals
 
 
 def _owner_zone(store):
@@ -21,6 +21,21 @@ def _owner_zone(store):
         return UTC, "UTC"
     name = owner_preferences.OwnerPreferences.model_validate_json(row["preferences"]).quietHours
     return ZoneInfo(name.timeZone), name.timeZone
+
+
+# A job Conker kept from a forgotten or trashed chat is named in that chat's words; once the owner
+# adopted it (createdBy owner) it is his. Same rule as the jobs list and the briefing.
+_ADOPTED = "json_extract(definition,'$.createdBy')='owner'"
+
+
+def _hidden_jobs(db) -> list[str]:
+    kept = sorted(visibility.kept_from_hidden(db, "ai_job"))
+    if not kept:
+        return []
+    marks = ",".join("?" * len(kept))
+    query = f"SELECT id FROM scheduled_jobs WHERE id IN ({marks}) AND {_ADOPTED}"
+    adopted = {row[0] for row in db.execute(query, kept)}
+    return [job for job in kept if job not in adopted]
 
 
 def _local_midnight(day, zone):
@@ -72,8 +87,10 @@ def _needs_suggestion_items(store):
     """Get open companion proposals."""
     items = []
     with store._connect() as db:
+        # A proposal from a hidden chat carries its words in the title (proposals.HIDDEN).
         rows = db.execute(
-            "SELECT * FROM proposals WHERE state='open' ORDER BY created_at"
+            f"SELECT * FROM proposals WHERE state='open' AND id NOT IN ({proposals.HIDDEN}) "
+            "ORDER BY created_at"
         ).fetchall()
 
         for row in rows:
@@ -84,35 +101,6 @@ def _needs_suggestion_items(store):
                     "title": row["title"],
                     "since": row["created_at"],
                     "source": {"kind": "proposal", "proposalId": row["id"]},
-                }
-            )
-    return items
-
-
-def _needs_memory_items(store):
-    """Get pending memory proposals."""
-    items = []
-    with store._connect() as db:
-        rows = db.execute(
-            f"""SELECT mp.*, s.title as session_title FROM memory_proposals mp
-               LEFT JOIN sessions s ON s.id=mp.session_id
-               WHERE mp.state='pending'
-               AND NOT {visibility.hidden_sql("mp.session_id")}
-               ORDER BY mp.created_at"""
-        ).fetchall()
-
-        for row in rows:
-            items.append(
-                {
-                    "kind": "memory",
-                    "id": row["id"],
-                    "title": "Memory change to review",
-                    "since": row["created_at"],
-                    "source": {
-                        "kind": "memory-proposal",
-                        "proposalId": row["id"],
-                        "sessionId": row["session_id"],
-                    },
                 }
             )
     return items
@@ -158,13 +146,14 @@ def _handled_items(store, day_start):
                ORDER BY co.occurred_at DESC LIMIT 50""",
             (day_start,),
         ).fetchall()
+        hidden_jobs = set(_hidden_jobs(db))
 
         for row in rows:
             if row["scheduled_run_id"]:
                 run = db.execute(
                     "SELECT * FROM scheduled_runs WHERE id=?", (row["scheduled_run_id"],)
                 ).fetchone()
-                if run:
+                if run and run["job_id"] not in hidden_jobs:
                     definition = json.loads(run["definition"])
                     items.append(
                         {
@@ -221,11 +210,16 @@ def _upcoming_items(store, now):
     week_later = now + (7 * 24 * 60 * 60)
 
     with store._connect() as db:
+        # A turned-off job keeps its next_at but will not run.
+        hidden_jobs = _hidden_jobs(db)
+        marks = ",".join("?" * len(hidden_jobs))
         rows = db.execute(
-            """SELECT * FROM scheduled_jobs
+            f"""SELECT * FROM scheduled_jobs
                WHERE next_at <= ? AND next_at > ?
+               AND COALESCE(json_extract(definition,'$.enabled'), 1)
+               AND id NOT IN ({marks})
                ORDER BY next_at ASC LIMIT 20""",
-            (week_later, now),
+            (week_later, now, *hidden_jobs),
         ).fetchall()
 
         for row in rows:
@@ -342,7 +336,6 @@ def inbox(store, *, now=None):
     approval_turns = store.awaiting_approval()
     needs_you.extend(_needs_approval_items(store, day_start, approval_turns))
     needs_you.extend(_needs_suggestion_items(store))
-    needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store, approval_turns))
     needs_you.extend(plan_alerts.needs_you(store))
     needs_you.extend(self_check.needs_you(store))
