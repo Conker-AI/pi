@@ -6,11 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- **The gateway's /health asks the terminal sidecar** (`gateway/api.py`). It said "Isolated
-  terminal sidecar ready" whenever a terminal was configured; the readiness read at start was never
-  used again. Each health check now asks the sidecar, and one that stopped answering (its channel
-  is never reconnected) shows as `owner_terminal: unavailable` and the gateway as degraded.
-
+- **A fork seeded by a summary keeps its parent's outside content** (`pi/turns/access.py`). An
+  automatic fork's child starts from the model's summary of the parent, which carries what the
+  parent read (web pages, tool results, attachments), yet it was judged on its own messages only.
+  Now a chat that starts from a summary counts as having read outside content whenever its parent
+  (and so on up) did, so his words no longer approve an action and remembering asks him.
 - **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
   OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
   key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
