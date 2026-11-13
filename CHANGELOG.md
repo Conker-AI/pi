@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A fork seeded by a summary keeps its parent's outside content** (`pi/turns/access.py`). An
+  automatic fork's child starts from the model's summary of the parent, which carries what the
+  parent read (web pages, tool results, attachments), yet it was judged on its own messages only.
+  Now a chat that starts from a summary counts as having read outside content whenever its parent
+  (and so on up) did, so his words no longer approve an action and remembering asks him.
+
 - **A decision Pi was not told about still continues the work** (docs/inbox-answers.md). A
   decision made with ToolGate's admin key, or while Pi was down, used to leave the parked turn or
   cron job run waiting for ever. Pi's decision sweep (`pi/turns/decision_sweep.py`, every
