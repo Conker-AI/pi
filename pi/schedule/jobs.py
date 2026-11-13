@@ -197,7 +197,7 @@ def set_enabled(store, identity, body, now=None):
 # scheduled_runs without an alias.
 WAITING_TURN = (
     "scheduled_runs.status='completed' "
-    "AND json_extract(scheduled_runs.receipt,'$.waitingForApproval') "
+    "AND COALESCE(json_extract(scheduled_runs.receipt,'$.waitingForApproval'), 0) "
     "AND EXISTS (SELECT 1 FROM turns t WHERE t.id=json_extract(scheduled_runs.receipt,'$.turnId') "
     "AND t.status='awaiting_approval')"
 )
