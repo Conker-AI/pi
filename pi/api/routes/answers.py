@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, Path
 from pydantic import Field
 
 from pi.agents import asks
-from pi.core.models import Strict
+from pi.agents.inbox_replies import AskList, AskView
+from pi.core.models import Strict, described
 from pi.schedule import jobs
 from pi.turns import answers
 
@@ -52,23 +53,23 @@ def router(store, loop, authorize, executor=lambda: None):
             cancel_run=lambda run_id: jobs.cancel_run(store(), run_id),
         )
 
-    @routes.get("/asks")
+    @routes.get("/asks", responses=described(AskList))
     def listing():
         """Conker's questions waiting for him, oldest first."""
         return {"schemaVersion": 1, "results": asks.listing(store())}
 
-    @routes.get("/asks/{identity}")
+    @routes.get("/asks/{identity}", responses=described(AskView))
     def get(identity: AskPath):
         return asks.get(store(), identity)
 
-    @routes.post("/asks/{identity}/answer")
+    @routes.post("/asks/{identity}/answer", responses=described(AskView))
     def answer(identity: AskPath, body: Answer):
         """Record his answer; it goes to that chat as his next message."""
         ask = asks.answer(store(), identity, body.text, chosen=body.chosen)
         answers.answered(loop(), ask)
         return ask
 
-    @routes.post("/asks/{identity}/dismiss")
+    @routes.post("/asks/{identity}/dismiss", responses=described(AskView))
     def dismiss(identity: AskPath):
         """No answer: nothing goes back to the chat."""
         return asks.dismiss(store(), identity)
