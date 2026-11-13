@@ -33,7 +33,7 @@ def _kick(loop):
 def drafts_router(store, authorize, loop=lambda: None):
     routes = APIRouter(dependencies=[Depends(authorize)])
 
-    @routes.post("/tool-drafts")
+    @routes.post("/tool-drafts", responses=described(change_requests.View))
     def new(body: tool_drafts.NewDraft):
         """File a tool request without a chat; drafting starts at once and the answer does not
         wait for it. The same request_id gives back the same request."""

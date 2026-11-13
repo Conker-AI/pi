@@ -2,6 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
+from pi.core.models import described
+from pi.models.roles import ConfigurationDocument
 from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import models as setup_models
@@ -10,6 +12,7 @@ from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
 from pi.setup import status as setup_status
 from pi.setup import status_models
+from pi.setup.boundary_replies import ToolGatePolicySummary
 
 
 def router(store, owner_key_configured, memory, toolgate, model_router, speech, authorize):
@@ -45,7 +48,7 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
     ):
         return setup_choices.record(store(), step, body)
 
-    @routes.get("/boundaries")
+    @routes.get("/boundaries", responses=described(ToolGatePolicySummary))
     def boundaries():
         client = toolgate()
         if client is None:
@@ -67,7 +70,7 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
     def model_options():
         return setup_models.options(store(), model_router())
 
-    @routes.post("/models")
+    @routes.post("/models", responses=described(ConfigurationDocument))
     def select_model(body: setup_models.Selection):
         try:
             return setup_models.select(store(), model_router(), body)

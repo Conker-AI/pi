@@ -139,20 +139,20 @@ def _identifier(value):
     return value
 
 
-class Detail(Strict):
+class CharacterDetail(Strict):
     id: AssetId
     label: str = Field(max_length=80)
     value: str = Field(max_length=500)
     _id = field_validator("id")(_identifier)
 
 
-class Examples(Strict):
+class CharacterExamples(Strict):
     prompt: str = Field(max_length=1000)
     focus: Notes
     character: Notes
 
 
-class Asset(Strict):
+class CharacterAsset(Strict):
     id: AssetId
     name: str = Field(max_length=120)
     kind: Literal["image", "video"]
@@ -165,14 +165,14 @@ class Asset(Strict):
         return self
 
 
-class Activities(Strict):
+class CharacterActivities(Strict):
     idle: Assignment
     listening: Assignment
     thinking: Assignment
     speaking: Assignment
 
 
-class Expression(Strict):
+class CharacterExpression(Strict):
     id: AssetId
     name: str = Field(min_length=1, max_length=60)
     instruction: str = Field(max_length=500)
@@ -180,12 +180,12 @@ class Expression(Strict):
     _id = field_validator("id")(_identifier)
 
 
-class Appearance(Strict):
+class CharacterAppearance(Strict):
     description: Notes
     inset: float = Field(ge=12.5, le=25, allow_inf_nan=False)
-    assets: list[Asset] = Field(max_length=16)
-    activities: Activities
-    expressions: list[Expression] = Field(max_length=16)
+    assets: list[CharacterAsset] = Field(max_length=16)
+    activities: CharacterActivities
+    expressions: list[CharacterExpression] = Field(max_length=16)
 
     @model_validator(mode="after")
     def references(self):
@@ -203,7 +203,7 @@ class Appearance(Strict):
         return self
 
 
-class Reference(Strict):
+class CharacterVoiceReference(Strict):
     name: str = Field(max_length=120)
     src: str = Field(max_length=12 * 1024 * 1024)
 
@@ -214,7 +214,7 @@ class Reference(Strict):
         return value
 
 
-class Voice(Strict):
+class CharacterVoice(Strict):
     source: Literal["design", "reference"]
     engine: Literal["qwen3-tts"]
     description: Notes
@@ -232,31 +232,31 @@ class Voice(Strict):
     ]
     pronunciation: Notes
     transcript: str = Field(max_length=3000)
-    reference: Reference | None
+    reference: CharacterVoiceReference | None
 
 
-class Mode(Strict):
+class CharacterMode(Strict):
     text: Notes
     voice: Notes
     expressiveness: float = Field(ge=0, le=100, allow_inf_nan=False)
     motion: bool
 
 
-class Modes(Strict):
+class CharacterModes(Strict):
     default: Literal["focus", "character"]
-    focus: Mode
-    character: Mode
+    focus: CharacterMode
+    character: CharacterMode
 
 
-class Studio(Strict):
+class CharacterStudio(Strict):
     soul: Notes
     backstory: Notes
     relationship: Notes
-    details: list[Detail] = Field(max_length=20)
-    examples: Examples
-    appearance: Appearance
-    voice: Voice
-    modes: Modes
+    details: list[CharacterDetail] = Field(max_length=20)
+    examples: CharacterExamples
+    appearance: CharacterAppearance
+    voice: CharacterVoice
+    modes: CharacterModes
 
     @field_validator("details")
     @classmethod
@@ -270,7 +270,7 @@ Face = Literal["sprout", "round", "cat"]
 EmotionAppearance = Literal["default", "sprout", "round", "cat", "portrait"]
 
 
-class Emotions(Strict):
+class CharacterEmotions(Strict):
     neutral: EmotionAppearance
     happy: EmotionAppearance
     thinking: EmotionAppearance
@@ -278,7 +278,7 @@ class Emotions(Strict):
     celebrating: EmotionAppearance
 
 
-class Profile(Strict):
+class CharacterProfile(Strict):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
     mood: str = Field(max_length=100)
     personality: Notes
@@ -288,8 +288,8 @@ class Profile(Strict):
     renderer: Literal["static", "live-2d", "live-3d"]
     face: Face
     tone: Literal["green", "soft", "graphite"]
-    emotions: Emotions
-    studio: Studio
+    emotions: CharacterEmotions
+    studio: CharacterStudio
 
     @field_validator("portrait")
     @classmethod
@@ -299,9 +299,25 @@ class Profile(Strict):
         return value
 
 
+# Short names kept for callers; the Character* names are what OpenAPI shows (D-01).
+Detail = CharacterDetail
+Examples = CharacterExamples
+Asset = CharacterAsset
+Activities = CharacterActivities
+Expression = CharacterExpression
+Appearance = CharacterAppearance
+Reference = CharacterVoiceReference
+Voice = CharacterVoice
+Mode = CharacterMode
+Modes = CharacterModes
+Studio = CharacterStudio
+Emotions = CharacterEmotions
+Profile = CharacterProfile
+
+
 class Save(Strict):
     expected_revision: int = Field(ge=0)
-    profile: Profile
+    profile: CharacterProfile
 
 
 class Restore(Strict):
@@ -339,8 +355,8 @@ class CharacterError(ServiceError, RuntimeError):
 
 
 def _serialize(profile):
-    value = Profile.model_validate(
-        profile.model_dump() if isinstance(profile, Profile) else profile
+    value = CharacterProfile.model_validate(
+        profile.model_dump() if isinstance(profile, CharacterProfile) else profile
     )
     # The frontend editor normalizes all authored drafts to custom; legacy labels grant no behavior.
     value.speakingPreset = "custom"
