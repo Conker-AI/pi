@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from pi.actions import identities as actions
+from pi.actions import tool_forgets
 from pi.agents import profiles as agents
 from pi.calls import call_turns
 from pi.context import research_usage
@@ -304,13 +305,16 @@ class Store:
             status = "cancelled"
         sets = ", ".join(f"{k}=?" for k in fields)
         clause = f", {sets}" if sets else ""
-        return (
+        changed = (
             db.execute(
                 f"UPDATE turns SET status=?, ended_at=?{clause} WHERE id=? AND status=?",
                 (status, time.time(), *fields.values(), turn_id, expected_status),
             ).rowcount
             == 1
         )
+        if changed:
+            tool_forgets.remember(db, turn_id, fields.get("approval_request_id"))
+        return changed
 
     def complete_turn(self, turn_id, text, *, citations=None, reply_request_id=None, **fields):
         """A final reply and terminal state are one commit, including exact message provenance."""

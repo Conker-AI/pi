@@ -22,7 +22,7 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from pi.actions import withdrawals
+from pi.actions import tool_forgets, withdrawals
 from pi.agents import agent_calls, asks, change_requests, keep, retired_workflows, skills
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
@@ -123,7 +123,8 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
         "memory_effect": "queue source deletions and clear all cached turn context packages",
         # Done by Pi once it runs again (pi.conversation.forget_followups); never blocks this.
         "followup_effect": "withdraw the listed approval requests in ToolGate, forget the "
-        "memories Conker kept from these chats on its own, turn off the AI jobs it made",
+        "listed tool records there, forget the memories Conker kept from these chats on its "
+        "own, turn off the AI jobs it made",
     }
     for sid in sessions:
         for table, field in (("messages", "message_ids"), ("turns", "turn_ids")):
@@ -147,6 +148,11 @@ def _plan(db: sqlite3.Connection, session_id: str) -> dict:
             )
         plan["submission_ids"] = sorted(identities)
     plan["approval_request_ids"] = sorted({ids[0] for ids in withdrawals.waiting(db, sessions)})
+    found = tool_forgets.records(db, sessions)
+    plan["tool_record_ids"] = {
+        kind: sorted({identity for found_kind, identity, _ in found if found_kind == kind})
+        for kind in ("request", "action")
+    }
     plan["confirmation"] = hashlib.sha256(
         json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -203,6 +209,8 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
 
         # Before anything changes a turn: the approvals its parked turns wait on, to withdraw.
         withdrawals.queue(db, plan["session_ids"], now=when)
+        # And every tool record its turns left in ToolGate, before tool_actions loses its args.
+        tool_forgets.queue(db, plan["session_ids"], now=when)
         # What Conker made on its own here: memories to forget, AI jobs to turn off (kept).
         keep.forget_chats(db, plan["session_ids"])
         context_controls.redact(db, plan["session_ids"])
@@ -307,6 +315,7 @@ def forget(path: Path | str, session_id: str, confirmation: str) -> dict:
         db.executescript(memory_store.SCHEMA)
         # A database Pi has not opened since this table arrived still gets its withdrawals.
         db.executescript(withdrawals.SCHEMA)
+        db.executescript(tool_forgets.SCHEMA)
         db.execute("PRAGMA secure_delete=ON")
         db.execute("BEGIN IMMEDIATE")
         try:
