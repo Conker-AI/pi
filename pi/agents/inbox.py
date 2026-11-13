@@ -209,6 +209,11 @@ def _handled_items(store, day_start):
     return items
 
 
+def _private(db, session_id) -> bool:
+    privacy = session_settings.source_privacy(db, session_id)
+    return privacy is not None and any(privacy.values())
+
+
 def _expired_items(store, day_start):
     """Approvals that expired unanswered today: Pi ended the turn, nothing was done."""
     with store._connect() as db:
@@ -220,11 +225,14 @@ def _expired_items(store, day_start):
             "ORDER BY t.ended_at DESC LIMIT 50",
             (APPROVAL_EXPIRED, day_start),
         ).fetchall()
+        private = {row["session_id"] for row in rows if _private(db, row["session_id"])}
     return [
         {
             "kind": "approval-expired",
             "title": f"Approval expired: {row['approval_tool_id'] or 'an action'}",
-            "chat": row["title"] or "Conversation",
+            "chat": "Private chat"
+            if row["session_id"] in private
+            else row["title"] or "Conversation",
             "at": row["ended_at"],
             "source": {"kind": "turn", "sessionId": row["session_id"], "turnId": row["id"]},
         }
