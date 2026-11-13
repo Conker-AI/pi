@@ -141,7 +141,7 @@ def test_suggestions_listed_and_retired_memory_proposals_not(tmp_path):
                     "noticed",
                     "suggestion",
                     "if_approved",
-                    "evidence",
+                    "[]",  # message ids, as proposals.run_pass stores them
                     "open",
                     1699900000.0,
                 ),
@@ -158,7 +158,7 @@ def test_suggestions_listed_and_retired_memory_proposals_not(tmp_path):
                     "noticed",
                     "suggestion",
                     "if_approved",
-                    "evidence",
+                    "[]",  # message ids, as proposals.run_pass stores them
                     "declined",
                     1699900000.0,
                 ),
