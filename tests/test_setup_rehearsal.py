@@ -120,6 +120,38 @@ def test_rehearsal_requires_real_conversation_memory_review_and_approval(tmp_pat
         assert status_receipts._receipt_step(store, "rehearsal", now=NOW).state == ("degraded")
 
 
+def test_receipt_survives_later_conversations_but_not_losing_its_own(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        choice = choose_memory(store)
+        gate = Gate()
+        first = complete_conversation(store)
+        setup_rehearsal.review_memory(
+            store,
+            setup_rehearsal.MemoryReviewInput(
+                requestId="memory-review-1", expectedChoiceRevision=choice.revision
+            ),
+            Memory(),
+            now=NOW_TS - 20,
+        )
+        flow = setup_rehearsal.ApprovalInput(requestId="approval-flow-1")
+        setup_rehearsal.start_approval(store, flow, gate, now=NOW_TS - 10)
+        setup_rehearsal.resume_approval(store, flow, gate, now=NOW_TS - 5)
+        receipt = setup_rehearsal.finalize(store, now=NOW)
+
+        # Using Conker after the rehearsal must not undo it.
+        complete_conversation(store, ended_at=NOW_TS + 60)
+        later = datetime.fromtimestamp(NOW_TS + 120, UTC)
+        assert setup_rehearsal.status(store, now=later).state == "complete"
+        assert status_receipts._receipt_step(store, "rehearsal", now=later).state == "complete"
+        assert setup_rehearsal.finalize(store, now=later) == receipt
+
+        # The rehearsal's own conversation no longer counts once it is not complete.
+        with store._connect() as db:
+            db.execute("UPDATE turns SET status='failed' WHERE id=?", (first,))
+        assert setup_rehearsal.status(store, now=later).state != "complete"
+        assert status_receipts._receipt_step(store, "rehearsal", now=later).state == "degraded"
+
+
 def test_memory_review_is_revision_bound_idempotent_and_content_free(tmp_path):
     with closing(Store(tmp_path / "pi.db")) as store:
         choice = choose_memory(store, "skip")
