@@ -6,6 +6,13 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A team run cut off by a restart can be cancelled; a too-long role input burns nothing**
+  (`pi/agents/team_execution.py`). A run that was running when Pi restarted stayed `interrupted`
+  for good: finish refused it and nothing else could close it. The owner can now cancel it
+  (completing it is still refused, its outcome being unknown). A role input over 16000 characters
+  (or a selected message that is gone) is now refused before the step is saved, so the run stays
+  ready instead of being blocked by a step that never ran.
+
 - **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
   OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
   key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
