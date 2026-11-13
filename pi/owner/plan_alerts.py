@@ -180,7 +180,9 @@ def record(
                 fields = {
                     **facts,
                     "usedPercent": max(facts.get("usedPercent", 0), window.usedPercent),
-                    "resetsAt": facts.get("resetsAt") or window.resetsAt,
+                    "resetsAt": (
+                        window.resetsAt if facts.get("resetsAt") is None else facts["resetsAt"]
+                    ),
                 }
                 notices.update(db, alert["id"], title=title(fields, reset=False), facts=fields)
         db.commit()

@@ -135,3 +135,21 @@ def test_forgetting_a_chat_takes_its_notes_and_leaves_plan_alerts(tmp_path):
         db.commit()
         kinds = [r[0] for r in db.execute("SELECT kind FROM notices ORDER BY kind")]
     assert kinds == ["plan", "plan"]
+
+
+def test_a_note_left_by_an_older_pi_after_its_chat_was_forgotten_goes_at_start(tmp_path):
+    # An older Pi (a code rollback without the snapshot) forgot the chat but could not see
+    # notices, so the note's text stayed there. The next start removes it.
+    path = tmp_path / "pi.db"
+    session = older_pi(path)
+    with closing(Store(path)):
+        pass
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO forgotten_sessions VALUES (?, 'rcpt_test')", (session,))
+        db.commit()
+        assert db.execute("SELECT COUNT(*) FROM notices WHERE session_id=?", (session,)).fetchone()[
+            0
+        ]
+    with closing(Store(path)), closing(sqlite3.connect(path)) as db:
+        assert not db.execute("SELECT 1 FROM notices WHERE session_id=?", (session,)).fetchone()
+        assert db.execute("SELECT COUNT(*) FROM notices WHERE kind='plan'").fetchone()[0] == 2

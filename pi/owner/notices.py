@@ -41,8 +41,16 @@ AGENT_JOB = "agent-job"
 KINDS = frozenset({PLAN, AGENT_JOB})
 
 
+# A note whose chat was forgotten. Normally `redact` removed it with the chat; this catches one
+# written while an older Pi ran on this database (a code rollback without the snapshot), which
+# could neither see this table nor clear it.
+_FORGOTTEN = "DELETE FROM notices WHERE session_id IN (SELECT session_id FROM forgotten_sessions)"
+
+
 def initialize(db: sqlite3.Connection) -> None:
     db.executescript(SCHEMA)
+    if _exists(db, "forgotten_sessions"):
+        db.executescript(_FORGOTTEN + ";")
 
 
 def _dump(facts: dict) -> str:
@@ -95,6 +103,8 @@ def redact(db: sqlite3.Connection, session_ids: list[str]) -> None:
     if not session_ids or not _exists(db, "notices"):
         return
     db.executemany("DELETE FROM notices WHERE session_id=?", [(value,) for value in session_ids])
+    if _exists(db, "forgotten_sessions"):
+        db.execute(_FORGOTTEN)
 
 
 def merge_old_tables(db: sqlite3.Connection) -> None:
