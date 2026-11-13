@@ -135,6 +135,33 @@ be a decision with visible consequences.
   the caller's model reads its reply from that chat, so forgetting or trashing it removes the reply
   too. The owner's Stop reaches the child. At most depth 2, no loops, 3 per turn and 30 a day, not
   from team roles or AI jobs (`agent_calls`, forgotten with either chat). docs/agents.md.
+- **Deleting an imported chat erases its words in MemoryGate too.** The deletion records the
+  chat's MemoryGate evidence ids (`import_evidence_erasures`, ids only), and the listener sender
+  erases them before it offers anything new, so the words, their analyses and the memories made
+  from them go with the chat. (#190)
+- **Delete forever holds.** A queued deletion that fails for a passing reason stays queued and Pi
+  tries again a minute later (refused after 3 starts); a queued chat is hidden at once, and
+  restoring it answers 409 `deletion_pending`. (#193)
+- **One rule hides forgotten and trashed chats** (`pi/conversation/visibility.py`). Lists, search,
+  recall, the memory explorer, proposals, Inbox tasks, handled actions, artifacts and other chats'
+  model input all leave them out; the Trash view and the chat's own link still show them. (#202)
+  It now also covers every chat below a hidden one, the chat of a kept AI job until it is adopted,
+  kept agents, teams and jobs, recall results and retries, and a turn in a trashed chat keeps its
+  own memories. (#210)
+- **Owner settings, preferences and model configuration describe their replies** in OpenAPI, so
+  generated clients can type them; what Pi sends is unchanged. (#229)
+- **Forgetting a chat forgets its ToolGate tool records** (gap 9). The chat's approval request and
+  action ids are queued with the forgetting (`toolgate_forgets`, ids only); once Pi runs again it
+  asks ToolGate to forget them (`POST /v2/agent/forget`, toolgate#105) and retries anything still
+  pending, running or not confirmed. Every request a turn parked on is recorded, not only the
+  last. (#231)
+- **docs/boundaries.md**: turn states, the three credentials, and what Pi and MemoryGate each
+  hold. (#230)
+- **Repository tooling, no behaviour change.** The shared .editorconfig, pre-commit hooks,
+  CODEOWNERS and Renovate config; a pyright type check whose per-file baseline may only shrink; CI
+  fails below 91% coverage; the mutation drills run beside the tests (CI 13.5 -> 7 min); a table of
+  every Inbox kind (docs/inbox-kinds.md); the turn mixins declare the attributes they use (types
+  only). (#195, #201, #204, #207, #232)
 
 ## 0.24.0
 
