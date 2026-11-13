@@ -104,13 +104,32 @@ def _digest(value: dict) -> str:
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
 
 
+_CONVERSATIONS = (
+    "SELECT t.id,t.ended_at FROM turns t "
+    "LEFT JOIN forgotten_sessions f ON f.session_id=t.session_id "
+    "WHERE t.status='complete' AND t.ended_at IS NOT NULL AND f.session_id IS NULL "
+)
+# A receipt names the newest conversation at the moment it was recorded. Conversations
+# that end later must not undo it, so a receipt is checked against the conversations that
+# had ended by its completion time; a few are tried in case of equal end times.
+_BOUND_CANDIDATES = 5
+
+
 def _conversation(db: sqlite3.Connection):
-    return db.execute(
-        "SELECT t.id,t.ended_at FROM turns t "
-        "LEFT JOIN forgotten_sessions f ON f.session_id=t.session_id "
-        "WHERE t.status='complete' AND t.ended_at IS NOT NULL AND f.session_id IS NULL "
-        "ORDER BY t.ended_at DESC,t.id DESC LIMIT 1"
-    ).fetchone()
+    return db.execute(_CONVERSATIONS + "ORDER BY t.ended_at DESC,t.id DESC LIMIT 1").fetchone()
+
+
+def _receipt_holds(db: sqlite3.Connection, receipt, memory, approval) -> bool:
+    """True while the receipt's own conversation, memory review and approval still stand."""
+    if receipt is None:
+        return False
+    candidates = db.execute(
+        _CONVERSATIONS + "AND t.ended_at<=? ORDER BY t.ended_at DESC,t.id DESC LIMIT ?",
+        (receipt.completedAt.timestamp(), _BOUND_CANDIDATES),
+    ).fetchall()
+    return any(
+        _rehearsal_digest(row, memory, approval) == receipt.evidenceDigest for row in candidates
+    )
 
 
 def _memory_review(db: sqlite3.Connection, choice_revision: int):
@@ -342,11 +361,16 @@ def _set_approval(
 def status(store, *, now: datetime | None = None) -> Status:
     observed = (now or datetime.now(UTC)).astimezone(UTC)
     memory_choice = setup_choices.current(store, "memory")
+    receipt = setup_receipts.current(store, "rehearsal", now=observed)
     with store._connect() as db:
         conversation = _conversation(db)
         memory = _memory_review(db, memory_choice.revision)
         approval = _approval(db)
-    receipt = setup_receipts.current(store, "rehearsal", now=observed)
+        holds = (
+            receipt is not None
+            and receipt.state == "valid"
+            and _receipt_holds(db, receipt, memory, approval)
+        )
     conversation_phase = Phase(
         state="complete" if conversation else "missing",
         detail=(
@@ -390,12 +414,7 @@ def status(store, *, now: datetime | None = None) -> Status:
     ready = all(
         phase.state == "complete" for phase in (conversation_phase, memory_phase, approval_phase)
     )
-    current_digest = _rehearsal_digest(conversation, memory, approval)
-    complete = (
-        receipt is not None
-        and receipt.state == "valid"
-        and receipt.evidenceDigest == current_digest
-    )
+    complete = holds
     return Status(
         state="complete" if complete else "ready" if ready else "in_progress",
         conversation=conversation_phase,
@@ -409,10 +428,18 @@ def status(store, *, now: datetime | None = None) -> Status:
 def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
     observed = (now or datetime.now(UTC)).astimezone(UTC)
     memory_choice = setup_choices.current(store, "memory")
+    current = setup_receipts.current(store, "rehearsal", now=observed)
     with store._connect() as db:
         conversation = _conversation(db)
         memory = _memory_review(db, memory_choice.revision)
         approval = _approval(db)
+        holds = (
+            current is not None
+            and current.state == "valid"
+            and _receipt_holds(db, current, memory, approval)
+        )
+    if holds and current is not None:
+        return current
     if (
         conversation is None
         or memory is None
@@ -425,7 +452,6 @@ def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
             409,
         )
     digest = _rehearsal_digest(conversation, memory, approval)
-    current = setup_receipts.current(store, "rehearsal", now=observed)
     if current is not None and current.evidenceDigest == digest:
         return current
     completed = datetime.fromtimestamp(
@@ -467,9 +493,6 @@ def _rehearsal_digest(conversation, memory, approval) -> str | None:
 def receipt_matches_current(store, receipt: setup_receipts.Receipt) -> bool:
     memory_choice = setup_choices.current(store, "memory")
     with store._connect() as db:
-        digest = _rehearsal_digest(
-            _conversation(db),
-            _memory_review(db, memory_choice.revision),
-            _approval(db),
+        return _receipt_holds(
+            db, receipt, _memory_review(db, memory_choice.revision), _approval(db)
         )
-    return digest is not None and receipt.evidenceDigest == digest
