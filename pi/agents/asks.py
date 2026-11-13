@@ -31,6 +31,8 @@ PER_CHAT = 3
 OPEN_LIMIT = 20
 DEFAULT_OPTIONS = ["Yes", "No"]
 VISIBLE = "NOT " + visibility.hidden_sql("session_id")
+# The submission id `pi.turns.answers` sends an answer as: answer-<ask id>[-<attempt>].
+ANSWER_PREFIX = "answer-ask_"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owner_asks (
  id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), turn_id TEXT,
@@ -152,7 +154,10 @@ def listing(store, limit=50) -> list[dict]:
 
 
 def answer(store, identity, text, *, chosen, now=None) -> dict:
-    """Record his answer once. `chosen`: he tapped one of Conker's options (not his own words)."""
+    """Record his answer once. `chosen`: he tapped one of Conker's options (not his own words).
+
+    Text that is exactly one of the options always counts as chosen, whatever the client said:
+    those words are the AI's, so a client that forgets the flag cannot make them his request."""
     text = str(text or "").strip()[:4000]
     if not text:
         raise AskError("empty_answer", "Write an answer or pick an option.", 422)
@@ -161,8 +166,10 @@ def answer(store, identity, text, *, chosen, now=None) -> dict:
         row = _row(db, identity)
         if row["state"] != "open":
             raise AskError("decided", "This question was already answered.", 409)
-        if chosen and text not in json.loads(row["options"]):
+        options = json.loads(row["options"])
+        if chosen and text not in options:
             raise AskError("unknown_option", "Pick one of the options shown.", 422)
+        chosen = chosen or text in options
         db.execute(
             "UPDATE owner_asks SET state='answered', answer=?, chosen=?, answered_at=? WHERE id=?",
             (text, int(bool(chosen)), time.time() if now is None else now, identity),
@@ -207,7 +214,13 @@ def answer_words(db, turn_id) -> str | None:
         (turn_id,),
     ).fetchone()
     if row is None:
-        return None
+        # Sent as an answer (`pi.turns.answers`) but its question's link is gone: the message
+        # holds the AI's question, so fail closed, as a tapped option.
+        sent = db.execute(
+            "SELECT 1 FROM turn_submissions WHERE turn_id=? AND request_id LIKE ? ESCAPE '!'",
+            (turn_id, ANSWER_PREFIX.replace("_", "!_") + "%"),
+        ).fetchone()
+        return "" if sent else None
     return "" if row["chosen"] else row["answer"] or ""
 
 
