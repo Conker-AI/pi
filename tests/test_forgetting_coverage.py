@@ -33,6 +33,10 @@ IDS_ONLY = {
     "agent_job_watch",
     # ToolGate approval request ids a forgotten chat's parked turns waited on, to withdraw.
     "approval_withdrawals",
+    # ToolGate request and action ids of a forgotten chat, to forget there (gap 9).
+    "toolgate_forgets",
+    # Every ToolGate approval request a turn parked on (the turn keeps only the latest).
+    "turn_approval_requests",
     "attachment_removals",
     "attachment_reservations",
     "call_events",

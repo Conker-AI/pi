@@ -1,8 +1,9 @@
 """What Pi still owes other services after the owner forgot a chat, done once Pi runs again.
 
-Forgetting runs with Pi stopped (`pi.conversation.forgetting`), so it only queues two things:
+Forgetting runs with Pi stopped (`pi.conversation.forgetting`), so it only queues three things:
 the ToolGate approval requests the chat's parked turns were waiting on, to withdraw
-(`pi.actions.withdrawals`), and the memories Conker kept from the chat on its own, to forget in
+(`pi.actions.withdrawals`), the chat's tool records in ToolGate, to forget there
+(`pi.actions.tool_forgets`, after the withdrawals: a request still waiting is refused), and the memories Conker kept from the chat on its own, to forget in
 MemoryGate (`pi.memory.followups`). This worker does both every `interval` seconds, retries what
 failed with a growing wait, and `status` says what is still owed (Pi's health, `forget_followups`).
 Nothing here can undo the forgetting itself, and no row holds any text from the chat.
@@ -13,15 +14,17 @@ from __future__ import annotations
 import logging
 import threading
 
-from pi.actions import withdrawals
+from pi.actions import tool_forgets, withdrawals
 from pi.memory import followups as memory_followups
 
 log = logging.getLogger(__name__)
 
 
 def tick(store, toolgate, corrections, now=None) -> int:
-    return withdrawals.drain(store, toolgate, now=now) + memory_followups.drain(
-        store, corrections, now=now
+    return (
+        withdrawals.drain(store, toolgate, now=now)
+        + tool_forgets.drain(store, toolgate, now=now)
+        + memory_followups.drain(store, corrections, now=now)
     )
 
 
@@ -34,17 +37,26 @@ def status(store, *, toolgate=True, memory=True) -> dict:
                 "WHERE state IN ('pending','blocked') GROUP BY state"
             ).fetchall()
         )
+        records = dict(
+            db.execute(
+                "SELECT state, COUNT(*) FROM toolgate_forgets "
+                "WHERE state IN ('pending','blocked') GROUP BY state"
+            ).fetchall()
+        )
         memories = dict(
             db.execute(
                 "SELECT undo, COUNT(*) FROM keep_results WHERE kind='memory' "
                 "AND undo IN ('pending','blocked') GROUP BY undo"
             ).fetchall()
         )
-    blocked = approvals.get("blocked", 0) + memories.get("blocked", 0)
-    stranded = (not toolgate and sum(approvals.values())) or (not memory and sum(memories.values()))
+    blocked = approvals.get("blocked", 0) + records.get("blocked", 0) + memories.get("blocked", 0)
+    stranded = (not toolgate and sum(approvals.values()) + sum(records.values())) or (
+        not memory and sum(memories.values())
+    )
     result = {
         "status": "degraded" if blocked or stranded else "ok",
         "approvalWithdrawals": sum(approvals.values()),
+        "toolRecordForgets": sum(records.values()),
         "memoryForgets": sum(memories.values()),
         "blocked": blocked,
     }

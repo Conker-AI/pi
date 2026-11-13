@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pi.actions import identities as actions
-from pi.actions import withdrawals
+from pi.actions import tool_forgets, withdrawals
 from pi.agents import (
     agent_calls,
     asks,
@@ -124,6 +124,7 @@ def install(db):
     change_requests.initialize(db)
     keep.initialize(db)
     withdrawals.initialize(db)
+    tool_forgets.initialize(db)
     tool_drafts.initialize(db)
     asks.initialize(db)
     turn_access.initialize(db)
