@@ -2384,7 +2384,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PlanUsageOverview"
+                }
               }
             }
           },
@@ -12004,7 +12006,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ToolGatePolicySummary"
+                }
               }
             }
           },
@@ -12266,7 +12270,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationDocument"
+                }
               }
             }
           },
@@ -29426,6 +29432,85 @@
         ],
         "title": "Phase"
       },
+      "PlanAlertItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "plan",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "since": {
+            "type": "number",
+            "title": "Since"
+          },
+          "usedPercent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usedpercent"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PlanAlertLink"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "since",
+          "usedPercent",
+          "resetsAt",
+          "source"
+        ],
+        "title": "PlanAlertItem",
+        "description": "An open alert the owner has not dismissed; its two numbers come from the alert's facts."
+      },
+      "PlanAlertLink": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "plan-alert",
+            "title": "Kind"
+          },
+          "alertId": {
+            "type": "string",
+            "title": "Alertid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "alertId"
+        ],
+        "title": "PlanAlertLink"
+      },
       "PlanAlerts": {
         "properties": {
           "enabled": {
@@ -29446,6 +29531,82 @@
           "percent"
         ],
         "title": "PlanAlerts"
+      },
+      "PlanUsageOverview": {
+        "properties": {
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/PlanUsageWindow"
+            },
+            "type": "array",
+            "title": "Windows"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/PlanAlertItem"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "windows",
+          "alerts"
+        ],
+        "title": "PlanUsageOverview"
+      },
+      "PlanUsageWindow": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Provider"
+          },
+          "window": {
+            "type": "string",
+            "title": "Window"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "usedPercent": {
+            "type": "integer",
+            "title": "Usedpercent"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "checkedAt": {
+            "type": "number",
+            "title": "Checkedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "window",
+          "label",
+          "usedPercent",
+          "resetsAt",
+          "checkedAt"
+        ],
+        "title": "PlanUsageWindow",
+        "description": "The latest reading of one plan window, as a subscription runtime reported it."
       },
       "Policy-Input": {
         "properties": {
@@ -32895,6 +33056,85 @@
           "hours"
         ],
         "title": "Timing"
+      },
+      "ToolGatePolicySummary": {
+        "properties": {
+          "lockdown": {
+            "type": "boolean",
+            "title": "Lockdown"
+          },
+          "scopePatterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopepatterns"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolGatePolicyTool"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lockdown",
+          "scopePatterns",
+          "tools",
+          "digest"
+        ],
+        "title": "ToolGatePolicySummary",
+        "description": "`digest` is the SHA-256 of the other three fields, canonical JSON."
+      },
+      "ToolGatePolicyTool": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "authorization": {
+            "type": "string",
+            "title": "Authorization"
+          },
+          "executionType": {
+            "type": "string",
+            "title": "Executiontype"
+          },
+          "usageLimits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Usagelimits"
+          },
+          "definitionDigest": {
+            "type": "string",
+            "title": "Definitiondigest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "authorization",
+          "executionType",
+          "usageLimits",
+          "definitionDigest"
+        ],
+        "title": "ToolGatePolicyTool",
+        "description": "One active tool Pi may call. `usageLimits` holds the tool policy's own limits that are set\n(max_per_minute, max_per_hour, cooldown_seconds, max_runtime_seconds, max_steps), unchecked."
       },
       "ToolWatch": {
         "properties": {
