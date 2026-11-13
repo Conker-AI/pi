@@ -68,7 +68,8 @@ docker compose up -d pi
 Build the updated image before these commands if it is not installed yet. The
 command never contacts a model, ToolGate, or MemoryGate. It prints JSON: the
 preview contains identifiers and a confirmation (and `approval_request_ids`, the
-ToolGate requests the chat's parked turns wait on); successful forgetting returns
+ToolGate requests the chat's parked turns wait on, and `tool_record_ids`, every approval request
+and action its turns made, to forget in ToolGate); successful forgetting returns
 a receipt. Review the session IDs before confirming. If messages, turns or fork
 descendants were added after preview, obtain and review a new preview.
 
@@ -203,7 +204,7 @@ Follow-ups (2026-11-13):
 ## Limits that remain
 
 This removes content from Pi's current store, not from everywhere it has been.
-MemoryGate evidence, ToolGate approval/provenance records, provider retention,
+MemoryGate evidence, ToolGate records of other keys (gap 9 covers Pi's own), provider retention,
 exports, browser caches and copies in unrelated sessions need their own deletion
 paths. Pi refuses to resume the forgotten turn.
 
@@ -217,6 +218,16 @@ it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
   (`POST /v2/agent/requests/{id}/withdraw`, as the agent that asked), so its Inbox card, which
   quotes the action, goes. A request ToolGate no longer knows or the owner already answered (404,
   409) needs nothing.
+- **Tool records** (2026-11-13, gap 9): every approval request and action the chat's turns made
+  is sent to ToolGate's `POST /v2/agent/forget` (as the agent that made it, then as the key for
+  what that agent does not know), which blanks their arguments and results and keeps the audit
+  line (`pi/actions/tool_forgets.py`). It runs after the withdrawals: a request still waiting, or
+  an action still running, is refused and tried again later. One ToolGate no longer knows is gone;
+  Pi's key refused is `blocked` in Pi's health and still retried. Cron runs belong to their job,
+  not a chat, and are not sent. A turn that parks again keeps only its latest request, so Pi
+  records each one as it parks (`turn_approval_requests`); requests a turn parked on and replaced
+  before this Pi version are not known and stay in ToolGate. A ToolGate without the route (before
+  its release with it) is a retry, never forgotten.
 - **Memories Conker kept on its own** from the chat (Keep results of `conker.remember`, recorded
   apart from the chat in `keep_results`) are forgotten in MemoryGate at their current revision,
   the same way as forgetting one memory by hand. A memory MemoryGate already held before the chat

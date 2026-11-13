@@ -404,6 +404,43 @@ class ToolGateClient:
                 raise ToolGateUnavailable(f"withdraw_{response.status_code}")
         return "gone"
 
+    def forget_records(
+        self, request_ids: list[str], action_ids: list[str], agent: str | None
+    ) -> dict:
+        """Blank these approval requests and actions of a forgotten chat in ToolGate (`POST
+        /v2/agent/forget`), as `agent` (None: the key itself). The answer, per kind ("requests",
+        "actions"): lists `forgotten`, `already`, `unknown` and `refused` ({"id", "code"}).
+        Any other answer raises ToolGateUnavailable with the status, so the caller retries."""
+        headers = {"X-ToolGate-Execution-Key": self.execution_key}
+        if agent is not None:
+            headers["X-ToolGate-Agent"] = agent
+        try:
+            response = httpx.post(
+                f"{self.base_url}/v2/agent/forget",
+                verify=verification(self.base_url),
+                headers=headers,
+                json={"request_ids": request_ids, "action_ids": action_ids},
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
+            )
+        except Exception as exc:
+            raise ToolGateUnavailable(type(exc).__name__) from exc
+        if response.status_code != 200:
+            raise ToolGateUnavailable(f"forget_{response.status_code}")
+        try:
+            answer = response.json()
+            parts = {field: answer[field] for field in ("requests", "actions")}
+            for part in parts.values():
+                for name in ("forgotten", "already", "unknown"):
+                    if not all(isinstance(item, str) for item in part[name]):
+                        raise TypeError(name)
+                if not all(isinstance(item["id"], str) for item in part["refused"]):
+                    raise TypeError("refused")
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ToolGateUnavailable("forget_shape") from exc
+        return parts
+
     def request_status(self, request_id: str, agent: str | None) -> str | None:
         """The status of an approval request Pi's key made (ToolGate `GET
         /v2/agent/requests/{id}`), tried as the agent and then as the key, like `withdraw`.

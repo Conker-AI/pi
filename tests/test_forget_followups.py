@@ -76,6 +76,8 @@ def test_forgetting_queues_the_withdrawal_and_the_memory_and_turns_the_job_off(f
     assert forget_followups.status(store) == {
         "status": "ok",
         "approvalWithdrawals": 1,
+        # The parked turn's request and its action, to forget in ToolGate.
+        "toolRecordForgets": 2,
         "memoryForgets": 1,
         "blocked": 0,
     }
@@ -85,6 +87,13 @@ class Gate:
     def __init__(self, answers):
         self.answers, self.calls = list(answers), []
         self.execution_key = "k"
+
+    def forget_records(self, request_ids, action_ids, agent):
+        empty = {"already": [], "unknown": [], "refused": []}
+        return {
+            "requests": {"forgotten": list(request_ids), **empty},
+            "actions": {"forgotten": list(action_ids), **empty},
+        }
 
     def withdraw(self, request_id, agent):
         self.calls.append((request_id, agent))
@@ -146,7 +155,8 @@ class Corrections:
 def test_the_kept_memory_is_forgotten_once_pi_runs(forgotten):
     store, session, *_ = forgotten
     client = Corrections(revision=2)
-    assert forget_followups.tick(store, Gate(["withdrawn"]), client) == 2
+    # The withdrawal, the two tool records and the memory.
+    assert forget_followups.tick(store, Gate(["withdrawn"]), client) == 4
     [(identity, memory_id, revision)] = client.forgotten
     assert (memory_id, revision) == ("mem_kept", 2) and identity.startswith("keepforget-")
     rows = {row["kind"]: row for row in keep.listing(store, session)}

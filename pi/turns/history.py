@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pi.agents import agent_calls
 from pi.calls import call_turns
 from pi.context import controls as context_controls
@@ -16,9 +18,20 @@ from pi.turns import prompt_prefix, recall
 from pi.turns import steering as turn_steering
 from pi.turns.failures import TurnFailed
 
+if TYPE_CHECKING:
+    from pi.conversation.store import Store
+    from pi.memory.service import Memory
+
 
 class History:
     """Part of Loop: history and forks. Uses the attributes Loop.__init__ sets."""
+
+    # Set by Loop.__init__ (pi/turns/loop.py); declared here for the type checker only.
+    store: Store
+    memory: Memory
+    system_prompt: str
+    max_tool_steps: int
+    fork_threshold_chars: int
 
     def _history(
         self,

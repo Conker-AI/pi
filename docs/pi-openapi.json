@@ -13123,7 +13123,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSettingsDocument"
+                }
               }
             }
           },
@@ -13191,7 +13193,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSettingsDocument"
+                }
               }
             }
           },
@@ -13251,7 +13255,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SearchCapabilities"
+                }
               }
             }
           },
@@ -13362,7 +13368,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPage"
+                }
               }
             }
           },
@@ -31657,6 +31665,252 @@
         ],
         "title": "SaveSettings"
       },
+      "SearchCapabilities": {
+        "properties": {
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "exactText": {
+            "type": "boolean",
+            "title": "Exacttext"
+          },
+          "semanticSources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Semanticsources"
+          },
+          "reranking": {
+            "type": "boolean",
+            "title": "Reranking"
+          },
+          "indexing": {
+            "type": "string",
+            "const": "source-owned",
+            "title": "Indexing"
+          },
+          "scanLimit": {
+            "type": "integer",
+            "title": "Scanlimit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sources",
+          "exactText",
+          "semanticSources",
+          "reranking",
+          "indexing",
+          "scanLimit"
+        ],
+        "title": "SearchCapabilities"
+      },
+      "SearchCoverage": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "searched",
+              "partial",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "status"
+        ],
+        "title": "SearchCoverage"
+      },
+      "SearchPage": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/SearchCoverage"
+            },
+            "type": "array",
+            "title": "Coverage"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "metadata",
+              "text",
+              "semantic"
+            ],
+            "title": "Stage"
+          },
+          "ranking": {
+            "$ref": "#/components/schemas/SearchRanking"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results",
+          "coverage",
+          "nextCursor",
+          "stage",
+          "ranking"
+        ],
+        "title": "SearchPage"
+      },
+      "SearchRanking": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "unavailable",
+              "not_needed",
+              "ranked",
+              "fallback"
+            ],
+            "title": "Status"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SearchRanking",
+        "description": "`modelId` and `candidates` only when the page was ranked."
+      },
+      "SearchResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "recordId": {
+            "type": "string",
+            "title": "Recordid"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "matchType": {
+            "type": "string",
+            "enum": [
+              "metadata",
+              "text",
+              "semantic"
+            ],
+            "title": "Matchtype"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "recordId",
+          "title",
+          "excerpt",
+          "href",
+          "matchType",
+          "role"
+        ],
+        "title": "SearchResult",
+        "description": "One record: `matchType` says how it matched (`text` when semantic memory fell back)."
+      },
+      "SearchSettingsDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/Settings-Output"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "configuration"
+        ],
+        "title": "SearchSettingsDocument"
+      },
       "Send": {
         "properties": {
           "request_id": {
@@ -31738,6 +31992,36 @@
           "action"
         ],
         "title": "ServiceRequest"
+      },
+      "Settings-Output": {
+        "properties": {
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Sources"
+          },
+          "exactText": {
+            "type": "boolean",
+            "title": "Exacttext",
+            "default": true
+          },
+          "semantic": {
+            "type": "boolean",
+            "title": "Semantic",
+            "default": false
+          },
+          "reranking": {
+            "type": "boolean",
+            "title": "Reranking",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Settings"
       },
       "SetupStatus": {
         "properties": {
