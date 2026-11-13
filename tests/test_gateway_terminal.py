@@ -54,3 +54,37 @@ def test_terminal_is_disabled_without_operator_config(request):
         ).status_code
         == 503
     )
+
+
+def test_terminal_work_never_runs_on_the_event_loop(request):
+    """A slow sidecar must not freeze every other gateway request (hunt pi-gateway-2 F3)."""
+    import asyncio
+
+    client, _auth, headers, _seen, _now = request.getfixturevalue("boundary")
+    on_loop = []
+
+    def running_loop():
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        return True
+
+    class Watched(FakeTerminal):
+        def write(self, data):
+            on_loop.append(running_loop())
+            return super().write(data)
+
+    def factory(*args):
+        on_loop.append(running_loop())
+        return Watched()
+
+    client.app.state.terminals = Terminals("/bin/bash", "/synthetic", factory=factory)
+    body = {"requestId": "terminal_request_01"}
+    verified = proof(client, headers, "/api/terminal", body)
+    admitted = {**headers, "X-Conker-Verification": verified["verification_token"]}
+    assert client.post("/api/terminal", json=body, headers=admitted).status_code == 200
+    data = {"data": base64.b64encode(b"x").decode()}
+    path = "/api/terminal/terminal_request_01/input"
+    assert client.post(path, json=data, headers=headers).status_code == 200
+    assert on_loop == [False, False]

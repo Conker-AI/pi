@@ -107,6 +107,8 @@ def request(socket, method, body=None, *, transport=None):
             ):
                 raise ValueError()
             return status.model_dump(mode="json")
+    except ProviderControlError:
+        raise  # Already the owner's message ("not confirmed"); it is a ValueError too.
     except (httpx.HTTPError, OSError):
         raise ProviderControlError(
             "ChatGPT control is unavailable. No operation was retried."

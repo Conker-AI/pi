@@ -102,6 +102,20 @@ def test_skipping_the_newest_offer_never_brings_back_an_older_one(store):
     assert updates.overview(store)["offer"]["version"] == "0.11.0"
 
 
+def test_a_pulled_release_takes_its_offer_with_it(store):
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW)
+    updates.record(store, report("0.1.0", "0.3.0"), now=NOW + 60)
+    # 0.3.0 was pulled: the latest release is 0.2.0 again, so that is the offer.
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW + 86400)
+    [item] = updates.needs_you(store)
+    assert item["version"] == "0.2.0"
+    with pytest.raises(updates.UpdateError):
+        updates.dismiss_offer(store, "0.3.0", now=NOW + 86401)
+    # Published again later, it is offered again.
+    updates.record(store, report("0.1.0", "0.3.0"), now=NOW + 2 * 86400)
+    assert updates.overview(store)["offer"]["version"] == "0.3.0"
+
+
 def test_a_dismissed_applied_update_leaves_the_handled_list(store):
     updates.record(store, report("0.1.0", "0.2.0", [result("applied")]), now=NOW)
     assert len(updates.applied(store, NOW - 3600)) == 1

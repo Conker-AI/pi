@@ -226,7 +226,8 @@ class OllamaProvider:
                     )
                     response.raise_for_status()
                     body = response.json()
-        except inference_control.InferenceCancelled:
+        except (inference_control.InferenceCancelled, ProviderUnavailable):
+            # Pi's own refusals (owner stop, local capacity busy) keep their reason.
             raise
         except Exception as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}") from exc

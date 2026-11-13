@@ -256,7 +256,7 @@ def resolve(store, session_id, request_id, providers):
             harness_disabled=False,
             guard=lambda: turn_control.guard(store, execution),
         )
-        selected = _selected(result["completion"].text, ids)
+        # Recorded before the answer is checked: an unusable answer was still paid for.
         evidence = {
             "configurationRevision": execution["modelConfigurationRevision"],
             "attempts": result["attempts"],
@@ -265,6 +265,7 @@ def resolve(store, session_id, request_id, providers):
             "outputTokens": result["completion"].output_tokens,
             "costUsd": result["completion"].cost_usd,
         }
+        selected = _selected(result["completion"].text, ids)
     except Exception as exc:
         code = (
             exc.detail["code"]
@@ -273,7 +274,11 @@ def resolve(store, session_id, request_id, providers):
             if isinstance(exc, (ValueError, TypeError))
             else "selection_failed"
         )
-        evidence = {"error": code, "latencyMs": round((time.monotonic() - started) * 1000)}
+        evidence = {
+            **evidence,
+            "error": code,
+            "latencyMs": round((time.monotonic() - started) * 1000),
+        }
         with store._connect() as db:
             db.execute(
                 "UPDATE submission_context SET state='failed',evidence=? WHERE "

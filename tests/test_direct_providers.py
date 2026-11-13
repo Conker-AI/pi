@@ -13,7 +13,7 @@ from pi.context import research_usage
 from pi.conversation.store import Store
 from pi.models import roles as model_roles
 from pi.models.direct import AnthropicProvider, OpenAIProvider, configured
-from pi.models.providers import Message, ProviderUnavailable
+from pi.models.providers import Message, OllamaProvider, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns import inference_control
 from pi.turns.failures import TurnFailed
@@ -194,12 +194,26 @@ def test_bad_http_and_shapes_fail_without_leaking(cls, status, body, monkeypatch
     assert error.value.__suppress_context__
 
 
-def test_anthropic_rejects_moved_system_instruction(capture):
-    with pytest.raises(ProviderUnavailable):
-        AnthropicProvider("synthetic", allow_paid=True).complete(
-            [Message("user", "Q"), Message("system", "late")], model="m"
-        )
-    assert not capture
+def test_anthropic_lifts_a_late_system_note_after_the_leading_ones():
+    # The tool-format retry adds a system note after the history; it must reach the model.
+    payload = AnthropicProvider("synthetic", allow_paid=True)._payload(
+        [Message("system", "rules"), Message("user", "Q"), Message("system", "late")], "m"
+    )
+    assert payload["messages"] == [{"role": "user", "content": "Q"}]
+    assert [part["text"] for part in payload["system"]] == [
+        "rules",
+        "(Added after the conversation so far.)\nlate",
+    ]
+
+
+def test_pis_own_refusal_inside_a_request_keeps_its_reason(monkeypatch):
+    def stopped(*args, **kwargs):
+        raise ProviderUnavailable("Owner stopped this turn.")
+
+    monkeypatch.setattr(httpx, "post", stopped)
+    for provider in (AnthropicProvider("synthetic", allow_paid=True), OllamaProvider("http://o")):
+        with pytest.raises(ProviderUnavailable, match=r"^Owner stopped this turn\.$"):
+            provider.complete([Message("user", "Q")], model="m")
 
 
 def test_factory_is_explicit_and_health_does_not_call(capture):
