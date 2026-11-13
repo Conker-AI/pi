@@ -12,6 +12,9 @@ from pi.owner import plan_alerts, self_check, updates
 from pi.owner import preferences as owner_preferences
 from pi.schedule import agent_jobs, job_hidden, jobs, proposals
 
+# A parked turn's detail once Pi ended it because its approval expired (turns/decision_sweep.py).
+APPROVAL_EXPIRED = "The approval expired before you answered. Nothing was done."
+
 
 def _owner_zone(store):
     """The owner's time zone and its name; UTC when no preferences are saved."""
@@ -206,6 +209,37 @@ def _handled_items(store, day_start):
     return items
 
 
+def _private(db, session_id) -> bool:
+    privacy = session_settings.source_privacy(db, session_id)
+    return privacy is not None and any(privacy.values())
+
+
+def _expired_items(store, day_start):
+    """Approvals that expired unanswered today: Pi ended the turn, nothing was done."""
+    with store._connect() as db:
+        rows = db.execute(
+            "SELECT t.id, t.session_id, t.approval_tool_id, t.ended_at, s.title FROM turns t "
+            "JOIN sessions s ON s.id=t.session_id "
+            "WHERE t.status='cancelled' AND t.detail=? AND t.ended_at >= ? "
+            f"AND NOT {visibility.hidden_sql('t.session_id')} "
+            "ORDER BY t.ended_at DESC LIMIT 50",
+            (APPROVAL_EXPIRED, day_start),
+        ).fetchall()
+        private = {row["session_id"] for row in rows if _private(db, row["session_id"])}
+    return [
+        {
+            "kind": "approval-expired",
+            "title": f"Approval expired: {row['approval_tool_id'] or 'an action'}",
+            "chat": "Private chat"
+            if row["session_id"] in private
+            else row["title"] or "Conversation",
+            "at": row["ended_at"],
+            "source": {"kind": "turn", "sessionId": row["session_id"], "turnId": row["id"]},
+        }
+        for row in rows
+    ]
+
+
 def _upcoming_items(store, now):
     """Get upcoming scheduled jobs and open tasks."""
     items = []
@@ -353,7 +387,8 @@ def inbox(store, *, now=None):
         _handled_items(store, day_start)
         + plan_alerts.resets(store, day_start)
         + self_check.recovered(store, day_start)
-        + updates.applied(store, day_start),
+        + updates.applied(store, day_start)
+        + _expired_items(store, day_start),
         key=lambda item: item["at"],
         reverse=True,
     )[:50]

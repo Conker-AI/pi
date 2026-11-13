@@ -15,6 +15,14 @@ passed on). A decision is acted on only once it has been seen decided for `GRACE
 gateway, which records it in ToolGate and then tells Pi with his words, always goes first. Each
 request is handed on at most `TRIES` times, so a resume that keeps failing does not repeat for
 ever; the chat still continues it when opened.
+
+ToolGate keeps an approval it let expire as pending (its Inbox card says it expired), so Pi ends
+a parked chat or AI-job turn itself once its `approval_expires_at` is `EXPIRY_GRACE` seconds
+past: the chat says the approval expired and nothing was done, the Inbox lists it under Handled,
+and an AI job's next run is no longer held back. The grace is longer than a decision's own
+(`GRACE` plus a pass), so an answer given just before the expiry is still acted on first. A turn
+is ended only when ToolGate answered "pending" for it in the same pass: while ToolGate cannot be
+read (down, no key, an error) nothing is expired, so an approval given meanwhile is never lost.
 """
 
 from __future__ import annotations
@@ -22,6 +30,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import datetime
 
 from pi.schedule import jobs
 from pi.turns import answers
@@ -31,6 +40,7 @@ log = logging.getLogger(__name__)
 DECIDED = {"approved", "rejected", "dismissed"}
 GRACE = 60.0
 TRIES = 3
+EXPIRY_GRACE = 300.0
 
 
 def waiting(db, limit) -> list[tuple[str, str | None]]:
@@ -68,20 +78,52 @@ def waiting(db, limit) -> list[tuple[str, str | None]]:
     return found
 
 
+def _expires(value) -> float | None:
+    try:
+        moment = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return moment.timestamp() if moment.tzinfo is not None else None
+
+
+def expire(store, now, pending, limit=50) -> int:
+    """End parked turns whose approval expired unanswered; how many were ended. Only a request
+    ToolGate just answered "pending" for (`pending`) is ended; an unreadable or zone-less expiry
+    is never guessed: that turn keeps waiting."""
+    with store._connect() as db:
+        rows = db.execute(
+            "SELECT id, session_id, approval_request_id, approval_tool_id, approval_expires_at "
+            "FROM turns "
+            "WHERE status='awaiting_approval' AND approval_expires_at IS NOT NULL "
+            "ORDER BY started_at LIMIT ?",
+            (limit,),
+        ).fetchall()
+    ended = 0
+    for row in rows:
+        expires = _expires(row["approval_expires_at"])
+        if row["approval_request_id"] not in pending:
+            continue
+        if expires is not None and now >= expires + EXPIRY_GRACE:
+            ended += answers.close(store, dict(row), expired=True)
+    return ended
+
+
 def sweep(store, toolgate, loop, executor=None, limit=50, seen=None, now=None) -> int:
     """Continue each decided request; how many were handed on. `seen` keeps, between passes,
     when each request was first seen decided and how often it was handed on."""
+    now = time.time() if now is None else now
     if toolgate is None or not getattr(toolgate, "execution_key", ""):
         return 0
     seen = {} if seen is None else seen
-    now = time.time() if now is None else now
     with store._connect() as db:
         pending = waiting(db, limit)
     for gone in set(seen) - {request_id for request_id, _ in pending}:
         del seen[gone]
-    handed = 0
+    handed, undecided = 0, set()
     for request_id, agent in pending:
         status = toolgate.request_status(request_id, agent)
+        if status == "pending":
+            undecided.add(request_id)
         if status not in DECIDED:
             continue
         mark = seen.setdefault(request_id, {"first": now, "tries": 0})
@@ -101,6 +143,8 @@ def sweep(store, toolgate, loop, executor=None, limit=50, seen=None, now=None) -
             cancel_run=lambda run_id: jobs.cancel_run(store, run_id),
         )
         handed += result.get("continued") != "nothing_waiting"
+    # Only requests ToolGate itself still calls pending: a decided or unreadable one never ends.
+    expire(store, now, undecided, limit)
     return handed
 
 

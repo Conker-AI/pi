@@ -16,7 +16,7 @@ import threading
 import time
 
 from pi.actions import identities as actions
-from pi.agents import asks
+from pi.agents import asks, inbox
 from pi.conversation import drafts, submissions
 from pi.schedule import tasks
 
@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 DECLINED = "The owner said no to this action in his Inbox. It did not run."
 CLOSED = "You said no in the Inbox. Nothing was done."
 CHANGED = "You said what to do instead in the Inbox. This action was not done."
+EXPIRED_NOTE = "The owner did not answer before this approval expired. It did not run."
+EXPIRED = inbox.APPROVAL_EXPIRED
 BUSY_WAIT, BUSY_TRIES = 5.0, 60
 
 
@@ -62,9 +64,9 @@ def waiting(store, request_id):
     return None
 
 
-def close(store, turn, note="") -> bool:
-    """End a parked turn he said no to. False when someone else (the chat, a second answer)
-    already took it."""
+def close(store, turn, note="", *, expired=False) -> bool:
+    """End a parked turn he said no to, or whose approval expired unanswered. False when someone
+    else (the chat, a second answer) already took it."""
     if not store.claim_turn(turn["id"], "awaiting_approval"):
         return False
     action = actions.latest(store, turn["id"])
@@ -74,12 +76,16 @@ def close(store, turn, note="") -> bool:
     store.append_message(
         turn["session_id"],
         "tool",
-        json.dumps({"tool": turn["approval_tool_id"], "declined": DECLINED}, ensure_ascii=False),
+        json.dumps(
+            {"tool": turn["approval_tool_id"], "declined": EXPIRED_NOTE if expired else DECLINED},
+            ensure_ascii=False,
+        ),
         turn_id=turn["id"],
         purpose="tool_result",
         action_id=action["id"] if action else None,
     )
-    store.finish_turn(turn["id"], "cancelled", detail=CHANGED if note else CLOSED)
+    detail = EXPIRED if expired else CHANGED if note else CLOSED
+    store.finish_turn(turn["id"], "cancelled", detail=detail)
     return True
 
 
