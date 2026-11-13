@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from pi.core.models import described
 from pi.models import roles as model_roles
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/models/configuration", dependencies=[Depends(authorize)])
-    # Described, not re-validated: the reply stays exactly what the handler returns.
-    reply = {200: {"model": model_roles.ConfigurationDocument}}
+    reply = described(model_roles.ConfigurationDocument)
 
     @routes.get("", responses=reply)
     def get():

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from pi.core.models import described
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
 
@@ -26,9 +27,8 @@ def _conflict(exc):
 
 def router(app_state, require_owner):
     routes = APIRouter()
-    # Described, not re-validated: the reply stays exactly what the handler returns.
-    settings_reply = {200: {"model": owner_settings.OwnerSettingsDocument}}
-    preferences_reply = {200: {"model": owner_preferences.OwnerPreferencesDocument}}
+    settings_reply = described(owner_settings.OwnerSettingsDocument)
+    preferences_reply = described(owner_preferences.OwnerPreferencesDocument)
 
     @routes.get("/owner/settings", dependencies=[Depends(require_owner)], responses=settings_reply)
     def get_owner_settings():
