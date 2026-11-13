@@ -39,6 +39,9 @@ def password_hash(password: str, salt: bytes) -> str:
         ).hex()
 
 
+TOUCH_EVERY = 60.0
+
+
 def _last_seen(row) -> float | None:
     """When the owner last proved the password or used the page in this session."""
     seen = [value for value in (row["verified_at"], row["active_at"]) if value is not None]
@@ -119,13 +122,13 @@ class AuthStore:
             self.path.chmod(0o600)
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
+    def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("PRAGMA synchronous=FULL")
-            db.execute("BEGIN IMMEDIATE")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
             yield db
             if db.in_transaction:
                 db.execute("COMMIT")
@@ -246,12 +249,18 @@ class AuthStore:
             return self._new(db, False, 0)
 
     def session(self, token: str, *, authenticated: bool = True) -> dict:
-        with self.transaction() as db:
+        """Check a session; a read, so requests do not queue on the write lock. `touched` (shown
+        in the session list, never part of the idle window) is written at most once a minute."""
+        with self.transaction(write=False) as db:
             row = self._session(db, token, authenticated=authenticated)
-            db.execute(
-                "UPDATE sessions SET touched=? WHERE token_hash=?", (self.clock(), digest(token))
-            )
-            return row
+        now = self.clock()
+        if row["touched"] <= now - TOUCH_EVERY:
+            with self.transaction() as db:
+                db.execute(
+                    "UPDATE sessions SET touched=? WHERE token_hash=? AND touched<?",
+                    (now, digest(token), now),
+                )
+        return row
 
     def _session(self, db: sqlite3.Connection, token: str, *, authenticated: bool = True) -> dict:
         row = db.execute("SELECT * FROM sessions WHERE token_hash=?", (digest(token),)).fetchone()

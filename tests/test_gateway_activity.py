@@ -177,3 +177,26 @@ def test_polling_and_writes_do_not_extend_the_window(gateway, clock):
     clock[0] += 50
     assert client.get("/api/pi/sessions").status_code == 401
     assert len(seen) == 10
+
+
+def test_checking_a_session_writes_its_touched_time_at_most_once_a_minute(auth, clock, tmp_path):
+    """Every request checks the session; a write each time would queue them all on the write lock
+    (hunt pi-gateway-2 F7). The idle window never depends on `touched`."""
+    token = signed_in(auth)
+    path = tmp_path / "auth.db"
+
+    def touched():
+        with sqlite3.connect(path) as db:
+            return db.execute("SELECT touched FROM sessions WHERE authenticated=1").fetchone()[0]
+
+    first = touched()
+    clock[0] += 30
+    auth.session(token)
+    auth.session(token)
+    assert touched() == first
+    clock[0] += 31
+    auth.session(token)
+    assert touched() == clock[0]
+    clock[0] += 600
+    with pytest.raises(AuthError):
+        auth.session(token)
