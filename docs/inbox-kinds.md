@@ -1,8 +1,8 @@
 # Every Inbox kind (2026-11-12)
 
-`GET /inbox` (`pi/agents/inbox.py:inbox`) builds "Needs you" from eight producers. Each has its
+`GET /inbox` (`pi/agents/inbox.py:inbox`) builds "Needs you" from seven producers. Each has its
 own table, routes and rules. This page lists them, checked against the code on this date, so a
-new feature can reuse one instead of adding a ninth. See [inbox.md](inbox.md) for the view itself.
+new feature can reuse one instead of adding an eighth. See [inbox.md](inbox.md) for the view itself.
 
 "Handled" (kinds `job`, `task`, `run`, `plan-reset`) and "Upcoming" (`job`, `task`) only report;
 nothing there waits for the owner, so they are not rows below.
@@ -14,7 +14,6 @@ nothing there waits for the owner, so they are not rows below.
 | ToolGate approvals (ToolGate request; Pi's parked turn, `turns.status='awaiting_approval'`, `store.awaiting_approval`) | `approval` | ToolGate, when a set tool is called by Conker in a chat or an AI job's turn | Do it / Don't / Change: ToolGate `POST /v2/owner/requests/{id}/decision` through the gateway, which then calls Pi `POST /approvals/{id}/decided` (`api/routes/answers.py:decided`) | ToolGate's `expires_at`, kept in `turns.approval_expires_at` | none | `conker inspect approvals`, `conker apply approvals` (`gateway/mutation.py`) | none in Pi | yes: hidden by `awaiting_approval`, withdrawn in ToolGate by `actions/withdrawals.py:queue` |
 | Change requests (`agents/change_requests.py`, `change_requests`; kinds `ai_job`, `tool_draft`, `memory`) | `change-request` | Conker in chat (`conker.schedule`, `conker.draft_tool`, `conker.remember`); the owner (`POST /tool-drafts`) | approve (signed-in session), decline (+ `reply`), saved, retry, published: `POST /change-requests/{id}/...` | none | none on the request; a Keep result is undone by forgetting its chat (`agents/keep.py`) | `conker inspect change-requests`, `conker apply requests`, `conker tool answer` | 3 open per chat, 20 overall (`file`); the owner's own are not limited | yes: `change_requests.redact` |
 | Questions (`agents/asks.py`, `owner_asks`) | `ask` | Conker in chat (`conker.ask`) | answer (an option or his words), dismiss: `POST /asks/{id}/answer`, `/dismiss` | none | none | `conker inspect asks`, `conker apply asks` | 3 open per chat, 20 overall (`asks.file`) | yes: `asks.redact` |
-| Memory proposals (`memory/proposals.py`, `memory_proposals`) | `memory` | whoever holds Pi's admin key (`POST /memory-proposals`); no Pi code, dashboard or CLI calls it | apply / reject: `POST /memory-proposals/{id}/decision`; `/reconcile` after an unknown outcome | none | none | none | none | text scrubbed, row kept as `forgotten`: `proposals.redact` |
 | Companion suggestions (`schedule/proposals.py`, `proposals`; timer `proposal_worker.py`) | `suggestion` | background worker, a `proposals` model pass over the owner's messages | accept / decline / never: `POST /proposals/{id}/decision`; accepting records a decision only (`grantsExecutionAuthority: false`) | none; a decline hides the same idea 30 days, never for good | none (`proposals_decided_once` trigger) | `conker inspect proposals`, `conker apply proposals` | 3 per pass and the daily suggestion budget (`run_pass`) | yes: every proposal from a pass that read the chat, `proposals.redact` |
 | Plan alerts (`owner/plan_alerts.py`, `plan_alerts`) | `plan` | background worker (`PlanAlertWorker`) reading subscription usage | dismiss: `POST /plans/alerts/{id}/dismiss` (owner key; not in the browser contract) | ends when the plan window resets (`record`) | none | `conker limits --dismiss ID` | one open alert per plan window (unique index) | n/a: no chat |
 | AI job notes (`schedule/agent_jobs.py`, `agent_job_notes`) | `agent-job` | job run: the AI job's reply had something for the owner (`_note`) | dismiss: `POST /jobs/agent/notes/{id}/dismiss`; the card links to the job's chat | none | none | none found | one per run (`run_id UNIQUE`) | yes: `agent_jobs.redact` |
@@ -26,6 +25,9 @@ Not Inbox rows, though named like one:
   waits for the owner, and `inbox` does not read them.
 - Workflow offers and workflow proposals (`agents/retired_workflows.py`) are retired (2026-10-30).
   The tables stay only so forgetting a chat clears old rows.
+- Memory proposals (`memory/proposals.py`, kind `memory`) are retired (2026-11-12, merge 2). The
+  routes and the Inbox item are gone; the `memory_proposals` table stays only so forgetting a chat
+  (`proposals.redact`) or a memory (`proposals.redact_memory`) scrubs old rows.
 - Memory edits by hand (`/memory/corrections`, `conker inspect memory-edit-pending`) are the
   owner's own corrections, not shown in the Inbox.
 
@@ -46,11 +48,11 @@ approval; that row is never merged with the others.
    routes `/plans/alerts/{id}/dismiss` and `/jobs/agent/notes/{id}/dismiss`, the browser
    contract, dashboard `lib/gateway/jobs.ts` and the Inbox cards, `conker limits --dismiss`.
    Small: one migration, two routes kept as aliases for a release.
-2. **Memory proposals.** No code, screen or CLI creates or answers one; only the admin-key route
-   does. Either retire it (stop listing kind `memory`, keep the table for forgetting, like
-   `retired_workflows`) or make it change-request kind `memory_edit`. Retiring is small: drop
-   `_needs_memory_items`, the router and the `conker inbox` text. Merging is medium: the
-   revision check, the `unknown` state and `/reconcile` move into change requests.
+2. **Memory proposals.** DONE 2026-11-12: retired. No code, screen or CLI created or answered
+   one; only the admin-key route did. Pi no longer lists kind `memory` (`_needs_memory_items` is
+   gone) and the `/memory-proposals` router is removed; the table stays for forgetting, like
+   `retired_workflows`. Left in Conker: the `conker inbox` marker for kind `memory`
+   (`scripts/conker_inbox.py`) and the generated `pi.d.ts` routes, removed at the next Pi pin.
 3. **Questions into change requests.** NOT DOING (decided 2026-11-13). They look alike (open,
    then answered or dismissed; 3 per chat, 20 overall; forgotten with the chat), but an answer
    delivers his words to the chat while an approval makes a thing, and `owner_asks.answer_request`

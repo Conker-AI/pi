@@ -49,7 +49,6 @@ pi/memory/edits.py 16
 pi/memory/import_formats.py 6
 pi/memory/import_offers.py 3
 pi/memory/imports.py 1
-pi/memory/proposals.py 13
 pi/memory/ranking.py 2
 pi/memory/service.py 5
 pi/models/chatgpt.py 4

@@ -21,7 +21,6 @@ from pi.host import filesystem_reads
 from pi.host import inventory as system_inventory
 from pi.memory import corrections as memory_corrections
 from pi.memory import edits as memory_edits
-from pi.memory import proposals as memory_proposals
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
 from pi.models import secrets as provider_secrets
@@ -118,7 +117,6 @@ async def lifespan(app: FastAPI):
     team_execution.recover_interrupted(store)
     tool_drafts.recover_interrupted(store)
     tool_drafting.ask_waiting(store)
-    memory_proposals.recover_interrupted(store)
     memory_edits.recover_interrupted(store)
     proposals.recover_interrupted(store)
     calls.recover(store)

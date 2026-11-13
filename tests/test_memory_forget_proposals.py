@@ -1,81 +1,105 @@
-"""Forgetting one memory scrubs every proposal that quoted or targeted it.
+"""Old memory proposal rows are scrubbed when their chat or their memory is forgotten.
 
-A proposal keeps the memory's old text (baseline), the proposed text and the reason. Without the
-scrub, a verified forget left all three readable in memory_proposals.
+Memory proposals are retired (pi/memory/proposals.py): nothing writes or lists them any more,
+but installs from before may still hold rows with a memory's old text (baseline), the proposed
+text and the reason. Without the scrub, forgetting left all three readable in memory_proposals.
 """
 
 import json
 from contextlib import closing
 
 import httpx
-import pytest
 
-from pi.agents import profiles as agents
+from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.memory import forget as memory_forget
-from pi.memory import proposals as p
 from pi.memory.corrections import Client
-from tests.test_memory_proposals import Remote
 
 OLD = "synthetic-old-memory-text-7714"
 PROPOSED = "synthetic-proposed-text-3390"
+AGENT = "companion-memory"
 
 
-class ForgetRemote(Remote):
-    def handle(self, request):
-        if request.method == "PUT" and "/forget/" in request.url.path:
-            body = json.loads(request.content)
-            return httpx.Response(
-                200,
-                json={
-                    "request_id": request.url.path.rsplit("/", 1)[-1],
-                    "memory_id": body["memory_id"],
-                    "agent_id": "companion-memory",
-                    "revision": body["expected_revision"],
-                    "status": "forgotten",
-                    "index_removal": "removed",
-                },
-            )
-        return super().handle(request)
-
-
-def _proposal(store, client, sid, message, request_id, memory_id, text):
-    return p.create(
-        store,
-        p.Create(
-            request_id=request_id,
-            session_id=sid,
-            memory_id=memory_id,
-            expected_memory_revision=3,
-            text=text,
-            reason=text,
-            basis="stated",
-            source_message_ids=[message["id"]],
-        ),
-        client,
+def _remote(request):
+    if request.method == "PUT" and "/forget/" in request.url.path:
+        body = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "request_id": request.url.path.rsplit("/", 1)[-1],
+                "memory_id": body["memory_id"],
+                "agent_id": AGENT,
+                "revision": body["expected_revision"],
+                "status": "forgotten",
+                "index_removal": "removed",
+            },
+        )
+    identity = request.url.path.rsplit("/", 1)[-1]
+    return httpx.Response(
+        200,
+        json={
+            "id": identity,
+            "agent_id": AGENT,
+            "revision": 3,
+            "text": OLD,
+            "source_type": "user",
+            "confidence": "high",
+        },
     )
 
 
+def _old_row(store, identity, session, memory_id, text, state="pending"):
+    """A row as the retired `/memory-proposals` route wrote it."""
+    with store._connect() as db:
+        db.execute(
+            "INSERT INTO memory_proposals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)",
+            (
+                identity,
+                session,
+                "hash-" + identity,
+                memory_id,
+                AGENT,
+                3,
+                json.dumps({"id": memory_id, "revision": 3, "text": OLD}),
+                text,
+                text,
+                "stated",
+                json.dumps(["msg_1"]),
+                state,
+                1700000000.0,
+            ),
+        )
+
+
+def _rows(store, where):
+    with store._connect() as db:
+        return [
+            tuple(row)
+            for row in db.execute(
+                "SELECT baseline,desired,reason,source_ids,receipt,state FROM memory_proposals "
+                "WHERE " + where + " ORDER BY id"
+            )
+        ]
+
+
+def _trigger_back(store):
+    with store._connect() as db:
+        return db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='memory_proposals_fixed'"
+        ).fetchone()
+
+
 def test_forgetting_a_memory_scrubs_its_proposals_and_keeps_others(tmp_path):
-    remote = ForgetRemote()
-    remote.text = OLD
     with (
         closing(Store(tmp_path / "pi.db")) as store,
         closing(
-            Client(
-                "https://memory.test",
-                "k" * 32,
-                "companion-memory",
-                transport=httpx.MockTransport(remote.handle),
-            )
+            Client("https://memory.test", "k" * 32, AGENT, transport=httpx.MockTransport(_remote))
         ) as client,
     ):
         sid = store.create_session()
-        message = store.append_message(sid, "user", "I changed my mind.")
-        _proposal(store, client, sid, message, "proposal_pending_01", "mem_1", PROPOSED)
-        _proposal(store, client, sid, message, "proposal_rejected_1", "mem_1", PROPOSED)
-        p.decide(store, "proposal_rejected_1", p.Decision(decision="reject"), client)
-        _proposal(store, client, sid, message, "proposal_other_001", "mem_2", "Keep this one")
+        _old_row(store, "proposal_pending_01", sid, "mem_1", PROPOSED)
+        _old_row(store, "proposal_rejected_1", sid, "mem_1", PROPOSED, state="rejected")
+        _old_row(store, "proposal_other_001", sid, "mem_2", "Keep this one")
 
         memory_forget.forget(
             store,
@@ -85,18 +109,30 @@ def test_forgetting_a_memory_scrubs_its_proposals_and_keeps_others(tmp_path):
             ),
         )
 
-        for identity in ("proposal_pending_01", "proposal_rejected_1"):
-            with pytest.raises(agents.AgentError, match="unavailable"):
-                p.get(store, identity)
-        assert [row["id"] for row in p.list_all(store, sid)] == ["proposal_other_001"]
-        assert p.get(store, "proposal_other_001")["desired"] == "Keep this one"
-        with store._connect() as db:
-            rows = db.execute(
-                "SELECT baseline,desired,reason,source_ids,receipt,state FROM memory_proposals "
-                "WHERE memory_id='mem_1'"
-            ).fetchall()
-            fixed = db.execute(
-                "SELECT 1 FROM sqlite_master WHERE name='memory_proposals_fixed'"
-            ).fetchone()
-        assert [tuple(row) for row in rows] == [(None, None, None, "[]", None, "forgotten")] * 2
-        assert fixed is not None  # The immutability trigger is back after the scrub.
+        scrubbed = (None, None, None, "[]", None, "forgotten")
+        assert _rows(store, "memory_id='mem_1'") == [scrubbed] * 2
+        assert [row[1] for row in _rows(store, "memory_id='mem_2'")] == ["Keep this one"]
+        assert _trigger_back(store) is not None  # The immutability trigger is back.
+
+
+def test_forgetting_a_chat_scrubs_its_old_proposals_from_every_file(tmp_path):
+    path = tmp_path / "pi.db"
+    secret = "proposal-private-content-8812937"
+    with closing(Store(path)) as store:
+        sid = store.create_session()
+        kept = store.create_session()
+        store.append_message(sid, "user", "a message so the chat can be forgotten")
+        _old_row(store, "proposal_in_chat_01", sid, "mem_1", secret)
+        _old_row(store, "proposal_in_chat_02", sid, "mem_1", secret, state="unknown")
+        _old_row(store, "proposal_elsewhere1", kept, "mem_2", "Keep this one")
+
+    forgetting.forget(path, sid, forgetting.preview(path, sid)["confirmation"])
+
+    with closing(Store(path)) as store:
+        scrubbed = (None, None, None, "[]", None, "forgotten")
+        assert _rows(store, f"session_id='{sid}'") == [scrubbed] * 2
+        assert [row[1] for row in _rows(store, f"session_id='{kept}'")] == ["Keep this one"]
+        assert _trigger_back(store) is not None
+    for file in tmp_path.iterdir():
+        if file.is_file():
+            assert secret.encode() not in file.read_bytes()
