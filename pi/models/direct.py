@@ -134,6 +134,10 @@ class _DirectProvider:
             return self._completion(body, model)
         except inference_control.InferenceCancelled:
             raise
+        except ProviderUnavailable:
+            # Pi's own refusals (owner stop, a request it will not send) keep their reason.
+            inference_control.check()
+            raise
         except Exception as exc:
             inference_control.check()
             # Provider bodies, URLs, and exception text can contain credentials or
@@ -250,15 +254,17 @@ class AnthropicProvider(_DirectProvider):
         return {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
 
     def _payload(self, messages, model):
-        # Only leading system instructions can be lifted without changing order.
+        # The Messages API takes system text only before the conversation. A system note Pi adds
+        # later (the tool-format retry) is lifted after the leading ones, said to be later.
         system, turns = [], []
         for message in messages:
             if message.images and message.role != "user":
                 raise ProviderUnavailable("Images require a user attachment message.")
             if message.role == "system":
+                text = message.content
                 if turns:
-                    raise ProviderUnavailable("system instructions must precede conversation")
-                system.append({"type": "text", "text": message.content})
+                    text = "(Added after the conversation so far.)\n" + text
+                system.append({"type": "text", "text": text})
             else:
                 content = (
                     (
