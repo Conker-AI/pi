@@ -174,7 +174,21 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
             not isinstance(result, dict) or result.get("outside") is not False
         ):
             return True
-    return _handed_outside(store, session_id, native)
+    return _handed_outside(store, session_id, native) or _summarised_outside(
+        store, session_id, native
+    )
+
+
+def _summarised_outside(store, session_id, native):
+    """True if this chat starts from a model summary of a parent chat that read outside content:
+    the summary carries what the parent read (pages, tool results, attachments) into the child."""
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT parent_id FROM sessions WHERE id=? AND parent_id IS NOT NULL "
+            "AND summary IS NOT NULL",
+            (session_id,),
+        ).fetchone()
+    return row is not None and outside_content(store, row["parent_id"], None, native)
 
 
 def _handed_outside(store, session_id, native):

@@ -6,13 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- **A team run cut off by a restart can be cancelled; a too-long role input burns nothing**
-  (`pi/agents/team_execution.py`). A run that was running when Pi restarted stayed `interrupted`
-  for good: finish refused it and nothing else could close it. The owner can now cancel it
-  (completing it is still refused, its outcome being unknown). A role input over 16000 characters
-  (or a selected message that is gone) is now refused before the step is saved, so the run stays
-  ready instead of being blocked by a step that never ran.
-
+- **A fork seeded by a summary keeps its parent's outside content** (`pi/turns/access.py`). An
+  automatic fork's child starts from the model's summary of the parent, which carries what the
+  parent read (web pages, tool results, attachments), yet it was judged on its own messages only.
+  Now a chat that starts from a summary counts as having read outside content whenever its parent
+  (and so on up) did, so his words no longer approve an action and remembering asks him.
 - **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
   OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
   key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
