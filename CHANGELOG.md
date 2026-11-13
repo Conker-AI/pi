@@ -8,7 +8,7 @@ be a decision with visible consequences.
 
 - Type check: the pyright baseline goes from 341 to 27 errors with type-only edits (annotations,
   casts, NoReturn on helpers that always raise, route path aliases at module scope). Behaviour and
-  the OpenAPI documents are unchanged (#PR).
+  the OpenAPI documents are unchanged (#247).
 
 ## 0.25.0
 
