@@ -866,7 +866,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillList"
+                }
               }
             }
           },
@@ -951,7 +953,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -1021,7 +1025,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -1100,7 +1106,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -3472,7 +3480,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -26027,6 +26037,103 @@
         ],
         "title": "Case"
       },
+      "ChangeRequestView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^creq_[a-f0-9]{32}$",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ai_job",
+              "tool_draft",
+              "memory",
+              "agent",
+              "team"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 600,
+            "title": "Summary"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "approved",
+              "declined",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "createdAt": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Createdat"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "summary",
+          "payload",
+          "state",
+          "createdAt"
+        ],
+        "title": "ChangeRequestView"
+      },
       "ChannelUpdate": {
         "properties": {
           "microphone": {
@@ -31780,6 +31887,134 @@
           "steps"
         ],
         "title": "SetupStatus"
+      },
+      "SkillDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "number",
+            "title": "Updatedat"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "revision",
+          "enabled",
+          "sha256",
+          "createdAt",
+          "updatedAt",
+          "markdown"
+        ],
+        "title": "SkillDetail",
+        "description": "One skill with its SKILL.md text exactly as imported."
+      },
+      "SkillList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SkillSummary"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "results"
+        ],
+        "title": "SkillList"
+      },
+      "SkillSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "number",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "revision",
+          "enabled",
+          "sha256",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SkillSummary",
+        "description": "One skill in the registry; `revision` grows on every import or state change."
       },
       "SourceReference": {
         "properties": {
