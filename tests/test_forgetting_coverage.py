@@ -123,7 +123,7 @@ OWNER_CONFIGURATION = {
 }
 
 # Readings from the subscription runtimes: plan names, window labels and percentages, no chat.
-PROVIDER_READINGS = {"plan_alerts", "plan_usage"}
+PROVIDER_READINGS = {"plan_usage"}
 
 # Conker updates (pi.owner.updates): versions, the public release notes from GitHub and the host
 # updater's receipts (outcome and a fixed reason), reported by the host; no chat text.

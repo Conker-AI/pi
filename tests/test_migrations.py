@@ -81,6 +81,7 @@ def test_ids_are_append_only():
         "0003-attachment-storage",
         "0004-change-request-agent-team",
         "0005-keep-result-agent-team",
+        "0006-notices",
     ]
 
 

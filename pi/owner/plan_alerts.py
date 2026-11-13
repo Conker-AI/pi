@@ -3,6 +3,11 @@
 Readings come from the subscription runtimes as percentages of each plan window, never prices or
 tokens. Pi keeps the latest reading per window and at most one alert per window period. Reading
 and polling call no model, send nothing and spend nothing.
+
+Alerts are notices of kind `plan` (pi.owner.notices; until migration 0006 they had a table of
+their own, `plan_alerts`, whose ids they keep). Their facts: provider, window, label, threshold
+(the owner's level when it was raised), usedPercent (the highest reading in the period) and
+resetsAt (when the runtime said the window resets).
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from pi.core.errors import ServiceError
-from pi.owner import preferences
+from pi.owner import notices, preferences
 from pi.owner import settings as owner_settings
 
 log = logging.getLogger(__name__)
@@ -32,20 +37,6 @@ CREATE TABLE IF NOT EXISTS plan_usage (
     checked_at REAL NOT NULL,
     PRIMARY KEY (provider, window_id)
 );
-CREATE TABLE IF NOT EXISTS plan_alerts (
-    id TEXT PRIMARY KEY,
-    provider TEXT NOT NULL,
-    window_id TEXT NOT NULL,
-    label TEXT NOT NULL,
-    threshold INTEGER NOT NULL,
-    used_percent INTEGER NOT NULL,
-    resets_at TEXT,
-    raised_at REAL NOT NULL,
-    reset_at REAL,
-    dismissed_at REAL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS plan_alerts_one_open
-    ON plan_alerts(provider, window_id) WHERE reset_at IS NULL;
 """
 NAMES = {"chatgpt": "ChatGPT", "claude": "Claude"}
 JITTER_SECONDS = 60  # a reset time that moves less than this is the same period
@@ -104,6 +95,11 @@ def watched(store) -> frozenset[str]:
     return frozenset(value)
 
 
+def subject(provider: str, window: str) -> str:
+    """The notices key of a window: one open alert per window period."""
+    return f"{provider}:{window}"
+
+
 def _counts(label: str, windows) -> bool:
     """Whether a window can raise an alert: one the setting names only while it is watched."""
     words = label.split()
@@ -119,25 +115,34 @@ def record(
     Every reading is kept and an open alert still closes when its window resets; only a window
     the owner does not watch raises no new alert."""
     now = time.time() if now is None else now
-    plan = Plan.model_validate(plan)
-    if not plan.available:
+    parsed = Plan.model_validate(plan)
+    if not parsed.available:
         return []
     changes = []
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        for window in plan.windows:
+        for window in parsed.windows:
             db.execute(
                 "INSERT INTO plan_usage VALUES (?,?,?,?,?,?) ON CONFLICT(provider, window_id) "
                 "DO UPDATE SET label=excluded.label, used_percent=excluded.used_percent, "
                 "resets_at=excluded.resets_at, checked_at=excluded.checked_at",
-                (plan.provider, window.id, window.label, window.usedPercent, window.resetsAt, now),
+                (
+                    parsed.provider,
+                    window.id,
+                    window.label,
+                    window.usedPercent,
+                    window.resetsAt,
+                    now,
+                ),
             )
+            key = subject(parsed.provider, window.id)
             alert = db.execute(
-                "SELECT * FROM plan_alerts WHERE provider=? AND window_id=? AND reset_at IS NULL",
-                (plan.provider, window.id),
+                "SELECT * FROM notices WHERE kind=? AND subject=? AND reset_at IS NULL",
+                (notices.PLAN, key),
             ).fetchone()
+            facts = notices.facts(alert) if alert is not None else {}
             if alert is not None:
-                ended, upcoming = _moment(alert["resets_at"]), _moment(window.resetsAt)
+                ended, upcoming = _moment(facts.get("resetsAt")), _moment(window.resetsAt)
                 over = (
                     (ended is not None and now >= ended)
                     or (
@@ -145,77 +150,89 @@ def record(
                         and upcoming is not None
                         and upcoming > ended + JITTER_SECONDS
                     )
-                    or (ended is None and window.usedPercent < alert["threshold"])
+                    or (ended is None and window.usedPercent < facts.get("threshold", 0))
                 )
                 if over:
-                    db.execute("UPDATE plan_alerts SET reset_at=? WHERE id=?", (now, alert["id"]))
+                    db.execute("UPDATE notices SET reset_at=? WHERE id=?", (now, alert["id"]))
                     changes.append({"change": "reset", "alertId": alert["id"]})
                     alert = None
             if alert is None and window.usedPercent >= threshold and _counts(window.label, windows):
                 identity = "plan_" + uuid.uuid4().hex
-                db.execute(
-                    "INSERT INTO plan_alerts VALUES (?,?,?,?,?,?,?,?,NULL,NULL)",
-                    (
-                        identity,
-                        plan.provider,
-                        window.id,
-                        window.label,
-                        threshold,
-                        window.usedPercent,
-                        window.resetsAt,
-                        now,
-                    ),
-                )
-                changes.append({"change": "raised", "alertId": identity})
+                fields = {
+                    "provider": parsed.provider,
+                    "window": window.id,
+                    "label": window.label,
+                    "threshold": threshold,
+                    "usedPercent": window.usedPercent,
+                    "resetsAt": window.resetsAt,
+                }
+                if notices.insert(
+                    db,
+                    identity=identity,
+                    kind=notices.PLAN,
+                    subject=key,
+                    title=title(fields, reset=False),
+                    created_at=now,
+                    facts=fields,
+                ):
+                    changes.append({"change": "raised", "alertId": identity})
             elif alert is not None:
-                db.execute(
-                    "UPDATE plan_alerts SET used_percent=MAX(used_percent, ?),"
-                    " resets_at=COALESCE(resets_at, ?) WHERE id=?",
-                    (window.usedPercent, window.resetsAt, alert["id"]),
-                )
+                fields = {
+                    **facts,
+                    "usedPercent": max(facts.get("usedPercent", 0), window.usedPercent),
+                    "resetsAt": (
+                        window.resetsAt if facts.get("resetsAt") is None else facts["resetsAt"]
+                    ),
+                }
+                notices.update(db, alert["id"], title=title(fields, reset=False), facts=fields)
         db.commit()
     return changes
 
 
-def _title(row, reset: bool) -> str:
-    name = f"{NAMES[row['provider']]} {row['label']}"
+def title(facts: dict, *, reset: bool) -> str:
+    provider = str(facts.get("provider", ""))
+    name = f"{NAMES.get(provider, provider)} {facts.get('label')}"
     if reset:
         return f"{name} limit reset"
-    return f"{name} limit {row['used_percent']}% used"
+    return f"{name} limit {facts.get('usedPercent')}% used"
 
 
 def needs_you(store) -> list[dict]:
     """Open alerts the owner has not dismissed, for the Inbox."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM plan_alerts WHERE reset_at IS NULL AND dismissed_at IS NULL "
-            "ORDER BY raised_at"
+            "SELECT * FROM notices WHERE kind=? AND reset_at IS NULL AND dismissed_at IS NULL "
+            "ORDER BY created_at",
+            (notices.PLAN,),
         ).fetchall()
-    return [
-        {
-            "kind": "plan",
-            "id": row["id"],
-            "title": _title(row, False),
-            "since": row["raised_at"],
-            "usedPercent": row["used_percent"],
-            "resetsAt": row["resets_at"],
-            "source": {"kind": "plan-alert", "alertId": row["id"]},
-        }
-        for row in rows
-    ]
+    items = []
+    for row in rows:
+        facts = notices.facts(row)
+        items.append(
+            {
+                "kind": "plan",
+                "id": row["id"],
+                "title": title(facts, reset=False),
+                "since": row["created_at"],
+                "usedPercent": facts.get("usedPercent"),
+                "resetsAt": facts.get("resetsAt"),
+                "source": {"kind": "plan-alert", "alertId": row["id"]},
+            }
+        )
+    return items
 
 
 def resets(store, since: float) -> list[dict]:
     """Alerts whose window reset since a moment (the owner's day), newest first."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM plan_alerts WHERE reset_at >= ? ORDER BY reset_at DESC LIMIT 50",
-            (since,),
+            "SELECT * FROM notices WHERE kind=? AND reset_at >= ? ORDER BY reset_at DESC LIMIT 50",
+            (notices.PLAN, since),
         ).fetchall()
     return [
         {
             "kind": "plan-reset",
-            "title": _title(row, True),
+            "title": title(notices.facts(row), reset=True),
             "at": row["reset_at"],
             "source": {"kind": "plan-alert", "alertId": row["id"]},
         }
@@ -246,12 +263,14 @@ def overview(store) -> dict:
 def dismiss(store, identity: str, *, now: float | None = None) -> dict:
     """Hide an alert until its window resets; a later period can raise a new one."""
     with store._connect() as db:
-        row = db.execute("SELECT * FROM plan_alerts WHERE id=?", (identity,)).fetchone()
+        row = db.execute(
+            "SELECT * FROM notices WHERE id=? AND kind=?", (identity, notices.PLAN)
+        ).fetchone()
         if row is None:
             raise AlertError("not_found", "Plan alert not found.", 404)
         if row["dismissed_at"] is None:
             db.execute(
-                "UPDATE plan_alerts SET dismissed_at=? WHERE id=?",
+                "UPDATE notices SET dismissed_at=? WHERE id=?",
                 (time.time() if now is None else now, identity),
             )
             db.commit()

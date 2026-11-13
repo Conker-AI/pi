@@ -50,7 +50,7 @@ from pi.memory import store as memory_store
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.models import service_inference, spending_cap
-from pi.owner import plan_alerts, self_check
+from pi.owner import notices, plan_alerts, self_check
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
 from pi.owner import updates as conker_updates
@@ -113,6 +113,7 @@ def install(db):
     owner_preferences.initialize(db)
     owner_settings.initialize(db)
     db.executescript(proactive_budget.SCHEMA)
+    notices.initialize(db)
     plan_alerts.initialize(db)
     self_check.initialize(db)
     conker_updates.initialize(db)
