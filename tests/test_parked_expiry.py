@@ -70,14 +70,21 @@ def test_an_expired_approval_ends_the_turn_and_says_so_in_the_inbox(store):
     assert not inbox.inbox(store)["needsYou"]
 
 
-def test_expiry_works_without_toolgate_and_never_guesses_a_bad_time(store):
-    loop, _, _, turn, _ = parked(store, ["unused"])
+def test_nothing_expires_unless_toolgate_says_pending_and_a_bad_time_is_never_guessed(store):
+    loop, _, _, turn, request = parked(store, ["unused"])
+    expiring(store, turn)
+    late = AT + 10**6
+    # ToolGate down, no key, or an unreadable answer: an approval given meanwhile is not lost.
+    decision_sweep.sweep(store, None, loop, now=late)
+    unreadable = Statuses(**{request: None})
+    decision_sweep.sweep(store, unreadable, loop, now=late)
+    assert store.get_turn(turn)["status"] == "awaiting_approval"
     for value in ("not a time", "2026-11-13T12:00:00"):
         expiring(store, turn, value)
-        decision_sweep.sweep(store, None, loop, now=AT + 10**6)
+        decision_sweep.sweep(store, Statuses(), loop, now=late)
         assert store.get_turn(turn)["status"] == "awaiting_approval"
     expiring(store, turn)
-    decision_sweep.sweep(store, None, loop, now=AT + 10**6)
+    decision_sweep.sweep(store, Statuses(), loop, now=late)
     assert store.get_turn(turn)["detail"] == answers.EXPIRED
 
 
@@ -99,8 +106,31 @@ def test_a_decision_seen_before_the_expiry_is_acted_on_not_expired(store):
 def test_a_hidden_chat_leaves_no_expired_line(store):
     loop, _, session, turn, _ = parked(store, ["unused"])
     expiring(store, turn)
-    decision_sweep.sweep(store, None, loop, now=AT + 10**6)
+    decision_sweep.sweep(store, Statuses(), loop, now=AT + 10**6)
     assert [i for i in inbox.inbox(store)["handled"] if i["kind"] == "approval-expired"]
     with store._connect() as db:
         db.execute("INSERT INTO session_trash VALUES (?, ?)", (session, AT))
     assert not [i for i in inbox.inbox(store)["handled"] if i["kind"] == "approval-expired"]
+
+
+def test_a_private_chat_expired_line_hides_its_title(store):
+    loop, _, session, turn, _ = parked(store, ["unused"])
+    with store._connect() as db:
+        db.execute("UPDATE sessions SET title='Medical results' WHERE id=?", (session,))
+        db.execute(
+            "INSERT OR REPLACE INTO session_settings (session_id, revision, settings) "
+            "VALUES (?, 1, ?)",
+            (
+                session,
+                json.dumps(
+                    {
+                        "agentId": "companion",
+                        "privacy": {"memoryDisabled": True, "harnessDisabled": True},
+                    }
+                ),
+            ),
+        )
+    expiring(store, turn)
+    decision_sweep.sweep(store, Statuses(), loop, now=AT + 10**6)
+    lines = [i for i in inbox.inbox(store)["handled"] if i["kind"] == "approval-expired"]
+    assert [line["chat"] for line in lines] == ["Private chat"]
