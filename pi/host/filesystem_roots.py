@@ -101,11 +101,12 @@ def read(gate, *, transport=None):
 
 
 def browser_view(value):
-    from pi.host.filesystem_reads import RootCatalogue
+    from pi.host.filesystem_reads import ConfiguredRootCatalogue, UnavailableRootCatalogue
 
-    return RootCatalogue(
-        mode=value["mode"],
-        code=value.get("code"),
-        roots=value["roots"],
-        capabilities=value.get("capabilities"),
+    if value["mode"] == "unavailable":
+        return UnavailableRootCatalogue(
+            mode="unavailable", code=value["code"], roots=value["roots"], capabilities=None
+        )
+    return ConfiguredRootCatalogue(
+        mode="configured", code=None, roots=value["roots"], capabilities=value["capabilities"]
     )

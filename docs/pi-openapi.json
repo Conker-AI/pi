@@ -26539,6 +26539,64 @@
         "title": "ConfigurationDocument",
         "description": "What GET and POST /models/configuration answer; no configuration before the first save."
       },
+      "ConfiguredRootCatalogue": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion",
+            "default": 1
+          },
+          "mode": {
+            "type": "string",
+            "const": "configured",
+            "title": "Mode"
+          },
+          "code": {
+            "type": "null",
+            "title": "Code"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/FileRoot"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Roots"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/RootCapabilities"
+          },
+          "authority": {
+            "type": "string",
+            "const": "none",
+            "title": "Authority",
+            "default": "none"
+          },
+          "execution": {
+            "type": "string",
+            "const": "directory-listing-only",
+            "title": "Execution",
+            "default": "directory-listing-only"
+          },
+          "contentIncluded": {
+            "type": "boolean",
+            "const": false,
+            "title": "Contentincluded",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "code",
+          "roots",
+          "capabilities"
+        ],
+        "title": "ConfiguredRootCatalogue"
+      },
       "ConfiguredTarget": {
         "properties": {
           "id": {
@@ -30865,82 +30923,23 @@
         "title": "RootCapabilities"
       },
       "RootCatalogue": {
-        "properties": {
-          "schemaVersion": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schemaversion",
-            "default": 1
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ConfiguredRootCatalogue"
           },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "configured",
-              "unavailable"
-            ],
-            "title": "Mode"
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "disabled",
-                  "not_configured",
-                  "invalid_configuration",
-                  "unsupported_platform"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
-          },
-          "roots": {
-            "items": {
-              "$ref": "#/components/schemas/FileRoot"
-            },
-            "type": "array",
-            "maxItems": 64,
-            "title": "Roots"
-          },
-          "capabilities": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RootCapabilities"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "authority": {
-            "type": "string",
-            "const": "none",
-            "title": "Authority",
-            "default": "none"
-          },
-          "execution": {
-            "type": "string",
-            "const": "directory-listing-only",
-            "title": "Execution",
-            "default": "directory-listing-only"
-          },
-          "contentIncluded": {
-            "type": "boolean",
-            "const": false,
-            "title": "Contentincluded",
-            "default": false
+          {
+            "$ref": "#/components/schemas/UnavailableRootCatalogue"
           }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "mode",
-          "roots"
         ],
-        "title": "RootCatalogue"
+        "title": "RootCatalogue",
+        "description": "GET /system/files/roots: one shape per mode, chosen by `mode` (D-01).",
+        "discriminator": {
+          "propertyName": "mode",
+          "mapping": {
+            "configured": "#/components/schemas/ConfiguredRootCatalogue",
+            "unavailable": "#/components/schemas/UnavailableRootCatalogue"
+          }
+        }
       },
       "Run": {
         "properties": {
@@ -33131,6 +33130,70 @@
           "text"
         ],
         "title": "TurnRequest"
+      },
+      "UnavailableRootCatalogue": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion",
+            "default": 1
+          },
+          "mode": {
+            "type": "string",
+            "const": "unavailable",
+            "title": "Mode"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "not_configured",
+              "invalid_configuration",
+              "unsupported_platform"
+            ],
+            "title": "Code"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/FileRoot"
+            },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Roots"
+          },
+          "capabilities": {
+            "type": "null",
+            "title": "Capabilities"
+          },
+          "authority": {
+            "type": "string",
+            "const": "none",
+            "title": "Authority",
+            "default": "none"
+          },
+          "execution": {
+            "type": "string",
+            "const": "directory-listing-only",
+            "title": "Execution",
+            "default": "directory-listing-only"
+          },
+          "contentIncluded": {
+            "type": "boolean",
+            "const": false,
+            "title": "Contentincluded",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "code",
+          "roots",
+          "capabilities"
+        ],
+        "title": "UnavailableRootCatalogue"
       },
       "UpdateAgent": {
         "properties": {
