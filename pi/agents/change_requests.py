@@ -91,7 +91,7 @@ class DraftSaved(Strict):
     draftId: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 
-class View(Strict):
+class ChangeRequestView(Strict):
     id: str = Field(pattern=REQUEST_ID)
     kind: Literal["ai_job", "tool_draft", "memory", "agent", "team"]
     title: str = Field(min_length=1, max_length=160)
@@ -102,6 +102,10 @@ class View(Strict):
     result: dict | None = None
     createdAt: float = Field(ge=0)
     decidedAt: float | None = None
+
+
+# The name the rest of Pi uses; OpenAPI shows the class's own name.
+View = ChangeRequestView
 
 
 def initialize(db):

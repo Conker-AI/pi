@@ -6,13 +6,14 @@ import time
 
 from fastapi import APIRouter, Depends
 
+from pi.core.models import described
 from pi.turns import access
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/access", dependencies=[Depends(authorize)])
 
-    @routes.get("/handled")
+    @routes.get("/handled", responses=described(access.HandledList))
     def handled():
         """The last week of actions that ran without asking him, newest first, with who decided."""
         return {"schemaVersion": 1, "results": access.handled(store(), time.time() - 7 * 86400)}
