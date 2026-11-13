@@ -197,22 +197,27 @@ class ToolGateClient:
                 ):
                     raise ValueError("Invalid published workflow catalogue")
                 rows = [*rows, *published]
+            if not isinstance(rows, list) or any(
+                not isinstance(row, dict) or not isinstance(row.get("id"), str) for row in rows
+            ):
+                raise ValueError("Invalid tool catalogue")
+            # Built inside the guard: a row of the wrong shape means ToolGate is unavailable.
+            return [
+                Tool(
+                    id=row["id"],
+                    name=row.get("name", row["id"]),
+                    description=row.get("description", ""),
+                    inputs=row.get("inputs", []),
+                    authorization=str(row.get("authorization", "owner_confirmation")),
+                    sensitive=row.get("sensitive") is True,
+                    card=row["card"] if row.get("card") in CARDS else "do",
+                    external=row.get("category") == "external-mcp"
+                    or (row.get("execution") or {}).get("type") == "mcp_http",
+                )
+                for row in rows
+            ]
         except Exception as exc:
             raise ToolGateUnavailable(type(exc).__name__) from exc
-        return [
-            Tool(
-                id=row["id"],
-                name=row.get("name", row["id"]),
-                description=row.get("description", ""),
-                inputs=row.get("inputs", []),
-                authorization=str(row.get("authorization", "owner_confirmation")),
-                sensitive=row.get("sensitive") is True,
-                card=row["card"] if row.get("card") in CARDS else "do",
-                external=row.get("category") == "external-mcp"
-                or (row.get("execution") or {}).get("type") == "mcp_http",
-            )
-            for row in rows
-        ]
 
     def delegate(self) -> bool:
         """Whether the owner lets this key's "run" decisions skip his confirmation (never on the

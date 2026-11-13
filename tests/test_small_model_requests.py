@@ -40,6 +40,12 @@ def test_invalid_escapes_alone_are_dropped_and_the_request_decodes():
     assert call.args == {"command": "getent hosts pypi.org ; echo exit=$?"}
 
 
+def test_a_backslash_before_a_letter_or_digit_is_kept_as_written():
+    # A Windows path or a pattern: dropping the backslash would send values nobody wrote.
+    text = r'{"tool": "t", "args": {"path": "C:\Users\Dani\docs", "pattern": "\d+ \$"}}'
+    assert parse(text, {"t"}).args == {"path": r"C:\Users\Dani\docs", "pattern": r"\d+ $"}
+
+
 def test_valid_escapes_are_never_touched():
     text = (
         r'{"tool": "t", "args": {"a": "line\nnext \"quoted\" back\\slash \/ '

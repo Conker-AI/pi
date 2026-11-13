@@ -139,6 +139,16 @@ def test_only_scoped_tools_are_visible(client):
     assert [t.id for t in tools] == ["t_echo"]
 
 
+@pytest.mark.parametrize(
+    "catalogue",
+    [{"tools": []}, ["t_echo"], [{"name": "no id"}], [{"id": 5}]],
+)
+def test_a_malformed_catalogue_is_toolgate_unavailable(client, catalogue):
+    FakeToolGate.tools = catalogue
+    with pytest.raises(ToolGateUnavailable):
+        client.tools()
+
+
 def test_policy_summary_digest_is_verified(client):
     summary = client.policy_summary()
     assert summary["tools"][0]["id"] == "t_echo"
