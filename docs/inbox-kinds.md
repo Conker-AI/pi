@@ -83,10 +83,9 @@ approval; that row is never merged with the others.
    The Jobs screen also says "Waiting for approval". What differs is only the label in Pi's
    admin-key `GET /inbox`, which the dashboard does not read (`conker inbox`, dev workspace,
    prints it as attention). Nothing in the turn loop, job worker or ledger needs to change.
-   Left as their own items: cancelling a waiting run does not withdraw its ToolGate request
-   (approving it later finds nothing waiting); ToolGate's admin-key decision route does not tell
-   Pi; an AI job whose turn parks is recorded `completed` (`waitingForApproval`), so Handled shows
-   it while its turn waits. Turn approvals from a trashed chat still show on purpose (L-06: an
+   Left as their own items, all fixed since: cancelling a waiting run now withdraws its ToolGate
+   request and a parked AI-job turn holds the next run back (pi#211); a decision made with
+   ToolGate's admin key reaches Pi through the decision sweep (docs/inbox-answers.md). Turn approvals from a trashed chat still show on purpose (L-06: an
    approval waiting for an answer stays reachable).
 
 ### Also fixed while mapping (2026-11-13)

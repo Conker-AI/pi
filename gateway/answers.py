@@ -3,7 +3,8 @@
 Called from the browser's Inbox route and from `conker apply approvals`, only once ToolGate has
 accepted the decision. Pi then runs the exact action (ToolGate checks the approval as it is spent)
 or closes it and passes on his words. The decision stands whatever Pi answers: a Pi that is down
-leaves the chat waiting, as before, and opening the chat still continues it.
+leaves the chat waiting until Pi's decision sweep (`pi.turns.decision_sweep`) reads the decision
+from ToolGate, which also covers a decision made with ToolGate's admin key.
 """
 
 from __future__ import annotations

@@ -327,6 +327,17 @@ async def lifespan(app: FastAPI):
     )
     followups.start()
     app.state.forget_followups = followups
+    # A decision made in ToolGate without telling Pi (its admin key, or while Pi was down).
+    from pi.turns.decision_sweep import DecisionSweep
+
+    decisions = DecisionSweep(
+        store,
+        toolgate,
+        app.state.loop,
+        app.state.job_executor,
+        interval=_seconds("PI_DECISION_SWEEP_SECONDS", 60.0),
+    )
+    decisions.start()
     # Pi checks itself and files an Inbox card when a part stays broken (pi.owner.self_check).
     self_checker = None
     probe = getattr(app.state, "health_probe", None)
@@ -341,6 +352,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.forget_followups = None
+        decisions.close()
         if self_checker:
             self_checker.close()
         followups.close()
