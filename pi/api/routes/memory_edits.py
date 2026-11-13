@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
+from pi.core.models import described
 from pi.memory import delivery as memory_delivery
 from pi.memory import edits
+from pi.memory import memory_replies as replies
 
 
 class BoundedRoute(APIRoute):
@@ -63,19 +65,19 @@ def router(store, client, companion, authorize):
             )
         return value
 
-    @routes.get("/pending")
+    @routes.get("/pending", responses=described(replies.MemoryCorrectionPending))
     def pending():
         return edits.pending(store())
 
-    @routes.get("/memories/{identity}")
+    @routes.get("/memories/{identity}", responses=described(replies.MemoryCorrectionPreview))
     def preview(identity: str):
         return edits.preview(scoped_client(), identity)
 
-    @routes.post("")
+    @routes.post("", responses=described(replies.MemoryCorrectionStatus))
     def apply(body: edits.Apply):
         return edits.apply(store(), scoped_client(), body)
 
-    @routes.get("/{identity}")
+    @routes.get("/{identity}", responses=described(replies.MemoryCorrectionStatus))
     def status(identity: str):
         return edits.status(store(), scoped_client(), identity)
 

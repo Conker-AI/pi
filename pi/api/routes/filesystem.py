@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 
+from pi.core.models import described
 from pi.host import filesystem_reads as reads
 from pi.host import filesystem_roots
 
@@ -20,7 +21,7 @@ def router(store, gate, authorize):
     def no_store(response):
         response.headers["Cache-Control"] = "no-store"
 
-    @routes.get("/roots", response_model=reads.RootCatalogue)
+    @routes.get("/roots", responses=described(reads.RootCatalogue))
     def roots(request: Request, response: Response):
         exact(request)
         no_store(response)

@@ -18,7 +18,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from starlette.concurrency import run_in_threadpool
 
-from pi.memory import import_deletion, import_formats, import_offers, imports
+from pi.core.models import described
+from pi.memory import import_deletion, import_formats, import_offers, import_replies, imports
 
 Source = Literal["chatgpt", "claude"]
 
@@ -72,7 +73,7 @@ def router(store, offers, authorize):
             lambda: imports.preview(store(), source, raw, memory_configured=configured())
         )
 
-    @api.post("/{source}/{digest}")
+    @api.post("/{source}/{digest}", responses=described(import_replies.ImportBatchResult))
     async def save(source: Source, request: Request, digest: str = Path(pattern=r"^[0-9a-f]{64}$")):
         raw = await _body(request)
         result = await run_in_threadpool(
@@ -83,7 +84,7 @@ def router(store, offers, authorize):
             sender.wake()
         return result
 
-    @api.get("")
+    @api.get("", responses=described(import_replies.ImportHistory))
     def listing():
         return {
             "schemaVersion": 1,
@@ -91,7 +92,7 @@ def router(store, offers, authorize):
             "memory": import_offers.status(store(), offers()),
         }
 
-    @api.get("/chats")
+    @api.get("/chats", responses=described(import_replies.ImportedChatList))
     def chats(
         source: Source | None = None,
         limit: int = Query(50, ge=1, le=100),
@@ -99,7 +100,7 @@ def router(store, offers, authorize):
     ):
         return imports.chats(store(), source=source, limit=limit, offset=offset)
 
-    @api.get("/chats/{chat_id}")
+    @api.get("/chats/{chat_id}", responses=described(import_replies.ImportedChatTranscript))
     def chat(
         chat_id: str = Path(pattern=r"^imp_[0-9a-f]{32}$"),
         after: int = Query(0, ge=0),
@@ -107,7 +108,7 @@ def router(store, offers, authorize):
     ):
         return imports.chat(store(), chat_id, after=after, limit=limit)
 
-    @api.post("/chats/{chat_id}/delete")
+    @api.post("/chats/{chat_id}/delete", responses=described(import_replies.ImportedChatDeletion))
     def delete(chat_id: str = Path(pattern=r"^imp_[0-9a-f]{32}$")):
         """Delete one imported chat for good; its words are erased from memory in the background."""
         sender = offers()

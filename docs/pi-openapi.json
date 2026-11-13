@@ -866,7 +866,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillList"
+                }
               }
             }
           },
@@ -951,7 +953,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -1021,7 +1025,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -1100,7 +1106,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
               }
             }
           },
@@ -2392,7 +2400,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PlanUsageOverview"
+                }
               }
             }
           },
@@ -3494,7 +3504,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3643,7 +3655,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterRecord"
+                }
               }
             }
           },
@@ -3710,7 +3724,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -3779,7 +3795,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -3848,7 +3866,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterHistory"
+                }
               }
             }
           },
@@ -3934,7 +3954,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterPackage"
+                }
               }
             }
           },
@@ -4003,7 +4025,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterImportDraft"
+                }
               }
             }
           },
@@ -4072,7 +4096,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterSaved"
+                }
               }
             }
           },
@@ -8336,7 +8362,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionPending"
+                }
               }
             }
           },
@@ -8405,7 +8433,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionPreview"
+                }
               }
             }
           },
@@ -8475,7 +8505,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionStatus"
+                }
               }
             }
           },
@@ -8544,7 +8576,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryCorrectionStatus"
+                }
               }
             }
           },
@@ -12046,7 +12080,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ToolGatePolicySummary"
+                }
               }
             }
           },
@@ -12308,7 +12344,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationDocument"
+                }
               }
             }
           },
@@ -12918,7 +12956,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryLibraryPage"
+                }
               }
             }
           },
@@ -19720,7 +19760,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetOverview"
+                }
               }
             }
           },
@@ -19789,9 +19831,21 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetDone"
+                }
               }
             }
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatForgetQueued"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "description": "Validation Error",
@@ -19849,7 +19903,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetPending"
+                }
               }
             }
           },
@@ -19989,7 +20045,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetReceipt"
+                }
               }
             }
           },
@@ -20060,7 +20118,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgetManyResult"
+                }
               }
             }
           },
@@ -20131,7 +20191,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryRemembered"
+                }
               }
             }
           },
@@ -20348,7 +20410,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportBatchResult"
+                }
               }
             }
           },
@@ -20408,7 +20472,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportHistory"
+                }
               }
             }
           },
@@ -20512,7 +20578,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatList"
+                }
               }
             }
           },
@@ -20605,7 +20673,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatTranscript"
+                }
               }
             }
           },
@@ -20676,7 +20746,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatDeletion"
+                }
               }
             }
           },
@@ -26429,6 +26501,756 @@
         "type": "object",
         "title": "Channels"
       },
+      "CharacterActivities": {
+        "properties": {
+          "idle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle"
+          },
+          "listening": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listening"
+          },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking"
+          },
+          "speaking": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaking"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idle",
+          "listening",
+          "thinking",
+          "speaking"
+        ],
+        "title": "CharacterActivities"
+      },
+      "CharacterAppearance": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Description"
+          },
+          "inset": {
+            "type": "number",
+            "maximum": 25.0,
+            "minimum": 12.5,
+            "title": "Inset"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterAsset"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Assets"
+          },
+          "activities": {
+            "$ref": "#/components/schemas/CharacterActivities"
+          },
+          "expressions": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterExpression"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Expressions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "inset",
+          "assets",
+          "activities",
+          "expressions"
+        ],
+        "title": "CharacterAppearance"
+      },
+      "CharacterAsset": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "title": "Kind"
+          },
+          "src": {
+            "type": "string",
+            "maxLength": 12582912,
+            "title": "Src"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "src"
+        ],
+        "title": "CharacterAsset"
+      },
+      "CharacterDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "value"
+        ],
+        "title": "CharacterDetail"
+      },
+      "CharacterEmotions": {
+        "properties": {
+          "neutral": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Neutral"
+          },
+          "happy": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Happy"
+          },
+          "thinking": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Thinking"
+          },
+          "concerned": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Concerned"
+          },
+          "celebrating": {
+            "type": "string",
+            "enum": [
+              "default",
+              "sprout",
+              "round",
+              "cat",
+              "portrait"
+            ],
+            "title": "Celebrating"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "neutral",
+          "happy",
+          "thinking",
+          "concerned",
+          "celebrating"
+        ],
+        "title": "CharacterEmotions"
+      },
+      "CharacterExamples": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Prompt"
+          },
+          "focus": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Focus"
+          },
+          "character": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Character"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt",
+          "focus",
+          "character"
+        ],
+        "title": "CharacterExamples"
+      },
+      "CharacterExpression": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Instruction"
+          },
+          "assetId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assetid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "instruction",
+          "assetId"
+        ],
+        "title": "CharacterExpression"
+      },
+      "CharacterHistory": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterVersion"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "CharacterHistory"
+      },
+      "CharacterImportDraft": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile",
+          "note"
+        ],
+        "title": "CharacterImportDraft",
+        "description": "POST /characters/{agent_id}/import: a draft to review; nothing is saved."
+      },
+      "CharacterMode": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Text"
+          },
+          "voice": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Voice"
+          },
+          "expressiveness": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Expressiveness"
+          },
+          "motion": {
+            "type": "boolean",
+            "title": "Motion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "voice",
+          "expressiveness",
+          "motion"
+        ],
+        "title": "CharacterMode"
+      },
+      "CharacterModes": {
+        "properties": {
+          "default": {
+            "type": "string",
+            "enum": [
+              "focus",
+              "character"
+            ],
+            "title": "Default"
+          },
+          "focus": {
+            "$ref": "#/components/schemas/CharacterMode"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CharacterMode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "default",
+          "focus",
+          "character"
+        ],
+        "title": "CharacterModes"
+      },
+      "CharacterPackage": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "conker-character",
+            "title": "Format"
+          },
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "format",
+          "version",
+          "character"
+        ],
+        "title": "CharacterPackage",
+        "description": "GET /characters/{agent_id}/export: a Conker v1 character package."
+      },
+      "CharacterProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mood": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Mood"
+          },
+          "personality": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Personality"
+          },
+          "speakingStyle": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Speakingstyle"
+          },
+          "speakingPreset": {
+            "type": "string",
+            "enum": [
+              "warm",
+              "direct",
+              "curious",
+              "custom"
+            ],
+            "title": "Speakingpreset"
+          },
+          "portrait": {
+            "type": "string",
+            "maxLength": 3145728,
+            "title": "Portrait"
+          },
+          "renderer": {
+            "type": "string",
+            "enum": [
+              "static",
+              "live-2d",
+              "live-3d"
+            ],
+            "title": "Renderer"
+          },
+          "face": {
+            "type": "string",
+            "enum": [
+              "sprout",
+              "round",
+              "cat"
+            ],
+            "title": "Face"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "green",
+              "soft",
+              "graphite"
+            ],
+            "title": "Tone"
+          },
+          "emotions": {
+            "$ref": "#/components/schemas/CharacterEmotions"
+          },
+          "studio": {
+            "$ref": "#/components/schemas/CharacterStudio"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "mood",
+          "personality",
+          "speakingStyle",
+          "speakingPreset",
+          "portrait",
+          "renderer",
+          "face",
+          "tone",
+          "emotions",
+          "studio"
+        ],
+        "title": "CharacterProfile"
+      },
+      "CharacterRecord": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "revision",
+          "profile"
+        ],
+        "title": "CharacterRecord",
+        "description": "GET /characters/{agent_id}: the current or a chosen revision; revision 0 and no profile\nbefore the first save."
+      },
+      "CharacterSaved": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/CharacterProfile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "revision",
+          "profile"
+        ],
+        "title": "CharacterSaved",
+        "description": "A save or restore: the new revision with the profile it holds."
+      },
+      "CharacterStudio": {
+        "properties": {
+          "soul": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Soul"
+          },
+          "backstory": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Backstory"
+          },
+          "relationship": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Relationship"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterDetail"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Details"
+          },
+          "examples": {
+            "$ref": "#/components/schemas/CharacterExamples"
+          },
+          "appearance": {
+            "$ref": "#/components/schemas/CharacterAppearance"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/CharacterVoice"
+          },
+          "modes": {
+            "$ref": "#/components/schemas/CharacterModes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "soul",
+          "backstory",
+          "relationship",
+          "details",
+          "examples",
+          "appearance",
+          "voice",
+          "modes"
+        ],
+        "title": "CharacterStudio"
+      },
+      "CharacterVersion": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "created_at",
+          "restored_from"
+        ],
+        "title": "CharacterVersion"
+      },
+      "CharacterVoice": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "design",
+              "reference"
+            ],
+            "title": "Source"
+          },
+          "engine": {
+            "type": "string",
+            "const": "qwen3-tts",
+            "title": "Engine"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Description"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "English",
+              "Chinese",
+              "Japanese",
+              "Korean",
+              "German",
+              "French",
+              "Russian",
+              "Portuguese",
+              "Spanish",
+              "Italian"
+            ],
+            "title": "Language"
+          },
+          "pronunciation": {
+            "type": "string",
+            "maxLength": 6000,
+            "title": "Pronunciation"
+          },
+          "transcript": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Transcript"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterVoiceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "engine",
+          "description",
+          "language",
+          "pronunciation",
+          "transcript",
+          "reference"
+        ],
+        "title": "CharacterVoice"
+      },
+      "CharacterVoiceReference": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name"
+          },
+          "src": {
+            "type": "string",
+            "maxLength": 12582912,
+            "title": "Src"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "src"
+        ],
+        "title": "CharacterVoiceReference"
+      },
       "Chart": {
         "properties": {
           "kind": {
@@ -26778,6 +27600,194 @@
         ],
         "title": "ChatContextPolicyDocument",
         "description": "GET and POST /context/{session_id}: revision 0 and no policy until the first save."
+      },
+      "ChatForgetDone": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "done",
+            "title": "State"
+          },
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "sessions"
+        ],
+        "title": "ChatForgetDone",
+        "description": "200: every named chat was already forgotten, so nothing was queued."
+      },
+      "ChatForgetOverview": {
+        "properties": {
+          "supervised": {
+            "type": "boolean",
+            "title": "Supervised"
+          },
+          "pending": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pending"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ChatForgetResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ChatForgetPlan"
+            },
+            "type": "array",
+            "title": "Chats"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "supervised",
+          "pending",
+          "results",
+          "chats"
+        ],
+        "title": "ChatForgetOverview"
+      },
+      "ChatForgetPlan": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "sessionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessionids"
+          },
+          "messages": {
+            "type": "integer",
+            "title": "Messages"
+          },
+          "turns": {
+            "type": "integer",
+            "title": "Turns"
+          },
+          "approvalRequests": {
+            "type": "integer",
+            "title": "Approvalrequests"
+          },
+          "confirmation": {
+            "type": "string",
+            "title": "Confirmation"
+          },
+          "alreadyForgotten": {
+            "type": "boolean",
+            "title": "Alreadyforgotten"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "sessionIds",
+          "messages",
+          "turns",
+          "approvalRequests",
+          "confirmation",
+          "alreadyForgotten"
+        ],
+        "title": "ChatForgetPlan",
+        "description": "What deleting one named chat reaches (forget_queue.summary) and the confirmation to send."
+      },
+      "ChatForgetQueued": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "const": "restarting",
+            "title": "State"
+          },
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "sessions"
+        ],
+        "title": "ChatForgetQueued",
+        "description": "202: the chats are queued and Pi restarts to forget them before it opens again."
+      },
+      "ChatForgetResult": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "refused",
+              "retrying"
+            ],
+            "title": "State"
+          },
+          "receiptId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receiptid"
+          },
+          "finishedAt": {
+            "type": "number",
+            "title": "Finishedat"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "state",
+          "receiptId",
+          "finishedAt",
+          "detail"
+        ],
+        "title": "ChatForgetResult",
+        "description": "How a queued chat ended at a start (forget_queue._record); `receiptId` only when done."
       },
       "ChatMemoryAdmission": {
         "properties": {
@@ -28330,6 +29340,64 @@
         ],
         "title": "ConfigurationDocument",
         "description": "What GET and POST /models/configuration answer; no configuration before the first save."
+      },
+      "ConfiguredRootCatalogue": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion",
+            "default": 1
+          },
+          "mode": {
+            "type": "string",
+            "const": "configured",
+            "title": "Mode"
+          },
+          "code": {
+            "type": "null",
+            "title": "Code"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/FileRoot"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Roots"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/RootCapabilities"
+          },
+          "authority": {
+            "type": "string",
+            "const": "none",
+            "title": "Authority",
+            "default": "none"
+          },
+          "execution": {
+            "type": "string",
+            "const": "directory-listing-only",
+            "title": "Execution",
+            "default": "directory-listing-only"
+          },
+          "contentIncluded": {
+            "type": "boolean",
+            "const": false,
+            "title": "Contentincluded",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "code",
+          "roots",
+          "capabilities"
+        ],
+        "title": "ConfiguredRootCatalogue"
       },
       "ConfiguredTarget": {
         "properties": {
@@ -30075,6 +31143,653 @@
         ],
         "title": "Import"
       },
+      "ImportBatchResult": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "batchId": {
+            "type": "string",
+            "title": "Batchid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "chats": {
+            "$ref": "#/components/schemas/ImportChatCounts"
+          },
+          "messages": {
+            "$ref": "#/components/schemas/ImportMessageCounts"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/ImportSkipCounts"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ImportMemoryChoice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "batchId",
+          "source",
+          "label",
+          "digest",
+          "importedAt",
+          "chats",
+          "messages",
+          "skipped",
+          "memory"
+        ],
+        "title": "ImportBatchResult",
+        "description": "One import as it was reported, also kept as a line of the import history."
+      },
+      "ImportChatCounts": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "new",
+          "updated",
+          "unchanged"
+        ],
+        "title": "ImportChatCounts"
+      },
+      "ImportHistory": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "imports": {
+            "items": {
+              "$ref": "#/components/schemas/ImportBatchResult"
+            },
+            "type": "array",
+            "title": "Imports"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ImportMemoryStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "imports",
+          "memory"
+        ],
+        "title": "ImportHistory"
+      },
+      "ImportMemoryChoice": {
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "title": "On"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "on",
+          "reason",
+          "configured"
+        ],
+        "title": "ImportMemoryChoice",
+        "description": "Whether imported words were offered to memory; `reason` says why not when `on` is off."
+      },
+      "ImportMemoryStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "waiting": {
+            "type": "integer",
+            "title": "Waiting"
+          },
+          "offered": {
+            "type": "integer",
+            "title": "Offered"
+          },
+          "refused": {
+            "type": "integer",
+            "title": "Refused"
+          },
+          "erasing": {
+            "type": "integer",
+            "title": "Erasing"
+          },
+          "notFoundToErase": {
+            "type": "integer",
+            "title": "Notfoundtoerase"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "configured",
+          "waiting",
+          "offered",
+          "refused",
+          "erasing",
+          "notFoundToErase",
+          "problem"
+        ],
+        "title": "ImportMemoryStatus",
+        "description": "Imported words waiting for, sent to or refused by MemoryGate, and erasures still owed."
+      },
+      "ImportMessageCounts": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "offeredToMemory": {
+            "type": "integer",
+            "title": "Offeredtomemory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "added",
+          "offeredToMemory"
+        ],
+        "title": "ImportMessageCounts"
+      },
+      "ImportSkipCounts": {
+        "properties": {
+          "chatsNotMatching": {
+            "type": "integer",
+            "title": "Chatsnotmatching"
+          },
+          "duplicateChats": {
+            "type": "integer",
+            "title": "Duplicatechats"
+          },
+          "emptyChats": {
+            "type": "integer",
+            "title": "Emptychats"
+          },
+          "longChats": {
+            "type": "integer",
+            "title": "Longchats"
+          },
+          "toolOrHiddenMessages": {
+            "type": "integer",
+            "title": "Toolorhiddenmessages"
+          },
+          "emptyMessages": {
+            "type": "integer",
+            "title": "Emptymessages"
+          },
+          "duplicateMessages": {
+            "type": "integer",
+            "title": "Duplicatemessages"
+          },
+          "shortenedMessages": {
+            "type": "integer",
+            "title": "Shortenedmessages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chatsNotMatching",
+          "duplicateChats",
+          "emptyChats",
+          "longChats",
+          "toolOrHiddenMessages",
+          "emptyMessages",
+          "duplicateMessages",
+          "shortenedMessages"
+        ],
+        "title": "ImportSkipCounts",
+        "description": "What the export held that was left out or shortened (import_formats.SKIP_REASONS)."
+      },
+      "ImportedChatDeletion": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "chatId": {
+            "type": "string",
+            "title": "Chatid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "deletedAt": {
+            "type": "number",
+            "title": "Deletedat"
+          },
+          "messagesDeleted": {
+            "type": "integer",
+            "title": "Messagesdeleted"
+          },
+          "offeredToMemory": {
+            "type": "integer",
+            "title": "Offeredtomemory"
+          },
+          "memoryNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorynote"
+          },
+          "fileScrubbed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filescrubbed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "chatId",
+          "source",
+          "label",
+          "deletedAt",
+          "messagesDeleted",
+          "offeredToMemory",
+          "memoryNote",
+          "fileScrubbed"
+        ],
+        "title": "ImportedChatDeletion",
+        "description": "`fileScrubbed` is None when this repeats an earlier deletion's record."
+      },
+      "ImportedChatList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedChatSummary"
+            },
+            "type": "array",
+            "title": "Chats"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextoffset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "total",
+          "chats",
+          "nextOffset"
+        ],
+        "title": "ImportedChatList"
+      },
+      "ImportedChatSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true,
+            "title": "Archived"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "const": true,
+            "title": "Readonly"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "label",
+          "title",
+          "exportId",
+          "startedAt",
+          "updatedAt",
+          "importedAt",
+          "messageCount",
+          "archived",
+          "readOnly"
+        ],
+        "title": "ImportedChatSummary"
+      },
+      "ImportedChatTranscript": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true,
+            "title": "Archived"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "const": true,
+            "title": "Readonly"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "nextAfter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextafter"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "label",
+          "title",
+          "exportId",
+          "startedAt",
+          "updatedAt",
+          "importedAt",
+          "messageCount",
+          "archived",
+          "readOnly",
+          "schemaVersion",
+          "messages",
+          "nextAfter"
+        ],
+        "title": "ImportedChatTranscript"
+      },
+      "ImportedMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "author": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Author"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "shortened": {
+            "type": "boolean",
+            "title": "Shortened"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "offering",
+                  "offered",
+                  "refused",
+                  "not_offered"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "seq",
+          "author",
+          "text",
+          "createdAt",
+          "shortened",
+          "exportId",
+          "memory"
+        ],
+        "title": "ImportedMessage",
+        "description": "`memory` is None for the other assistant's replies, which are never offered."
+      },
       "InferenceAnswer": {
         "properties": {
           "text": {
@@ -30673,6 +32388,611 @@
           "description"
         ],
         "title": "Media"
+      },
+      "MemoryCorrectionPending": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryCorrectionWaiting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "pending"
+        ],
+        "title": "MemoryCorrectionPending",
+        "description": "The one correction whose outcome is not settled yet, or null."
+      },
+      "MemoryCorrectionPreview": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "sourceType": {
+            "type": "string",
+            "title": "Sourcetype"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "memoryId",
+          "revision",
+          "text",
+          "sourceType",
+          "confidence"
+        ],
+        "title": "MemoryCorrectionPreview",
+        "description": "The exact current text and revision of a memory the owner is about to correct."
+      },
+      "MemoryCorrectionStatus": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "previousRevision": {
+            "type": "integer",
+            "title": "Previousrevision"
+          },
+          "payloadHash": {
+            "type": "string",
+            "title": "Payloadhash"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applying",
+              "unknown",
+              "applied",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "indexing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "indexed",
+                  "degraded"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexing"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "cachedPackagesCleared": {
+            "type": "integer",
+            "title": "Cachedpackagescleared"
+          },
+          "sourceConversationKept": {
+            "type": "boolean",
+            "const": true,
+            "title": "Sourceconversationkept"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "requestId",
+          "memoryId",
+          "previousRevision",
+          "payloadHash",
+          "status",
+          "revision",
+          "indexing",
+          "errorCode",
+          "cachedPackagesCleared",
+          "sourceConversationKept"
+        ],
+        "title": "MemoryCorrectionStatus",
+        "description": "One correction; `revision` and `indexing` come from MemoryGate's receipt once applied."
+      },
+      "MemoryCorrectionWaiting": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "title": "Expectedrevision"
+          },
+          "payloadHash": {
+            "type": "string",
+            "title": "Payloadhash"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applying",
+              "unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "expectedRevision",
+          "payloadHash",
+          "status"
+        ],
+        "title": "MemoryCorrectionWaiting"
+      },
+      "MemoryForgetManyResult": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryForgetReceipt"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "stopped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryForgetStop"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "results",
+          "stopped"
+        ],
+        "title": "MemoryForgetManyResult"
+      },
+      "MemoryForgetPending": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryForgetWaiting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "pending"
+        ],
+        "title": "MemoryForgetPending",
+        "description": "The forget request whose outcome is not settled yet (recall is paused), or null."
+      },
+      "MemoryForgetReceipt": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "status": {
+            "type": "string",
+            "const": "forgotten",
+            "title": "Status"
+          },
+          "indexRemoval": {
+            "type": "string",
+            "enum": [
+              "removed",
+              "degraded",
+              "pending"
+            ],
+            "title": "Indexremoval"
+          },
+          "cachedPackagesCleared": {
+            "type": "integer",
+            "title": "Cachedpackagescleared"
+          },
+          "sourceConversationKept": {
+            "type": "boolean",
+            "const": true,
+            "title": "Sourceconversationkept"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "status",
+          "indexRemoval",
+          "cachedPackagesCleared",
+          "sourceConversationKept"
+        ],
+        "title": "MemoryForgetReceipt",
+        "description": "`indexRemoval` is MemoryGate's word, checked before any receipt is stored (forget.py)."
+      },
+      "MemoryForgetStop": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "index",
+          "memoryId",
+          "code",
+          "message"
+        ],
+        "title": "MemoryForgetStop",
+        "description": "Where a batch stopped: the item's position, its memory and the refusal."
+      },
+      "MemoryForgetWaiting": {
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "title": "Requestid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requestId",
+          "memoryId",
+          "revision"
+        ],
+        "title": "MemoryForgetWaiting"
+      },
+      "MemoryLibraryCard": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "entity",
+              "evidence",
+              "analysis",
+              "episode",
+              "observation",
+              "pattern",
+              "transcript"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          },
+          "preview_truncated": {
+            "type": "boolean",
+            "title": "Preview Truncated"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "available_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Fields"
+          },
+          "memory_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Type"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "do_not_generalize": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Do Not Generalize"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "hypothesis_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis Confidence"
+          },
+          "connections": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Connections"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "preview",
+          "preview_truncated",
+          "title",
+          "status",
+          "confidence",
+          "available_fields",
+          "connections"
+        ],
+        "title": "MemoryLibraryCard",
+        "description": "One record of MemoryGate's library page (its `memory_explorer.card` plus `connections`).\n\nThe keys from `memory_type` to `valid_until` come only on a memory, `hypothesis` and\n`hypothesis_confidence` only on an observation. `confidence` is a word on a memory and a\nnumber on an analysis, episode or pattern; records without one send null."
+      },
+      "MemoryLibraryPage": {
+        "properties": {
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryLibraryCard"
+            },
+            "type": "array",
+            "title": "Objects"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "scope": {
+            "type": "string",
+            "const": "all",
+            "title": "Scope"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          },
+          "search_mode": {
+            "type": "string",
+            "title": "Search Mode"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "objects",
+          "total",
+          "scope",
+          "next_after",
+          "search_mode",
+          "instruction"
+        ],
+        "title": "MemoryLibraryPage",
+        "description": "`total` counts the whole scope, less this page's records from a hidden chat."
+      },
+      "MemoryRemembered": {
+        "properties": {
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "remembered",
+              "already_remembered"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryId",
+          "status"
+        ],
+        "title": "MemoryRemembered"
       },
       "MemoryReviewInput": {
         "properties": {
@@ -31498,6 +33818,85 @@
         ],
         "title": "Phase"
       },
+      "PlanAlertItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "plan",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "since": {
+            "type": "number",
+            "title": "Since"
+          },
+          "usedPercent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usedpercent"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PlanAlertLink"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "since",
+          "usedPercent",
+          "resetsAt",
+          "source"
+        ],
+        "title": "PlanAlertItem",
+        "description": "An open alert the owner has not dismissed; its two numbers come from the alert's facts."
+      },
+      "PlanAlertLink": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "plan-alert",
+            "title": "Kind"
+          },
+          "alertId": {
+            "type": "string",
+            "title": "Alertid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "alertId"
+        ],
+        "title": "PlanAlertLink"
+      },
       "PlanAlerts": {
         "properties": {
           "enabled": {
@@ -31518,6 +33917,82 @@
           "percent"
         ],
         "title": "PlanAlerts"
+      },
+      "PlanUsageOverview": {
+        "properties": {
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/PlanUsageWindow"
+            },
+            "type": "array",
+            "title": "Windows"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/PlanAlertItem"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "windows",
+          "alerts"
+        ],
+        "title": "PlanUsageOverview"
+      },
+      "PlanUsageWindow": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Provider"
+          },
+          "window": {
+            "type": "string",
+            "title": "Window"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "usedPercent": {
+            "type": "integer",
+            "title": "Usedpercent"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "checkedAt": {
+            "type": "number",
+            "title": "Checkedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "window",
+          "label",
+          "usedPercent",
+          "resetsAt",
+          "checkedAt"
+        ],
+        "title": "PlanUsageWindow",
+        "description": "The latest reading of one plan window, as a subscription runtime reported it."
       },
       "Policy-Input": {
         "properties": {
@@ -32937,82 +35412,23 @@
         "title": "RootCapabilities"
       },
       "RootCatalogue": {
-        "properties": {
-          "schemaVersion": {
-            "type": "integer",
-            "const": 1,
-            "title": "Schemaversion",
-            "default": 1
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ConfiguredRootCatalogue"
           },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "configured",
-              "unavailable"
-            ],
-            "title": "Mode"
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "disabled",
-                  "not_configured",
-                  "invalid_configuration",
-                  "unsupported_platform"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
-          },
-          "roots": {
-            "items": {
-              "$ref": "#/components/schemas/FileRoot"
-            },
-            "type": "array",
-            "maxItems": 64,
-            "title": "Roots"
-          },
-          "capabilities": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RootCapabilities"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "authority": {
-            "type": "string",
-            "const": "none",
-            "title": "Authority",
-            "default": "none"
-          },
-          "execution": {
-            "type": "string",
-            "const": "directory-listing-only",
-            "title": "Execution",
-            "default": "directory-listing-only"
-          },
-          "contentIncluded": {
-            "type": "boolean",
-            "const": false,
-            "title": "Contentincluded",
-            "default": false
+          {
+            "$ref": "#/components/schemas/UnavailableRootCatalogue"
           }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "mode",
-          "roots"
         ],
-        "title": "RootCatalogue"
+        "title": "RootCatalogue",
+        "description": "GET /system/files/roots: one shape per mode, chosen by `mode` (D-01).",
+        "discriminator": {
+          "propertyName": "mode",
+          "mapping": {
+            "configured": "#/components/schemas/ConfiguredRootCatalogue",
+            "unavailable": "#/components/schemas/UnavailableRootCatalogue"
+          }
+        }
       },
       "Run": {
         "properties": {
@@ -33852,6 +36268,134 @@
           "steps"
         ],
         "title": "SetupStatus"
+      },
+      "SkillDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "number",
+            "title": "Updatedat"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "revision",
+          "enabled",
+          "sha256",
+          "createdAt",
+          "updatedAt",
+          "markdown"
+        ],
+        "title": "SkillDetail",
+        "description": "One skill with its SKILL.md text exactly as imported."
+      },
+      "SkillList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SkillSummary"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "results"
+        ],
+        "title": "SkillList"
+      },
+      "SkillSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "number",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "revision",
+          "enabled",
+          "sha256",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SkillSummary",
+        "description": "One skill in the registry; `revision` grows on every import or state change."
       },
       "SourceReference": {
         "properties": {
@@ -35016,6 +37560,85 @@
         "title": "TitleDocument",
         "description": "A chat's name and how it got it (D-01): `source` is None until it is named."
       },
+      "ToolGatePolicySummary": {
+        "properties": {
+          "lockdown": {
+            "type": "boolean",
+            "title": "Lockdown"
+          },
+          "scopePatterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scopepatterns"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolGatePolicyTool"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lockdown",
+          "scopePatterns",
+          "tools",
+          "digest"
+        ],
+        "title": "ToolGatePolicySummary",
+        "description": "`digest` is the SHA-256 of the other three fields, canonical JSON."
+      },
+      "ToolGatePolicyTool": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "authorization": {
+            "type": "string",
+            "title": "Authorization"
+          },
+          "executionType": {
+            "type": "string",
+            "title": "Executiontype"
+          },
+          "usageLimits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Usagelimits"
+          },
+          "definitionDigest": {
+            "type": "string",
+            "title": "Definitiondigest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "authorization",
+          "executionType",
+          "usageLimits",
+          "definitionDigest"
+        ],
+        "title": "ToolGatePolicyTool",
+        "description": "One active tool Pi may call. `usageLimits` holds the tool policy's own limits that are set\n(max_per_minute, max_per_hour, cooldown_seconds, max_runtime_seconds, max_steps), unchecked."
+      },
       "ToolWatch": {
         "properties": {
           "toolId": {
@@ -35251,6 +37874,70 @@
           "text"
         ],
         "title": "TurnRequest"
+      },
+      "UnavailableRootCatalogue": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion",
+            "default": 1
+          },
+          "mode": {
+            "type": "string",
+            "const": "unavailable",
+            "title": "Mode"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "not_configured",
+              "invalid_configuration",
+              "unsupported_platform"
+            ],
+            "title": "Code"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/FileRoot"
+            },
+            "type": "array",
+            "maxItems": 0,
+            "title": "Roots"
+          },
+          "capabilities": {
+            "type": "null",
+            "title": "Capabilities"
+          },
+          "authority": {
+            "type": "string",
+            "const": "none",
+            "title": "Authority",
+            "default": "none"
+          },
+          "execution": {
+            "type": "string",
+            "const": "directory-listing-only",
+            "title": "Execution",
+            "default": "directory-listing-only"
+          },
+          "contentIncluded": {
+            "type": "boolean",
+            "const": false,
+            "title": "Contentincluded",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "code",
+          "roots",
+          "capabilities"
+        ],
+        "title": "UnavailableRootCatalogue"
       },
       "UpdateAgent": {
         "properties": {

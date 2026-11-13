@@ -3,9 +3,9 @@
 import json
 import time
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, RootModel, field_validator
 
 from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.core.errors import ServiceError
@@ -46,18 +46,37 @@ class RootCapabilities(Strict):
     write: Literal[False]
 
 
-class RootCatalogue(Strict):
+RootCode = Literal["disabled", "not_configured", "invalid_configuration", "unsupported_platform"]
+
+
+class ConfiguredRootCatalogue(Strict):
     schemaVersion: Literal[1] = 1
-    mode: Literal["configured", "unavailable"]
-    code: (
-        Literal["disabled", "not_configured", "invalid_configuration", "unsupported_platform"]
-        | None
-    ) = None
-    roots: list[FileRoot] = Field(max_length=64)
-    capabilities: RootCapabilities | None = None
+    mode: Literal["configured"]
+    code: None
+    roots: list[FileRoot] = Field(min_length=1, max_length=64)
+    capabilities: RootCapabilities
     authority: Literal["none"] = "none"
     execution: Literal["directory-listing-only"] = "directory-listing-only"
     contentIncluded: Literal[False] = False
+
+
+class UnavailableRootCatalogue(Strict):
+    schemaVersion: Literal[1] = 1
+    mode: Literal["unavailable"]
+    code: RootCode
+    roots: list[FileRoot] = Field(max_length=0)
+    capabilities: None
+    authority: Literal["none"] = "none"
+    execution: Literal["directory-listing-only"] = "directory-listing-only"
+    contentIncluded: Literal[False] = False
+
+
+class RootCatalogue(
+    RootModel[
+        Annotated[ConfiguredRootCatalogue | UnavailableRootCatalogue, Field(discriminator="mode")]
+    ]
+):
+    """GET /system/files/roots: one shape per mode, chosen by `mode` (D-01)."""
 
 
 class DirectoryEntry(Strict):

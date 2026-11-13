@@ -12,11 +12,11 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from pi.core.models import described
 from pi.memory.hidden import hidden_objects
+from pi.memory.memory_replies import MemoryLibraryPage, MemoryObjectKind
 
-Kind = Literal[
-    "memory", "entity", "evidence", "analysis", "episode", "observation", "pattern", "transcript"
-]
+Kind = MemoryObjectKind
 UNAVAILABLE = "Memory record or field is unavailable."
 
 
@@ -92,7 +92,7 @@ def router(memory, authorize):
         except (httpx.HTTPError, ValueError, TypeError):
             raise HTTPException(503, "MemoryGate inspection is unavailable.") from None
 
-    @routes.get("")
+    @routes.get("", responses=described(MemoryLibraryPage))
     def library(
         search: str = Query(default="", max_length=200),
         object_type: Kind | None = None,
