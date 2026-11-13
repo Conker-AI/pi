@@ -12,7 +12,7 @@ nothing there waits for the owner, so they are not rows below.
 | Mechanism (module / table) | Inbox kind | Who creates it | Owner's answers (route) | Expiry | Undo | CLI verb | Caps | Forgotten with chat |
 |---|---|---|---|---|---|---|---|---|
 | ToolGate approvals (ToolGate request; Pi's parked turn, `turns.status='awaiting_approval'`, `store.awaiting_approval`) | `approval` | ToolGate, when a set tool is called by Conker in a chat or an AI job's turn | Do it / Don't / Change: ToolGate `POST /v2/owner/requests/{id}/decision` through the gateway, which then calls Pi `POST /approvals/{id}/decided` (`api/routes/answers.py:decided`) | ToolGate's `expires_at`, kept in `turns.approval_expires_at` | none | `conker inspect approvals`, `conker apply approvals` (`gateway/mutation.py`) | none in Pi | yes: hidden by `awaiting_approval`, withdrawn in ToolGate by `actions/withdrawals.py:queue` |
-| Change requests (`agents/change_requests.py`, `change_requests`; kinds `ai_job`, `tool_draft`, `memory`) | `change-request` | Conker in chat (`conker.schedule`, `conker.draft_tool`, `conker.remember`); the owner (`POST /tool-drafts`) | approve (password), decline (+ `reply`), saved, retry, published: `POST /change-requests/{id}/...` | none | none on the request; a Keep result is undone by forgetting its chat (`agents/keep.py`) | `conker inspect change-requests`, `conker apply requests`, `conker tool answer` | 3 open per chat, 20 overall (`file`); the owner's own are not limited | yes: `change_requests.redact` |
+| Change requests (`agents/change_requests.py`, `change_requests`; kinds `ai_job`, `tool_draft`, `memory`) | `change-request` | Conker in chat (`conker.schedule`, `conker.draft_tool`, `conker.remember`); the owner (`POST /tool-drafts`) | approve (signed-in session), decline (+ `reply`), saved, retry, published: `POST /change-requests/{id}/...` | none | none on the request; a Keep result is undone by forgetting its chat (`agents/keep.py`) | `conker inspect change-requests`, `conker apply requests`, `conker tool answer` | 3 open per chat, 20 overall (`file`); the owner's own are not limited | yes: `change_requests.redact` |
 | Questions (`agents/asks.py`, `owner_asks`) | `ask` | Conker in chat (`conker.ask`) | answer (an option or his words), dismiss: `POST /asks/{id}/answer`, `/dismiss` | none | none | `conker inspect asks`, `conker apply asks` | 3 open per chat, 20 overall (`asks.file`) | yes: `asks.redact` |
 | Memory proposals (`memory/proposals.py`, `memory_proposals`) | `memory` | whoever holds Pi's admin key (`POST /memory-proposals`); no Pi code, dashboard or CLI calls it | apply / reject: `POST /memory-proposals/{id}/decision`; `/reconcile` after an unknown outcome | none | none | none | none | text scrubbed, row kept as `forgotten`: `proposals.redact` |
 | Companion suggestions (`schedule/proposals.py`, `proposals`; timer `proposal_worker.py`) | `suggestion` | background worker, a `proposals` model pass over the owner's messages | accept / decline / never: `POST /proposals/{id}/decision`; accepting records a decision only (`grantsExecutionAuthority: false`) | none; a decline hides the same idea 30 days, never for good | none (`proposals_decided_once` trigger) | `conker inspect proposals`, `conker apply proposals` | 3 per pass and the daily suggestion budget (`run_pass`) | yes: every proposal from a pass that read the chat, `proposals.redact` |
@@ -51,14 +51,16 @@ approval; that row is never merged with the others.
    `retired_workflows`) or make it change-request kind `memory_edit`. Retiring is small: drop
    `_needs_memory_items`, the router and the `conker inbox` text. Merging is medium: the
    revision check, the `unknown` state and `/reconcile` move into change requests.
-3. **Questions into change requests.** Same life (open, then answered or dismissed), same caps
-   (3 per chat, 20 overall), same forgetting, both from Conker in chat. A question becomes kind
-   `question` with `{question, options}`; answer is approve with text. Touches `owner_asks`
-   (its `answer_request` column feeds `turns/answers.py` and `asks.answer_words`, which
-   `turns/access.py` uses to tell his words from tapped options), routes `/asks/*`, the browser
-   contract, `gateway/mutation.py` (`asks`), the dashboard ask card, `conker apply asks`.
-   Medium. Answering must keep needing only the session, while approving a job asks for the
-   password: the approval level has to follow the kind.
+3. **Questions into change requests.** NOT DOING (decided 2026-11-13). They look alike (open,
+   then answered or dismissed; 3 per chat, 20 overall; forgotten with the chat), but an answer
+   delivers his words to the chat while an approval makes a thing, and `owner_asks.answer_request`
+   is what lets `turns/access.py` tell his words from a tapped option. Moving or dropping those
+   rows would make old answer turns count the AI's question as his request. The premise was also
+   stale: approving any request already needs only the session (no kind asks the password).
+   The mapping found gaps on main instead, fixed: change requests from forgotten or trashed chats
+   were listed and could be approved; a client that left out `chosen` turned a tapped option into
+   his words (Pi now marks any exact option as chosen); an answer turn whose link was gone counted
+   the whole message as his (now none of it); an unknown kind fell through to the memory branch.
 4. **The two "proposal" mechanisms are not the same shape.** Memory proposals are an exact text
    change to one MemoryGate record at a known revision, with apply, conflict and an unknown
    outcome to reconcile. Companion suggestions are a model's idea with no chat, cited messages,

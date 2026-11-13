@@ -53,16 +53,18 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
 
     @routes.get("/{identity}")
     def get(identity: RequestPath):
-        return change_requests.get(store(), identity)
+        return change_requests.shown(store(), identity)
 
     @routes.post("/{identity}/approve")
     def approve(identity: RequestPath):
         """Make a cron job or memory real exactly as filed."""
+        change_requests.shown(store(), identity)
         return change_requests.approve(store(), identity, memory=memory_writer())
 
     @routes.post("/{identity}/saved")
     def saved(identity: RequestPath, body: change_requests.DraftSaved):
         """The owner saved this tool request as a draft in Tools; recording it creates nothing."""
+        change_requests.shown(store(), identity)
         return change_requests.saved(store(), identity, body)
 
     @routes.post("/{identity}/retry")
@@ -70,6 +72,7 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
         """Draft this tool request again: from a new description (`description`, a fresh start),
         with the owner's answer to the drafter's question (`answer`, the same draft goes on), or
         as it was (empty body, answers kept)."""
+        change_requests.shown(store(), identity)
         request = tool_drafts.retry(store(), identity, body or tool_drafts.Retry())
         _kick(loop)
         return request
@@ -78,6 +81,7 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
     def published(identity: RequestPath, body: tool_drafts.Published):
         """The owner published this request's tool. The first time, Conker says in the chat that
         asked that it is live (a stored message, not a model call)."""
+        change_requests.shown(store(), identity)
         request, first = tool_drafts.published(store(), identity, body)
         if first and request["sessionId"]:
             tool_drafting.announce(store(), request["sessionId"], body.name)
@@ -87,6 +91,7 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
     def decline(identity: RequestPath, body: Decline | None = None):
         """Nothing is created; Conker is told it was declined if it asks again. Words he wrote
         with it (Change) go to that chat as his next message."""
+        change_requests.shown(store(), identity)
         declined = change_requests.decline(store(), identity)
         words = (body.reply if body else "").strip()
         if words and declined["sessionId"]:

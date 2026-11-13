@@ -12,10 +12,11 @@ waits for him by default; a tool draft always waits. Every Keep result is kept a
 its chat (`pi.agents.keep`), so forgetting the chat can undo it.
 
 - `ai_job`: approving creates the AI job in Pi (`agent_jobs.create`). Approved by the owner
-  (password verified) it is his; made at once it is marked `createdBy: "conker"` and held
+  (his signed-in session; ADR-0010 asks the password only for forget, delete, pay and security
+  settings) it is his; made at once it is marked `createdBy: "conker"` and held
   tighter (see `pi.schedule.agent_jobs`). A job asked for in a private chat gets a private chat.
 - `tool_draft`: Pi holds no ToolGate authority. Once the draft is ready, the owner's browser saves
-  the document as a draft in ToolGate's editor (password verified there) and reports the draft's
+  the document as a draft in ToolGate's editor and reports the draft's
   id here (`saved`), which creates nothing; the owner then publishes it there.
 - `memory`: approving stores the exact text through MemoryGate's statement route, keyed by the
   request id, so a retry after a lost answer never stores it twice. Approved by the owner it is
@@ -27,6 +28,11 @@ its chat (`pi.agents.keep`), so forgetting the chat can undo it.
 
 Conker keeps at most `PER_CHAT` requests open per chat and `OPEN_LIMIT` in all, so outside
 content cannot flood the Inbox; the owner's own requests (`/tool-drafts`) are not limited.
+
+A request from a chat that is forgotten or in the Trash (`pi.conversation.visibility`) is not
+listed, counted or answerable by the owner (`shown`): restoring the chat brings it back, deleting
+it forever removes it (`redact`). One with no chat (the owner's own) is always shown. Pi's own
+background work (drafting, Keep) still reads it with `get`.
 """
 
 from __future__ import annotations
@@ -39,6 +45,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from pi.conversation import visibility
 from pi.core import rebuild
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
@@ -66,6 +73,8 @@ CREATE TABLE IF NOT EXISTS change_requests (
 SCHEMA = (
     TABLE + "CREATE INDEX IF NOT EXISTS change_requests_open ON change_requests(state, created_at);"
 )
+# A request with no chat is the owner's own; one from a hidden chat waits unseen.
+VISIBLE = f"(session_id IS NULL OR NOT {visibility.hidden_sql('session_id')})"
 
 
 class ChangeRequestError(ServiceError):
@@ -153,9 +162,9 @@ def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None,
                 f"{PER_CHAT} of Conker's requests from this chat already wait in the owner's "
                 "Inbox. Nothing new was filed: tell the owner, and ask again once they decide."
             )
-        if db.execute("SELECT COUNT(*) FROM change_requests WHERE state='open'").fetchone()[0] >= (
-            OPEN_LIMIT
-        ):
+        if db.execute(
+            f"SELECT COUNT(*) FROM change_requests WHERE state='open' AND {VISIBLE}"
+        ).fetchone()[0] >= (OPEN_LIMIT):
             raise Full(
                 f"{OPEN_LIMIT} requests already wait in the owner's Inbox. Nothing new was filed: "
                 "tell the owner, and ask again once they have decided some."
@@ -197,10 +206,21 @@ def get(store, identity) -> dict:
     return _view(row)
 
 
+def shown(store, identity) -> dict:
+    """`get` for the owner: a request from a hidden chat is not found."""
+    request = get(store, identity)
+    if request["sessionId"] is not None:
+        with store._connect() as db:
+            if visibility.hidden(db, [request["sessionId"]]):
+                raise ChangeRequestError("not_found", "Request not found.", 404)
+    return request
+
+
 def listing(store, state="open", limit=50) -> list[dict]:
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM change_requests WHERE state=? ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM change_requests WHERE state=? AND {VISIBLE} "
+            "ORDER BY created_at DESC LIMIT ?",
             (state, limit),
         ).fetchall()
     return [_view(row) for row in rows]
@@ -305,6 +325,9 @@ def approve(store, identity, *, draft=None, memory=None, by="owner", now=None) -
             draft.model_dump() if hasattr(draft, "model_dump") else draft
         )
         return _close(store, identity, "approved", {"draftId": saved.draftId}, now)
+    if request["kind"] != "memory":
+        # A kind this code does not know (a newer Pi's row) is never made as a memory.
+        raise ChangeRequestError("unknown_kind", "This kind of request can't be approved.", 409)
     if memory is None:
         raise ChangeRequestError(
             "memory_unavailable", "Memory isn't connected, so nothing was saved.", 503
