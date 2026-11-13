@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Literal
 
 from pydantic import Field
 
@@ -51,6 +52,15 @@ class Rename(Strict):
 
 class AutoName(Strict):
     expected_revision: int = Field(ge=0)
+
+
+class TitleDocument(Strict):
+    """A chat's name and how it got it (D-01): `source` is None until it is named."""
+
+    revision: int
+    title: str
+    source: Literal["owner", "auto"] | None
+    modelId: str | None
 
 
 class NamingError(ServiceError):
