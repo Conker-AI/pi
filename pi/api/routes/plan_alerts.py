@@ -6,13 +6,15 @@ stays with the recovery credential.
 
 from fastapi import APIRouter, Depends, Path
 
+from pi.core.models import described
 from pi.owner import plan_alerts
+from pi.owner.plan_replies import PlanUsageOverview
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/plans", dependencies=[Depends(authorize)])
 
-    @routes.get("/usage")
+    @routes.get("/usage", responses=described(PlanUsageOverview))
     def usage():
         """The latest reading of each plan window and the alerts still open."""
         return plan_alerts.overview(store())
