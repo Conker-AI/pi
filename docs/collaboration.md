@@ -83,7 +83,10 @@ roles, have unique IDs and directed pairs, declare `result_only` or
 within these explicit limits. Total transfers cannot exceed team `maxHandoffs`.
 Each role's `maxTurns`, `maxTokens`, and `maxCostCents` allocations contribute to a
 sum that cannot exceed the corresponding team ceiling. Zero cost means no paid
-usage. There are at most 12 roles, 30 handoffs and 100 references per selection;
+usage. Cost counts only prices a provider reports (OpenRouter); local models, plans and
+direct keys report none, so their calls count tokens only and `maxTokens` is their stop
+(a direct key's money is bounded only by the daily spending cap). Zero cost still blocks
+every call. There are at most 12 roles, 30 handoffs and 100 references per selection;
 turn/token/cost caps are 200, 1000000 and 1000000 cents, with at most 100 handoffs.
 
 POST `/teams/{id}/prepare` with `{expected_revision}` revalidates current active
