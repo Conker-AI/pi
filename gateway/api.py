@@ -156,6 +156,19 @@ class Config:
         )
 
 
+def _terminal_check(app) -> dict:
+    """The terminal sidecar's state now, asked on every health check: the channel is never
+    reconnected, so a sidecar that went away stays unavailable until the gateway restarts."""
+    if not app.state.terminals:
+        return {"status": "not_configured", "reason": "Terminal sidecar is not configured"}
+    if app.state.terminal_sidecar is not None:
+        try:
+            app.state.terminal_sidecar.readiness()
+        except TerminalError:
+            return {"status": "unavailable", "reason": "Terminal sidecar is not answering"}
+    return {"status": "ok", "reason": "Isolated terminal sidecar ready"}
+
+
 def create_app(
     config: Config | None = None,
     *,
@@ -183,12 +196,11 @@ def create_app(
         app.state.auth = store or AuthStore(
             settings.database, idle_seconds=settings.idle_timeout_seconds
         )
-        app.state.terminal_readiness = None
         app.state.terminal_sidecar = None
         if settings.terminal_socket:
             if terminal_factory is None:
                 sidecar = TerminalSidecar(settings.terminal_socket)
-                app.state.terminal_readiness = sidecar.readiness()
+                sidecar.readiness()
                 app.state.terminal_sidecar = sidecar
 
                 def factory(socket_path, workspace_label, request_identity):
@@ -373,14 +385,7 @@ def create_app(
                 else "Run conker auth setup on the host",
             }
         }
-        checks["owner_terminal"] = {
-            "status": "ok" if app.state.terminals else "not_configured",
-            "reason": (
-                "Isolated terminal sidecar ready"
-                if app.state.terminals
-                else "Terminal sidecar is not configured"
-            ),
-        }
+        checks["owner_terminal"] = _terminal_check(app)
         for name, url, header, key in (
             (
                 "runtime",
