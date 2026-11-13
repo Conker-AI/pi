@@ -111,8 +111,11 @@ restart, preserves receipts/budget bindings, and releases schedule overlap.
 Future scheduled occurrences are unaffected; disable the definition to stop them.
 Continuity treats cancellation as a resolved status rather than an attention alert.
 
-This operation withdraws Pi's dispatch only. It does not revoke a ToolGate approval
-or return a spending grant to a reusable pool. Saved approvals remain evidence;
+Cancelling a run in `awaiting_approval` also takes its ToolGate request back: in the
+same transaction the request is queued for withdrawal (`approval_withdrawals`, drained
+by Pi's follow-up worker as for a forgotten chat), so its card leaves the Inbox. One the
+owner already answered is simply gone. It does not return a spending grant to a reusable
+pool. Saved approval receipts remain evidence;
 ToolGate authority outside this scheduler is administered separately. No browser
 response exposes the saved approval, receipt or budget identifier.
 
@@ -126,6 +129,11 @@ with friends are all instructions. ToolGate decides every tool call exactly as i
 that need no confirmation (get tools) run on their own, and a tool that needs the owner's OK
 (set tools) parks the turn as an Inbox approval. Pi grants nothing of its own
 (`pi/schedule/agent_jobs.py`).
+
+A run whose turn parks is `completed` with `waitingForApproval` in its receipt (reconcile keeps
+it). While that turn waits, the job's chat is busy: the run still holds the next one back (a due
+slot is skipped, Run now is refused), and the Inbox neither lists it as Handled nor counts it.
+Once the owner answers, or the chat is forgotten, the job runs again.
 
 - After the preamble the run is told when it started, in the job's time zone: weekday, date
   (also as YYYY-MM-DD) and time, so "today", "this week" or "only in the first week of the

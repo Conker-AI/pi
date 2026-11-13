@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A cron job waiting on the owner** (docs/jobs.md). Cancelling a run that waits on its ToolGate
+  approval now queues that request for withdrawal in the same transaction, so its card leaves the
+  Inbox. An AI job whose turn parks on an approval holds its next run back until he answers,
+  instead of dispatching into the busy chat and ending `outcome_unknown` (which blocked the job
+  until reconciled); reconcile keeps `waitingForApproval`, and the Inbox no longer shows or counts
+  such a run as handled while it waits.
 - **Change requests and answers fail closed** (docs/inbox-kinds.md, merge 3 is not doing). A
   change request from a forgotten or trashed chat is not listed, not counted against the overall
   limit, and answers 404 on every owner route until the chat is restored (one with no chat is the

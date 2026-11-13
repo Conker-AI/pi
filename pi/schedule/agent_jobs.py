@@ -476,7 +476,10 @@ class AgentJobs:
         except submissions.SubmissionError:
             return {"status": "failed", "reason": "The job never started."}
         receipt = {"sessionId": saved["effective_session_id"], "turnId": saved["turn_id"]}
-        if saved["status"] in ("complete", "acted_no_reply", "awaiting_approval"):
+        if saved["status"] == "awaiting_approval":
+            # Same receipt as run(): the flag keeps the next run back while the turn waits.
+            return {"status": "completed", **receipt, "waitingForApproval": True}
+        if saved["status"] in ("complete", "acted_no_reply"):
             return {"status": "completed", **receipt}
         if saved["status"] in ("failed", "interrupted", "cancelled", "preparation_failed"):
             return {"status": "failed", **receipt, "reason": "The job did not finish."}
