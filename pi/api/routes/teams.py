@@ -8,6 +8,8 @@ from pi.agents import profiles as agents
 from pi.agents import team_models
 from pi.agents import teams as c
 
+TeamPath = Annotated[str, Path(pattern=r"^team_[0-9a-f]{32}$")]
+
 
 def create_router(store_provider, authorize, owner_authorize=None):
     router = APIRouter(prefix="/collaboration", dependencies=[Depends(authorize)])
@@ -20,7 +22,6 @@ def create_router(store_provider, authorize, owner_authorize=None):
         prefix="/collaboration",
         dependencies=[Depends(owner_authorize or authorize), Depends(no_store)],
     )
-    TeamPath = Annotated[str, Path(pattern=r"^team_[0-9a-f]{32}$")]
 
     def owner_call(function, *args, **kwargs):
         try:

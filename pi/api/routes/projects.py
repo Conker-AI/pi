@@ -1,10 +1,12 @@
 """Durable project endpoints; browser exposure is controlled by the exact owner allowlist."""
 
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Path, Query
 
 from pi.context import projects
+
+ProjectPath = Annotated[str, Path(pattern=r"^project_[0-9a-f]{32}$")]
 
 
 def router(store, authorize, resolve=None):
@@ -13,8 +15,6 @@ def router(store, authorize, resolve=None):
     def run(fn, *args, **kwargs):
         return fn(store(), *args, **kwargs)
 
-    ProjectPath = Annotated[str, Path(pattern=r"^project_[0-9a-f]{32}$")]
-
     @routes.get("", response_model=projects.ProjectCollection)
     def listing(
         limit: int = Query(default=50, ge=1, le=200),
@@ -22,7 +22,8 @@ def router(store, authorize, resolve=None):
     ):
         rows = run(projects.list_projects, resolve, limit + 1, cursor)
         return projects.ProjectCollection(
-            results=rows[:limit], nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None
+            results=cast(Any, rows[:limit]),
+            nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None,
         )
 
     @routes.post("", response_model=projects.ProjectView)

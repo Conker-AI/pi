@@ -3,12 +3,14 @@
 import contextlib
 import re
 import threading
+from collections.abc import Callable
+from typing import Any
 
 from pi.owner.terminal import Terminal, TerminalError
 
 
 class Terminals:
-    def __init__(self, shell, directory, *, factory=Terminal, interval=1):
+    def __init__(self, shell, directory, *, factory: Callable[..., Any] = Terminal, interval=1):
         self.shell, self.directory, self.factory = shell, directory, factory
         self.lock = threading.RLock()
         self.entries = {}

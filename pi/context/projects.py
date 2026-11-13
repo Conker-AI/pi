@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from pydantic import Field, StringConstraints, field_validator
 
@@ -170,9 +170,9 @@ def _links(row, resolve):
                 else "archived"
                 if source.archived
                 else "available",
-                "label": source.label if available else "Unavailable reference",
+                "label": cast(Source, source).label if available else "Unavailable reference",
                 "labelSource": "live-source" if available else "unavailable",
-                "privacy": source.privacy.model_dump() if available else None,
+                "privacy": cast(Source, source).privacy.model_dump() if available else None,
             }
         )
     return result
@@ -240,14 +240,14 @@ def mutate(store, identity, body: Revision, operation, resolve=None):
             db.commit()
             return None
         if operation == "archive":
-            archived = (archived or time.time()) if body.archived else None
+            archived = (archived or time.time()) if cast(Archive, body).archived else None
         else:
             if archived is not None:
                 raise ProjectError("archived", "Restore the project before editing.")
             if operation == "update":
-                fields = body.fields.model_dump_json()
+                fields = cast(Update, body).fields.model_dump_json()
             elif operation in ("link", "unlink"):
-                reference = body.reference.model_dump()
+                reference = cast(Link, body).reference.model_dump()
                 existing = next((link for link in links if link["reference"] == reference), None)
                 if operation == "unlink":
                     links = [link for link in links if link["reference"] != reference]

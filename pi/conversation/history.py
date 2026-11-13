@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import re
+from typing import Any, NoReturn, cast
 
 from pi.conversation import visibility
 from pi.schedule.tasks import TaskError
@@ -35,17 +36,17 @@ ORDERS = {
 }
 
 
-def _invalid_request():
+def _invalid_request() -> NoReturn:
     raise TaskError("invalid_history_request", "Use a bounded history query and page size.", 422)
 
 
-def _invalid_cursor():
+def _invalid_cursor() -> NoReturn:
     raise TaskError(
         "invalid_history_cursor", "History cursor unavailable; restart this search.", 422
     )
 
 
-def _unavailable():
+def _unavailable() -> NoReturn:
     raise TaskError("history_unavailable", "Conversation history is unavailable.", 503)
 
 
@@ -103,13 +104,13 @@ def _text(value, maximum):
     return value[:maximum] if isinstance(value, str) else None
 
 
-def _time(value, nullable=False):
+def _time(value: Any, nullable=False):
     if value is None and nullable:
         return None
     if (
         type(value) not in (int, float)
-        or not math.isfinite(value)
-        or not 0 <= value <= 8_640_000_000_000
+        or not math.isfinite(cast(float, value))
+        or not 0 <= cast(float, value) <= 8_640_000_000_000
     ):
         _unavailable()
     return value

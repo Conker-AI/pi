@@ -22,6 +22,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 
 from pi.core.errors import ServiceError
 
@@ -140,10 +141,10 @@ def read(source: str, raw: bytes) -> Export:
 def _items(text: str):
     """The items of a top-level JSON list, one at a time, so one chat is in memory at once."""
     decoder = json.JSONDecoder(parse_constant=_no_constant)
-    index = _SPACE.match(text, 0).end()
+    index = cast("re.Match[str]", _SPACE.match(text, 0)).end()
     if text[index : index + 1] != "[":
         raise FormatRefused("not_a_list", "The file is not a list of chats.")
-    index = _SPACE.match(text, index + 1).end()
+    index = cast("re.Match[str]", _SPACE.match(text, index + 1)).end()
     if text[index : index + 1] == "]":
         index += 1
     else:
@@ -153,14 +154,14 @@ def _items(text: str):
             except (ValueError, RecursionError):
                 raise FormatRefused("not_json", "The file is not valid JSON.") from None
             yield item
-            index = _SPACE.match(text, index).end()
+            index = cast("re.Match[str]", _SPACE.match(text, index)).end()
             mark = text[index : index + 1]
-            index = _SPACE.match(text, index + 1).end()
+            index = cast("re.Match[str]", _SPACE.match(text, index + 1)).end()
             if mark == "]":
                 break
             if mark != ",":
                 raise FormatRefused("not_json", "The file is not valid JSON.")
-    if _SPACE.match(text, index).end() != len(text):
+    if cast("re.Match[str]", _SPACE.match(text, index)).end() != len(text):
         raise FormatRefused("not_json", "The file has more after its list of chats.")
 
 
@@ -294,7 +295,7 @@ def _chatgpt_message(node_id, message, skipped) -> Message | None:
     parts = content.get("parts")
     _need(isinstance(parts, list) and len(parts) <= MAX_PARTS)
     pieces = []
-    for part in parts:
+    for part in cast(list, parts):
         if isinstance(part, str):
             pieces.append(part)
         elif isinstance(part, dict):

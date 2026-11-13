@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from typing import cast
 
 from pi.actions.toolgate import Tool, ToolResult
 from pi.conversation import hidden_records
@@ -186,7 +187,8 @@ def expand(store, role, text, *, reading=None, agents=()):
     if package is None:
         found = {"status": "cleared", "message": CLEARED}
     else:
-        found = {**result, "message": EVIDENCE, **package}
+        # identity is a str only when result is a dict (checked above).
+        found = {**cast(dict, result), "message": EVIDENCE, **package}
         if package.get("leftOut"):
             found["count"] = sum(len(package[key]) for key in _GROUPS if key in package)
     return json.dumps({"tool": RECALL, "result": found}, ensure_ascii=False)

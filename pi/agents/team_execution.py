@@ -5,6 +5,7 @@ import json
 import math
 import time
 import uuid
+from typing import NoReturn
 
 from pi.agents import profiles as agents
 from pi.agents import team_models
@@ -99,7 +100,7 @@ BEGIN SELECT RAISE(ABORT,'team execution identity is permanent'); END;
 """
 
 
-def _error(code, message, status=409):
+def _error(code, message, status=409) -> NoReturn:
     raise agents.AgentError(code, message, status)
 
 
@@ -281,9 +282,8 @@ def _limits(db, run, role_id):
 
 
 MAX_INPUT_CHARS = 16000  # a role's input is sent whole or not at all
-# Providers that report a price with every answer. A missing price from one of them is unknown
-# usage; every other provider (local models, plans, direct keys) reports none, so its calls count
-# tokens only and maxTokens is their stop (money counts only reported prices, never guesses).
+# Providers that report a price with every answer: a missing price from one is unknown usage.
+# Others (local, plans, direct keys) report none: tokens only, maxTokens stops them, no guesses.
 PRICED = frozenset({"openrouter"})
 
 

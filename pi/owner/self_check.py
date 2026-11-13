@@ -19,6 +19,7 @@ import logging
 import threading
 import time
 import uuid
+from typing import cast
 
 from pi.core.errors import ServiceError
 
@@ -85,8 +86,8 @@ def _one(db, name: str, check: dict, now: float) -> dict | None:
     state = db.execute("SELECT * FROM self_check_state WHERE check_name=?", (name,)).fetchone()
     # `since` is when the check last went from working to broken or back.
     fresh = state is not None and now - state["checked_at"] < STALE_SECONDS
-    same = fresh and (state["status"] in BROKEN) == broken
-    since = state["since"] if same else now
+    same = fresh and (cast(dict, state)["status"] in BROKEN) == broken
+    since = cast(dict, state)["since"] if same else now
     db.execute(
         "INSERT INTO self_check_state VALUES (?,?,?,?) ON CONFLICT(check_name) "
         "DO UPDATE SET status=excluded.status, since=excluded.since, "

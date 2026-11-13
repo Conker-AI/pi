@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import cast
 
 HASH_SLOTS = threading.BoundedSemaphore(1)
 DEVICE_SECONDS = 400 * 86400  # Browsers keep a cookie at most 400 days.
@@ -280,7 +281,7 @@ class AuthStore:
             raise AuthError("Password changed. Sign in again.")
         value = dict(row)
         value["unlock_expires_at"] = (
-            min(row["expires"], seen + idle) if row["authenticated"] else None
+            min(row["expires"], cast(float, seen) + idle) if row["authenticated"] else None
         )
         return value
 

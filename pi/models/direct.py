@@ -7,8 +7,9 @@ No discovery, automatic paid fallback, SDK retries, or inferred dollar charges.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
+from typing import cast
 
 import httpx
 
@@ -77,6 +78,12 @@ def sse_events(response: httpx.Response) -> Iterator[dict]:
 
 class _DirectProvider:
     supports_images = True
+    url: str
+    _headers: Callable[[], dict]
+    _payload: Callable[[list[Message], str], dict]
+    _stream_options: Callable[[], dict]
+    _collect: Callable[[Iterator[dict]], dict]
+    _completion: Callable[[dict, str], Completion]
 
     def __init__(self, api_key: str, *, allow_paid: bool = False, timeout: float = 180.0):
         self.api_key = api_key.strip()
@@ -342,7 +349,11 @@ class AnthropicProvider(_DirectProvider):
             _count(usage.get(k, 0))
             for k in ("cache_creation_input_tokens", "cache_read_input_tokens")
         ]
-        total = tokens + sum(extras) if tokens is not None and None not in extras else None
+        total = (
+            tokens + sum(cast("list[int]", extras))
+            if tokens is not None and None not in extras
+            else None
+        )
         actual = body.get("model", model)
         if not isinstance(actual, str) or not actual:
             raise ValueError()
@@ -387,7 +398,7 @@ def collect_chat_stream(events) -> dict:
     # A cut-off stream has neither; some compatible vendors end without [DONE].
     if not done and finish is None:
         raise ValueError("stream ended before [DONE]")
-    message = {"role": "assistant", "content": "".join(text)}
+    message: dict = {"role": "assistant", "content": "".join(text)}
     if annotations:
         message["annotations"] = annotations
     return {**body, "choices": [{"message": message, "finish_reason": finish}]}

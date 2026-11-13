@@ -6,6 +6,10 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Type check: the pyright baseline goes from 341 to 27 errors with type-only edits (annotations,
+  casts, NoReturn on helpers that always raise, route path aliases at module scope). Behaviour and
+  the OpenAPI documents are unchanged (#PR).
+
 ## 0.25.0
 
 - **A skipped update stays skipped when its release comes back** (`pi/owner/updates.py`).

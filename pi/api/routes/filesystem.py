@@ -8,11 +8,11 @@ from pi.core.models import described
 from pi.host import filesystem_reads as reads
 from pi.host import filesystem_roots
 
+RequestPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{16,100}$")]
+
 
 def router(store, gate, authorize):
     routes = APIRouter(prefix="/system/files", dependencies=[Depends(authorize)])
-
-    RequestPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{16,100}$")]
 
     def exact(request):
         if request.url.query:

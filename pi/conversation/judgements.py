@@ -4,7 +4,7 @@ import hashlib
 import json
 import random
 import time
-from typing import Literal
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends
 from pydantic import Field
@@ -183,7 +183,7 @@ def _prepare(store, sid, root, body):
             "user",
             json.dumps(
                 {
-                    "request": str(request["content"])[:16000],
+                    "request": str(cast(dict, request)["content"])[:16000],
                     "rubric": body.rubric,
                     "answers": {
                         label: str(messages[identity]["content"])[:16000]
@@ -233,7 +233,7 @@ def _judge(store, providers, sid: str, root: str, body: Judge):
             role,
             prompt,
             providers,
-            **({"override": body.model_id} if body.model_id else {}),
+            **cast("dict[str, Any]", {"override": body.model_id} if body.model_id else {}),
         )
         parsed = _parse_judge_result(decision["completion"].text)
         if set(parsed["scores"]) != set(labels) or decision["modelId"] not in judges:

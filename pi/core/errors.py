@@ -1,7 +1,12 @@
 """One refusal shape for the whole API."""
 
+from typing import TYPE_CHECKING, cast
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+
+if TYPE_CHECKING:
+    from starlette.types import ExceptionHandler
 
 
 class ServiceError(Exception):
@@ -19,7 +24,8 @@ class ServiceError(Exception):
 
 def install(app: FastAPI) -> None:
     """Answer every ServiceError the app raises in its one shape."""
-    app.add_exception_handler(ServiceError, _respond)
+    # Starlette calls the handler only with the class it is registered for.
+    app.add_exception_handler(ServiceError, cast("ExceptionHandler", _respond))
 
 
 async def _respond(_request: Request, exc: ServiceError) -> JSONResponse:
