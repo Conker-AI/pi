@@ -10,7 +10,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.owner import plan_alerts, self_check, updates
 from pi.owner import preferences as owner_preferences
-from pi.schedule import agent_jobs, proposals
+from pi.schedule import agent_jobs, jobs, proposals
 
 
 def _owner_zone(store):
@@ -150,8 +150,10 @@ def _handled_items(store, day_start):
 
         for row in rows:
             if row["scheduled_run_id"]:
+                # A run whose turn still waits on an approval is not handled yet.
                 run = db.execute(
-                    "SELECT * FROM scheduled_runs WHERE id=?", (row["scheduled_run_id"],)
+                    f"SELECT * FROM scheduled_runs WHERE id=? AND NOT ({jobs.WAITING_TURN})",
+                    (row["scheduled_run_id"],),
                 ).fetchone()
                 if run and run["job_id"] not in hidden_jobs:
                     definition = json.loads(run["definition"])
@@ -295,8 +297,8 @@ def _impact_counts(store, day_start, week_start):
             ).fetchone()[0]
 
             jobs_completed = db.execute(
-                """SELECT COUNT(*) FROM scheduled_runs sr
-                   WHERE sr.status='completed' AND sr.started_at >= ?""",
+                f"""SELECT COUNT(*) FROM scheduled_runs
+                   WHERE status='completed' AND started_at >= ? AND NOT ({jobs.WAITING_TURN})""",
                 (start_time,),
             ).fetchone()[0]
 

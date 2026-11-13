@@ -194,10 +194,21 @@ def set_enabled(store, identity, body, now=None):
     )
 
 
+# An AI job's run is `completed` once its turn parks on an approval (agent_jobs.AgentJobs), but
+# the job's chat is busy until the owner answers: it still holds the next run back. Used on
+# scheduled_runs without an alias.
+WAITING_TURN = (
+    "scheduled_runs.status='completed' "
+    "AND json_extract(scheduled_runs.receipt,'$.waitingForApproval') "
+    "AND EXISTS (SELECT 1 FROM turns t WHERE t.id=json_extract(scheduled_runs.receipt,'$.turnId') "
+    "AND t.status='awaiting_approval')"
+)
+
+
 def _claim(db, row, now, request_id=None):
     if db.execute(
         "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-        "AND status NOT IN ('completed','failed','cancelled')",
+        f"AND (status NOT IN ('completed','failed','cancelled') OR ({WAITING_TURN}))",
         (row["id"],),
     ).fetchone():
         return None
@@ -580,10 +591,18 @@ def bind_budget(store, identity, body, adapter):
 
 
 def cancel_run(store, identity):
-    """Withdraw undispatched work; never claim an uncertain effect was cancelled."""
+    """Withdraw undispatched work; never claim an uncertain effect was cancelled.
+
+    A run waiting on its ToolGate approval also queues that request for withdrawal in the same
+    transaction (`pi.actions.withdrawals` drains it), so its card leaves the owner's Inbox. The
+    request was made by Pi's key itself (PublishedJobs), so it is queued with no agent. One the
+    owner already answered (the reject path of `answers.decided`) is simply gone.
+    """
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        row = db.execute(
+            "SELECT status, receipt FROM scheduled_runs WHERE id=?", (identity,)
+        ).fetchone()
         if row is None:
             raise JobError("Run not found.")
         if row["status"] == "cancelled":
@@ -592,5 +611,13 @@ def cancel_run(store, identity):
             raise JobError("Only waiting work can be cancelled; reconcile dispatched work first.")
         # Preserve any saved approval receipt and spending binding as evidence.
         db.execute("UPDATE scheduled_runs SET status='cancelled' WHERE id=?", (identity,))
+        request_id = json.loads(row["receipt"] or "{}").get("request_id")
+        if row["status"] == "awaiting_approval" and isinstance(request_id, str) and request_id:
+            # Written here, not through withdrawals.queue: schedule does not import actions.
+            db.execute(
+                "INSERT OR IGNORE INTO approval_withdrawals(request_id,agent_id,state,created_at) "
+                "VALUES (?,NULL,'pending',?)",
+                (request_id, time.time()),
+            )
         db.commit()
         return {"status": "cancelled", "replayed": False}
