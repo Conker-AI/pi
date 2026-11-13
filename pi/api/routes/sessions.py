@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from pi.conversation import submissions
+from pi.conversation.session_replies import ChatSessionDocument
+from pi.core.models import described
 from pi.turns import control as turn_control
 from pi.turns import thinking as background_thinking
 from pi.turns.failures import ActedWithoutReply, TurnFailed
@@ -109,7 +111,11 @@ def router(app_state, require_key, require_admin):
             headers={"Cache-Control": "no-store"},
         )
 
-    @routes.get("/sessions/{session_id}", dependencies=[Depends(require_key)])
+    @routes.get(
+        "/sessions/{session_id}",
+        dependencies=[Depends(require_key)],
+        responses=described(ChatSessionDocument),
+    )
     def get_session(session_id: str):
         session = app_state().store.get_session(session_id)
         if session is None:

@@ -1169,7 +1169,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatContextPolicyDocument"
+                }
               }
             }
           },
@@ -1246,7 +1248,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatContextPolicyDocument"
+                }
               }
             }
           },
@@ -1550,7 +1554,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummaryDocument"
+                }
               }
             }
           },
@@ -1627,7 +1633,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummaryDocument"
+                }
               }
             }
           },
@@ -9059,7 +9067,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSettingsDocument"
+                }
               }
             }
           },
@@ -9136,7 +9146,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSettingsDocument"
+                }
               }
             }
           },
@@ -9668,7 +9680,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatArchiveResult"
+                }
               }
             }
           },
@@ -9738,7 +9752,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTrashResult"
+                }
               }
             }
           },
@@ -13440,7 +13456,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NewChatDraftDocument"
+                }
               }
             }
           },
@@ -13508,7 +13526,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NewChatDraftDocument"
+                }
               }
             }
           },
@@ -13578,7 +13598,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NewChatStartDocument"
+                }
               }
             }
           },
@@ -13647,7 +13669,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NewChatStartDocument"
+                }
               }
             }
           },
@@ -18219,7 +18243,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSessionDocument"
+                }
               }
             }
           },
@@ -26478,6 +26504,1506 @@
         ],
         "title": "ChartRow"
       },
+      "ChatArchiveResult": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessions",
+          "archived"
+        ],
+        "title": "ChatArchiveResult",
+        "description": "POST /sessions/archive: the chats now in that state, each once, in the order sent."
+      },
+      "ChatAttachmentPrivacy": {
+        "properties": {
+          "memoryDisabled": {
+            "type": "boolean",
+            "title": "Memorydisabled"
+          },
+          "harnessDisabled": {
+            "type": "boolean",
+            "title": "Harnessdisabled"
+          },
+          "incognito": {
+            "type": "boolean",
+            "title": "Incognito"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryDisabled",
+          "harnessDisabled",
+          "incognito"
+        ],
+        "title": "ChatAttachmentPrivacy"
+      },
+      "ChatAttachmentProcessing": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "reason"
+        ],
+        "title": "ChatAttachmentProcessing"
+      },
+      "ChatBackgroundThinking": {
+        "properties": {
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "input_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Message Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "turn_id",
+          "session_id",
+          "status",
+          "created_at",
+          "ended_at",
+          "model",
+          "provider",
+          "result",
+          "detail",
+          "input_tokens",
+          "output_tokens",
+          "input_message_id"
+        ],
+        "title": "ChatBackgroundThinking",
+        "description": "Background work for one turn (pi.turns.thinking)."
+      },
+      "ChatContextBudget": {
+        "properties": {
+          "contextWindowTokens": {
+            "type": "integer",
+            "title": "Contextwindowtokens"
+          },
+          "outputReserveTokens": {
+            "type": "integer",
+            "title": "Outputreservetokens"
+          },
+          "otherInputTokens": {
+            "type": "integer",
+            "title": "Otherinputtokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "contextWindowTokens",
+          "outputReserveTokens",
+          "otherInputTokens"
+        ],
+        "title": "ChatContextBudget"
+      },
+      "ChatContextPolicy": {
+        "properties": {
+          "sessionInstructions": {
+            "type": "string",
+            "title": "Sessioninstructions"
+          },
+          "messagePolicies": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "keep-exact",
+                "allow-summary",
+                "retrieve",
+                "exclude"
+              ]
+            },
+            "type": "object",
+            "title": "Messagepolicies"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/ChatContextBudget"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionInstructions",
+          "messagePolicies",
+          "budget"
+        ],
+        "title": "ChatContextPolicy",
+        "description": "The saved policy, as pi.context.controls.Policy validated it."
+      },
+      "ChatContextPolicyDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatContextPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "policy"
+        ],
+        "title": "ChatContextPolicyDocument",
+        "description": "GET and POST /context/{session_id}: revision 0 and no policy until the first save."
+      },
+      "ChatMemoryAdmission": {
+        "properties": {
+          "admitted": {
+            "type": "integer",
+            "title": "Admitted"
+          },
+          "filtered": {
+            "type": "integer",
+            "title": "Filtered"
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "admitted",
+          "filtered",
+          "deleted"
+        ],
+        "title": "ChatMemoryAdmission",
+        "description": "How many saved messages MemoryGate admitted, filtered out or deleted."
+      },
+      "ChatMemoryRetrieval": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "package": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "package"
+        ],
+        "title": "ChatMemoryRetrieval",
+        "description": "What memory a turn was given; `turn_id` and `recorded_at` only when it was recorded."
+      },
+      "ChatMemoryStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "pending_ingestion": {
+            "type": "integer",
+            "title": "Pending Ingestion"
+          },
+          "blocked_delivery": {
+            "type": "integer",
+            "title": "Blocked Delivery"
+          },
+          "pending_deletion": {
+            "type": "integer",
+            "title": "Pending Deletion"
+          },
+          "admission": {
+            "$ref": "#/components/schemas/ChatMemoryAdmission"
+          },
+          "delivery_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Error"
+          },
+          "retrieval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatMemoryRetrieval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notices"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "configured",
+          "pending_ingestion",
+          "blocked_delivery",
+          "pending_deletion",
+          "admission",
+          "delivery_error",
+          "retrieval",
+          "notices"
+        ],
+        "title": "ChatMemoryStatus",
+        "description": "Memory delivery of the chat's messages; `retrieval` is null for the chat, set per turn."
+      },
+      "ChatMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "content": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
+          },
+          "forgotten_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forgotten At"
+          },
+          "content_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "forgotten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Status"
+          },
+          "citations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Citation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citations"
+          },
+          "memory_delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatMessageMemoryDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "response_family": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatResponseFamily"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChatMessageAttachment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "seq",
+          "role",
+          "content",
+          "created_at"
+        ],
+        "title": "ChatMessage",
+        "description": "One message. A forgotten one carries `content_status`, `receipt_id` and `forgotten_at`;\nthe other optional keys are present only when they apply."
+      },
+      "ChatMessageAttachment": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "lastModified": {
+            "type": "number",
+            "title": "Lastmodified"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "source-archived",
+              "removed",
+              "source_unavailable",
+              "privacy_unknown"
+            ],
+            "title": "Availability"
+          },
+          "privacy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatAttachmentPrivacy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "privateOrigin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privateorigin"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/ChatAttachmentProcessing"
+          },
+          "execution": {
+            "type": "string",
+            "const": "not-wired",
+            "title": "Execution"
+          },
+          "storage": {
+            "type": "string",
+            "title": "Storage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "name",
+          "size",
+          "type",
+          "lastModified",
+          "createdAt",
+          "sha256",
+          "availability",
+          "privacy",
+          "privateOrigin",
+          "processing",
+          "execution",
+          "storage"
+        ],
+        "title": "ChatMessageAttachment",
+        "description": "A file sent with a message; an unreadable one keeps its id and size but not its name."
+      },
+      "ChatMessageMemoryDelivery": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "filtered",
+              "pending",
+              "excluded",
+              "removed",
+              "unavailable"
+            ],
+            "title": "State"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "forgotten",
+                  "legacy_unknown",
+                  "privacy_disabled",
+                  "agent_excluded",
+                  "forget_pending",
+                  "retry_scheduled",
+                  "queued",
+                  "blocked",
+                  "invalid_receipt",
+                  "destination_unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "admission_method": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner_requested",
+                  "signal",
+                  "filtered"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admission Method"
+          },
+          "memory_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "reason_code",
+          "admission_method",
+          "memory_id"
+        ],
+        "title": "ChatMessageMemoryDelivery",
+        "description": "What became of one owner message in long-term memory (pi.memory.delivery)."
+      },
+      "ChatPendingSubmission": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "requested_session_id": {
+            "type": "string",
+            "title": "Requested Session Id"
+          },
+          "effective_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Session Id"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "bound",
+              "preparation_failed",
+              "preparation_interrupted",
+              "forgotten"
+            ],
+            "title": "State"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "number",
+            "title": "Updated At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "content_status": {
+            "type": "string",
+            "const": "available",
+            "title": "Content Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "requested_session_id",
+          "effective_session_id",
+          "turn_id",
+          "state",
+          "created_at",
+          "updated_at",
+          "status",
+          "content_status"
+        ],
+        "title": "ChatPendingSubmission",
+        "description": "A saved input not yet resolved; `status` is its turn's status, else its state."
+      },
+      "ChatResponseFamily": {
+        "properties": {
+          "root_message_id": {
+            "type": "string",
+            "title": "Root Message Id"
+          },
+          "retry_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of"
+          },
+          "selected_message_id": {
+            "type": "string",
+            "title": "Selected Message Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "root_message_id",
+          "retry_of",
+          "selected_message_id",
+          "revision"
+        ],
+        "title": "ChatResponseFamily",
+        "description": "The answer versions a message belongs to, and which one is selected."
+      },
+      "ChatSessionDocument": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "pending_submissions": {
+            "items": {
+              "$ref": "#/components/schemas/ChatPendingSubmission"
+            },
+            "type": "array",
+            "title": "Pending Submissions"
+          },
+          "pending_submissions_truncated": {
+            "type": "boolean",
+            "title": "Pending Submissions Truncated"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "type": "array",
+            "title": "Turns"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ChatMemoryStatus"
+          },
+          "thinking": {
+            "items": {
+              "$ref": "#/components/schemas/ChatBackgroundThinking"
+            },
+            "type": "array",
+            "title": "Thinking"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "parent_id",
+          "title",
+          "status",
+          "created_at",
+          "closed_at",
+          "summary",
+          "pending_submissions",
+          "pending_submissions_truncated",
+          "messages",
+          "turns",
+          "memory",
+          "thinking"
+        ],
+        "title": "ChatSessionDocument",
+        "description": "GET /sessions/{session_id}: the sessions row with what belongs to it."
+      },
+      "ChatSettings": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "privacy": {
+            "$ref": "#/components/schemas/ChatSettingsPrivacy"
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectid"
+          },
+          "projectSources": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Conversation"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Task"
+                    },
+                    {
+                      "$ref": "#/components/schemas/File"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "conversation": "#/components/schemas/Conversation",
+                      "file": "#/components/schemas/File",
+                      "task": "#/components/schemas/Task"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projectsources"
+          },
+          "presentationMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "focus",
+                  "character"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presentationmode"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "ask",
+                  "ai",
+                  "full"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "privacy"
+        ],
+        "title": "ChatSettings",
+        "description": "A chat's saved settings (pi.conversation.settings.Settings); keys a chat was saved\nwithout are absent."
+      },
+      "ChatSettingsDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ChatSettings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "settings"
+        ],
+        "title": "ChatSettingsDocument",
+        "description": "GET and POST /sessions/{identity}/settings: revision 0 until the first save. `settings`\nkeeps the keys it was saved with, so a chat saved before a field existed omits it."
+      },
+      "ChatSettingsPrivacy": {
+        "properties": {
+          "memoryDisabled": {
+            "type": "boolean",
+            "title": "Memorydisabled"
+          },
+          "harnessDisabled": {
+            "type": "boolean",
+            "title": "Harnessdisabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryDisabled",
+          "harnessDisabled"
+        ],
+        "title": "ChatSettingsPrivacy"
+      },
+      "ChatSummaryDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "source_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Session Id"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSummaryVersion"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "summary",
+          "source_session_id",
+          "versions"
+        ],
+        "title": "ChatSummaryDocument",
+        "description": "GET and POST /context/{session_id}/summary: the current summary and the newest 100\nversions, newest first."
+      },
+      "ChatSummaryVersion": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "source_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Session Id"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At"
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "summary",
+          "source_session_id",
+          "created_at",
+          "restored_from"
+        ],
+        "title": "ChatSummaryVersion",
+        "description": "One kept summary; `restored_from` names the revision a restore copied."
+      },
+      "ChatTrashResult": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "trashed": {
+            "type": "boolean",
+            "title": "Trashed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessions",
+          "trashed"
+        ],
+        "title": "ChatTrashResult",
+        "description": "POST /sessions/trash: the chats moved to the Trash (`trashed`) or restored from it."
+      },
+      "ChatTurn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "cached_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Tokens"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "route_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Tier"
+          },
+          "route_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Reason"
+          },
+          "approval_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Request Id"
+          },
+          "approval_tool_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Tool Id"
+          },
+          "approval_args": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "approval_expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Expires At"
+          },
+          "approval_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Intent"
+          },
+          "acted": {
+            "type": "integer",
+            "title": "Acted"
+          },
+          "started_at": {
+            "type": "number",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "usage_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Version"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatTurnAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ChatMemoryStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "status",
+          "provider",
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cached_tokens",
+          "cost_usd",
+          "latency_ms",
+          "route_tier",
+          "route_reason",
+          "approval_request_id",
+          "approval_tool_id",
+          "approval_args",
+          "approval_expires_at",
+          "approval_intent",
+          "acted",
+          "started_at",
+          "ended_at",
+          "detail",
+          "usage_version",
+          "action",
+          "memory"
+        ],
+        "title": "ChatTurn",
+        "description": "One turn row; `acted` is 0 or 1."
+      },
+      "ChatTurnAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "job_id"
+        ],
+        "title": "ChatTurnAction",
+        "description": "The turn's latest tool action."
+      },
       "Check": {
         "properties": {
           "request_id": {
@@ -29327,6 +30853,185 @@
           "privateOrigin"
         ],
         "title": "NativeExport"
+      },
+      "NewChatDraftDocument": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "session_id": {
+            "type": "null",
+            "title": "Session Id"
+          },
+          "task_id": {
+            "type": "null",
+            "title": "Task Id"
+          },
+          "content_status": {
+            "type": "string",
+            "const": "available",
+            "title": "Content Status"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "research_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "web",
+              "deep"
+            ],
+            "title": "Research Mode"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "skill_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skill Ids"
+          },
+          "think": {
+            "type": "boolean",
+            "title": "Think"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "privacy": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "enum": [
+                "memoryDisabled",
+                "harnessDisabled"
+              ]
+            },
+            "type": "object",
+            "title": "Privacy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "session_id",
+          "task_id",
+          "content_status",
+          "revision",
+          "updated_at",
+          "text",
+          "research_mode",
+          "model_id",
+          "skill_ids",
+          "think",
+          "title",
+          "agent_id",
+          "privacy"
+        ],
+        "title": "NewChatDraftDocument",
+        "description": "GET and POST /drafts/new: the one draft of a chat not started yet."
+      },
+      "NewChatStartDocument": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "content_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "forgotten"
+            ],
+            "title": "Content Status"
+          },
+          "source_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision"
+          },
+          "draft_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "request_id",
+          "session_id",
+          "content_status",
+          "source_revision",
+          "draft_revision"
+        ],
+        "title": "NewChatStartDocument",
+        "description": "POST /drafts/new/start and GET /drafts/new/start/{request_id}: the chat a start made.\nA forgotten chat keeps its id; its revisions are gone (null)."
       },
       "NewDraft": {
         "properties": {

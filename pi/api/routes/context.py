@@ -1,19 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from pi.context import controls, retrieval, summaries
+from pi.context.context_replies import ChatContextPolicyDocument, ChatSummaryDocument
+from pi.core.models import described
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/context", dependencies=[Depends(authorize)])
+    policy = described(ChatContextPolicyDocument)
+    summary_reply = described(ChatSummaryDocument)
 
     def invoke(fn, *args):
         return fn(store(), *args)
 
-    @routes.get("/{session_id}")
+    @routes.get("/{session_id}", responses=policy)
     def get(session_id: str):
         return invoke(controls.load, session_id)
 
-    @routes.post("/{session_id}")
+    @routes.post("/{session_id}", responses=policy)
     def save(session_id: str, body: controls.Update):
         return invoke(controls.save, session_id, body)
 
@@ -33,11 +37,11 @@ def router(store, authorize):
     def fork(session_id: str, body: controls.ReviewedFork):
         return invoke(controls.reviewed_fork, session_id, body)
 
-    @routes.get("/{session_id}/summary")
+    @routes.get("/{session_id}/summary", responses=summary_reply)
     def summary(session_id: str):
         return invoke(summaries.load, session_id)
 
-    @routes.post("/{session_id}/summary")
+    @routes.post("/{session_id}/summary", responses=summary_reply)
     def edit_summary(session_id: str, body: summaries.Edit):
         return invoke(summaries.save, session_id, body)
 

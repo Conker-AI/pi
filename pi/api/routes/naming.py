@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from pi.conversation import archive, naming
+from pi.conversation.chat_replies import ChatArchiveResult, ChatTrashResult
 from pi.core.models import described
 
 
@@ -10,11 +11,11 @@ def router(get_store, get_providers, authorize):
     routes = APIRouter(prefix="/sessions", dependencies=[Depends(authorize)])
     title = described(naming.TitleDocument)
 
-    @routes.post("/archive")
+    @routes.post("/archive", responses=described(ChatArchiveResult))
     def archive_chats(body: archive.Archive):
         return archive.apply(get_store(), body)
 
-    @routes.post("/trash")
+    @routes.post("/trash", responses=described(ChatTrashResult))
     def trash_chats(body: archive.Trash):
         return archive.trash(get_store(), body)
 

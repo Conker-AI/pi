@@ -4,6 +4,8 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from pi.conversation import drafts
+from pi.conversation.chat_replies import NewChatDraftDocument, NewChatStartDocument
+from pi.core.models import described
 
 
 def router(store, authorize):
@@ -32,6 +34,9 @@ def router(store, authorize):
 
     routes = APIRouter(prefix="/drafts", dependencies=[Depends(authorize), Depends(bounded_body)])
 
+    new_draft = described(NewChatDraftDocument)
+    new_start = described(NewChatStartDocument)
+
     def call(function, *args):
         return function(store(), *args)
 
@@ -48,22 +53,22 @@ def router(store, authorize):
                 raise HTTPException(422, "Invalid draft identity.")
         return task_id
 
-    @routes.get("/new")
+    @routes.get("/new", responses=new_draft)
     def load_new(request: Request):
         scope(request)
         return call(drafts.load_new)
 
-    @routes.post("/new")
+    @routes.post("/new", responses=new_draft)
     def save_new(request: Request, body: drafts.NewSave):
         scope(request)
         return call(drafts.save_new, body)
 
-    @routes.post("/new/start")
+    @routes.post("/new/start", responses=new_start)
     def start(request: Request, body: drafts.Start):
         scope(request)
         return call(drafts.start, body)
 
-    @routes.get("/new/start/{request_id}")
+    @routes.get("/new/start/{request_id}", responses=new_start)
     def get_start(request: Request, request_id: str):
         scope(request)
         if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_id):
