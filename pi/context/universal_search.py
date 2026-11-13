@@ -15,12 +15,13 @@ from pydantic import Field
 from pi.agents import profiles as agents
 from pi.content import artifacts
 from pi.context import projects
+from pi.context.search_replies import SearchCapabilities, SearchPage
 from pi.conversation import hidden_records as shared_hidden
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.conversation.search_excerpt import excerpt
-from pi.core.models import Strict
+from pi.core.models import Strict, described
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 from pi.schedule import jobs, tasks
@@ -50,6 +51,11 @@ class Settings(Strict):
     exactText: bool = True
     semantic: bool = False
     reranking: bool = False
+
+
+class SearchSettingsDocument(Strict):
+    revision: int
+    configuration: Settings
 
 
 class SaveSettings(Strict):
@@ -424,11 +430,11 @@ def rerank(store, providers, query, results):
 def router(store, memory, toolgate, providers, authorize):
     routes = APIRouter(prefix="/search", dependencies=[Depends(authorize)])
 
-    @routes.get("/settings")
+    @routes.get("/settings", responses=described(SearchSettingsDocument))
     def settings():
         return load_settings(store())
 
-    @routes.get("/capabilities")
+    @routes.get("/capabilities", responses=described(SearchCapabilities))
     def capabilities():
         return {
             "sources": list(SOURCES),
@@ -439,7 +445,7 @@ def router(store, memory, toolgate, providers, authorize):
             "scanLimit": SCAN_LIMIT,
         }
 
-    @routes.post("/settings")
+    @routes.post("/settings", responses=described(SearchSettingsDocument))
     def save(body: SaveSettings):
         return save_settings(
             store(),
@@ -448,7 +454,7 @@ def router(store, memory, toolgate, providers, authorize):
             ranking_available=ranking_configuration(store()) is not None,
         )
 
-    @routes.get("")
+    @routes.get("", responses=described(SearchPage))
     def search(
         q: str = Query(min_length=1, max_length=200),
         stage: str = Query(default="metadata", pattern="^(metadata|text|semantic)$"),
