@@ -11,6 +11,11 @@ be a decision with visible consequences.
   parent read (web pages, tool results, attachments), yet it was judged on its own messages only.
   Now a chat that starts from a summary counts as having read outside content whenever its parent
   (and so on up) did, so his words no longer approve an action and remembering asks him.
+- **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
+  OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
+  key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
+  reports its tokens but no price now counts tokens only (`maxTokens` is its stop; money counts only
+  reported prices, as for the daily cap). A missing price from OpenRouter is still unknown usage.
 - **The first-run rehearsal stays done after you use Conker** (`pi/setup/rehearsal.py`). Its
   receipt named the newest conversation, so the next chat turned the rehearsal back to "ready"
   and the setup step to degraded. A receipt now holds while its own conversation (the newest one
