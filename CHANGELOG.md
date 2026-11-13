@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.25.0
+
 - **A skipped update stays skipped when its release comes back** (`pi/owner/updates.py`).
   Withdrawing an offer newer than the latest release no longer deletes one the owner dismissed.
 - **An update that rolled back is offered again** (`pi/owner/updates.py`). An offer marked
