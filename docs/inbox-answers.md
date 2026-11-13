@@ -17,8 +17,11 @@ A decision nobody tells Pi about (made with ToolGate's admin key, `POST
 (`pi/turns/decision_sweep.py`, every `PI_DECISION_SWEEP_SECONDS`, default 60). With its own key
 Pi reads the status of each request it still waits on (`GET /v2/agent/requests/{id}`, as the
 agent that asked and then as the key, a random 50 turns and 50 runs per pass) and takes the same
-step as below. It reads only the status, never the note: a note becomes his words only through
-the owner's own channel, so a "no" read this way just closes. A second caller (the owner route,
+step as below, once the decision has been seen for 60 s (so the gateway, which tells Pi with his
+words, always goes first) and at most three times per request (a resume that keeps failing waits
+for the chat to be opened). It reads only the status, never the note: a note becomes his words
+only through the owner's own channel, so a "no" read this way just closes, and words typed with
+the admin key are not passed on. A second caller (the owner route,
 the chat opening) finds the turn or run already taken, so nothing runs twice.
 
 - **approved** (Do it): the parked turn resumes now, in the background. Pi replays the exact

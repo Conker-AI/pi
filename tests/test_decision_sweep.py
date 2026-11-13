@@ -1,7 +1,7 @@
 """A decision made in ToolGate that Pi was not told about (its admin key, or Pi down) still
 continues the work: Pi reads the status with its own key and takes the owner route's step."""
 
-from contextlib import closing
+from contextlib import closing, suppress
 
 import httpx
 import pytest
@@ -25,6 +25,15 @@ def inline(monkeypatch):
     monkeypatch.setattr(answers, "background", lambda work: work())
 
 
+def passes(store, toolgate, loop, executor=None):
+    """Two passes a grace period apart: the first only notes the decision, the second acts."""
+    seen = {}
+    assert decision_sweep.sweep(store, toolgate, loop, executor, seen=seen, now=0) == 0
+    return decision_sweep.sweep(
+        store, toolgate, loop, executor, seen=seen, now=decision_sweep.GRACE
+    )
+
+
 class Statuses:
     """ToolGate's answer per request, as Pi's key reads it."""
 
@@ -41,8 +50,8 @@ class Statuses:
 def test_an_admin_approval_resumes_the_parked_chat_turn_once(store):
     loop, gate, _, turn, request = parked(store, ["Echoed."])
     toolgate = Statuses(**{request: "approved"})
-    assert decision_sweep.sweep(store, toolgate, loop) == 1
-    assert toolgate.reads == [(request, "companion")]
+    assert passes(store, toolgate, loop) == 1
+    assert toolgate.reads == [(request, "companion")] * 2
     assert store.get_turn(turn)["status"] == "complete"
     assert gate.invocations[-1] == ("t_echo", {"text": "hi"}, request)
     # Nothing waits any more: the next pass reads nothing and runs nothing twice.
@@ -53,7 +62,7 @@ def test_an_admin_approval_resumes_the_parked_chat_turn_once(store):
 def test_an_admin_no_closes_the_turn_and_never_passes_a_note_as_his_words(store):
     loop, gate, session, turn, request = parked(store, ["Hello again."])
     before = inputs(store, session)
-    assert decision_sweep.sweep(store, Statuses(**{request: "rejected"}), loop) == 1
+    assert passes(store, Statuses(**{request: "rejected"}), loop) == 1
     saved = store.get_turn(turn)
     assert (saved["status"], saved["detail"]) == ("cancelled", answers.CLOSED)
     assert len(gate.invocations) == 1
@@ -63,7 +72,7 @@ def test_an_admin_no_closes_the_turn_and_never_passes_a_note_as_his_words(store)
 @pytest.mark.parametrize("status", ["pending", "withdrawn", None])
 def test_an_undecided_or_unreadable_request_keeps_waiting(store, status):
     loop, gate, _, turn, request = parked(store, ["Echoed."])
-    assert decision_sweep.sweep(store, Statuses(**{request: status}), loop) == 0
+    assert passes(store, Statuses(**{request: status}), loop) == 0
     assert store.get_turn(turn)["status"] == "awaiting_approval"
     assert len(gate.invocations) == 1
 
@@ -96,14 +105,64 @@ def test_an_admin_decision_resumes_or_cancels_a_tool_cron_run(store):
 
     toolgate = Statuses(**{"tg-yes": "approved", "tg-no": "rejected"})
     loop = type("Loop", (), {"store": store})()
-    assert decision_sweep.sweep(store, toolgate, loop, executor) == 2
+    assert passes(store, toolgate, loop, executor) == 2
     # Pi's own key asked for a cron job, so it reads as the key.
-    assert sorted(toolgate.reads) == [("tg-no", None), ("tg-yes", None)]
+    assert sorted(set(toolgate.reads)) == [("tg-no", None), ("tg-yes", None)]
     assert jobs.get_run(store, approved["id"])["status"] == "completed"
     assert calls == [
         {"action_id": approved["id"], "agent_id": "companion", "approval_request_id": "tg-yes"}
     ]
     assert jobs.get_run(store, refused["id"])["status"] == "cancelled"
+
+
+def test_the_gateway_goes_first_so_his_change_words_are_never_lost(store):
+    loop, _, session, turn, request = parked(store, ["Echoed bye."])
+    toolgate, seen = Statuses(**{request: "rejected"}), {}
+    # ToolGate already says "rejected"; the gateway has not told Pi yet.
+    assert decision_sweep.sweep(store, toolgate, loop, seen=seen, now=0) == 0
+    assert store.get_turn(turn)["status"] == "awaiting_approval"
+    # The gateway's call arrives with his words, within the grace period.
+    assert answers.decided(loop, request, "rejected", "Say bye instead.")["continued"] == (
+        "your_words"
+    )
+    assert "Say bye instead." in str(inputs(store, session))
+    assert decision_sweep.sweep(store, toolgate, loop, seen=seen, now=60) == 0
+    assert seen == {}  # nothing waits on it any more
+
+
+def test_a_resume_that_keeps_failing_is_tried_three_times(store, monkeypatch):
+    _, _, _, turn, request = parked(store, ["Echoed."])
+    tries = []
+
+    class Stuck:
+        def __init__(self):
+            self.store = store
+
+        def resume_turn(self, turn_id):
+            tries.append(turn_id)
+            raise RuntimeError("the tool is not available")
+
+    # As in production, a failed continuation is logged by background(), not raised.
+    monkeypatch.setattr(answers, "background", _swallow)
+    seen, toolgate = {}, Statuses(**{request: "approved"})
+    for now in range(0, 600, 60):
+        decision_sweep.sweep(store, toolgate, Stuck(), seen=seen, now=now)
+    assert tries == [turn] * decision_sweep.TRIES
+    assert store.get_turn(turn)["status"] == "awaiting_approval"
+
+
+def _swallow(work):
+    with suppress(RuntimeError):
+        work()
+
+
+def test_a_malformed_receipt_never_stops_the_pass(store):
+    _, _, _, _, request = parked(store, ["Echoed."])
+    run = waiting_run(store, "tg-bad")
+    with store._connect() as db:
+        db.execute("UPDATE scheduled_runs SET receipt='not json' WHERE id=?", (run["id"],))
+    with store._connect() as db:
+        assert decision_sweep.waiting(db, 50) == [(request, "companion")]
 
 
 class Response:
