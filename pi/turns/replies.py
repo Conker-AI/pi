@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING
 
 from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
@@ -17,9 +18,19 @@ from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering
 from pi.turns.failures import ActedWithoutReply, TurnFailed
 
+if TYPE_CHECKING:
+    from pi.actions.toolgate import ToolGateClient
+    from pi.conversation.store import Store
+    from pi.memory.service import Memory
+
 
 class Replies:
     """Part of Loop: replies and resumption. Uses the attributes Loop.__init__ sets."""
+
+    # Set by Loop.__init__ (pi/turns/loop.py); declared here for the type checker only.
+    store: Store
+    memory: Memory
+    toolgate: ToolGateClient | None
 
     def resume_turn(self, turn_id: str, job_id: str | None = None) -> dict:
         """Continue a turn the owner has now approved.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
 from pi.conversation import live_stream
@@ -34,8 +36,19 @@ def identity_scopes(tool_ids):
     return scopes
 
 
+if TYPE_CHECKING:
+    from pi.actions.toolgate import ToolGateClient
+    from pi.conversation.store import Store
+    from pi.models.routing import Router
+
+
 class ModelCalls:
     """Part of Loop: model calls. Uses the attributes Loop.__init__ sets."""
+
+    # Set by Loop.__init__ (pi/turns/loop.py); declared here for the type checker only.
+    store: Store
+    toolgate: ToolGateClient | None
+    router: Router
 
     def _offers_tools(self) -> bool:
         """ToolGate is set up and the owner did not leave tools out at setup."""
@@ -45,8 +58,9 @@ class ModelCalls:
 
         return setup_choices.current(self.store, "capabilities").choice != "skip"
 
-    def _gate(self, execution=None):
-        """ToolGate as the running agent, so its toolkit is enforced there and not only by Pi."""
+    def _gate(self, execution=None) -> ToolGateClient:
+        """ToolGate as the running agent, so its toolkit is enforced there and not only by Pi.
+        Called only once ToolGate is set, hence the cast."""
         execution = execution or {}
         agent = execution.get("agentId") or "companion"
         if execution.get("kind", "companion") == "companion":
@@ -54,7 +68,7 @@ class ModelCalls:
         else:
             scopes = identity_scopes(execution["configuration"]["toolIds"])
         acting = getattr(self.toolgate, "acting_as", None)
-        return acting(agent, scopes) if acting else self.toolgate
+        return cast("ToolGateClient", acting(agent, scopes) if acting else self.toolgate)
 
     def _available_tools(self, execution=None):
         """What this key is scoped to right now, or nothing.
