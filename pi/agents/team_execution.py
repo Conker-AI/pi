@@ -269,15 +269,31 @@ def _limits(db, run, role_id):
             c["state"] != "complete"
             or c["input_tokens"] is None
             or c["output_tokens"] is None
-            or c["cost_usd"] is None
+            or (c["cost_usd"] is None and c["provider"] in PRICED)
             for c in selected
         ):
             _error("usage_unknown", "Unresolved or unknown model usage blocks further calls.")
         if sum(c["input_tokens"] + c["output_tokens"] for c in selected) >= budget["maxTokens"]:
             _error("token_stop", "Observed token threshold reached; no next model call.")
-        if sum(c["cost_usd"] for c in selected) * 100 >= budget["maxCostCents"]:
+        if sum(c["cost_usd"] or 0 for c in selected) * 100 >= budget["maxCostCents"]:
             _error("cost_stop", "Observed cost threshold reached; no next model call.")
     return role
+
+
+# Providers that report a price with every answer. A missing price from one of them is unknown
+# usage; every other provider (local models, plans, direct keys) reports none, so its calls count
+# tokens only and maxTokens is their stop (money counts only reported prices, never guesses).
+PRICED = frozenset({"openrouter"})
+
+
+def _known_usage(provider, result) -> bool:
+    tokens = (result.input_tokens, result.output_tokens)
+    if not all(type(v) is int and v >= 0 for v in tokens):
+        return False
+    cost = result.cost_usd
+    if cost is None:
+        return provider not in PRICED
+    return type(cost) in (int, float) and math.isfinite(cost) and cost >= 0
 
 
 class _Metered:
@@ -313,12 +329,7 @@ class _Metered:
                 )
             raise
         values = (result.input_tokens, result.output_tokens, result.cost_usd)
-        known = (
-            all(type(v) is int and v >= 0 for v in values[:2])
-            and type(values[2]) in (int, float)
-            and math.isfinite(values[2])
-            and values[2] >= 0
-        )
+        known = _known_usage(self.name, result)
         with self.store._connect() as db:
             changed = db.execute(
                 "UPDATE team_model_calls SET state=?,actual_model=?,"
