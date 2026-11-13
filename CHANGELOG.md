@@ -11,6 +11,11 @@ be a decision with visible consequences.
   key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
   reports its tokens but no price now counts tokens only (`maxTokens` is its stop; money counts only
   reported prices, as for the daily cap). A missing price from OpenRouter is still unknown usage.
+- **The first-run rehearsal stays done after you use Conker** (`pi/setup/rehearsal.py`). Its
+  receipt named the newest conversation, so the next chat turned the rehearsal back to "ready"
+  and the setup step to degraded. A receipt now holds while its own conversation (the newest one
+  that had ended when it was recorded), memory review and approval still stand; forgetting that
+  conversation or changing the memory choice still undoes it.
 
 - **A decision Pi was not told about still continues the work** (docs/inbox-answers.md). A
   decision made with ToolGate's admin key, or while Pi was down, used to leave the parked turn or
