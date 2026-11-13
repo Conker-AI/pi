@@ -223,6 +223,13 @@ def follow_answer(value):
     return {**value, "roleSettings": settings}
 
 
+class ConfigurationDocument(Strict):
+    """What GET and POST /models/configuration answer; no configuration before the first save."""
+
+    revision: int
+    configuration: Configuration | None
+
+
 class Update(Strict):
     expected_revision: int = Field(ge=0)
     configuration: Configuration

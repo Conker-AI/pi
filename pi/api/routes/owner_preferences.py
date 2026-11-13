@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from pi.core.models import described
 from pi.owner import preferences as owner_preferences
 from pi.owner import settings as owner_settings
 
@@ -26,12 +27,14 @@ def _conflict(exc):
 
 def router(app_state, require_owner):
     routes = APIRouter()
+    settings_reply = described(owner_settings.OwnerSettingsDocument)
+    preferences_reply = described(owner_preferences.OwnerPreferencesDocument)
 
-    @routes.get("/owner/settings", dependencies=[Depends(require_owner)])
+    @routes.get("/owner/settings", dependencies=[Depends(require_owner)], responses=settings_reply)
     def get_owner_settings():
         return owner_settings.load(app_state().store)
 
-    @routes.post("/owner/settings", dependencies=[Depends(require_owner)])
+    @routes.post("/owner/settings", dependencies=[Depends(require_owner)], responses=settings_reply)
     def save_owner_settings(body: owner_settings.Update):
         try:
             return owner_settings.save(app_state().store, body)
@@ -40,11 +43,15 @@ def router(app_state, require_owner):
         except ValueError as exc:
             raise HTTPException(422, {"code": "invalid_settings", "message": str(exc)}) from exc
 
-    @routes.get("/owner/preferences", dependencies=[Depends(require_owner)])
+    @routes.get(
+        "/owner/preferences", dependencies=[Depends(require_owner)], responses=preferences_reply
+    )
     def get_owner_preferences():
         return owner_preferences.load(app_state().store)
 
-    @routes.post("/owner/preferences", dependencies=[Depends(require_owner)])
+    @routes.post(
+        "/owner/preferences", dependencies=[Depends(require_owner)], responses=preferences_reply
+    )
     def save_owner_preferences(body: owner_preferences.UpdatePreferences):
         try:
             return owner_preferences.save(app_state().store, body)

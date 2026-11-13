@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from pi.core.models import described
 from pi.models import roles as model_roles
 
 
 def router(store, authorize):
     routes = APIRouter(prefix="/models/configuration", dependencies=[Depends(authorize)])
+    reply = described(model_roles.ConfigurationDocument)
 
-    @routes.get("")
+    @routes.get("", responses=reply)
     def get():
         return model_roles.load(store())
 
-    @routes.post("")
+    @routes.post("", responses=reply)
     def save(body: model_roles.Update):
         try:
             return model_roles.save(store(), body)

@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, JsonValue
 
 from pi.core.models import Strict
 
@@ -38,6 +39,14 @@ class RevisionConflict(Exception):
     def __init__(self, current_revision):
         self.current_revision = current_revision
         super().__init__("Settings changed elsewhere. Reload before saving.")
+
+
+class OwnerSettingsDocument(Strict):
+    """What GET and POST /owner/settings answer: the whole document after the read or save."""
+
+    schemaVersion: Literal[1]
+    revision: int
+    values: dict[str, JsonValue]
 
 
 class Update(Strict):
