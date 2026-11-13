@@ -17,6 +17,10 @@ be a decision with visible consequences.
   a forgotten or trashed chat, nor names an AI job Conker kept from one in Upcoming or Handled
   (an adopted job is the owner's and still shows). A turned-off job is no longer Upcoming.
 
+- **One notices table for plan alerts and AI job notes** (docs/inbox-kinds.md, merge 1).
+  Migration 0006 moves `plan_alerts` and `agent_job_notes` into `notices`, keeping every id, and
+  drops the two tables. Routes, response bodies, Inbox items and auth are unchanged. A database
+  this migration has run on needs the pre-update snapshot to go back to an older Pi.
 - **Memory proposals are retired** (docs/inbox-kinds.md, merge 2). `GET /inbox` no longer lists
   kind `memory`, and the admin-key routes `/memory-proposals` (list, create, get, `/decision`,
   `/reconcile`) are gone from the API and docs/pi-openapi.json. No Pi code, dashboard or CLI used

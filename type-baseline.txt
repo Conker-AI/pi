@@ -57,7 +57,6 @@ pi/models/direct.py 11
 pi/models/evaluations.py 4
 pi/models/openrouter.py 2
 pi/models/roles.py 7
-pi/owner/plan_alerts.py 6
 pi/owner/self_check.py 2
 pi/schedule/agent_jobs.py 2
 pi/schedule/jobs.py 1

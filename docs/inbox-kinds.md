@@ -15,8 +15,8 @@ nothing there waits for the owner, so they are not rows below.
 | Change requests (`agents/change_requests.py`, `change_requests`; kinds `ai_job`, `tool_draft`, `memory`) | `change-request` | Conker in chat (`conker.schedule`, `conker.draft_tool`, `conker.remember`); the owner (`POST /tool-drafts`) | approve (signed-in session), decline (+ `reply`), saved, retry, published: `POST /change-requests/{id}/...` | none | none on the request; a Keep result is undone by forgetting its chat (`agents/keep.py`) | `conker inspect change-requests`, `conker apply requests`, `conker tool answer` | 3 open per chat, 20 overall (`file`); the owner's own are not limited | yes: `change_requests.redact` |
 | Questions (`agents/asks.py`, `owner_asks`) | `ask` | Conker in chat (`conker.ask`) | answer (an option or his words), dismiss: `POST /asks/{id}/answer`, `/dismiss` | none | none | `conker inspect asks`, `conker apply asks` | 3 open per chat, 20 overall (`asks.file`) | yes: `asks.redact` |
 | Companion suggestions (`schedule/proposals.py`, `proposals`; timer `proposal_worker.py`) | `suggestion` | background worker, a `proposals` model pass over the owner's messages | accept / decline / never: `POST /proposals/{id}/decision`; accepting records a decision only (`grantsExecutionAuthority: false`) | none; a decline hides the same idea 30 days, never for good | none (`proposals_decided_once` trigger) | `conker inspect proposals`, `conker apply proposals` | 3 per pass and the daily suggestion budget (`run_pass`) | yes: every proposal from a pass that read the chat, `proposals.redact` |
-| Plan alerts (`owner/plan_alerts.py`, `plan_alerts`) | `plan` | background worker (`PlanAlertWorker`) reading subscription usage | dismiss: `POST /plans/alerts/{id}/dismiss` (owner key; not in the browser contract) | ends when the plan window resets (`record`) | none | `conker limits --dismiss ID` | one open alert per plan window (unique index) | n/a: no chat |
-| AI job notes (`schedule/agent_jobs.py`, `agent_job_notes`) | `agent-job` | job run: the AI job's reply had something for the owner (`_note`) | dismiss: `POST /jobs/agent/notes/{id}/dismiss`; the card links to the job's chat | none | none | none found | one per run (`run_id UNIQUE`) | yes: `agent_jobs.redact` |
+| Plan alerts (`owner/plan_alerts.py`, `notices` kind `plan`) | `plan` | background worker (`PlanAlertWorker`) reading subscription usage | dismiss: `POST /plans/alerts/{id}/dismiss` (recovery key only; not in the browser contract) | ends when the plan window resets (`record`) | none | `conker limits --dismiss ID` | one open alert per plan window (unique index) | n/a: no chat |
+| AI job notes (`schedule/agent_jobs.py`, `notices` kind `agent-job`) | `agent-job` | job run: the AI job's reply had something for the owner (`_note`) | dismiss: `POST /jobs/agent/notes/{id}/dismiss`; the card links to the job's chat | none | none | none found | one per run (`run_id UNIQUE`) | yes: `agent_jobs.redact` |
 | Attention (`agents/continuity.py`, `continuity_order` + `continuity_ack`) | `attention` | Pi, from run, task and job-run status events (blocked, failed, awaiting approval or budget, acted with no reply, outcome unknown, interrupted) | acknowledge: `POST /continuity/seen` (admin key; no browser route or dashboard caller found). A job run's approval is answered by its ToolGate card (merge 5) | replaced by a later status of the same run or task (`briefing`) | none | none found | none (Inbox list cut at 50) | hidden, not deleted: `continuity._eligible` |
 
 Not Inbox rows, though named like one:
@@ -42,12 +42,14 @@ approval; that row is never merged with the others.
 
 ## Duplicates, smallest merge first
 
-1. **Plan alerts and AI job notes.** Both are a line, a link and Dismiss, with no undo and no
-   answer. One notices table (kind, title, detail, link, dismissed_at) would serve both; plan
-   alerts keep their per-window reset as a column. Touches `plan_alerts`, `agent_job_notes`,
-   routes `/plans/alerts/{id}/dismiss` and `/jobs/agent/notes/{id}/dismiss`, the browser
-   contract, dashboard `lib/gateway/jobs.ts` and the Inbox cards, `conker limits --dismiss`.
-   Small: one migration, two routes kept as aliases for a release.
+1. **Plan alerts and AI job notes.** DONE 2026-11-13: one `notices` table (`pi/owner/notices.py`:
+   kind, subject, title, detail, session_id, facts, created_at, reset_at, dismissed_at), filled by
+   migration 0006 from `plan_alerts` and `agent_job_notes` with their ids kept, which then go.
+   One partial unique index, (kind, subject) while `reset_at` is NULL, keeps both rules: one
+   open alert per plan window, one note per run. Routes, item shapes and auth are unchanged, so
+   the dashboard cards and `conker limits --dismiss` need no change. A shared
+   `/notices` route waits until the dashboard reads the Inbox; then these two become its
+   aliases. Self-check alerts (`self_check_alerts`) have the same shape and are the next kind.
 2. **Memory proposals.** DONE 2026-11-12: retired. No code, screen or CLI created or answered
    one; only the admin-key route did. Pi no longer lists kind `memory` (`_needs_memory_items` is
    gone) and the `/memory-proposals` router is removed; the table stays for forgetting, like
