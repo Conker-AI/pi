@@ -38,7 +38,7 @@ import uuid
 
 from pi.agents import profiles
 from pi.conversation import settings as session_settings
-from pi.conversation import submissions
+from pi.conversation import submissions, visibility
 
 MAX_DEPTH = 2
 PER_TURN = 3
@@ -201,7 +201,8 @@ def _target(db, wanted):
     row = db.execute(
         "SELECT id FROM agents WHERE id=? OR name_key=?", (wanted, wanted.casefold())
     ).fetchone()
-    if row is None:
+    # An agent Conker kept from a forgotten or trashed chat carries that chat's words: unknown here.
+    if row is None or row["id"] in visibility.kept_from_hidden(db, "agent"):
         raise Refused(f"There is no agent called “{wanted}”. Use an agent's exact name.")
     agent = profiles._get(db, row["id"])
     if agent["archived_at"] is not None:
@@ -443,6 +444,40 @@ GONE = (
 )
 
 
+# How far up from the reply's chat to look for the agent's chat (forks of forks during its turn).
+_CHAIN_LIMIT = 32
+
+
+def _owner_hid(db, child, reply_chat) -> bool:
+    """Whether the owner forgot or trashed the agent's chat, the continuation holding its reply
+    (a fork made during its turn) or a chat between them. Not `visibility.hidden`: that also hides
+    every chat below a hidden one, and the agent's chat sits below the caller, whose own history
+    still reads the reply while the caller is in the Trash and opened by its own id. Every other
+    chat that carries the caller's lines sits below the caller too, so it is hidden as a whole."""
+    chain, current = [reply_chat], reply_chat
+    for _ in range(_CHAIN_LIMIT):
+        if current == child:
+            break
+        parent = db.execute("SELECT parent_id FROM sessions WHERE id=?", (current,)).fetchone()
+        if parent is None or not parent[0]:
+            chain = [reply_chat, child]
+            break
+        current = parent[0]
+        chain.append(current)
+    else:
+        chain = [reply_chat, child]
+    ids = sorted(set(chain))
+    marks = ",".join("?" * len(ids))
+    # The chats the owner marked himself, as in visibility's sources before their descendants.
+    marked = db.execute(
+        f"SELECT 1 FROM sessions WHERE id IN ({marks}) AND status='forgotten' "
+        f"UNION ALL SELECT 1 FROM session_trash WHERE session_id IN ({marks}) "
+        f"UNION ALL SELECT 1 FROM forgotten_sessions WHERE session_id IN ({marks}) LIMIT 1",
+        ids * 3,
+    ).fetchone()
+    return marked is not None
+
+
 def expand(store, role, text):
     """The model's view of one history message: a call's record gets the reply back from the
     child chat, unless that chat was forgotten or trashed since."""
@@ -459,16 +494,13 @@ def expand(store, role, text):
     if not isinstance(identity, str) or result.get("status") != "done":
         return text
     with store._connect() as db:
-        # The reply can sit in a continuation of the child chat (a fork made during its turn):
-        # trashing or forgetting either chat hides it.
         row = db.execute(
-            "SELECT c.reply_message_id FROM agent_calls c JOIN messages m "
-            "ON m.id=c.reply_message_id WHERE c.id=? AND NOT EXISTS (SELECT 1 FROM ("
-            "SELECT session_id FROM session_trash UNION SELECT session_id FROM "
-            "forgotten_sessions) gone WHERE gone.session_id IN (c.child_session_id, m.session_id))",
+            "SELECT c.reply_message_id, c.child_session_id, m.session_id FROM agent_calls c "
+            "JOIN messages m ON m.id=c.reply_message_id WHERE c.id=?",
             (identity,),
         ).fetchone()
-    reply = _content(store.get_message(row[0])) if row and row[0] else None
+        reply_id = row[0] if row is not None and not _owner_hid(db, row[1], row[2]) else None
+    reply = _content(store.get_message(reply_id)) if reply_id else None
     if reply is None:
         shown = {**result, "status": "gone", "message": GONE}
     else:

@@ -24,6 +24,10 @@ The owner can take a job Conker made as his own (`adopt`, `POST /jobs/{id}/adopt
 his words and it runs on his schedule like a job he made; forgetting the chat it came from no
 longer turns it off.
 
+While the chat a job Conker kept came from is hidden (in the Trash or forgotten) and the owner has
+not adopted it, the job does not run (pi.schedule.job_hidden): its slots pass, a start is refused,
+and a run admitted just before is held back here before its turn starts.
+
 A run's opening message (all of the above, the instructions and any webhook payload) is never sent
 to memory (`pi.memory.store.JOB_RUN_INPUTS`); the job's chat still recalls memory, and what the
 owner types there is his own.
@@ -42,7 +46,7 @@ from pi.conversation import submissions, visibility
 from pi.core.errors import ServiceError
 from pi.owner import notices
 from pi.owner import preferences as prefs
-from pi.schedule import agent_hooks, agent_triggers, jobs, proactive_budget
+from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 from pi.turns.failures import TurnFailed
 
@@ -256,8 +260,8 @@ def admit(store, run_id, definition, now=None) -> str | None:
 
 def turn_off(db, job_ids, reason="chat_forgotten") -> None:
     """Inside the caller's transaction (forgetting): switch these jobs off, say why, and withdraw
-    their runs that have not started. Never deletes a job; the owner can turn it back on. A job he
-    took as his own is his and stays as it is."""
+    their runs that have not started. Never deletes a job; it leaves every owner list with its
+    chat (pi.conversation.visibility). A job he took as his own is his and stays as it is."""
     for job_id in job_ids:
         row = db.execute("SELECT definition FROM scheduled_jobs WHERE id=?", (job_id,)).fetchone()
         if row is None:
@@ -275,6 +279,16 @@ def turn_off(db, job_ids, reason="chat_forgotten") -> None:
             "AND status IN ('ready','awaiting_budget')",
             (job_id,),
         )
+
+
+def _hidden_before_start(store, job_id, run_id) -> bool:
+    """A run admitted just before the chat its job was kept from was hidden: held back, unless
+    its turn already started (a repeated dispatch, or an approval the owner answered resuming it)."""
+    with store._connect() as db:
+        if not job_hidden.paused(db, job_id):
+            return False
+        query = "SELECT 1 FROM turn_submissions WHERE request_id=?"
+        return db.execute(query, (run_id,)).fetchone() is None
 
 
 def adopt(store, identity, body: Adopt, now=None):
@@ -391,6 +405,8 @@ class AgentJobs:
         if row is None:
             return {"status": "failed", "reason": "Run not found."}
         definition = Definition.model_validate_json(row["definition"]).model_dump()
+        if _hidden_before_start(self.store, row["job_id"], run_id):
+            return {"status": "failed", "code": "SOURCE_HIDDEN", "reason": job_hidden.REFUSAL}
         held = admit(self.store, run_id, definition, now)
         if held:
             return {"status": "failed", "code": "HELD_BACK", "reason": "Held back: " + held}
@@ -457,10 +473,18 @@ class AgentJobs:
         if not rows:
             return []
         quiet_hours = quiet(self.store, now)
+        # A job kept from a hidden chat looks at nothing, like quiet hours: no tool call while the
+        # owner cannot see it, and the last real look stays, so a change still starts it after.
+        with self.store._connect() as db:
+            hidden = {row["id"] for row in rows if job_hidden.paused(db, row["id"])}
         clients = getattr(self.published, "clients", {}) if self.published is not None else {}
         return [
             agent_triggers.check(
-                self.store, clients.get(row["definition"].agentId), row, now, quiet=quiet_hours
+                self.store,
+                clients.get(row["definition"].agentId),
+                row,
+                now,
+                quiet=quiet_hours or row["id"] in hidden,
             )
             for row in rows
         ]

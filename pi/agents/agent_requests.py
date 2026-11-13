@@ -37,6 +37,7 @@ from pydantic import ValidationError
 from pi.agents import change_requests, teams
 from pi.agents import profiles as agents
 from pi.agents.team_models import Team
+from pi.conversation import visibility
 
 NEVER_GIVEN = frozenset({"conker.create_agent", "conker.create_team", "conker.run_agent"})
 MIN_ROLES, MAX_ROLES = 2, 6
@@ -140,7 +141,8 @@ def _agent(db, reference) -> dict:
     row = db.execute(
         "SELECT id FROM agents WHERE id=? OR name_key=?", (reference, reference.casefold())
     ).fetchone()
-    if row is None:
+    # An agent Conker kept from a forgotten or trashed chat carries that chat's words: unknown here.
+    if row is None or row["id"] in visibility.kept_from_hidden(db, "agent"):
         raise Refused(f"There is no agent “{reference[:80]}”; nothing was filed.")
     agent = agents._get(db, row["id"])
     if agent["archived_at"] is not None:

@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -217,12 +218,16 @@ def get(store, identity, revision=None):
 
 
 def list_agents(store):
+    """Every agent but one Conker kept from a forgotten or trashed chat (its name and
+    instructions came from that chat); it stays readable by id and lists again once restored."""
     with store._connect() as db:
         db.execute("BEGIN")
+        kept = visibility.kept_from_hidden(db, "agent")
         return AgentCollection(
             results=[
                 _get(db, row["id"])
                 for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
+                if row["id"] not in kept
             ]
         ).model_dump()
 
@@ -242,11 +247,22 @@ def history(store, identity):
         ).model_dump()
 
 
+# An agent Conker kept from a forgotten or trashed chat is in no list (visibility.kept_from_hidden)
+# but keeps its name (names are unique in the table), so the refusal says what holds the name
+# instead of pointing at an agent the owner cannot find.
+HIDDEN_NAME = (
+    "An agent Conker made in a chat that is now forgotten or in the Trash has this name. "
+    "Choose another name."
+)
+
+
 def _unique_name(db, configuration, identity=None):
     other = db.execute(
         "SELECT id FROM agents WHERE name_key=?", (configuration.name.casefold(),)
     ).fetchone()
     if other is not None and other["id"] != identity:
+        if other["id"] in visibility.kept_from_hidden(db, "agent"):
+            raise AgentError("name_conflict", HIDDEN_NAME)
         raise AgentError(
             "name_conflict", "Choose a unique name, including archived agents and the Companion."
         )

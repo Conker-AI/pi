@@ -10,7 +10,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.owner import plan_alerts, self_check, updates
 from pi.owner import preferences as owner_preferences
-from pi.schedule import agent_jobs, jobs, proposals
+from pi.schedule import agent_jobs, job_hidden, jobs, proposals
 
 
 def _owner_zone(store):
@@ -25,7 +25,7 @@ def _owner_zone(store):
 
 # A job Conker kept from a forgotten or trashed chat is named in that chat's words; once the owner
 # adopted it (createdBy owner) it is his. Same rule as the jobs list and the briefing.
-_ADOPTED = "json_extract(definition,'$.createdBy')='owner'"
+_ADOPTED = job_hidden.ADOPTED
 
 
 def _hidden_jobs(db) -> list[str]:

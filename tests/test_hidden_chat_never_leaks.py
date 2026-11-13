@@ -360,21 +360,29 @@ def test_a_hidden_chat_leaks_into_no_list_search_or_model_input(tmp_path, monkey
         assert job_name(HIDDEN) in restored["inbox"]
 
 
-@pytest.mark.parametrize("state", ["trashed", "forgotten"])
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known gap: an AI job kept from a hidden chat keeps its own chat, titled with the "
-    "job's name, in the chat list and chat-title search (pi.schedule.agent_jobs).",
-)
-def test_the_chat_of_a_job_kept_from_a_hidden_chat_does_not_show_its_name(
-    tmp_path, monkeypatch, state
-):
-    path, hidden, _, _, _ = build(tmp_path)
+def job_chat_shows(path, hidden, state, monkeypatch, where):
+    """Where the name of an AI job kept from the hidden chat still shows, of `where`."""
     hide(path, state, hidden, monkeypatch)
     name = job_name(HIDDEN)
     with closing(Store(path)) as store:
         shown = {
-            "chat list": session_history.page(store),
-            "chat titles": search.conversation_metadata(store, name)[0],
+            "chat list": lambda: session_history.page(store),
+            "chat titles": lambda: search.conversation_metadata(store, name)[0],
         }
-    assert [where for where, value in shown.items() if name in json.dumps(value)] == []
+        return [place for place in where if name in json.dumps(shown[place]())]
+
+
+@pytest.mark.parametrize("state", ["trashed", "forgotten"])
+def test_the_chat_of_a_job_kept_from_a_hidden_chat_does_not_show_in_title_search(
+    tmp_path, monkeypatch, state
+):
+    path, hidden, _, _, _ = build(tmp_path)
+    assert job_chat_shows(path, hidden, state, monkeypatch, ["chat titles"]) == []
+
+
+@pytest.mark.parametrize("state", ["trashed", "forgotten"])
+def test_the_chat_of_a_job_kept_from_a_hidden_chat_does_not_show_in_the_chat_list(
+    tmp_path, monkeypatch, state
+):
+    path, hidden, _, _, _ = build(tmp_path)
+    assert job_chat_shows(path, hidden, state, monkeypatch, ["chat list"]) == []
