@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A stopped or refused model call says why** (`pi/models/providers.py`, `pi/models/direct.py`).
+  The Ollama and direct adapters replaced Pi's own refusals raised inside a request (the owner's
+  Stop, local capacity busy) with the bare word "ProviderUnavailable"; they now keep the reason,
+  as OpenRouter already did. Anthropic direct no longer refuses a system note added after the
+  conversation (the tool-format retry): it goes after the leading system text, marked as later.
+
 - **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
   OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
   key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
