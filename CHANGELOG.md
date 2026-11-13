@@ -6,6 +6,34 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A parked approval that expires ends** (`pi/turns/decision_sweep.py`). ToolGate keeps an
+  approval it let expire as pending, so a parked chat turn or AI job waited for ever. Five minutes
+  after `approval_expires_at`, and only when ToolGate still answers "pending", Pi ends the turn: the
+  chat says the approval expired and nothing ran, the Inbox lists it under Handled, and an AI job's
+  next run is no longer held back.
+- **An update offer newer than the latest release is withdrawn** (`pi/owner/updates.py`), so a
+  pulled release leaves no card that cannot be installed.
+- **Your words are kept when they cannot be delivered** (`pi/turns/answers.py`). Words sent with
+  a Change or decline, when the chat stays busy or the turn fails to start, become the chat's
+  unsent message instead of a log line.
+- **Cut and downgraded answers say so** (`pi/models`). An answer the provider cut at its length
+  limit ends with a note; a turn that needed tools but fell back to a model without them says so;
+  an over-long service answer is recorded as `too_long` with its usage (still a 503).
+- **Provider failures keep their reason** (`pi/models/providers.py`, `direct.py`). An owner stop or
+  a busy local model inside Ollama or a direct provider was recorded as "ProviderUnavailable".
+  Anthropic direct now accepts the tool-format retry's late system note.
+- **Interrupted team runs can be cancelled; role input is checked before the step is saved**
+  (`pi/agents/team_execution.py`).
+- **Tool requests keep path and pattern backslashes; a malformed ToolGate catalogue is "ToolGate
+  unavailable"** (`pi/actions/tools.py`, `toolgate.py`).
+- **The context-selection call's usage is kept when its answer is unusable**
+  (`pi/context/retrieval.py`).
+- **Gateway** (`gateway/`): /health asks the terminal sidecar each time and reuses its Pi and
+  ToolGate checks for 10 s (it has no sign-in, so a flood makes no extra upstream calls); the
+  ChatGPT runtime's "not confirmed" refusal reaches you as written; terminal work runs off the
+  event loop; `conker apply` says an unknown outcome may already have been made (check before
+  retrying); checking a session is a read (its touched time is written at most once a minute); a stalled or abandoned
+  upload is `408 upload_incomplete`, not "Pi is unavailable".
 - **A fork seeded by a summary keeps its parent's outside content** (`pi/turns/access.py`). An
   automatic fork's child starts from the model's summary of the parent, which carries what the
   parent read (web pages, tool results, attachments), yet it was judged on its own messages only.
