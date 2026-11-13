@@ -248,6 +248,26 @@ def test_unknown_or_exceeded_observed_usage_stops_without_second_call(store, usa
         execute(store, provider, current, second=True)
 
 
+@pytest.mark.parametrize("priced", [False, True])
+def test_a_provider_that_reports_no_price_counts_tokens_only(store, monkeypatch, priced):
+    if priced:
+        monkeypatch.setattr(teams, "PRICED", frozenset({Recorder.name}))
+    sid = store.create_session()
+    record, _ = setup(store)
+    run = start(store, record, sid)
+    provider = Recorder(cost=None)
+    if not priced:
+        # Local models, plans and direct keys report no price: the answer is kept.
+        assert execute(store, provider, run)["steps"][0]["state"] == "complete"
+        call = teams.get(store, run["id"])["modelCalls"][0]
+        assert call["state"] == "complete"
+    else:
+        # OpenRouter always reports one, so a missing price is unknown usage.
+        with pytest.raises(TurnFailed):
+            execute(store, provider, run)
+        assert teams.get(store, run["id"])["state"] == "blocked"
+
+
 def test_zero_cost_blocks_before_call(store):
     sid = store.create_session()
     record, _ = setup(store, cost=0)

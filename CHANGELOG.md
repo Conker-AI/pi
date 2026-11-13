@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Team runs work on every provider, not only OpenRouter** (`pi/agents/team_execution.py`). Only
+  OpenRouter reports a price, so a team call on a local model, a ChatGPT or Claude plan or a direct
+  key was stored as unknown usage, its answer was thrown away and the run blocked. A call that
+  reports its tokens but no price now counts tokens only (`maxTokens` is its stop; money counts only
+  reported prices, as for the daily cap). A missing price from OpenRouter is still unknown usage.
+
 - **A decision Pi was not told about still continues the work** (docs/inbox-answers.md). A
   decision made with ToolGate's admin key, or while Pi was down, used to leave the parked turn or
   cron job run waiting for ever. Pi's decision sweep (`pi/turns/decision_sweep.py`, every
