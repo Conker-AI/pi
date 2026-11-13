@@ -116,6 +116,34 @@ def test_a_pulled_release_takes_its_offer_with_it(store):
     assert updates.overview(store)["offer"]["version"] == "0.3.0"
 
 
+def test_a_dismissed_offer_stays_dismissed_after_the_latest_steps_back(store):
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW)
+    updates.dismiss_offer(store, "0.2.0", now=NOW + 60)
+    # 0.2.0 stops being the latest for a while (un-marked or pulled), then comes back.
+    updates.record(store, report("0.1.0", "0.1.5"), now=NOW + 86400)
+    updates.dismiss_offer(store, "0.1.5", now=NOW + 86460)
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW + 2 * 86400)
+    assert updates.overview(store)["offer"] is None
+    assert updates.needs_you(store) == []
+
+
+def test_an_offer_marked_installed_during_an_update_that_rolled_back_comes_back(store):
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW)
+    # The daily check ran mid-update, while the new sources were in place.
+    updates.record(store, report("0.2.0", "0.2.0"), now=NOW + 60)
+    assert updates.overview(store)["offer"] is None
+    rolled_back = result("rolled_back")
+    updates.record(store, report("0.1.0", None, [rolled_back]), now=NOW + 700)
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW + 86400)
+    assert updates.overview(store)["offer"]["version"] == "0.2.0"
+    assert [item["kind"] for item in updates.needs_you(store)] == ["update", "update-result"]
+    # A version he skipped stays skipped, also after a rollback.
+    updates.dismiss_offer(store, "0.2.0", now=NOW + 86460)
+    updates.record(store, report("0.2.0", "0.2.0"), now=NOW + 2 * 86400)
+    updates.record(store, report("0.1.0", "0.2.0"), now=NOW + 3 * 86400)
+    assert updates.overview(store)["offer"] is None
+
+
 def test_a_dismissed_applied_update_leaves_the_handled_list(store):
     updates.record(store, report("0.1.0", "0.2.0", [result("applied")]), now=NOW)
     assert len(updates.applied(store, NOW - 3600)) == 1

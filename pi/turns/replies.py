@@ -179,7 +179,7 @@ class Replies:
             # down now, before anything else is attempted, because everything
             # after this point can fail and none of it can un-happen the action.
             actions.record(self.store, action, outcome)
-            acted = acted or outcome.ok
+            acted = acted or outcome.changed
 
         if execution.get("researchMode") == "deep" and turn["status"] in {
             "awaiting_approval",

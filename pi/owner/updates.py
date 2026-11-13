@@ -6,7 +6,9 @@ release and the receipts of updates that finished. Pi keeps one offer per versio
 version stays dismissed and a version at or below the running one closes, and one result per
 update receipt, so a report sent twice changes nothing. An open offer newer than the latest
 release was pulled after it was found: it is withdrawn (its card goes, and the host would refuse
-to install it anyway). Nothing here updates anything.
+to install it anyway), unless he dismissed it, so a release that comes back stays dismissed. An
+offer marked installed comes back when the host later runs an older version (the update rolled
+back). Nothing here updates anything.
 """
 
 from __future__ import annotations
@@ -113,9 +115,24 @@ def record(store, report: Report, *, now: float | None = None) -> dict:
                         (moment, row["version"]),
                     )
         latest = report.latest
-        if latest is not None:
+        if latest is not None and report.running is not None:
+            # Marked installed while an update ran, then rolled back: offered again, unless he
+            # skipped it. Only up to the latest release, which the host has just offered too.
             for row in db.execute(
-                "SELECT version FROM update_offers WHERE installed_at IS NULL"
+                "SELECT version FROM update_offers "
+                "WHERE installed_at IS NOT NULL AND dismissed_at IS NULL"
+            ).fetchall():
+                if _key(report.running) < _key(row["version"]) <= _key(latest.version):
+                    db.execute(
+                        "UPDATE update_offers SET installed_at=NULL WHERE version=?",
+                        (row["version"],),
+                    )
+        if latest is not None:
+            # A dismissed row is kept (it shows no card), so his skip survives a release that
+            # is pulled and published again.
+            for row in db.execute(
+                "SELECT version FROM update_offers "
+                "WHERE installed_at IS NULL AND dismissed_at IS NULL"
             ).fetchall():
                 if _key(row["version"]) > _key(latest.version):
                     db.execute("DELETE FROM update_offers WHERE version=?", (row["version"],))

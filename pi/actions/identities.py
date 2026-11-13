@@ -89,7 +89,8 @@ def record(store, action, outcome):
             action_id=action["id"],
         )
         db.execute(
-            "UPDATE turns SET acted=MAX(acted,?) WHERE id=?", (int(outcome.ok), action["turn_id"])
+            "UPDATE turns SET acted=MAX(acted,?) WHERE id=?",
+            (int(outcome.changed), action["turn_id"]),
         )
         db.execute("UPDATE tool_actions SET state='completed' WHERE id=?", (action["id"],))
         db.commit()

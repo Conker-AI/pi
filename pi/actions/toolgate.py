@@ -73,6 +73,14 @@ class ToolResult:
     ok: bool
     result: Any
     tool_id: str
+    # Whether the world changed. None: it did if `ok` (every ToolGate tool). Only a tool that
+    # changes nothing (a read) or knows exactly what it changed says so.
+    acted: bool | None = None
+
+    @property
+    def changed(self) -> bool:
+        """Whether this result marks its turn acted."""
+        return self.ok if self.acted is None else self.acted
 
 
 @dataclass(frozen=True)
