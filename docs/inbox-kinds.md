@@ -17,7 +17,7 @@ nothing there waits for the owner, so they are not rows below.
 | Companion suggestions (`schedule/proposals.py`, `proposals`; timer `proposal_worker.py`) | `suggestion` | background worker, a `proposals` model pass over the owner's messages | accept / decline / never: `POST /proposals/{id}/decision`; accepting records a decision only (`grantsExecutionAuthority: false`) | none; a decline hides the same idea 30 days, never for good | none (`proposals_decided_once` trigger) | `conker inspect proposals`, `conker apply proposals` | 3 per pass and the daily suggestion budget (`run_pass`) | yes: every proposal from a pass that read the chat, `proposals.redact` |
 | Plan alerts (`owner/plan_alerts.py`, `plan_alerts`) | `plan` | background worker (`PlanAlertWorker`) reading subscription usage | dismiss: `POST /plans/alerts/{id}/dismiss` (owner key; not in the browser contract) | ends when the plan window resets (`record`) | none | `conker limits --dismiss ID` | one open alert per plan window (unique index) | n/a: no chat |
 | AI job notes (`schedule/agent_jobs.py`, `agent_job_notes`) | `agent-job` | job run: the AI job's reply had something for the owner (`_note`) | dismiss: `POST /jobs/agent/notes/{id}/dismiss`; the card links to the job's chat | none | none | none found | one per run (`run_id UNIQUE`) | yes: `agent_jobs.redact` |
-| Attention (`agents/continuity.py`, `continuity_order` + `continuity_ack`) | `attention` | Pi, from run, task and job-run status events (blocked, failed, awaiting approval or budget, acted with no reply, outcome unknown, interrupted) | acknowledge: `POST /continuity/seen` (admin key; no browser route or dashboard caller found) | replaced by a later status of the same run or task (`briefing`) | none | none found | none (Inbox list cut at 50) | hidden, not deleted: `continuity._eligible` |
+| Attention (`agents/continuity.py`, `continuity_order` + `continuity_ack`) | `attention` | Pi, from run, task and job-run status events (blocked, failed, awaiting approval or budget, acted with no reply, outcome unknown, interrupted) | acknowledge: `POST /continuity/seen` (admin key; no browser route or dashboard caller found). A job run's approval is answered by its ToolGate card (merge 5) | replaced by a later status of the same run or task (`briefing`) | none | none found | none (Inbox list cut at 50) | hidden, not deleted: `continuity._eligible` |
 
 Not Inbox rows, though named like one:
 
@@ -70,9 +70,26 @@ approval; that row is never merged with the others.
    word. Merging them with each other buys nothing. A suggestion could become a change request
    whose accept files a real `ai_job` request, which gives Accept a meaning. Medium to large:
    the pass ledger, the never-list and 30-day suppression, the pass-window forgetting rule, the
-   dashboard proposals panel and `conker apply proposals` all move.
-5. **Attention and approvals overlap.** A chat turn waiting on ToolGate is an `approval`; a
-   tool cron job's run waiting on ToolGate shows as `attention` with status
-   `awaiting_approval`. Attention also has no browser or CLI answer. Large: it touches the
-   turn loop, the job worker and the continuity ledger. Do it last, and keep the ToolGate
-   decision path unchanged (security-critical).
+   dashboard proposals panel and `conker apply proposals` all move. NOT DOING as a merge
+   (2026-11-13): with memory proposals retired (merge 2) only suggestions are left, so there is
+   nothing to merge; giving Accept a meaning is a product change, not a duplicate.
+5. **Attention and approvals overlap.** NOT A MERGE (checked 2026-11-13). The owner meets one
+   card: the dashboard lists ToolGate's open requests whoever asked (`owner_channel`), so a tool
+   cron job's request is the same approval card as a chat's, and his answer reaches the run
+   (`turns/answers.py` `waiting` matches the run's receipt; approve resumes it with the request,
+   anything else cancels it; test `test_approving_a_tool_jobs_request_resumes_that_run_with_it`).
+   The Jobs screen also says "Waiting for approval". What differs is only the label in Pi's
+   admin-key `GET /inbox`, which the dashboard does not read (`conker inbox`, dev workspace,
+   prints it as attention). Nothing in the turn loop, job worker or ledger needs to change.
+   Left as their own items: cancelling a waiting run does not withdraw its ToolGate request
+   (approving it later finds nothing waiting); ToolGate's admin-key decision route does not tell
+   Pi; an AI job whose turn parks is recorded `completed` (`waitingForApproval`), so Handled shows
+   it while its turn waits. Turn approvals from a trashed chat still show on purpose (L-06: an
+   approval waiting for an answer stays reachable).
+
+### Also fixed while mapping (2026-11-13)
+- Suggestions from a forgotten or trashed chat were listed in needs-you with the chat's words in
+  the title (`proposals.HIDDEN` now filters them).
+- An AI job Conker kept from a hidden chat was named in Upcoming and Handled; it is left out
+  until the owner adopts it (createdBy owner), as in the jobs list. A turned-off job is no longer
+  Upcoming. `tests/test_hidden_chat_never_leaks.py` now reads the Inbox too.

@@ -13,6 +13,9 @@ be a decision with visible consequences.
   made as a memory. An answer that is exactly one of the offered options counts as chosen even if
   the client did not say so, and an answer turn whose question link is gone counts none of its
   text as the owner's request.
+- **The Inbox leaves out what a hidden chat made.** `GET /inbox` no longer lists suggestions from
+  a forgotten or trashed chat, nor names an AI job Conker kept from one in Upcoming or Handled
+  (an adopted job is the owner's and still shows). A turned-off job is no longer Upcoming.
 
 - **Memory proposals are retired** (docs/inbox-kinds.md, merge 2). `GET /inbox` no longer lists
   kind `memory`, and the admin-key routes `/memory-proposals` (list, create, get, `/decision`,

@@ -1,15 +1,18 @@
 """Inbox gaps found while mapping merge 3 (docs/inbox-kinds.md): each one fails closed now."""
 
 import hashlib
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from test_jobs import definition
 from test_tool_turns import FakeGate, build
 
 from pi.agents import asks, change_requests
 from pi.api import server as api
 from pi.conversation import archive
 from pi.conversation.store import Store
+from pi.schedule import jobs
 from pi.turns import access, answers
 
 OWNER = "inbox-hardening-owner-key-" + "o" * 32
@@ -111,3 +114,30 @@ def test_an_answer_turn_whose_link_is_gone_fails_closed(store):
     # The message holds the AI's question: with the link gone, none of it is his request.
     assert access.owner_text(store, newest) == ""
     assert access.outside_content(store, session, "", lambda tool: False, turn_id=newest)
+
+
+def test_approving_a_tool_jobs_request_resumes_that_run_with_it(store):
+    """Merge 5: a tool cron job's ToolGate approval is answered like a chat's (the same card and
+    route); his yes resumes exactly the run that waits on it, carrying the request."""
+    job = jobs.create(store, definition(), now=0)
+    run = jobs.run_now(store, job["id"], "approve_waiting_request", now=1)
+    parked = {"status": "awaiting_approval", "request_id": "req-job-1"}
+    assert jobs.dispatch_claim(store, run, lambda *a, **kw: parked) == "awaiting_approval"
+    seen = []
+
+    def invoke(target, **kw):
+        seen.append(kw.get("approval_request_id"))
+        return {"status": "completed"}
+
+    resume = lambda run_id: jobs.dispatch_claim(store, {"id": run_id}, invoke, resume=True)  # noqa: E731
+    loop = SimpleNamespace(store=store)
+    assert answers.decided(loop, "req-job-1", "approved", resume_run=resume) == {
+        "continued": "running",
+        "runId": run["id"],
+    }
+    assert seen == ["req-job-1"]
+    assert jobs.runs(store, job["id"])[0]["status"] == "completed"
+    # Answered once: the same request finds nothing waiting any more.
+    assert answers.decided(loop, "req-job-1", "approved", resume_run=resume) == {
+        "continued": "nothing_waiting"
+    }
