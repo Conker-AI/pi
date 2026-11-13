@@ -399,6 +399,37 @@ class ToolGateClient:
                 raise ToolGateUnavailable(f"withdraw_{response.status_code}")
         return "gone"
 
+    def request_status(self, request_id: str, agent: str | None) -> str | None:
+        """The status of an approval request Pi's key made (ToolGate `GET
+        /v2/agent/requests/{id}`), tried as the agent and then as the key, like `withdraw`.
+        None when ToolGate does not know it as ours or does not answer; never its note."""
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,200}", request_id or ""):
+            return None
+        for acting in dict.fromkeys([agent, None]):
+            headers = {"X-ToolGate-Execution-Key": self.execution_key}
+            if acting is not None:
+                headers["X-ToolGate-Agent"] = acting
+            try:
+                response = httpx.get(
+                    f"{self.base_url}/v2/agent/requests/{request_id}",
+                    verify=verification(self.base_url),
+                    headers=headers,
+                    timeout=self.timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                )
+            except httpx.HTTPError:
+                return None
+            if response.status_code == 200:
+                try:
+                    status = response.json().get("status")
+                except (ValueError, AttributeError):
+                    return None
+                return status if isinstance(status, str) else None
+            if response.status_code != 404:
+                return None
+        return None
+
     def check_action(self, action_id: str, tool_id: str) -> ToolResult | ToolPending:
         try:
             response = httpx.get(

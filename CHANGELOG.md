@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **A decision Pi was not told about still continues the work** (docs/inbox-answers.md). A
+  decision made with ToolGate's admin key, or while Pi was down, used to leave the parked turn or
+  cron job run waiting for ever. Pi's decision sweep (`pi/turns/decision_sweep.py`, every
+  `PI_DECISION_SWEEP_SECONDS`, default 60) reads each waiting request's status with its own key and
+  takes the owner route's step; it never reads the note, so a "no" just closes.
 - **A cron job waiting on the owner** (docs/jobs.md). Cancelling a run that waits on its ToolGate
   approval now queues that request for withdrawal in the same transaction, so its card leaves the
   Inbox. An AI job whose turn parks on an approval holds its next run back until he answers,
