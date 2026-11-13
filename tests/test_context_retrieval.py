@@ -161,6 +161,15 @@ def test_invalid_selection_fails_without_answer_or_automatic_retry(store, output
         len(provider.calls) == 1
         and r.read(store, sid, request_id="invalid_selection_001")["state"] == "failed"
     )
+    # The unusable answer was still a paid call: its usage is kept beside the error.
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT evidence FROM submission_context WHERE request_id=?",
+            ("invalid_selection_001",),
+        ).fetchone()
+    evidence = json.loads(row["evidence"])
+    assert evidence["error"] == "selection_invalid" and "inputTokens" in evidence
+    assert evidence["modelId"] and evidence["attempts"]
 
 
 def test_empty_valid_selection_keeps_exact_pin(store):
