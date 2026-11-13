@@ -89,35 +89,6 @@ def _needs_suggestion_items(store):
     return items
 
 
-def _needs_memory_items(store):
-    """Get pending memory proposals."""
-    items = []
-    with store._connect() as db:
-        rows = db.execute(
-            f"""SELECT mp.*, s.title as session_title FROM memory_proposals mp
-               LEFT JOIN sessions s ON s.id=mp.session_id
-               WHERE mp.state='pending'
-               AND NOT {visibility.hidden_sql("mp.session_id")}
-               ORDER BY mp.created_at"""
-        ).fetchall()
-
-        for row in rows:
-            items.append(
-                {
-                    "kind": "memory",
-                    "id": row["id"],
-                    "title": "Memory change to review",
-                    "since": row["created_at"],
-                    "source": {
-                        "kind": "memory-proposal",
-                        "proposalId": row["id"],
-                        "sessionId": row["session_id"],
-                    },
-                }
-            )
-    return items
-
-
 def _needs_attention_items(store, turns):
     """Get continuity items needing attention."""
     items = []
@@ -342,7 +313,6 @@ def inbox(store, *, now=None):
     approval_turns = store.awaiting_approval()
     needs_you.extend(_needs_approval_items(store, day_start, approval_turns))
     needs_you.extend(_needs_suggestion_items(store))
-    needs_you.extend(_needs_memory_items(store))
     needs_you.extend(_needs_attention_items(store, approval_turns))
     needs_you.extend(plan_alerts.needs_you(store))
     needs_you.extend(self_check.needs_you(store))
