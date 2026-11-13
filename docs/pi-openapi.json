@@ -10923,7 +10923,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationDocument"
+                }
               }
             }
           },
@@ -10991,7 +10993,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationDocument"
+                }
               }
             }
           },
@@ -17169,7 +17173,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerSettingsDocument"
+                }
               }
             }
           },
@@ -17237,7 +17243,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerSettingsDocument"
+                }
               }
             }
           },
@@ -17297,7 +17305,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerPreferencesDocument"
+                }
               }
             }
           },
@@ -17365,7 +17375,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerPreferencesDocument"
+                }
               }
             }
           },
@@ -26493,6 +26505,32 @@
         ],
         "title": "Configuration"
       },
+      "ConfigurationDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Configuration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "configuration"
+        ],
+        "title": "ConfigurationDocument",
+        "description": "What GET and POST /models/configuration answer; no configuration before the first save."
+      },
       "ConfiguredTarget": {
         "properties": {
           "id": {
@@ -28582,6 +28620,7 @@
         ],
         "title": "JobView"
       },
+      "JsonValue": {},
       "Judge": {
         "properties": {
           "request_id": {
@@ -29303,6 +29342,54 @@
           "idleTimeoutMinutes"
         ],
         "title": "OwnerPreferences"
+      },
+      "OwnerPreferencesDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/OwnerPreferences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "preferences"
+        ],
+        "title": "OwnerPreferencesDocument",
+        "description": "What GET and POST /owner/preferences answer: the preferences after the read or save."
+      },
+      "OwnerSettingsDocument": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "values": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "revision",
+          "values"
+        ],
+        "title": "OwnerSettingsDocument",
+        "description": "What GET and POST /owner/settings answer: the whole document after the read or save."
       },
       "Phase": {
         "properties": {

@@ -94,6 +94,13 @@ class OwnerPreferences(Strict):
         return value
 
 
+class OwnerPreferencesDocument(Strict):
+    """What GET and POST /owner/preferences answer: the preferences after the read or save."""
+
+    revision: int
+    preferences: OwnerPreferences
+
+
 class UpdatePreferences(Strict):
     expected_revision: int = Field(ge=1)
     preferences: OwnerPreferences
