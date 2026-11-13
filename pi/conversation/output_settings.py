@@ -93,6 +93,13 @@ class Update(Strict):
     output: Output
 
 
+class OutputDocument(Strict):
+    """A chat's saved output settings and their revision (D-01)."""
+
+    revision: int
+    output: Output
+
+
 class OutputError(ServiceError):
     pass
 

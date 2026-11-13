@@ -38,9 +38,11 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from typing import Literal
 
 from pi.agents import agent_calls, asks
 from pi.conversation import visibility
+from pi.core.models import Strict
 from pi.memory import store as memory_store
 from pi.schedule import agent_jobs
 from pi.turns import reviewer
@@ -279,6 +281,23 @@ def record(store, *, session_id, turn_id, action_id, tool_id, decided_by, reason
             ),
         )
         db.commit()
+
+
+class HandledAction(Strict):
+    """One action that ran without asking him (Inbox Handled), and who decided it."""
+
+    id: str
+    sessionId: str | None
+    turnId: str | None
+    toolId: str
+    decidedBy: str
+    reason: str
+    createdAt: float
+
+
+class HandledList(Strict):
+    schemaVersion: Literal[1]
+    results: list[HandledAction]
 
 
 def handled(store, since):
