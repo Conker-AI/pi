@@ -16,7 +16,6 @@ be a decision with visible consequences.
 - **The Inbox leaves out what a hidden chat made.** `GET /inbox` no longer lists suggestions from
   a forgotten or trashed chat, nor names an AI job Conker kept from one in Upcoming or Handled
   (an adopted job is the owner's and still shows). A turned-off job is no longer Upcoming.
-
 - **One notices table for plan alerts and AI job notes** (docs/inbox-kinds.md, merge 1).
   Migration 0006 moves `plan_alerts` and `agent_job_notes` into `notices`, keeping every id, and
   drops the two tables. Routes, response bodies, Inbox items and auth are unchanged. A database
