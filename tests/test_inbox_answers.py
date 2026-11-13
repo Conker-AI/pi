@@ -226,3 +226,29 @@ def test_change_on_conkers_request_sends_his_words(store, monkeypatch):
     )
     assert response.status_code == 200 and response.json()["state"] == "declined"
     assert inputs(store, session) == ["Make it weekly instead"]
+
+
+def test_words_that_cannot_be_sent_are_kept_as_his_unsent_message(store, monkeypatch):
+    from types import SimpleNamespace
+
+    from pi.conversation import drafts
+    from pi.schedule import tasks
+
+    session = store.create_session()
+    monkeypatch.setattr(answers, "_busy", lambda *_: True)
+    loop = SimpleNamespace(store=store)
+    assert (
+        answers.deliver(loop, session, "Send it to Dani instead", "change-x", sleep=lambda _: None)
+        is None
+    )
+    assert drafts.load(store, session)["text"] == "Send it to Dani instead"
+
+    # A refusal other than busy keeps them too, after what he had already typed there.
+    def refused(*_args, **_kwargs):
+        raise tasks.TaskError("other", "Refused.")
+
+    monkeypatch.setattr(answers, "_busy", lambda *_: False)
+    loop = SimpleNamespace(store=store, run_turn=refused)
+    with pytest.raises(tasks.TaskError):
+        answers.deliver(loop, session, "About the plan: yes", "answer-y", sleep=lambda _: None)
+    assert drafts.load(store, session)["text"] == "Send it to Dani instead\n\nAbout the plan: yes"
