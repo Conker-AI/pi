@@ -29639,13 +29639,11 @@
             "title": "Status"
           },
           "indexRemoval": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": "string",
+            "enum": [
+              "removed",
+              "degraded",
+              "pending"
             ],
             "title": "Indexremoval"
           },
@@ -29670,7 +29668,7 @@
           "sourceConversationKept"
         ],
         "title": "MemoryForgetReceipt",
-        "description": "`indexRemoval` is MemoryGate's word; receipts stored before it was checked may hold any."
+        "description": "`indexRemoval` is MemoryGate's word, checked before any receipt is stored (forget.py)."
       },
       "MemoryForgetStop": {
         "properties": {

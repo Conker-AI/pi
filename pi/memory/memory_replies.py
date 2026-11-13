@@ -108,12 +108,12 @@ class MemoryForgetPending(Strict):
 
 
 class MemoryForgetReceipt(Strict):
-    """`indexRemoval` is MemoryGate's word; receipts stored before it was checked may hold any."""
+    """`indexRemoval` is MemoryGate's word, checked before any receipt is stored (forget.py)."""
 
     requestId: str
     memoryId: str
     status: Literal["forgotten"]
-    indexRemoval: str | None
+    indexRemoval: Literal["removed", "degraded", "pending"]
     cachedPackagesCleared: int
     sourceConversationKept: Literal[True]
 
