@@ -389,7 +389,10 @@ def _strict(text: str) -> tuple[object, bool]:
 
 
 def _without_invalid_escapes(text: str) -> str | None:
-    """The text without each in-string backslash that starts no JSON escape; None if it has none."""
+    r"""The text with each in-string backslash that starts no JSON escape repaired; None if it has
+    none. Before a symbol (`\$`, `\?`) the backslash is the small-model mistake of escaping
+    a character JSON does not escape, so it is dropped. Before a letter or digit (a Windows path
+    `C:\Users`, a pattern `\d+`) it is part of the value, so it is kept as a backslash."""
     parts, start, position, in_string = [], 0, 0, False
     while found := _QUOTE_OR_BACKSLASH.search(text, position):
         index = found.start()
@@ -402,6 +405,9 @@ def _without_invalid_escapes(text: str) -> str | None:
             position = index + 1
         elif following in _ESCAPES:
             position = index + 2
+        elif following.isalnum():
+            parts.append(text[start:index] + "\\\\")  # an escaped backslash
+            start = position = index + 1
         else:
             parts.append(text[start:index])
             start = position = index + 1
