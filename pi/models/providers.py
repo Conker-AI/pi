@@ -122,6 +122,20 @@ def output(value: Output):
         _output.reset(saved)
 
 
+# Shown under a reply the model stopped at its length limit, so a cut answer never reads as
+# whole. Adapters report it as `finish_reason` (OpenAI-style "length", Anthropic "max_tokens")
+# or, for Ollama, `done_reason`.
+CUT_NOTE = "\n\n(This answer was cut off: it reached the model's length limit.)"
+_CUT = {"length", "max_tokens"}
+
+
+def shown_text(completion) -> str:
+    """The reply as the owner sees it: the model's text, with a note when it was cut short."""
+    raw = completion.raw if isinstance(completion.raw, dict) else {}
+    cut = raw.get("finish_reason") in _CUT or raw.get("done_reason") in _CUT
+    return completion.text + CUT_NOTE if cut and completion.text else completion.text
+
+
 class ProviderUnavailable(RuntimeError):
     """The provider could not answer. The caller degrades; it never invents."""
 

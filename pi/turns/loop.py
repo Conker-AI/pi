@@ -41,7 +41,7 @@ from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.memory import store as memory_store
 from pi.memory.service import Memory
-from pi.models.providers import ProviderUnavailable
+from pi.models.providers import ProviderUnavailable, shown_text
 from pi.models.routing import Router, TurnContext, history_size
 from pi.schedule import tasks
 from pi.turns import access, native_tools, tool_drafting
@@ -545,7 +545,7 @@ class Loop(ModelCalls, History, Replies):
 
         message = self._complete_turn(
             turn_id,
-            completion.text,
+            shown_text(completion),
             citations=completion.citations,
             provider=completion.provider,
             model=completion.model,

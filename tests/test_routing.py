@@ -12,7 +12,7 @@ import pytest
 from pi.models import openrouter, roles
 from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider, PaidModelRefused
 from pi.models.providers import Completion, Message, ProviderUnavailable
-from pi.models.routing import Reason, Router, Tier, TurnContext
+from pi.models.routing import NO_TOOL_MODEL, Reason, Router, Tier, TurnContext
 
 
 class FakeLocal:
@@ -119,6 +119,14 @@ def test_a_turn_needing_tools_gets_a_model_that_has_them():
     hosted = FakeHosted([free("no-tools", 1_000_000), free("with-tools", 32_000, tools=True)])
     router = Router(local_provider=FakeLocal(), hosted_provider=hosted, local_model="qwen3:4b")
     assert router.route(TurnContext(needs_tools=True)).model == "with-tools"
+
+
+def test_a_turn_needing_tools_without_a_tool_model_says_so_in_its_record():
+    hosted = FakeHosted([free("no-tools", 1_000_000)])
+    router = Router(local_provider=FakeLocal(), hosted_provider=hosted, local_model="qwen3:4b")
+    route = router.route(TurnContext(needs_tools=True))
+    assert (route.model, route.unavailable_reason) == ("no-tools", NO_TOOL_MODEL)
+    assert router.route(TurnContext(is_analysis=True)).unavailable_reason is None
 
 
 def test_no_hosted_provider_still_answers_and_keeps_the_reason():
