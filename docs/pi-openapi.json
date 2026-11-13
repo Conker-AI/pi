@@ -2922,7 +2922,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestList"
+                }
               }
             }
           },
@@ -2992,7 +2994,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3063,7 +3067,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3144,7 +3150,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3232,7 +3240,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3313,7 +3323,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3401,7 +3413,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRequestView"
+                }
               }
             }
           },
@@ -3533,7 +3547,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HandledList"
+                }
               }
             }
           },
@@ -9281,7 +9297,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutputDocument"
+                }
               }
             }
           },
@@ -9358,7 +9376,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OutputDocument"
+                }
               }
             }
           },
@@ -9801,7 +9821,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -9878,7 +9900,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -9957,7 +9981,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDocument"
+                }
               }
             }
           },
@@ -16913,7 +16939,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AskList"
+                }
               }
             }
           },
@@ -16983,7 +17011,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AskView"
+                }
               }
             }
           },
@@ -17064,7 +17094,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AskView"
+                }
               }
             }
           },
@@ -17135,7 +17167,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AskView"
+                }
               }
             }
           },
@@ -25045,6 +25079,118 @@
         "type": "object",
         "title": "Ask"
       },
+      "AskList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AskView"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "results"
+        ],
+        "title": "AskList"
+      },
+      "AskView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "chatTitle": {
+            "type": "string",
+            "title": "Chattitle"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "answered",
+              "dismissed"
+            ],
+            "title": "State"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "answeredAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answeredat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "chatTitle",
+          "question",
+          "options",
+          "state",
+          "answer",
+          "chosen",
+          "createdAt",
+          "answeredAt"
+        ],
+        "title": "AskView",
+        "description": "One question; `chatTitle` is \"Private chat\" for a private one."
+      },
       "Assignment": {
         "properties": {
           "enabled": {
@@ -26040,6 +26186,126 @@
           "prompt"
         ],
         "title": "Case"
+      },
+      "ChangeRequestList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeRequestView"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "results"
+        ],
+        "title": "ChangeRequestList"
+      },
+      "ChangeRequestView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^creq_[a-f0-9]{32}$",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ai_job",
+              "tool_draft",
+              "memory",
+              "agent",
+              "team"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 600,
+            "title": "Summary"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "approved",
+              "declined",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "createdAt": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Createdat"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "summary",
+          "payload",
+          "state",
+          "createdAt"
+        ],
+        "title": "ChangeRequestView"
       },
       "ChannelUpdate": {
         "properties": {
@@ -28806,6 +29072,88 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HandledAction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "turnId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnid"
+          },
+          "toolId": {
+            "type": "string",
+            "title": "Toolid"
+          },
+          "decidedBy": {
+            "type": "string",
+            "title": "Decidedby"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "turnId",
+          "toolId",
+          "decidedBy",
+          "reason",
+          "createdAt"
+        ],
+        "title": "HandledAction",
+        "description": "One action that ran without asking him (Inbox Handled), and who decided it."
+      },
+      "HandledList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/HandledAction"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "results"
+        ],
+        "title": "HandledList"
+      },
       "Handoff": {
         "properties": {
           "id": {
@@ -30065,6 +30413,25 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Output"
+      },
+      "OutputDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "output": {
+            "$ref": "#/components/schemas/Output"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "output"
+        ],
+        "title": "OutputDocument",
+        "description": "A chat's saved output settings and their revision (D-01)."
       },
       "OwnerPreferences": {
         "properties": {
@@ -33659,6 +34026,54 @@
           "hours"
         ],
         "title": "Timing"
+      },
+      "TitleDocument": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "title",
+          "source",
+          "modelId"
+        ],
+        "title": "TitleDocument",
+        "description": "A chat's name and how it got it (D-01): `source` is None until it is named."
       },
       "ToolWatch": {
         "properties": {

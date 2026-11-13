@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, Path
 from pydantic import Field
 
 from pi.agents import change_requests, tool_drafts
-from pi.core.models import Strict
+from pi.agents.inbox_replies import ChangeRequestList
+from pi.core.models import Strict, described
 from pi.turns import answers, tool_drafting
 
 RequestPath = Annotated[str, Path(pattern=change_requests.REQUEST_ID[1:-1].join("^$"))]
@@ -45,29 +46,30 @@ def drafts_router(store, authorize, loop=lambda: None):
 
 def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
     routes = APIRouter(prefix="/change-requests", dependencies=[Depends(authorize)])
+    view = described(change_requests.View)
 
-    @routes.get("")
+    @routes.get("", responses=described(ChangeRequestList))
     def listing():
         """Open requests, newest first."""
         return {"schemaVersion": 1, "results": change_requests.listing(store())}
 
-    @routes.get("/{identity}")
+    @routes.get("/{identity}", responses=view)
     def get(identity: RequestPath):
         return change_requests.shown(store(), identity)
 
-    @routes.post("/{identity}/approve")
+    @routes.post("/{identity}/approve", responses=view)
     def approve(identity: RequestPath):
         """Make a cron job or memory real exactly as filed."""
         change_requests.shown(store(), identity)
         return change_requests.approve(store(), identity, memory=memory_writer())
 
-    @routes.post("/{identity}/saved")
+    @routes.post("/{identity}/saved", responses=view)
     def saved(identity: RequestPath, body: change_requests.DraftSaved):
         """The owner saved this tool request as a draft in Tools; recording it creates nothing."""
         change_requests.shown(store(), identity)
         return change_requests.saved(store(), identity, body)
 
-    @routes.post("/{identity}/retry")
+    @routes.post("/{identity}/retry", responses=view)
     def retry(identity: RequestPath, body: tool_drafts.Retry | None = None):
         """Draft this tool request again: from a new description (`description`, a fresh start),
         with the owner's answer to the drafter's question (`answer`, the same draft goes on), or
@@ -77,7 +79,7 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
         _kick(loop)
         return request
 
-    @routes.post("/{identity}/published")
+    @routes.post("/{identity}/published", responses=view)
     def published(identity: RequestPath, body: tool_drafts.Published):
         """The owner published this request's tool. The first time, Conker says in the chat that
         asked that it is live (a stored message, not a model call)."""
@@ -87,7 +89,7 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
             tool_drafting.announce(store(), request["sessionId"], body.name)
         return request
 
-    @routes.post("/{identity}/decline")
+    @routes.post("/{identity}/decline", responses=view)
     def decline(identity: RequestPath, body: Decline | None = None):
         """Nothing is created; Conker is told it was declined if it asks again. Words he wrote
         with it (Change) go to that chat as his next message."""
