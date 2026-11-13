@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from typing import Any
 
 from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
@@ -408,7 +409,7 @@ class Loop(ModelCalls, History, Replies):
                             run=choice == "run",
                         )
                     else:
-                        decision = (
+                        decision: dict[str, Any] = (
                             {
                                 "decision": {
                                     "outcome": choice,

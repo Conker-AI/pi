@@ -64,12 +64,12 @@ pi/schedule/proposals.py 3
 pi/setup/models.py 4
 pi/setup/rehearsal.py 2
 pi/setup/status_steps.py 5
-pi/turns/history.py 28
+pi/turns/history.py 2
 pi/turns/loop.py 12
-pi/turns/model_calls.py 26
+pi/turns/model_calls.py 5
 pi/turns/native_tools.py 2
 pi/turns/recall.py 1
-pi/turns/replies.py 43
+pi/turns/replies.py 11
 pi/turns/restart.py 1
 pi/turns/routing_memo.py 1
 pi/turns/thinking.py 6
