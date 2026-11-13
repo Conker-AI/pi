@@ -17,7 +17,7 @@ import time
 
 from pi.actions import identities as actions
 from pi.agents import asks
-from pi.conversation import submissions
+from pi.conversation import drafts, submissions
 from pi.schedule import tasks
 
 log = logging.getLogger(__name__)
@@ -90,7 +90,8 @@ def _busy(store, session_id) -> bool:
 
 def deliver(loop, session_id, text, base_id, *, ask_id=None, sleep=time.sleep):
     """Send his words as his next message in that chat, once it is free. Each attempt has its
-    own submission id (a refused one is permanent); an ask records which one carries it."""
+    own submission id (a refused one is permanent); an ask records which one carries it. Words
+    that cannot be sent are kept as his unsent message in that chat (`keep_unsent`)."""
     for attempt in range(BUSY_TRIES):
         if _busy(loop.store, session_id):
             sleep(BUSY_WAIT)
@@ -102,10 +103,41 @@ def deliver(loop, session_id, text, base_id, *, ask_id=None, sleep=time.sleep):
             return loop.run_turn(session_id, text, request_id=request_id)
         except tasks.TaskError as exc:
             if exc.detail.get("code") != "session_busy":
+                keep_unsent(loop.store, session_id, text)
                 raise
+        except Exception:
+            keep_unsent(loop.store, session_id, text)
+            raise
         sleep(BUSY_WAIT)
-    log.warning("The chat stayed busy; the owner's answer was not delivered.")
+    log.warning("The chat stayed busy; the owner's answer was kept as his unsent message.")
+    keep_unsent(loop.store, session_id, text)
     return None
+
+
+def keep_unsent(store, session_id, text) -> bool:
+    """Put words that could not be sent into that chat's draft, after any he already had, so the
+    chat (and Home's "Jump back in") shows them instead of losing them. Draft text never reaches
+    a model or memory. False when the chat is gone or the draft would be too long."""
+    try:
+        with store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            scope = drafts._scope(db, session_id, None)
+            current = drafts._read(db, session_id, scope)
+            kept = current["text"].rstrip()
+            body = drafts.Save(
+                expected_revision=current["revision"],
+                text=f"{kept}\n\n{text}" if kept else text,
+                research_mode=current["research_mode"],
+                model_id=current["model_id"],
+                skill_ids=current["skill_ids"],
+                think=current["think"],
+            )
+            drafts._write(db, session_id, scope, drafts._bounded(body))
+            db.commit()
+            return True
+    except (drafts.DraftError, ValueError):
+        log.warning("The owner's undelivered words could not be kept in the chat's draft.")
+        return False
 
 
 def decided(loop, request_id, status, note="", *, resume_run=None, cancel_run=None) -> dict:

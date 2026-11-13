@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 
 from fastapi import APIRouter, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from .operations import json_body
 from .store import AuthError
@@ -21,7 +22,7 @@ def router(app, session, admit_write):
 
     @routes.post("/api/terminal")
     async def terminal_create(request: Request):
-        owner, manager = terminal_access(request)
+        owner, manager = await run_in_threadpool(terminal_access, request)
         body = await json_body(request)
         if set(body) != {"requestId"} or request.scope["query_string"]:
             raise AuthError("Supply only a terminal requestId.", 422)
@@ -32,8 +33,13 @@ def router(app, session, admit_write):
             if current["id"] != owner["id"]:
                 raise AuthError("Terminal session identity changed.")
 
-        return manager.create(
-            owner["id"], body["requestId"], validate, lambda: admit_write(request, body)
+        # Session check, password proof and the sidecar round trip block: never on the event loop.
+        return await run_in_threadpool(
+            manager.create,
+            owner["id"],
+            body["requestId"],
+            validate,
+            lambda: admit_write(request, body),
         )
 
     @routes.get("/api/terminal/current")
@@ -59,7 +65,7 @@ def router(app, session, admit_write):
 
     @routes.post("/api/terminal/{identity}/{operation}")
     async def terminal_write(identity: str, operation: str, request: Request):
-        owner, manager = terminal_access(request)
+        owner, manager = await run_in_threadpool(terminal_access, request)
         body = await json_body(request)
         if request.scope["query_string"]:
             raise AuthError("Terminal writes cannot include query parameters.", 422)
@@ -69,7 +75,9 @@ def router(app, session, admit_write):
             except ValueError:
                 raise AuthError("Use base64 terminal input.", 422) from None
             return {
-                "acceptedBytes": manager.use(owner["id"], identity, "write", data),
+                "acceptedBytes": await run_in_threadpool(
+                    manager.use, owner["id"], identity, "write", data
+                ),
                 "automaticReplay": False,
             }
         rows, columns = body.get("rows"), body.get("columns")
@@ -83,10 +91,10 @@ def router(app, session, admit_write):
             and rows > 0
             and columns > 0
         ):
-            manager.use(owner["id"], identity, "resize", rows, columns)
+            await run_in_threadpool(manager.use, owner["id"], identity, "resize", rows, columns)
             return {"resized": True}
         if operation == "close" and not body:
-            manager.use(owner["id"], identity, "close")
+            await run_in_threadpool(manager.use, owner["id"], identity, "close")
             return {"closed": True}
         raise AuthError("Invalid terminal operation.", 422)
 

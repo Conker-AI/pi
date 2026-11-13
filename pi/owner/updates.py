@@ -4,7 +4,9 @@ Pi reads nothing outside (ADR-0005). The host checks the latest Conker release a
 (ADR-0014); with the recovery credential it hands Pi a report: the running version, the newest
 release and the receipts of updates that finished. Pi keeps one offer per version, so a dismissed
 version stays dismissed and a version at or below the running one closes, and one result per
-update receipt, so a report sent twice changes nothing. Nothing here updates anything.
+update receipt, so a report sent twice changes nothing. An open offer newer than the latest
+release was pulled after it was found: it is withdrawn (its card goes, and the host would refuse
+to install it anyway). Nothing here updates anything.
 """
 
 from __future__ import annotations
@@ -111,6 +113,12 @@ def record(store, report: Report, *, now: float | None = None) -> dict:
                         (moment, row["version"]),
                     )
         latest = report.latest
+        if latest is not None:
+            for row in db.execute(
+                "SELECT version FROM update_offers WHERE installed_at IS NULL"
+            ).fetchall():
+                if _key(row["version"]) > _key(latest.version):
+                    db.execute("DELETE FROM update_offers WHERE version=?", (row["version"],))
         if latest is not None and (
             report.running is None or _key(latest.version) > _key(report.running)
         ):
