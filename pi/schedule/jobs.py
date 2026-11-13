@@ -8,8 +8,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from pi.conversation import visibility
 from pi.core.errors import ServiceError
+from pi.schedule.job_hidden import ADOPTED, PAUSED, REFUSAL, paused  # noqa: F401 (ADOPTED)
 from pi.schedule.job_models import (
     AgentTargetSummary,
     BudgetBinding,
@@ -43,12 +43,11 @@ CREATE TABLE IF NOT EXISTS scheduled_run_budgets (
 CREATE UNIQUE INDEX IF NOT EXISTS scheduled_once ON scheduled_runs(job_id,scheduled_at)
  WHERE request_id IS NULL;
 """
-ADOPTED = "json_extract(definition,'$.createdBy')='owner'"  # his job, Conker kept it or not
 
 
 class JobError(ServiceError, RuntimeError):
-    def __init__(self, message, status=409):
-        super().__init__("not_found" if status == 404 else "job_conflict", message, status)
+    def __init__(self, message, status=409, code="job_conflict"):
+        super().__init__("not_found" if status == 404 else code, message, status)
 
 
 def next_due(definition, after, *, anchor):
@@ -98,9 +97,7 @@ def _view(row):
 
 def list_jobs(store, limit=None, cursor=None):
     with store._connect() as db:
-        # A job kept from a forgotten or trashed chat is out till restored, unless he adopted it.
-        kept = sorted(visibility.kept_from_hidden(db, "ai_job"))
-        where, values = f"WHERE (id NOT IN ({','.join('?' * len(kept))}) OR {ADOPTED})", kept
+        where, values = f"WHERE NOT {PAUSED}", []  # kept from a hidden chat (job_hidden)
         if cursor is not None:
             position = _row(db, cursor)
             where += " AND (created_at>? OR (created_at=? AND id>?))"
@@ -254,6 +251,7 @@ def claim_due(store, now=None, limit=20):
                 and definition.watch is None
                 and not clockless
                 and not (repeating and quiet_hours)
+                and not paused(db, row["id"])
             ):
                 run = _claim(db, row, now)
                 if run:
@@ -283,6 +281,8 @@ def run_now(store, identity, request_id, now=None, with_run=None):
                 raise JobError("Request ID belongs to a different job.")
             return {**dict(old), "definition": json.loads(old["definition"]), "replayed": True}
         row = _row(db, identity)
+        if paused(db, identity):
+            raise JobError(REFUSAL, code="job_source_hidden")
         run = _claim(db, row, now, request_id)
         if run is None:
             raise JobError("Resolve the current run before starting another.")

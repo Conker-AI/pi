@@ -15,7 +15,8 @@ Boundaries, in order of when they apply:
 - Declines are remembered. "Never" suppresses the same idea for good, and plain
   declines for 30 days, so the owner is not asked twice.
 - A proposal from a hidden chat is not listed, decided or shown to the model (`hidden_ids`); it
-  comes back when the chat is restored.
+  comes back when the chat is restored. A chat already hidden when the pass started was not
+  read, so it hides none of that pass's ideas (`visibility.hidden_since`).
 """
 
 from __future__ import annotations
@@ -49,16 +50,25 @@ _READABLE = """m.role='user'
 # have read it (a readable message in the pass's window, the chat still visible when the pass
 # started). A chat already hidden then (in the Trash, forgotten, or made from such a chat) was
 # not read, so its messages hide nothing. A chat trashed, restored and trashed again after the
-# pass hides more than it must.
+# pass hides more than it must. Cost: `since` (when each chat was first hidden) is built once
+# for the statement; the window test runs once per pass that holds proposals and reads the
+# window's messages by time (messages_by_time). The unary `+` keeps SQLite from driving it from
+# the hidden chats instead, which probes messages once per (proposal, hidden chat): forgotten
+# chats stay in that set for good and proposals are never deleted, so that cost only grows.
 HIDDEN = f"""
-SELECT pr.id FROM proposals pr JOIN proposal_passes p ON p.id=pr.pass_id
-WHERE EXISTS (
+WITH since AS MATERIALIZED ({visibility.hidden_since()}),
+read_hidden AS MATERIALIZED (
+ SELECT p.id FROM proposal_passes p
+ WHERE p.id IN (SELECT pass_id FROM proposals) AND EXISTS (
   SELECT 1 FROM messages m LEFT JOIN message_privacy pv ON pv.message_id=m.id
+  LEFT JOIN since ON since.id=m.session_id
   WHERE m.created_at > COALESCE(p.watermark_from, 0)
    AND m.created_at <= COALESCE(p.watermark_to, p.started_at)
    AND {_READABLE}
-   AND {visibility.hidden_sql("m.session_id")}
-   AND NOT {visibility.hidden_by("m.session_id", "p.started_at")})
+   AND +{visibility.hidden_sql("m.session_id")}
+   AND (since.at IS NULL OR since.at > p.started_at)))
+SELECT pr.id FROM proposals pr
+WHERE pr.pass_id IN (SELECT id FROM read_hidden)
  OR EXISTS (
   SELECT 1 FROM json_each(pr.evidence) e JOIN messages m ON m.id=e.value
   WHERE {visibility.hidden_sql("m.session_id")})
@@ -78,6 +88,8 @@ CREATE TABLE IF NOT EXISTS proposals (
  state TEXT NOT NULL DEFAULT 'open', decided_at REAL, created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS proposals_state ON proposals(state, created_at);
+-- A pass reads messages by time (`_evidence`, `HIDDEN`, `redact`); messages is created first.
+CREATE INDEX IF NOT EXISTS messages_by_time ON messages(created_at);
 CREATE TABLE IF NOT EXISTS proposal_watermark (
  singleton INTEGER PRIMARY KEY CHECK (singleton=1), position REAL NOT NULL
 );

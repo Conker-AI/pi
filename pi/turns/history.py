@@ -6,6 +6,7 @@ from pi.agents import agent_calls
 from pi.calls import call_turns
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
+from pi.conversation import hidden_records
 from pi.conversation import settings as session_settings
 from pi.memory import store as memory_store
 from pi.models.providers import Message, ProviderUnavailable
@@ -45,8 +46,10 @@ class History:
             self.store, self.system_prompt, execution, policy, tools
         )
         acknowledgement_generation = None
+        memory = self.memory
+        readers = recall.reading_agents(memory, execution)
         if turn_id:
-            saved = self.memory.saved_context(turn_id, execution)
+            saved = memory.saved_context(turn_id, execution)
             if session_settings.memory_allowed(execution):
                 memory_prompt = memory_store.prompt_context(saved)
                 if memory_prompt:
@@ -125,6 +128,8 @@ class History:
         attached_ids = attachment_turns.attached_message_ids(
             self.store, [row["id"] for row in selected_history]
         )
+        # Saved searches are re-checked against hidden chats; one reading serves them all.
+        reading = hidden_records.Reading()
         for row in selected_history:
             if row["id"] == reply_to:
                 messages.append(
@@ -139,7 +144,8 @@ class History:
             content = row["content"]
             text = content if isinstance(content, str) else str(content)
             text = agent_calls.expand(self.store, row["role"], text)
-            messages.append(Message(row["role"], recall.expand(self.store, row["role"], text)))
+            text = recall.expand(self.store, row["role"], text, reading=reading, agents=readers)
+            messages.append(Message(row["role"], text))
             if row["id"] in attached_ids:
                 try:
                     attached = attachment_turns.context(

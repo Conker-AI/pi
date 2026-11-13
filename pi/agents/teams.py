@@ -317,12 +317,22 @@ def _validated(kind, definition):
     return cls.model_validate(definition.model_dump())
 
 
+# As for agents (profiles.HIDDEN_NAME): a team kept from a hidden chat is in no list but keeps
+# its name, and the refusal says so.
+HIDDEN_NAME = (
+    "A team Conker made in a chat that is now forgotten or in the Trash has this name. "
+    "Choose another name."
+)
+
+
 def _unique(db, kind, name, identity=None):
     row = db.execute(
         "SELECT id FROM collaboration_records WHERE kind=? AND name_key=? AND deleted_at IS NULL",
         (kind, name.casefold()),
     ).fetchone()
     if row and row["id"] != identity:
+        if kind == "team" and row["id"] in visibility.kept_from_hidden(db, "team"):
+            raise agents.AgentError("name_conflict", HIDDEN_NAME)
         raise agents.AgentError(
             "name_conflict", "Choose a unique configuration name, including archived records."
         )

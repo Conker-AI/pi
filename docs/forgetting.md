@@ -167,8 +167,36 @@ Follow-ups (2026-11-13):
   A turn inside a trashed chat, opened by its link, keeps that chat's own memories; a forgotten
   chat is never exempt. One copy of the rule: `pi/conversation/hidden_records.py`.
 - A proposal pass reads no chat hidden when it started (the tree included), so those chats hide
-  none of its ideas (`visibility.hidden_by`).
+  none of its ideas. `visibility.hidden_since()` gives each hidden chat the earliest time it was
+  hidden (a fork or a kept job's chat takes its source's time) in one query with no outer
+  reference; `proposals.HIDDEN` builds it once per statement (`AS MATERIALIZED`) and compares it
+  per message. Why: the earlier form named the pass's start time inside the recursive query, so
+  SQLite rebuilt the hidden tree for every (proposal, message) pair; with 300 proposals and 100
+  chats trashed before their passes, one `HIDDEN` query took 80 to 100 s, now about 0.3 s
+  (`tests/test_visibility_since.py`). `visibility.hidden_by` stays as the one-column form.
+  The window test then runs once per pass that holds proposals (not once per proposal) and reads
+  the window's messages by time (`messages_by_time`, created in `proposals.SCHEMA`); a unary `+`
+  on the hidden test stops SQLite from driving it from the hidden chats instead. Why: driven from
+  the hidden chats it probed messages once per (proposal, hidden chat), and both only grow:
+  forgotten chats stay in the hidden set for good (their words are gone, their ids are not) and
+  proposals are never deleted. With 2000 forgotten chats of 4 each and 1000 proposals over a
+  visible chat, one `HIDDEN` query took 3 to 4 s, now about 0.2 s. Driven by time it reads each
+  pass's window once: about the messages since the last pass, the whole history only for the
+  first pass (200,000 messages: 0.12 s).
 - Activity reads "forgotten" only for a forgotten chat; a trashed chat's own runs read "available".
+  A task or run opened by its own id shows its events, like a chat opened by its link.
+- Restoring a chat whose parent (or any chat above it) is still in the Trash is refused and names
+  that chat: restore it first, or both in one request. Otherwise the restored chat would stay hidden under it and look
+  lost.
+- An AI job Conker kept from a chat in the Trash does not run until the chat is restored or the
+  owner adopts the job: its runs would write into a hidden chat he cannot see.
+- `GET /turns/unreplied` leaves out hidden chats.
+- Decision: chats whose model read a chat through a project source stay visible while that
+  source is in the Trash. Forgetting takes them with it (`project_context_dependencies`, see the top
+  of this page), but they are the owner's own other chats, not made from the source; hiding them
+  would hide his work for a chat he only put in the Trash. The source stops feeding them at once
+  (`project_sources.resolve` returns nothing for a hidden chat), and delete forever still forgets
+  them at Pi's next start, as before.
 - Decision: an agent-call chat ("Agent call: <name>") of an agent kept from a hidden chat stays
   under its visible caller, which recorded the call and owns that name.
 
@@ -195,11 +223,12 @@ it after it starts (`pi/conversation/forget_followups.py`, every 30 seconds,
   is left alone, and so is everything the owner approved himself.
 - **Memory searches** Conker ran in the chat (`conker.recall`, saved in `recall_results`) are
   deleted; forgetting one memory clears every saved search result.
-- **Agents and teams Conker made on its own** in the chat are archived (the owner can restore
-  them; their stored configuration stays).
+- **Agents and teams Conker made on its own** in the chat are archived (their stored
+  configuration stays). They leave every owner list, and the model's `conker.run_agent` and
+  `conker.create_team` treat them as unknown.
 - **AI jobs Conker made on its own** in the chat are turned off and marked `turnedOff:
-  "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). The owner can turn one
-  back on; that clears the mark.
+  "chat_forgotten"` at once (never deleted; waiting runs are withdrawn). They leave every owner
+  list; a job the owner adopted before is his and is left alone.
 
 A step that fails (service down, work running, another forget pending) is tried again with a
 growing wait, at most hourly. Pi's health shows what is still owed as `forget_followups`

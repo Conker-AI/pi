@@ -4,11 +4,16 @@ A change request is deleted when its chat is forgotten (it quotes the chat), so 
 record of each Keep result that holds no text: the chat, the request id, and the memory, AI job,
 agent or team made. Forgetting the chat (`pi.conversation.forgetting`) then undoes what it can:
 each memory it kept is queued to be forgotten in MemoryGate once Pi runs again
-(`pi.memory.followups`), each AI job it made is turned off and marked (never deleted; the owner can
-turn it back on), and each agent or team it made is archived (the owner can restore it; its stored
-configuration stays, like a job's instructions). A memory MemoryGate already held
-("already_remembered") was not made by that chat and is left alone. What the owner approved
-himself is his and stays.
+(`pi.memory.followups`), each AI job it made is turned off and marked, and each agent or team it
+made is archived. Nothing is deleted (a job keeps its instructions, an agent or team its stored
+configuration), but none of it comes back: what Conker kept from a hidden chat leaves every owner
+list (`pi.conversation.visibility.kept_from_hidden`; kept instructions surviving their forgotten
+chat were a gap in the forgetting data map). An agent or team keeps its name, and a new one with
+that name is refused with a message that says why (`pi.agents.profiles`, `pi.agents.teams`).
+The model's `conker.run_agent` and `conker.create_team` treat such an agent as unknown
+(`pi.agents.agent_calls._target`, `pi.agents.agent_requests._agent`). Putting the chat in the Trash only hides these the same
+way; restoring the chat lists them again. A memory MemoryGate already held ("already_remembered")
+was not made by that chat and is left alone. What the owner approved himself is his and stays.
 """
 
 from __future__ import annotations
@@ -81,8 +86,8 @@ def listing(store, session_id) -> list[dict]:
 
 def forget_chats(db, session_ids) -> dict:
     """Inside the forgetting transaction: queue each kept memory to be forgotten, turn off each AI
-    job and archive each agent and team these chats made on their own. Counts, for the
-    forgetting receipt."""
+    job and archive each agent and team these chats made on their own; they stay out of every
+    owner list from now on (see the module docstring). Counts, for the forgetting receipt."""
     if (
         not session_ids
         or not db.execute(

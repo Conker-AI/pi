@@ -1,8 +1,8 @@
 """Bounded read projections of Pi's actual turns and content-free state events.
 
-A list that is not asked for one chat leaves out the runs and events of a hidden chat
-(pi.conversation.visibility), as the universal search's activity source does; asked for that
-chat by its id, it still lists them. Content is "forgotten" only for a chat that is forgotten or
+A list that is not asked for one chat, task or run leaves out the runs and events of a hidden
+chat (pi.conversation.visibility), as the universal search's activity source does; asked for that
+chat, or a task or run in it, by its id, it still lists them. Content is "forgotten" only for a chat that is forgotten or
 gone; a chat in the Trash can be restored, so its own lookups still read "available".
 """
 
@@ -84,7 +84,7 @@ def list_runs(store, limit=50, cursor=None, session_id=None, task_id=None):
         if session_id:
             where.append("session_id=?")
             values.append(session_id)
-        else:
+        elif not task_id:
             where.append("NOT " + visibility.hidden_sql("session_id"))
         if task_id:
             where.append("id IN (SELECT run_id FROM task_runs WHERE task_id=?)")
@@ -123,7 +123,7 @@ def list_events(store, limit=50, cursor=None, session_id=None, task_id=None, run
             if value:
                 where.append(field + "=?")
                 values.append(value)
-        if not session_id:
+        if not (session_id or task_id or run_id):
             where.append("NOT " + visibility.hidden_sql("session_id"))
         clause = " WHERE " + " AND ".join(where) if where else ""
         rows = db.execute(

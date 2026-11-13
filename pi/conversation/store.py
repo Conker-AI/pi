@@ -373,13 +373,14 @@ class Store:
         The same reasoning as the approval queue: an action whose result the
         owner never sees is, to them, indistinguishable from one that silently
         went wrong. These are all resumable, and resuming asks only for the
-        missing reply - the action is not repeated.
+        missing reply - the action is not repeated. A hidden chat's turns
+        (pi.conversation.visibility) are left out: they await no answer.
         """
         with self._connect() as db:
             rows = db.execute(
                 "SELECT * FROM turns WHERE (status='acted_no_reply' "
                 "OR (status='interrupted' AND acted=1))"
-                " AND session_id NOT IN (SELECT session_id FROM forgotten_sessions)"
+                f" AND NOT {visibility.hidden_sql('session_id')}"
                 " ORDER BY started_at"
             ).fetchall()
         return [

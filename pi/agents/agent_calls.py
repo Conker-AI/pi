@@ -38,7 +38,7 @@ import uuid
 
 from pi.agents import profiles
 from pi.conversation import settings as session_settings
-from pi.conversation import submissions
+from pi.conversation import submissions, visibility
 
 MAX_DEPTH = 2
 PER_TURN = 3
@@ -201,7 +201,8 @@ def _target(db, wanted):
     row = db.execute(
         "SELECT id FROM agents WHERE id=? OR name_key=?", (wanted, wanted.casefold())
     ).fetchone()
-    if row is None:
+    # An agent Conker kept from a forgotten or trashed chat carries that chat's words: unknown here.
+    if row is None or row["id"] in visibility.kept_from_hidden(db, "agent"):
         raise Refused(f"There is no agent called “{wanted}”. Use an agent's exact name.")
     agent = profiles._get(db, row["id"])
     if agent["archived_at"] is not None:
@@ -498,8 +499,8 @@ def expand(store, role, text):
             "JOIN messages m ON m.id=c.reply_message_id WHERE c.id=?",
             (identity,),
         ).fetchone()
-        shown_reply = row is not None and not _owner_hid(db, row[1], row[2])
-    reply = _content(store.get_message(row[0])) if shown_reply and row[0] else None
+        reply_id = row[0] if row is not None and not _owner_hid(db, row[1], row[2]) else None
+    reply = _content(store.get_message(reply_id)) if reply_id else None
     if reply is None:
         shown = {**result, "status": "gone", "message": GONE}
     else:

@@ -66,6 +66,37 @@ def _hidden_where(column: str, own: str | None) -> tuple[str, tuple]:
     return f"{condition} AND {column}<>?", (own,)
 
 
+# Messages whose MemoryGate records may exist. A message with no outbox row was never sent (only
+# the outbox delivers, and a row is removed only before delivery starts), so it names nothing. A
+# delete MemoryGate acknowledged ('delete' + 'sent': forgetting the chat queued it) erased the
+# message's memory and analysis and invalidated its evidence, which recall and the explorer skip;
+# no saved package can still hold them, since forgetting cleared every saved package and none is
+# saved while a delete is owed (pi.memory.store.recall_held_in). So the set stops growing with
+# forgotten chats: it holds only the Trash and deletes still owed.
+_DELIVERED = (
+    "SELECT o.message_id, o.destination_agent_id FROM memory_outbox o "
+    "JOIN messages m ON m.id=o.message_id "
+    "WHERE NOT (o.operation='delete' AND o.state='sent') AND {where}"
+)
+
+
+def _namespaces(db) -> set[str]:
+    """Every MemoryGate namespace Pi has delivered to or forgotten in: for a message sent before
+    Pi pinned destinations (destination NULL), any of them may be the one that holds it."""
+    found = {
+        row[0]
+        for row in db.execute(
+            "SELECT DISTINCT destination_agent_id FROM memory_outbox "
+            "WHERE destination_agent_id IS NOT NULL"
+        )
+    }
+    if _table(db, "memory_forget_operations"):
+        found |= {
+            row[0] for row in db.execute("SELECT DISTINCT agent_id FROM memory_forget_operations")
+        }
+    return found - {None, ""}
+
+
 def _records(db, agent_ids, own) -> dict[str, set[str]]:
     found: dict[str, set[str]] = {"memory": set(), "evidence": set(), "analysis": set()}
     if _table(db, "keep_results"):
@@ -83,18 +114,39 @@ def _records(db, agent_ids, own) -> dict[str, set[str]]:
         )
         found["memory"] |= {row[0] for row in rows}
     where, params = _hidden_where("m.session_id", own)
-    rows = db.execute(
-        "SELECT m.id, o.destination_agent_id FROM messages m "
-        f"LEFT JOIN memory_outbox o ON o.message_id=m.id WHERE {where}",
-        params,
-    ).fetchall()
+    rows = db.execute(_DELIVERED.format(where=where), params).fetchall()
+    unpinned = None
     for message_id, destination in rows:
-        for agent in {destination, *agent_ids} - {None, ""}:
+        # A pinned destination is the one namespace the message went to (pin_destination never
+        # moves it); an unpinned one may be any reader's, or any namespace Pi knows.
+        if destination:
+            readers = (destination,)
+        else:
+            if unpinned is None:
+                unpinned = tuple(sorted(({*agent_ids} | _namespaces(db)) - {None, ""}))
+            readers = unpinned
+        for agent in readers:
             evidence, analysis, memory = receipt_ids(agent, message_id)
             found["evidence"].add(evidence)
             found["analysis"].add(analysis)
             found["memory"].add(memory)
     return found
+
+
+class Reading:
+    """One reading's hidden records, worked out at most once: a history build re-checks every
+    saved `conker.recall` result, and each check would otherwise read every hidden message again.
+    Keyed by the reading agents and the exempt chat; a new reading (the next history build, the
+    next turn) starts empty, so a chat trashed or restored since is seen then."""
+
+    def __init__(self):
+        self._found: dict[tuple, dict[str, set[str]]] = {}
+
+    def records(self, db, agent_ids, exempt) -> dict[str, set[str]]:
+        key = (tuple(sorted(set(agent_ids) - {None, ""})), exempt)
+        if key not in self._found:
+            self._found[key] = _records(db, key[0], exempt)
+        return self._found[key]
 
 
 def hidden_records(db, agent_ids=(), own=None) -> dict[str, set[str]]:
@@ -121,10 +173,11 @@ def _cited(item):
     ]
 
 
-def filter_cited(store, groups, agent_ids=(), own=None) -> dict[str, list]:
+def filter_cited(store, groups, agent_ids=(), own=None, reading=None) -> dict[str, list]:
     """Each group's items (`groups` maps a recall package group name to its list) without the
     records of a hidden chat other than `own`: named by `hidden_records`, or citing that chat or
-    one of its messages. Read on one snapshot."""
+    one of its messages. Read on one snapshot; `reading` (a Reading) shares the named records
+    across the checks of one history build."""
     pairs = [pair for items in groups.values() for item in items for pair in _cited(item)]
     messages = sorted({m for _, m in pairs if m})
     with store._connect() as db:
@@ -144,7 +197,7 @@ def filter_cited(store, groups, agent_ids=(), own=None) -> dict[str, list]:
             if key in RECORD_KINDS
             for item in items
         )
-        records = _records(db, tuple(agent_ids), exempt) if named else {}
+        records = (reading or Reading()).records(db, agent_ids, exempt) if named else {}
 
     def hidden(key, item):
         identity = _text(item.get("id")) if isinstance(item, dict) else None
@@ -155,7 +208,7 @@ def filter_cited(store, groups, agent_ids=(), own=None) -> dict[str, list]:
     return {key: [item for item in items if not hidden(key, item)] for key, items in groups.items()}
 
 
-def filter_package(store, package, agent_ids=(), own=None):
+def filter_package(store, package, agent_ids=(), own=None, reading=None):
     """A recall package without the records of a hidden chat other than `own`; the same object
     when nothing is left out, so a caller can tell (`is`)."""
     if not isinstance(package, dict):
@@ -167,7 +220,7 @@ def filter_package(store, package, agent_ids=(), own=None):
     }
     if not any(groups.values()):
         return package
-    shown = filter_cited(store, groups, agent_ids, own)
+    shown = filter_cited(store, groups, agent_ids, own, reading)
     if all(len(shown[key]) == len(groups[key]) for key in groups):
         return package
     return {**package, **shown}

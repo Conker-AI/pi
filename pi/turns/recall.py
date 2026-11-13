@@ -147,8 +147,22 @@ def call(loop, args, *, session_id, turn_id, run=True) -> ToolResult:
     )
 
 
-def expand(store, role, text):
-    """The model's view of one history message: a recall record gets back what it found."""
+def reading_agents(memory, execution) -> tuple[str, ...]:
+    """The MemoryGate namespace the turn's agent reads, which `conker.recall` searched: it names
+    the records of a hidden message sent before Pi pinned destinations. Empty without one."""
+    pick = getattr(memory, "_client", None)
+    try:
+        client = pick(execution) if callable(pick) else None
+    except (KeyError, TypeError):
+        client = None
+    agent = getattr(client, "agent_id", None)
+    return (agent,) if isinstance(agent, str) and agent else ()
+
+
+def expand(store, role, text, *, reading=None, agents=()):
+    """The model's view of one history message: a recall record gets back what it found.
+    `reading` (hidden_records.Reading) is shared by one history build, so the hidden records are
+    worked out once however many results it holds; `agents` are the reading agents."""
     if role != "tool" or RECALL not in text:
         return text
     try:
@@ -166,7 +180,7 @@ def expand(store, role, text):
             "SELECT session_id, package FROM recall_results WHERE id=?", (identity,)
         ).fetchone()
         held = memory_store.recall_held_in(db)
-    package = _still_shown(store, row) if row is not None and not held else None
+    package = _still_shown(store, row, reading, agents) if row is not None and not held else None
     if package is None:
         found = {"status": "cleared", "message": CLEARED}
     else:
@@ -176,15 +190,16 @@ def expand(store, role, text):
     return json.dumps({"tool": RECALL, "result": found}, ensure_ascii=False)
 
 
-def _still_shown(store, row):
+def _still_shown(store, row, reading=None, agents=()):
     """A saved result as it may be shown now: what a chat put in the Trash or forgotten since
     wrote is left out (pi.conversation.hidden_records), except the searching chat's own records.
-    None when nothing is left to show. The searching agent is not recorded; every delivered
-    message's MemoryGate namespace is (memory_outbox), which is what names its records."""
+    None when nothing is left to show. The searching agent is not recorded; a delivered message's
+    MemoryGate namespace mostly is (memory_outbox). One sent before Pi pinned it is named for
+    `agents` (the reader now) and every namespace Pi knows."""
     if row["package"] is None:
         return None
     package = json.loads(row["package"])
-    shown = hidden_records.filter_package(store, package, (), row["session_id"])
+    shown = hidden_records.filter_package(store, package, agents, row["session_id"], reading)
     if shown is package:
         return package
     if not any(shown.get(key) for key in _GROUPS):

@@ -5,6 +5,11 @@ and need no password. An archived chat stays readable and searchable; a trashed 
 out of search and memory recall until it is restored or deleted forever (forget_queue). One
 request sets the state of up to 100 chats in one transaction; a chat that does not exist or was
 forgotten fails the whole request, so nothing is half done. Forgetting a chat deletes both rows.
+
+A chat made from a chat in the Trash (sessions.parent_id, all the way up) is hidden with it
+(pi.conversation.visibility), so restoring it alone would take it out of the Trash view and leave
+it listed nowhere: that restore is refused (`restore_parent_first`, naming the chat to restore
+first). Restoring both in one request works in either order.
 """
 
 from __future__ import annotations
@@ -125,6 +130,8 @@ def _mark(store, sessions, table: str, on: bool) -> list[str]:
                 raise ArchiveError(
                     "not_found", "One of these chats no longer exists; nothing was changed.", 404
                 )
+            if table == "session_trash" and not on:
+                _refuse_hidden_parents(db, ids)
             if on:
                 # A chat marked earlier keeps its first time.
                 db.executemany(
@@ -141,6 +148,29 @@ def _mark(store, sessions, table: str, on: bool) -> list[str]:
             db.rollback()
             raise
     return ids
+
+
+def _refuse_hidden_parents(db, ids) -> None:
+    """Refuse restoring a chat while a chat it was made from is still in the Trash, unless that
+    chat is restored in the same request; the caller's transaction is rolled back."""
+    marks = ",".join("?" * len(ids))
+    rows = db.execute(
+        "WITH RECURSIVE up(child, id) AS ("
+        f"SELECT id, parent_id FROM sessions WHERE id IN ({marks}) "
+        "UNION SELECT up.child, s.parent_id FROM up JOIN sessions s ON s.id=up.id) "
+        "SELECT up.child, up.id FROM up JOIN session_trash t ON t.session_id=up.id "
+        f"WHERE up.id NOT IN ({marks}) ORDER BY up.child, up.id",
+        [*ids, *ids],
+    ).fetchall()
+    if rows:
+        raise ArchiveError(
+            "restore_parent_first",
+            "These chats were made from a chat that is still in the Trash; restore that chat "
+            "first, or both together. Nothing was changed.",
+            409,
+            sessions=sorted({row[0] for row in rows}),
+            parents=sorted({row[1] for row in rows}),
+        )
 
 
 def redact(db, session_ids) -> None:
