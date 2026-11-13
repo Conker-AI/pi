@@ -43,7 +43,8 @@ def test_waiting_run_cancels_durably_and_releases_overlap(tmp_path, state):
         row = jobs.runs(store, job["id"])[0]
         if state == "awaiting_approval":
             assert row["receipt"]["request_id"] == "retained-approval"
-            # Approving the still-open request later finds nothing to continue.
+            # Cancelling queued the request's withdrawal (tests/test_job_waits.py); an approval
+            # that lands before it finds nothing to continue.
             assert answers.decided(
                 SimpleNamespace(store=store),
                 "retained-approval",

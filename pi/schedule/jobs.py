@@ -11,19 +11,17 @@ from zoneinfo import ZoneInfo
 from pi.core.errors import ServiceError
 from pi.schedule.job_hidden import ADOPTED, PAUSED, REFUSAL, paused  # noqa: F401 (ADOPTED)
 from pi.schedule.job_models import (
-    AgentTargetSummary,
     BudgetBinding,
     Definition,
-    DefinitionSummary,
     JobPrivacy,
-    JobView,
-    RunActionView,
-    RunView,
     StateChange,
-    TargetSummary,
     Update,
-    WatchSummary,
 )
+
+# Browser views live in job_views; callers keep using jobs.browser_*.
+from pi.schedule.job_views import browser_job as browser_job
+from pi.schedule.job_views import browser_run as browser_run
+from pi.schedule.job_views import browser_run_action as browser_run_action
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
@@ -195,10 +193,21 @@ def set_enabled(store, identity, body, now=None):
     )
 
 
+# An AI job's run is `completed` once its turn parks on an approval (agent_jobs.AgentJobs), but
+# the job's chat is busy until the owner answers: it still holds the next run back. Used on
+# scheduled_runs without an alias.
+WAITING_TURN = (
+    "scheduled_runs.status='completed' "
+    "AND COALESCE(json_extract(scheduled_runs.receipt,'$.waitingForApproval'), 0) "
+    "AND EXISTS (SELECT 1 FROM turns t WHERE t.id=json_extract(scheduled_runs.receipt,'$.turnId') "
+    "AND t.status='awaiting_approval')"
+)
+
+
 def _claim(db, row, now, request_id=None):
     if db.execute(
         "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-        "AND status NOT IN ('completed','failed','cancelled')",
+        f"AND (status NOT IN ('completed','failed','cancelled') OR ({WAITING_TURN}))",
         (row["id"],),
     ).fetchone():
         return None
@@ -353,99 +362,6 @@ def runs(store, identity, limit=100, cursor=None):
         ]
 
 
-def browser_job(row):
-    definition = Definition.model_validate(row["definition"])
-    target = definition.target
-    return JobView(
-        id=row["id"],
-        revision=row["revision"],
-        definition=DefinitionSummary(
-            name=definition.name,
-            instructionsConfigured=bool(definition.instructions),
-            instructions=definition.instructions,
-            agentId=definition.agentId,
-            agentName=row.get("agent_name") or None,
-            timing=definition.timing,
-            timeZone=definition.timeZone,
-            enabled=definition.enabled,
-            state="enabled" if definition.enabled else "paused",
-            target=AgentTargetSummary(
-                kind="agent",
-                sessionId=row.get("agent_session_id"),
-                webhook=bool(row.get("has_webhook")),
-                clock=target.clock,
-            )
-            if target.kind == "agent"
-            else TargetSummary(
-                kind=target.kind,
-                id=target.id,
-                publishedVersion=target.publishedVersion,
-                digest=target.digest,
-                inputsConfigured=bool(target.args),
-            ),
-            watch=WatchSummary(
-                toolId=definition.watch.toolId,
-                everyMinutes=definition.watch.everyMinutes,
-                inputsConfigured=bool(definition.watch.args),
-                lastCheckedAt=row.get("watch_checked_at"),
-                problem=row.get("watch_failure"),
-            )
-            if definition.watch
-            else None,
-            overlap=definition.overlap,
-            requireBudget=definition.requireBudget,
-            budgetAllowanceConfigured=definition.budgetAllowanceId is not None,
-            createdBy=definition.createdBy,
-            turnedOff=definition.turnedOff,
-            adoptedAt=definition.adoptedAt,
-        ),
-        createdAt=row["created_at"],
-        nextAt=row["next_at"],
-    )
-
-
-def browser_run(row):
-    receipt = row.get("receipt")
-    code = receipt.get("code") if isinstance(receipt, dict) else None
-    if (
-        not isinstance(code, str)
-        or not code.isascii()
-        or code != code.upper()
-        or not code.replace("_", "").isalnum()
-        or len(code) > 64
-    ):
-        code = None
-    status = row["status"]
-    execution = (
-        "admitted-only"
-        if status == "ready"
-        else "waiting"
-        if status in {"awaiting_budget", "awaiting_approval"}
-        else "dispatched"
-        if status == "dispatching"
-        else "uncertain"
-        if status == "outcome_unknown"
-        else "resolved"
-    )
-    return RunView(
-        id=row["id"],
-        jobId=row["job_id"],
-        jobRevision=row["job_revision"],
-        scheduledAt=row["scheduled_at"],
-        startedAt=row["started_at"],
-        status=status,
-        manual=row["request_id"] is not None,
-        budgetBound=row.get("spending_budget_id") is not None,
-        receiptRecorded=receipt is not None,
-        outcomeCode=code,
-        execution=execution,
-    )
-
-
-def browser_run_action(row, replayed):
-    return RunActionView(**browser_run(row).model_dump(), replayed=replayed)
-
-
 def dispatch_claim(store, run, invoke, *, resume=False):
     """Injected server adapter invokes the exact publication; never retries an uncertain effect."""
     # Acquire the dispatch right before invoking. Only identity comes from the
@@ -584,10 +500,18 @@ def bind_budget(store, identity, body, adapter):
 
 
 def cancel_run(store, identity):
-    """Withdraw undispatched work; never claim an uncertain effect was cancelled."""
+    """Withdraw undispatched work; never claim an uncertain effect was cancelled.
+
+    A run waiting on its ToolGate approval also queues that request for withdrawal in the same
+    transaction (`pi.actions.withdrawals` drains it), so its card leaves the owner's Inbox. The
+    request was made by Pi's key itself (PublishedJobs), so it is queued with no agent. One the
+    owner already answered (the reject path of `answers.decided`) is simply gone.
+    """
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT status FROM scheduled_runs WHERE id=?", (identity,)).fetchone()
+        row = db.execute(
+            "SELECT status, receipt FROM scheduled_runs WHERE id=?", (identity,)
+        ).fetchone()
         if row is None:
             raise JobError("Run not found.")
         if row["status"] == "cancelled":
@@ -596,5 +520,13 @@ def cancel_run(store, identity):
             raise JobError("Only waiting work can be cancelled; reconcile dispatched work first.")
         # Preserve any saved approval receipt and spending binding as evidence.
         db.execute("UPDATE scheduled_runs SET status='cancelled' WHERE id=?", (identity,))
+        request_id = json.loads(row["receipt"] or "{}").get("request_id")
+        if row["status"] == "awaiting_approval" and isinstance(request_id, str) and request_id:
+            # Written here, not through withdrawals.queue: schedule does not import actions.
+            db.execute(
+                "INSERT OR IGNORE INTO approval_withdrawals(request_id,agent_id,state,created_at) "
+                "VALUES (?,NULL,'pending',?)",
+                (request_id, time.time()),
+            )
         db.commit()
         return {"status": "cancelled", "replayed": False}
