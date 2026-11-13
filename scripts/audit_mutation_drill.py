@@ -90,7 +90,13 @@ CASES = [
         "return ToolResult(True, None, tool_id)",
         EXEC,
     ),
-    ("F2b-negative-receipt-marks-acted", "pi/actions/identities.py", "int(outcome.changed)", "1", EXEC),
+    (
+        "F2b-negative-receipt-marks-acted",
+        "pi/actions/identities.py",
+        "int(outcome.changed)",
+        "1",
+        EXEC,
+    ),
     (
         "F2b-unknown-redispatches",
         "pi/turns/replies.py",
