@@ -21,7 +21,7 @@ from test_loop import loop_with
 from test_visibility_memory import explorer
 from test_visibility_search import Library
 
-from pi.agents import keep
+from pi.agents import inbox, keep
 from pi.agents import profiles as agents
 from pi.content import artifact_models, artifacts
 from pi.context import controls as context_controls
@@ -130,6 +130,7 @@ def seed_chat(store, mark, at):
             )
         ),
         now=DAY.timestamp(),
+        created_by="conker",  # Conker's own job: one he adopted or approved stays (jobs.ADOPTED)
     )["id"]
     delivered = store.append_message(sid, "user", f"{mark} delivered")["id"]
     kept_memory = f"mem-kept-{sid}"
@@ -266,6 +267,8 @@ def read_all(store, chats, project, targets, round_id):
         "project": projects.get(store, project, resolve),
         "project search": projects.search(store, project, COMMON, resolve),
         "proposal list": proposals.list_proposals(store, "all"),
+        # The jobs' next run (DAY + 2 h) is inside the Inbox's week ahead.
+        "inbox": inbox.inbox(store, now=DAY.timestamp()),
     }
     for source in LEXICAL:
         for stage in ("metadata", "text"):
@@ -310,6 +313,7 @@ SHOWS = {
     "project",
     "project search",
     "proposal list",
+    "inbox",
     "explorer",
     f"project turn {CONTROL}",
     *(f"universal {source} metadata" for source in LEXICAL),
@@ -334,6 +338,9 @@ def test_a_hidden_chat_leaks_into_no_list_search_or_model_input(tmp_path, monkey
         )
         assert missing == []
         assert outputs["explorer detail"] == "null"  # the hidden record is refused by id
+        # The Inbox's upcoming jobs name each job: the kept one from the hidden chat is not there.
+        assert job_name(HIDDEN) not in outputs["inbox"]
+        assert job_name(CONTROL) in outputs["inbox"]
         assert hidden["sid"] not in activity_chats(store)
         assert control["sid"] in activity_chats(store)
         assert hidden["job"] not in listed_jobs(store) and control["job"] in listed_jobs(store)
@@ -350,6 +357,7 @@ def test_a_hidden_chat_leaks_into_no_list_search_or_model_input(tmp_path, monkey
         assert absent == []
         assert hidden["sid"] in activity_chats(store)
         assert hidden["job"] in listed_jobs(store)
+        assert job_name(HIDDEN) in restored["inbox"]
 
 
 @pytest.mark.parametrize("state", ["trashed", "forgotten"])
