@@ -10,7 +10,7 @@ from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ApprovalRequired, ToolGateUnavailable, ToolPending, ToolRefused
 from pi.calls import call_turns
 from pi.conversation import settings as session_settings
-from pi.models.providers import ProviderUnavailable
+from pi.models.providers import ProviderUnavailable, shown_text
 from pi.models.routing import TurnContext, history_size
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
@@ -256,7 +256,7 @@ class Replies:
 
         message = self._complete_turn(
             turn_id,
-            completion.text,
+            shown_text(completion),
             citations=completion.citations,
             acted=int(acted),
             reply_request_id=reply_request_id,

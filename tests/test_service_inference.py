@@ -333,6 +333,10 @@ def test_an_answer_past_max_tokens_is_refused(monkeypatch, store):
         "/inference", json=body(max_tokens=8), headers={"X-Pi-Service-Key": MEMORYGATE}
     )
     assert response.status_code == 503 and response.json()["detail"]["code"] == "unavailable"
+    # It was answered and paid for, so it stays completed; the usage list says why it was refused.
+    with store._connect() as db:
+        row = db.execute("SELECT status, failure_kind FROM service_model_calls").fetchone()
+    assert tuple(row) == ("completed", "too_long")
 
 
 def test_usage_is_recorded_without_any_text(monkeypatch, store):

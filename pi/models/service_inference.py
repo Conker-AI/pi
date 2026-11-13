@@ -328,6 +328,15 @@ def _answer(store, service, body, configuration, adapters) -> InferenceAnswer:
         ) from None
     completion = result["completion"]
     if len(completion.text) > body.max_tokens * CHARACTERS_PER_TOKEN:
+        # Paid for and answered, but refused: the usage list says why (status stays completed).
+        with store._connect() as db:
+            db.execute(
+                "UPDATE service_model_calls SET failure_kind='too_long' WHERE id=(SELECT id FROM "
+                "service_model_calls WHERE service=? AND request_id=? AND status='completed' "
+                "ORDER BY started_at DESC LIMIT 1)",
+                (service, body.request_id),
+            )
+            db.commit()
         raise InferenceError("unavailable", "The model answered past max_tokens.", 503)
     return InferenceAnswer(
         text=completion.text, model=completion.model, provider=result["providerId"]

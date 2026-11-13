@@ -28,6 +28,9 @@ class Tier(StrEnum):
     STRONG = "strong"  # the best available under the current spend policy
 
 
+NO_TOOL_MODEL = "No free model can call tools; this one answers without them."
+
+
 class Reason(StrEnum):
     CONFIGURED = "configured"
     DEFAULT = "default"
@@ -185,17 +188,19 @@ class Router:
 
         needs_tools = ctx.needs_tools
         candidates = self.hosted.free_models(needs_tools=needs_tools)
+        without_tools = None
         if not candidates and needs_tools:
-            # No free model can call tools. Say so by falling back rather than
-            # silently answering without the tools the turn needed.
+            # No free model can call tools: fall back, and say so in the turn's record rather
+            # than silently answering without the tools the turn needed.
             candidates = self.hosted.free_models()
+            without_tools = NO_TOOL_MODEL
         if not candidates:
             if self.local is not None and self.local_model:
                 return Route(Tier.LOCAL, reason, self.local.name, self.local_model)
             raise RuntimeError("no free hosted model is available and there is no local fallback")
 
         tier = Tier.STRONG if reason is not Reason.DEFAULT else Tier.CHEAP
-        return Route(tier, reason, self.hosted.name, candidates[0].id)
+        return Route(tier, reason, self.hosted.name, candidates[0].id, without_tools)
 
     def provider_for(self, route: Route):
         if route.provider == getattr(self.local, "name", None):
