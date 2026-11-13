@@ -20288,7 +20288,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportBatchResult"
+                }
               }
             }
           },
@@ -20348,7 +20350,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportHistory"
+                }
               }
             }
           },
@@ -20452,7 +20456,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatList"
+                }
               }
             }
           },
@@ -20545,7 +20551,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatTranscript"
+                }
               }
             }
           },
@@ -20616,7 +20624,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedChatDeletion"
+                }
               }
             }
           },
@@ -28200,6 +28210,653 @@
           "expected_revision"
         ],
         "title": "Import"
+      },
+      "ImportBatchResult": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "batchId": {
+            "type": "string",
+            "title": "Batchid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "chats": {
+            "$ref": "#/components/schemas/ImportChatCounts"
+          },
+          "messages": {
+            "$ref": "#/components/schemas/ImportMessageCounts"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/ImportSkipCounts"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ImportMemoryChoice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "batchId",
+          "source",
+          "label",
+          "digest",
+          "importedAt",
+          "chats",
+          "messages",
+          "skipped",
+          "memory"
+        ],
+        "title": "ImportBatchResult",
+        "description": "One import as it was reported, also kept as a line of the import history."
+      },
+      "ImportChatCounts": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "new",
+          "updated",
+          "unchanged"
+        ],
+        "title": "ImportChatCounts"
+      },
+      "ImportHistory": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "imports": {
+            "items": {
+              "$ref": "#/components/schemas/ImportBatchResult"
+            },
+            "type": "array",
+            "title": "Imports"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ImportMemoryStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "imports",
+          "memory"
+        ],
+        "title": "ImportHistory"
+      },
+      "ImportMemoryChoice": {
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "title": "On"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "on",
+          "reason",
+          "configured"
+        ],
+        "title": "ImportMemoryChoice",
+        "description": "Whether imported words were offered to memory; `reason` says why not when `on` is off."
+      },
+      "ImportMemoryStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "waiting": {
+            "type": "integer",
+            "title": "Waiting"
+          },
+          "offered": {
+            "type": "integer",
+            "title": "Offered"
+          },
+          "refused": {
+            "type": "integer",
+            "title": "Refused"
+          },
+          "erasing": {
+            "type": "integer",
+            "title": "Erasing"
+          },
+          "notFoundToErase": {
+            "type": "integer",
+            "title": "Notfoundtoerase"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "configured",
+          "waiting",
+          "offered",
+          "refused",
+          "erasing",
+          "notFoundToErase",
+          "problem"
+        ],
+        "title": "ImportMemoryStatus",
+        "description": "Imported words waiting for, sent to or refused by MemoryGate, and erasures still owed."
+      },
+      "ImportMessageCounts": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "offeredToMemory": {
+            "type": "integer",
+            "title": "Offeredtomemory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "added",
+          "offeredToMemory"
+        ],
+        "title": "ImportMessageCounts"
+      },
+      "ImportSkipCounts": {
+        "properties": {
+          "chatsNotMatching": {
+            "type": "integer",
+            "title": "Chatsnotmatching"
+          },
+          "duplicateChats": {
+            "type": "integer",
+            "title": "Duplicatechats"
+          },
+          "emptyChats": {
+            "type": "integer",
+            "title": "Emptychats"
+          },
+          "longChats": {
+            "type": "integer",
+            "title": "Longchats"
+          },
+          "toolOrHiddenMessages": {
+            "type": "integer",
+            "title": "Toolorhiddenmessages"
+          },
+          "emptyMessages": {
+            "type": "integer",
+            "title": "Emptymessages"
+          },
+          "duplicateMessages": {
+            "type": "integer",
+            "title": "Duplicatemessages"
+          },
+          "shortenedMessages": {
+            "type": "integer",
+            "title": "Shortenedmessages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chatsNotMatching",
+          "duplicateChats",
+          "emptyChats",
+          "longChats",
+          "toolOrHiddenMessages",
+          "emptyMessages",
+          "duplicateMessages",
+          "shortenedMessages"
+        ],
+        "title": "ImportSkipCounts",
+        "description": "What the export held that was left out or shortened (import_formats.SKIP_REASONS)."
+      },
+      "ImportedChatDeletion": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "chatId": {
+            "type": "string",
+            "title": "Chatid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "deletedAt": {
+            "type": "number",
+            "title": "Deletedat"
+          },
+          "messagesDeleted": {
+            "type": "integer",
+            "title": "Messagesdeleted"
+          },
+          "offeredToMemory": {
+            "type": "integer",
+            "title": "Offeredtomemory"
+          },
+          "memoryNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorynote"
+          },
+          "fileScrubbed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filescrubbed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "chatId",
+          "source",
+          "label",
+          "deletedAt",
+          "messagesDeleted",
+          "offeredToMemory",
+          "memoryNote",
+          "fileScrubbed"
+        ],
+        "title": "ImportedChatDeletion",
+        "description": "`fileScrubbed` is None when this repeats an earlier deletion's record."
+      },
+      "ImportedChatList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "chats": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedChatSummary"
+            },
+            "type": "array",
+            "title": "Chats"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextoffset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "total",
+          "chats",
+          "nextOffset"
+        ],
+        "title": "ImportedChatList"
+      },
+      "ImportedChatSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true,
+            "title": "Archived"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "const": true,
+            "title": "Readonly"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "label",
+          "title",
+          "exportId",
+          "startedAt",
+          "updatedAt",
+          "importedAt",
+          "messageCount",
+          "archived",
+          "readOnly"
+        ],
+        "title": "ImportedChatSummary"
+      },
+      "ImportedChatTranscript": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "importedAt": {
+            "type": "number",
+            "title": "Importedat"
+          },
+          "messageCount": {
+            "type": "integer",
+            "title": "Messagecount"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true,
+            "title": "Archived"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "const": true,
+            "title": "Readonly"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "nextAfter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextafter"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "label",
+          "title",
+          "exportId",
+          "startedAt",
+          "updatedAt",
+          "importedAt",
+          "messageCount",
+          "archived",
+          "readOnly",
+          "schemaVersion",
+          "messages",
+          "nextAfter"
+        ],
+        "title": "ImportedChatTranscript"
+      },
+      "ImportedMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "author": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Author"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "shortened": {
+            "type": "boolean",
+            "title": "Shortened"
+          },
+          "exportId": {
+            "type": "string",
+            "title": "Exportid"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "offering",
+                  "offered",
+                  "refused",
+                  "not_offered"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "seq",
+          "author",
+          "text",
+          "createdAt",
+          "shortened",
+          "exportId",
+          "memory"
+        ],
+        "title": "ImportedMessage",
+        "description": "`memory` is None for the other assistant's replies, which are never offered."
       },
       "InferenceAnswer": {
         "properties": {
