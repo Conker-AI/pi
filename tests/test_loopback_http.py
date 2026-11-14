@@ -12,8 +12,7 @@ import pytest
 
 from gateway.__main__ import create_certificate
 from pi.actions.toolgate import ToolGateClient, ToolGateUnavailable
-from pi.conversation import live_stream
-from pi.models import inference_control
+from pi.models import inference_control, live_stream
 from pi.models.decision import DecisionProvider
 from pi.models.loopback_http import verification
 from pi.models.providers import Message, OllamaProvider, ProviderUnavailable
