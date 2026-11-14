@@ -310,7 +310,7 @@ def router(app_state, require_key, require_admin):
         attempt started), `done` (fetch the saved turn). Unknown or expired previews
         end with `unavailable`, which is not an error: the saved turn is still there.
         """
-        from pi.conversation import live_stream
+        from pi.models import live_stream
 
         async def events():
             import asyncio
@@ -423,7 +423,7 @@ def router(app_state, require_key, require_admin):
     @routes.post("/turn-submissions/{request_id}/cancel", dependencies=[Depends(require_key)])
     def cancel_submission(request_id: str):
         """Stop is an owner safety action: record it durably, then end any live answer stream."""
-        from pi.conversation import live_stream
+        from pi.models import live_stream
 
         result = turn_control.cancel_submission(app_state().store, request_id)
         live_stream.stop(request_id)

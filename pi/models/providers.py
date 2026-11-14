@@ -21,11 +21,10 @@ from typing import Protocol
 
 import httpx
 
-from pi.conversation import citations as message_citations
-from pi.conversation import live_stream
 from pi.core.images import ImageInput
 from pi.core.untrusted_text import strip_invisible
-from pi.models import inference_control, local_settings
+from pi.models import citations as message_citations
+from pi.models import inference_control, live_stream, local_settings
 from pi.models.loopback_http import verification
 
 

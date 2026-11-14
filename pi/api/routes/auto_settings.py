@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from pi.conversation import settings as session_settings
 from pi.models import auto_settings
 
 
@@ -9,6 +10,8 @@ def router(store, providers, authorize):
     @routes.post("/models/auto-settings")
     def propose(body: auto_settings.Request):
         """Proposed settings for the next message; saves and grants nothing."""
-        return auto_settings.propose(store(), providers(), body)
+        return auto_settings.propose(
+            store(), providers(), body, source_privacy=session_settings.source_privacy
+        )
 
     return routes

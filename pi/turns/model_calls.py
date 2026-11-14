@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
-from pi.conversation import live_stream
+from pi.models import live_stream
 from pi.models import roles as model_roles
 from pi.models.openrouter import ModelUnusable
 from pi.models.providers import Message, ProviderUnavailable

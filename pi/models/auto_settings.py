@@ -12,7 +12,6 @@ import json
 
 from pydantic import Field
 
-from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models import roles as model_roles
@@ -75,11 +74,13 @@ def parse(text: str) -> dict:
     }
 
 
-def propose(store, providers, body: Request) -> dict:
+def propose(store, providers, body: Request, *, source_privacy) -> dict:
+    """`source_privacy(db, session_id)` is the chat's privacy settings, or None for an unknown chat;
+    the caller passes it in (required) so the helpers-off rule can never be skipped."""
     harness_disabled = body.harness_disabled
     if body.session_id is not None:
         with store._connect() as db:
-            privacy = session_settings.source_privacy(db, body.session_id)
+            privacy = source_privacy(db, body.session_id)
         if privacy is None:
             raise ProposalError("not_found", "Conversation unavailable.", 404)
         harness_disabled |= privacy["harnessDisabled"]

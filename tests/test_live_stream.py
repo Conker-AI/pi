@@ -6,8 +6,8 @@ from contextlib import closing, contextmanager
 import httpx
 import pytest
 
-from pi.conversation import live_stream
 from pi.conversation.store import Store
+from pi.models import live_stream
 from pi.models.direct import AnthropicProvider, OpenAIProvider
 from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider
 from pi.models.providers import Completion, Message, OllamaProvider, ProviderUnavailable
