@@ -11,6 +11,7 @@ from test_setup_status import (
     Router,
     ToolGate,
     choose_optional,
+    companion_reader,
     configuration,
     verify_model,
 )
@@ -251,6 +252,7 @@ def test_expiry_is_explicit_and_setup_can_reach_complete(tmp_path):
             memory=Memory(),
             toolgate=ToolGate(),
             router=router,
+            companion=companion_reader(store),
             now=NOW,
         )
         stale = setup_status.load(
@@ -259,6 +261,7 @@ def test_expiry_is_explicit_and_setup_can_reach_complete(tmp_path):
             memory=Memory(),
             toolgate=ToolGate(),
             router=router,
+            companion=companion_reader(store),
             now=NOW + timedelta(days=11),
         )
         boundary_stale = setup_status.load(
@@ -267,6 +270,7 @@ def test_expiry_is_explicit_and_setup_can_reach_complete(tmp_path):
             memory=Memory(),
             toolgate=ToolGate(),
             router=router,
+            companion=companion_reader(store),
             now=NOW + timedelta(days=31),
         )
 
@@ -298,6 +302,7 @@ def test_boundary_policy_drift_invalidates_current_receipt(tmp_path):
                 memory=Memory(),
                 toolgate=ToolGate(digest="2" * 64),
                 router=Router(),
+                companion=companion_reader(store),
                 now=NOW,
             ).steps
             if item.id == "boundaries"
@@ -335,6 +340,7 @@ def test_persisted_boundary_with_unbounded_expiry_is_stale(tmp_path, expires):
                 memory=Memory(),
                 toolgate=ToolGate(digest="1" * 64),
                 router=Router(),
+                companion=companion_reader(store),
                 now=NOW,
             ).steps
             if item.id == "boundaries"

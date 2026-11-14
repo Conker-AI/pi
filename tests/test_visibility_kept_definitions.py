@@ -11,6 +11,7 @@ from pi.agents import continuity, definitions, keep, teams
 from pi.agents import profiles as agents
 from pi.agents.team_models import Team
 from pi.api import server as api
+from pi.context import projects
 from pi.conversation import archive, forgetting
 from pi.conversation.store import Store
 from pi.schedule import agent_jobs, jobs
@@ -99,7 +100,9 @@ def make(store, session, label):
 
 def listed(store):
     """What each list shows, called directly."""
-    summaries = definitions.summaries(store, archived=True)["results"]
+    summaries = definitions.summaries(store, archived=True, list_projects=projects.list_projects)[
+        "results"
+    ]
     return {
         "agents": {a["id"] for a in agents.list_agents(store)["results"]},
         "teams": {t.id for t in teams.owner_list(store).results},

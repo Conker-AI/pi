@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import cast
 
-from pi.agents import profiles as agents
 from pi.models import roles as model_roles
 from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
@@ -39,10 +39,9 @@ def _security(store, owner_key_configured):
     return _step("security", state, True, evidence, reason)
 
 
-def _companion(store):
+def _companion(store, read_companion: Callable[[], dict]):
     try:
-        companion = agents.get(store, "companion")
-        agents.AgentInput.model_validate(companion["configuration"])
+        companion = read_companion()
         configured = companion["archived_at"] is None and companion["kind"] == "companion"
     except Exception:
         return _step(

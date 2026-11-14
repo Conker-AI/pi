@@ -7,7 +7,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from pi.content import attachment_turns, attachments, image_input
+from pi.content import attachments, image_input
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -21,6 +21,7 @@ from pi.models.providers import (
     require_images,
 )
 from pi.models.routing import Router
+from pi.turns import attachment_turns
 from pi.turns import context as turn_context
 from pi.turns.loop import Loop
 

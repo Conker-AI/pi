@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from pi.agents import definitions
+from pi.context import projects
 
 
 def router(store, authorize):
@@ -15,6 +16,12 @@ def router(store, authorize):
         search: str = Query(default="", max_length=200),
     ):
         """Agents, teams, templates, skills, cron jobs and projects. Reads only."""
-        return definitions.summaries(store(), kind, archived=archived, search=search)
+        return definitions.summaries(
+            store(),
+            kind,
+            archived=archived,
+            search=search,
+            list_projects=projects.list_projects,
+        )
 
     return routes

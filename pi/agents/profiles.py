@@ -10,15 +10,7 @@ from pydantic import Field, field_validator, model_validator
 
 from pi.conversation import visibility
 from pi.core.errors import ServiceError
-from pi.core.models import Strict
-
-
-def references(values):
-    if any(not value.strip() or value != value.strip() or len(value) > 200 for value in values):
-        raise ValueError("Use nonempty reference IDs of at most 200 characters.")
-    if len(set(values)) != len(values):
-        raise ValueError("Reference IDs must be unique.")
-    return values
+from pi.core.models import Strict, references
 
 
 class MemorySelection(Strict):

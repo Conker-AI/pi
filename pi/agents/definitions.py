@@ -8,12 +8,12 @@ never writes, and it includes nothing a kind's own list would not already show.
 from __future__ import annotations
 
 import json
-from typing import Literal, cast
+from collections.abc import Callable, Iterable
+from typing import Any, Literal, cast
 
 from pydantic import Field
 
 from pi.agents import profiles, skills
-from pi.context import projects
 from pi.conversation import visibility
 from pi.core.models import Strict
 from pi.schedule import jobs
@@ -130,8 +130,8 @@ def _jobs(store):
         }
 
 
-def _projects(store):
-    for project in projects.list_projects(store):
+def _projects(store, list_projects: Callable[[Any], Iterable[dict]]):
+    for project in list_projects(store):
         yield {
             "kind": "project",
             "id": project["id"],
@@ -152,14 +152,25 @@ SOURCES = {
     "template": _collaboration,
     "skill": _skills,
     "job": _jobs,
-    "project": _projects,
 }
 
 
-def summaries(store, kind: str | None = None, *, archived: bool = False, search: str = "") -> dict:
-    """Every saved definition, or one kind, in kind order then by name."""
+def summaries(
+    store,
+    kind: str | None = None,
+    *,
+    archived: bool = False,
+    search: str = "",
+    list_projects: Callable[[Any], Iterable[dict]],
+) -> dict:
+    """Every saved definition, or one kind, in kind order then by name.
+
+    list_projects reads the saved projects (pi.context.projects.list_projects), passed in by the
+    caller so this package does not import the context package.
+    """
     wanted = [kind] if kind else list(KINDS)
-    readers = list(dict.fromkeys(SOURCES[name] for name in wanted))
+    sources = {**SOURCES, "project": lambda s: _projects(s, list_projects)}
+    readers = list(dict.fromkeys(sources[name] for name in wanted))
     needle = search.casefold().strip()
     rows = [
         row

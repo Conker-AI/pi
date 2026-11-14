@@ -5,7 +5,7 @@ import io
 
 from PIL import Image
 
-from pi.models.providers import ImageInput
+from pi.core.images import ImageInput
 
 FORMATS = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}
 

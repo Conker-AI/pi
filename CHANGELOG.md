@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
+  the code unchanged (setup, models, memory, agents, calls, content and schedule no longer reach into each
+  other's modules; `pi.turns.failures` keeps re-exporting what moved to `pi.core`). Behaviour, routes and the
+  OpenAPI documents are unchanged (#253).
+
 - **Docs: calls back into Pi (R-A14).** docs/boundaries.md names the two service cycles (Pi ->
   ToolGate -> Pi `/inference`, Pi -> MemoryGate -> Pi `/inference`), what stops them recursing and
   the known risks (waits that shrink inward, `/inference` running on after its caller left). No

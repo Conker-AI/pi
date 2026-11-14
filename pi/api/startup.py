@@ -261,7 +261,7 @@ async def lifespan(app: FastAPI):
         providers=direct_providers,
         local_model=os.environ.get("PI_MODEL", "qwen3:4b"),
     )
-    from pi.memory.ranking import ConfiguredMemoryRanker
+    from pi.context.memory_ranking import ConfiguredMemoryRanker
 
     memory.ranker = ConfiguredMemoryRanker(store, app.state.router.providers)
     app.state.loop = Loop(
