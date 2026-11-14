@@ -390,7 +390,8 @@ def reserve(
         )
         context_retrieval.reserve(db, request_id, session_id)
         if attachment_ids:
-            from pi.content import attachment_turns, attachments
+            from pi.content import attachments
+            from pi.turns import attachment_turns
 
             try:
                 attachment_turns.reserve(db, request_id, session_id, attachment_ids)
@@ -437,7 +438,7 @@ def fail_preparation(store, request_id, code="preparation_failed"):
             "updated_at=? WHERE request_id=? AND state='preparing'",
             (code, time.time(), request_id),
         )
-        from pi.content import attachment_turns
+        from pi.turns import attachment_turns
 
         terminal = db.execute(
             "SELECT 1 FROM turn_submissions WHERE request_id=? "
@@ -506,7 +507,7 @@ def bind(store, request_id, *, fork_summary=None):
         message = append(
             db, session_id, "user", row["pending_text"], turn_id=turn_id, purpose="input"
         )
-        from pi.content import attachment_turns
+        from pi.turns import attachment_turns
 
         attachment_turns.bind(db, request_id, session_id, message["id"])
         if row["task_id"]:

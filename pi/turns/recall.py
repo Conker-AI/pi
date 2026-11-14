@@ -7,10 +7,10 @@ for the turn (a private chat, a team role) means no search.
 What it found is kept here, not in the chat: messages cannot change, and a memory the owner
 forgets must not live on in an old tool result. The chat keeps a short record (`recallId`, how
 many, whether someone else wrote any of it); the model reads the full result through `expand` when
-the history is built. Forgetting any memory clears every saved result (`clear`, called with the
-other recall caches), and forgetting a chat removes its results (`redact`). A chat forgotten or put
-in the Trash after the search takes its records out of every other chat's saved results each time
-they are read (`expand`); restoring it brings them back.
+the history is built. Forgetting any memory clears every saved result
+(`pi.memory.store.invalidate_recall`), and forgetting a chat removes its results (`redact`). A chat
+forgotten or put in the Trash after the search takes its records out of every other chat's saved
+results each time they are read (`expand`); restoring it brings them back.
 
 A result counts as outside content unless every item is the owner's own words
 (`pi.memory.store.others_wrote`), so a recalled note Conker or an import wrote makes the rest of the
@@ -211,13 +211,6 @@ def _still_shown(store, row, reading=None, agents=()):
     if not any(shown.get(key) for key in _GROUPS):
         return None
     return {**shown, "leftOut": LEFT_OUT}
-
-
-def clear(db) -> int:
-    """A memory was forgotten: no saved search result may still show it."""
-    if not _exists(db):
-        return 0
-    return db.execute("UPDATE recall_results SET package=NULL WHERE package IS NOT NULL").rowcount
 
 
 def redact(db, session_ids):

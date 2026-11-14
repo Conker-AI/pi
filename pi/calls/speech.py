@@ -277,7 +277,7 @@ class SpeechClient:
         self._configured("stt")
         media = mime.split(";", 1)[0].strip().lower() if isinstance(mime, str) else ""
         if media not in WAV_TYPES and self._audio_decoder:
-            from pi.content.audio_decode import DecodeError, decode
+            from pi.calls.audio_decode import DecodeError, decode
 
             try:
                 audio = decode(audio, mime, self._audio_decoder)
@@ -457,7 +457,7 @@ class SpeechClient:
             if mime == "audio/mp3":
                 mime = "audio/mpeg"
             if mime not in WAV_TYPES:
-                from pi.content.audio_decode import decode
+                from pi.calls.audio_decode import decode
 
                 audio = decode(audio, mime, self._audio_decoder)
                 mime = "audio/wav"

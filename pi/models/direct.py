@@ -13,8 +13,8 @@ from typing import cast
 
 import httpx
 
-from pi.actions.evidence import project_tool_evidence
 from pi.conversation import live_stream
+from pi.models.evidence import project_tool_evidence
 from pi.models.providers import Completion, Message, ProviderUnavailable, chat_content
 from pi.turns import inference_control
 

@@ -23,17 +23,11 @@ import httpx
 
 from pi.conversation import citations as message_citations
 from pi.conversation import live_stream
+from pi.core.images import ImageInput
 from pi.core.untrusted_text import strip_invisible
 from pi.models import local_settings
 from pi.models.loopback_http import verification
 from pi.turns import inference_control
-
-
-@dataclass(frozen=True)
-class ImageInput:
-    media_type: str
-    data: str = field(repr=False)
-    attachment_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -197,7 +191,7 @@ class OllamaProvider:
     def complete_bounded(
         self, messages: list[Message], *, model: str, timeout: float
     ) -> Completion:
-        from pi.actions.evidence import project_tool_evidence  # imports Message from here
+        from pi.models.evidence import project_tool_evidence  # imports Message from here
 
         if any(m.role == "tool" for m in messages):
             messages = project_tool_evidence(messages)

@@ -1,1 +1,1 @@
-"""Tool actions through ToolGate: the client, the tool catalogue, action identities and evidence."""
+"""Tool actions through ToolGate: the client, the tool catalogue and action identities."""

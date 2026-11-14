@@ -4,7 +4,6 @@
 actions -> conversation
 actions -> models
 actions -> turns
-agents -> context
 agents -> conversation
 agents -> core
 agents -> models
@@ -25,7 +24,6 @@ api -> schedule
 api -> setup
 api -> turns
 calls -> agents
-calls -> content
 calls -> context
 calls -> conversation
 calls -> core
@@ -33,7 +31,6 @@ calls -> models
 calls -> owner
 content -> conversation
 content -> core
-content -> models
 context -> agents
 context -> content
 context -> conversation
@@ -70,15 +67,9 @@ gateway -> schedule
 gateway -> setup
 host -> actions
 host -> core
-memory -> agents
-memory -> context
 memory -> conversation
 memory -> core
-memory -> models
 memory -> owner
-memory -> turns
-models -> actions
-models -> agents
 models -> conversation
 models -> core
 models -> owner
@@ -88,9 +79,7 @@ schedule -> conversation
 schedule -> core
 schedule -> models
 schedule -> owner
-schedule -> turns
 setup -> actions
-setup -> agents
 setup -> core
 setup -> models
 turns -> actions

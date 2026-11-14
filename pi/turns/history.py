@@ -137,7 +137,8 @@ class History:
                 "reply_excluded",
                 "The reply target is not in selected context; review its context policy.",
             )
-        from pi.content import attachment_turns, attachments
+        from pi.content import attachments
+        from pi.turns import attachment_turns
 
         attached_ids = attachment_turns.attached_message_ids(
             self.store, [row["id"] for row in selected_history]

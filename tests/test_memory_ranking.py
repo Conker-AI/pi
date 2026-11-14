@@ -2,8 +2,8 @@ import json
 
 from test_model_roles import Adapter, config
 
+from pi.context.memory_ranking import ConfiguredMemoryRanker
 from pi.conversation.store import Store
-from pi.memory.ranking import ConfiguredMemoryRanker
 from pi.models import roles as model_roles
 
 

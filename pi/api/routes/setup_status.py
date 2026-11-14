@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
+from pi.agents import profiles as agents
 from pi.core.models import described
 from pi.models.roles import ConfigurationDocument
 from pi.setup import choices as setup_choices
@@ -20,12 +21,20 @@ def router(store, owner_key_configured, memory, toolgate, model_router, speech, 
 
     @routes.get("/status", response_model=status_models.SetupStatus)
     def status():
+        current = store()
+
+        def read_companion():
+            record = agents.get(current, "companion")
+            agents.AgentInput.model_validate(record["configuration"])
+            return record
+
         return setup_status.load(
-            store(),
+            current,
             owner_key_configured=owner_key_configured(),
             memory=memory(),
             toolgate=toolgate(),
             router=model_router(),
+            companion=read_companion,
             speech=speech(),
         )
 
