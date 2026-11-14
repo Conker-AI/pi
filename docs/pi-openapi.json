@@ -8888,6 +8888,9 @@
               }
             }
           },
+          "202": {
+            "description": "Started in the background; read the run until done."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -38341,6 +38344,11 @@
           "conditionReviewed": {
             "type": "boolean",
             "title": "Conditionreviewed",
+            "default": false
+          },
+          "background": {
+            "type": "boolean",
+            "title": "Background",
             "default": false
           }
         },

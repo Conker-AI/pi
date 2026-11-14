@@ -230,6 +230,10 @@ class Step(Strict):
     roleId: str = Field(min_length=1, max_length=64)
     handoffId: str | None = Field(default=None, min_length=1, max_length=64)
     conditionReviewed: bool = False
+    # Answer at once with the run still `running` and poll it; for callers that cannot hold an
+    # HTTP call for a whole role turn (a screen, an @team mention). Not part of the request's
+    # identity: a replay may differ in this flag.
+    background: bool = False
 
 
 class Finish(Strict):
