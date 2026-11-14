@@ -5,7 +5,9 @@ browser's Inbox or the `conker` CLI. Pi grants nothing here: Do it replays the e
 and ToolGate checks his approval as it is spent. A "no" only ever closes: the action never runs,
 the chat records that he said no, and the chat takes messages again. Words he wrote with it
 (Change) become his next message in that chat, so whatever Conker does next passes every access
-layer again. An answer to one of Conker's questions arrives the same way (`deliver`).
+layer again. Words that arrive after the turn already ended (Pi ended it as expired, or the chat
+took it first) are kept as that chat's draft instead. An answer to one of Conker's questions
+arrives the same way (`deliver`).
 """
 
 from __future__ import annotations
@@ -146,11 +148,28 @@ def keep_unsent(store, session_id, text) -> bool:
         return False
 
 
+def _too_late(store, request_id, status, note) -> dict:
+    """His Change words for a turn that already ended (Pi ended it as expired, or the chat took it
+    first) are kept as that chat's draft: never sent for him, never lost."""
+    words = (note or "").strip()
+    if status == "approved" or not words:
+        return {"continued": "nothing_waiting"}
+    with store._connect() as db:
+        row = db.execute(
+            "SELECT session_id FROM turns WHERE approval_request_id=? "
+            "AND status!='awaiting_approval' ORDER BY started_at DESC LIMIT 1",
+            (request_id,),
+        ).fetchone()
+    if row is None or not keep_unsent(store, row["session_id"], words):
+        return {"continued": "nothing_waiting"}
+    return {"continued": "kept_as_draft", "sessionId": row["session_id"]}
+
+
 def decided(loop, request_id, status, note="", *, resume_run=None, cancel_run=None) -> dict:
     """Continue whatever waits on this request after his decision in ToolGate."""
     found = waiting(loop.store, request_id)
     if found is None:
-        return {"continued": "nothing_waiting"}
+        return _too_late(loop.store, request_id, status, note)
     kind, target = found
     if kind == "run":
         if status == "approved":
@@ -167,7 +186,7 @@ def decided(loop, request_id, status, note="", *, resume_run=None, cancel_run=No
         return {"continued": "running", **receipt}
     words = (note or "").strip()
     if not close(loop.store, target, words):
-        return {"continued": "nothing_waiting"}
+        return _too_late(loop.store, request_id, status, words)
     if words:
         background(lambda: deliver(loop, target["session_id"], words, f"change-{target['id']}"))
         return {"continued": "your_words", **receipt}

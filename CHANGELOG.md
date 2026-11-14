@@ -28,6 +28,14 @@ be a decision with visible consequences.
   `GET /memory/forget/{id}` answer 404 for a memory from a hidden chat, and a correction to one is
   refused (404), like the memory explorer. Forgetting it is still allowed.
 
+- A tool cron job's run waiting on an approval that expired unanswered is cancelled by the decision sweep (its card withdrawn), so the job runs again instead of being held for good (hunt2 sweep-F1).
+
+- The owner's Change words that arrive after Pi already ended the turn (expired, or the chat took it first) are kept as that chat's draft instead of being dropped (hunt2 sweep-F2, late-answer part).
+
+- The decision sweep keeps each request's grace and try count while it waits, even when more requests wait than one pass reads, so a failing resume is tried at most 3 times (hunt2 sweep-F3).
+
+- Expiry looks only at the requests this pass read from ToolGate as pending, so turns that wait for ever (a zone-less expiry) no longer keep newer expired ones from ending (hunt2 sweep-F4).
+
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
