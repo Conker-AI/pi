@@ -8,6 +8,7 @@ quiet hours). Code: `pi/models/spending_cap.py`.
 - OpenRouter models that are not listed as free, when paid models are on
   (`PI_ALLOW_PAID_MODELS`). If the catalogue cannot be read, the call counts as paid.
 - The direct-key providers (OpenAI, Anthropic, Gemini, xAI, Mistral, DeepSeek, Groq).
+- Helper calls outside a turn go through the same adapters, so they are counted and stopped too, for example [prompt enhance](prompt-enhance.md).
 - Not counted: voice (`PI_SPEECH_KEY`), subscriptions (ChatGPT, Claude: flat-rate, shown as plan usage), local models
   (Ollama) and free OpenRouter models.
 
