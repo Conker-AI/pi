@@ -14,12 +14,12 @@ from test_tool_turns import CALL, FakeGate
 
 from pi.context import research_usage
 from pi.conversation.store import Store
+from pi.models import inference_control, routing_memo
 from pi.models import roles as model_roles
 from pi.models.decision import DecisionProvider
 from pi.models.providers import Completion, Message, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns import control as turn_control
-from pi.turns import inference_control, routing_memo
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 from pi.turns.failures import ActedWithoutReply

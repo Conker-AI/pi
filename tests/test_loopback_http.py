@@ -13,10 +13,10 @@ import pytest
 from gateway.__main__ import create_certificate
 from pi.actions.toolgate import ToolGateClient, ToolGateUnavailable
 from pi.conversation import live_stream
+from pi.models import inference_control
 from pi.models.decision import DecisionProvider
 from pi.models.loopback_http import verification
 from pi.models.providers import Message, OllamaProvider, ProviderUnavailable
-from pi.turns import inference_control
 
 
 @pytest.mark.parametrize("url", ["http://127.0.0.1:8000/base", "http://[::1]:8000/base"])

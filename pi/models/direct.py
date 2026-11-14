@@ -14,6 +14,7 @@ from typing import cast
 import httpx
 
 from pi.conversation import live_stream
+from pi.models import inference_control
 from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
     Completion,
@@ -22,7 +23,6 @@ from pi.models.providers import (
     chat_content,
     reported_count,
 )
-from pi.turns import inference_control
 
 _count = reported_count
 

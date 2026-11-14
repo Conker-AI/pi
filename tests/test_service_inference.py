@@ -10,10 +10,9 @@ from fastapi.testclient import TestClient
 
 from pi.api import server as api
 from pi.conversation.store import Store
-from pi.models import providers, service_inference
+from pi.models import inference_control, providers, service_inference
 from pi.models import roles as model_roles
 from pi.models.providers import Completion, ProviderUnavailable
-from pi.turns import inference_control
 
 MEMORYGATE, TOOLGATE, OWNER = "memorygate-key-synthetic", "toolgate-key-synthetic", "owner-key"
 PROMPT = "Sort this private memory: the owner likes tea"

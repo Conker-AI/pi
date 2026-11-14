@@ -10,10 +10,10 @@ import pytest
 from test_background_thinking import setup
 
 from pi.conversation.store import Store
+from pi.models import inference_control
 from pi.models.chatgpt import ChatGPTProvider
 from pi.models.claude_code import ClaudeCodeProvider
 from pi.models.providers import Completion, Message, OllamaProvider, ProviderUnavailable
-from pi.turns import inference_control
 from pi.turns import thinking as background_thinking
 
 

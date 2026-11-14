@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, cast
 import httpx
 
 from pi.conversation import live_stream
+from pi.models import inference_control
 from pi.models.providers import Completion, ProviderUnavailable, require_images
-from pi.turns import inference_control
 
 if TYPE_CHECKING:
-    from pi.turns.inference_control import Token
+    from pi.models.inference_control import Token
 
 ERRORS: dict[object, str] = {
     "not_connected": "Sign in with ChatGPT in Settings > Providers.",

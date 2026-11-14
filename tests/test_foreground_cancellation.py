@@ -11,9 +11,10 @@ from test_loop import Recorder, loop_with
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
 from pi.conversation.store import Store
+from pi.models import inference_control
 from pi.models.providers import OllamaProvider, ProviderUnavailable
 from pi.turns import control as turn_control
-from pi.turns import foreground_inference, inference_control
+from pi.turns import foreground_inference
 from pi.turns.failures import TurnFailed
 
 

@@ -264,7 +264,7 @@ class Loop(ModelCalls, History, Replies):
         return result
 
     def _run_bound(self, session_id, user_text, turn_id, context, forked_from, continued=False):
-        from pi.turns import routing_memo
+        from pi.models import routing_memo
 
         turn_steering.active(self.store, turn_id, True)
         started = time.monotonic()
@@ -328,7 +328,7 @@ class Loop(ModelCalls, History, Replies):
         ctx = TurnContext(history_chars=history_size(history), **context)
 
         try:
-            from pi.turns import inference_control
+            from pi.models import inference_control
 
             local_keys = background_thinking.foreground_local_keys(self, execution)
             with inference_control.foreground_intent(local_keys):

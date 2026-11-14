@@ -109,7 +109,7 @@ no memory (`pi/models/` never calls ToolGate or MemoryGate), and each service ma
 role (`service_inference.py:31`). So the depth is fixed at two hops; nothing can call `/inference`
 again from inside it. Each service has at most 4 calls in flight (`service_inference.py:38`); the
 fifth is told to try again (503). MemoryGate's calls run in the background lane, which a reply can
-preempt (`pi/turns/inference_control.py:166`). The turn holds no local-model slot and no database
+preempt (`pi/models/inference_control.py:166`). The turn holds no local-model slot and no database
 transaction while it waits on ToolGate. No service calls another at startup; compose start order
 (`depends_on`) has no cycle.
 

@@ -30,7 +30,8 @@ import unicodedata
 from pi.actions.toolgate import ToolGateUnavailable
 from pi.agents import asks, draft_capabilities, tool_drafts
 from pi.conversation import submissions
-from pi.turns import answers, inference_control, native_tools
+from pi.models import inference_control
+from pi.turns import answers, native_tools
 
 log = logging.getLogger(__name__)
 
