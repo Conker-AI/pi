@@ -68,10 +68,8 @@ gateway -> schedule
 gateway -> setup
 host -> actions
 host -> core
-memory -> context
 memory -> conversation
 memory -> core
-memory -> models
 memory -> owner
 models -> actions
 models -> conversation
