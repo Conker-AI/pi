@@ -78,7 +78,6 @@ memory -> models
 memory -> owner
 memory -> turns
 models -> actions
-models -> agents
 models -> conversation
 models -> core
 models -> owner

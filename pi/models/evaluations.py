@@ -11,8 +11,8 @@ from typing import Any, Literal, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from pi.agents import profiles as agents
-from pi.core.models import Strict
+from pi.core.errors import ServiceError
+from pi.core.models import Strict, references
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
 
@@ -28,12 +28,14 @@ class Case(Strict):
     @field_validator("name", "prompt")
     @classmethod
     def text(cls, value):
-        return agents.AgentInput.text(value)
+        if not value.strip():
+            raise ValueError("Provide nonempty text.")
+        return value.strip()
 
     @field_validator("candidateIds", "expectedIds")
     @classmethod
     def ids(cls, value):
-        return agents.references(value)
+        return references(value)
 
     @field_validator("requiredFacts")
     @classmethod
@@ -72,7 +74,12 @@ class Run(Strict):
     expected_configuration_revision: int = Field(ge=1)
 
 
-class EvaluationError(agents.AgentError):
+class Archive(Strict):
+    expected_revision: int = Field(ge=1)
+    archived: bool
+
+
+class EvaluationError(ServiceError):
     pass
 
 
@@ -191,7 +198,7 @@ def save_case(store, definition, identity=None, revision=None):
 
 
 def archive_case(store, identity, request):
-    request = agents.ArchiveAgent.model_validate(request.model_dump())
+    request = Archive.model_validate(request.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         current = _case(db, identity, request.expected_revision)
