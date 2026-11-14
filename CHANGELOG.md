@@ -6,10 +6,29 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
 
+- One contract test for every HTTP model adapter (OpenRouter, OpenAI, Gemini, xAI, Mistral, DeepSeek, Groq, Anthropic, Ollama): answer shape, reported token counts, cut answers, refusals that leak no key, vendor body or prompt, malformed answers, no redirects or proxies (pi#258). It found two gaps, now fixed: OpenRouter and Ollama kept token counts that were not non-negative integers (the daily cap counts them) and crashed instead of refusing on a body that was not an object; one `reported_count` rule now serves all adapters.
 - `GET /insights/tomorrow?hours=24` (owner, pi#257): what Conker will start on its own soon, read-only: jobs the clock fires (next time, how many slots, held while a parked run waits for his answer), watched jobs, and parked approvals that run out in the window. Never his words or tool arguments; hidden chats are left out.
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
+
+- **Hidden chats, hunt 2 (vis-F1).** A fork whose context rules name a message it inherited from a
+  parent now in the Trash answers again (the message and its rule are left out, not
+  `missing_message`); restoring the parent brings both back.
+
+- **Hidden chats, hunt 2 (vis-F2).** Inbox Handled leaves out hidden chats and hidden kept jobs
+  before its 50-row limit, so a trashed busy chat no longer pushes visible work out.
+
+- **Hidden chats, hunt 2 (vis-F3).** Inbox impact counts (answers, actions, tasks, jobs, cost)
+  follow the one visibility rule: chats in the Trash, chats made from a hidden chat and runs of a
+  hidden kept job are not counted (before, only forgotten chats were left out).
+
+- **Hidden chats, hunt 2 (vis-F4).** Restoring the chat of an AI job Conker kept while the chat it
+  was kept from is still in the Trash is refused (`restore_parent_first`), as for forks.
+
+- **Hidden chats, hunt 2 (vis-F5).** `GET /memory-edits/memories/{id}` and
+  `GET /memory/forget/{id}` answer 404 for a memory from a hidden chat, and a correction to one is
+  refused (404), like the memory explorer. Forgetting it is still allowed.
+
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
@@ -53,6 +72,7 @@ be a decision with visible consequences.
   the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
   forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
   `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
+- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
 
 ## 0.25.0
 

@@ -179,7 +179,8 @@ def resolve(store, session_id, request_id, providers):
                 "selection_budget",
                 "Select at most 200 candidate messages; no candidates were silently dropped.",
             )
-        rows = {row["id"]: row for row in context_controls.history(store, session_id)}
+        known, hidden_ids = context_controls.history_and_hidden(store, session_id)
+        rows = {row["id"]: row for row in known}
         with store._connect() as db:
             submission = db.execute(
                 "SELECT pending_text,state,history_seq FROM turn_submissions WHERE "
@@ -231,7 +232,7 @@ def resolve(store, session_id, request_id, providers):
             )
         # Check the fixed portion first. A helper can never repair an over-budget pin.
         fixed = context_controls.select_history(
-            receipt["policy"], list(rows.values()), retrieved_ids=[]
+            receipt["policy"], list(rows.values()), retrieved_ids=[], hidden_ids=hidden_ids
         )
         fixed_messages = [Message(row["role"], str(row["content"])) for row in fixed]
         fixed_messages += [

@@ -80,7 +80,7 @@ def router(store, client, companion, authorize):
 
     @routes.get("/memories/{identity}", responses=described(replies.MemoryCorrectionPreview))
     def preview(identity: str):
-        return edits.preview(scoped_client(), identity)
+        return edits.preview(scoped_client(), identity, store())
 
     @routes.post("", responses=described(replies.MemoryCorrectionStatus))
     def apply(body: edits.Apply):

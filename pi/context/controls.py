@@ -179,13 +179,19 @@ def estimate(text):
     return math.ceil(len(text.encode("utf-8")) / 4) + 4 if text else 0
 
 
-def select_history(policy, rows, retrieved_ids=None):
-    """No silent compaction. Retrieve needs a separate authorized selection result."""
+def select_history(policy, rows, retrieved_ids=None, hidden_ids=frozenset()):
+    """No silent compaction. Retrieve needs a separate authorized selection result.
+
+    `hidden_ids` are inherited messages `history` left out because their chat is hidden
+    (forgotten or in the Trash): a rule naming one is skipped, not an error, so the fork still
+    answers; restoring the chat brings the message and its rule back."""
     if not policy:
         return rows
     value = Policy.model_validate(policy)
     by_id = {row["id"]: row for row in rows}
     for identity, mode in value.messagePolicies.items():
+        if identity in hidden_ids and identity not in by_id:
+            continue
         if identity not in by_id:
             raise ContextError("missing_message", "Context refers to an unavailable message.")
         if mode == "retrieve" and retrieved_ids is None:
@@ -248,6 +254,11 @@ def redact(db, session_ids):
 
 def history(store, identity):
     """Resolve inherited exact pins by original identity, never transcript copies."""
+    return history_and_hidden(store, identity)[0]
+
+
+def history_and_hidden(store, identity):
+    """`history` and the ids of inherited messages it left out because their chat is hidden."""
     with store._connect() as db:
         inherited = db.execute(
             "SELECT message_id FROM context_inherited_messages "
@@ -257,9 +268,10 @@ def history(store, identity):
         rows = [store.get_message(item[0]) for item in inherited]
         # A pin from a forgotten or trashed chat is left out, not an error: restoring brings it back.
         gone = visibility.hidden(db, {row["session_id"] for row in rows if row}) - {identity}
-    kept = []
+    kept, hidden_ids = [], set()
     for row in rows:
         if row is not None and row["session_id"] in gone:
+            hidden_ids.add(row["id"])
             continue
         if row is None or row.get("content_status") == "forgotten":
             raise ContextError("unavailable_pin", "An inherited source was forgotten.")
@@ -278,7 +290,7 @@ def history(store, identity):
             if row["id"] in covered_set:
                 result[i] = dict(row)  # Copy to avoid mutating shared objects
                 result[i]["covered"] = True
-        return result
+        return result, frozenset(hidden_ids)
 
 
 def cancelled_input_ids(store, rows):
