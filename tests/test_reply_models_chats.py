@@ -15,13 +15,13 @@ from starlette.routing import Match
 from test_loop import Recorder, loop_with
 from test_response_versions import alternative
 
-from pi.actions import identities
 from pi.api import server as api
 from pi.context import context_replies as context
 from pi.conversation import chat_replies as chats
 from pi.conversation import session_replies as sessions
 from pi.conversation.store import Store
 from pi.memory import store as memory_store
+from pi.turns import action_identities as identities
 
 MODELS = {
     ("GET", "/sessions/{session_id}"): sessions.ChatSessionDocument,

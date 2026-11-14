@@ -34,8 +34,8 @@ import time
 from dataclasses import dataclass
 from typing import cast
 
-from pi.actions import identities as actions
 from pi.actions.toolgate import ToolResult
+from pi.turns import action_identities as actions
 
 log = logging.getLogger(__name__)
 

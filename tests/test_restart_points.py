@@ -12,12 +12,12 @@ import pytest
 from test_loop import Recorder, loop_with
 from test_tool_turns import CALL, FakeGate, Scripted, build
 
-from pi.actions import identities as actions
 from pi.actions.toolgate import ToolResult
 from pi.agents import change_requests
 from pi.conversation import forgetting, submissions
 from pi.conversation.store import Store
 from pi.models.routing import Router
+from pi.turns import action_identities as actions
 from pi.turns import control as turn_control
 from pi.turns import restart
 from pi.turns.failures import TurnFailed

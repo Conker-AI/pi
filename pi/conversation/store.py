@@ -25,7 +25,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from pi.actions import identities as actions
 from pi.actions import tool_forgets
 from pi.agents import profiles as agents
 from pi.calls import call_turns
@@ -40,6 +39,7 @@ from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
 from pi.core import migrations
 from pi.core.version import VERSION
 from pi.owner import preferences as owner_preferences
+from pi.turns import action_identities as actions
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering

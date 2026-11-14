@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from test_memory_forget import BODY, client, forgotten
 
-from pi.actions import identities as actions
 from pi.api import browser_contract
 from pi.context import controls as context_controls
 from pi.conversation import drafts, forgetting, submissions
@@ -22,6 +21,7 @@ from pi.memory import store as memory_store
 from pi.memory.service import Memory
 from pi.models.providers import Message
 from pi.models.routing import Router
+from pi.turns import action_identities as actions
 from pi.turns import context as turn_context
 from pi.turns.loop import Loop
 
