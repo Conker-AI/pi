@@ -228,6 +228,22 @@ def test_a_chat_in_the_trash_when_the_change_finishes_gets_its_notice_on_restore
     assert stored(store)[0][0] == "Memory changed"
 
 
+def test_a_revision_that_is_not_an_int_files_nothing(setup):
+    store, _, _ = setup
+    use(store, store.create_session())
+    with store._connect() as db:
+        for bad in (None, "3", True):
+            filed = recall_notices.file(
+                db,
+                request_id="bad_revision_00000001",
+                memory_id="mem-1",
+                change="corrected",
+                revision=bad,  # type: ignore[arg-type]
+            )
+            assert filed is False
+    assert stored(store) == []
+
+
 def test_filing_twice_for_one_request_keeps_one_notice(setup):
     store, _, _ = setup
     use(store, store.create_session())

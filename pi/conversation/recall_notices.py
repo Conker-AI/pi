@@ -55,8 +55,11 @@ def file(
     The caller owns the transaction, so the notice is saved with the change itself."""
     if change not in CHANGES:
         raise ValueError("unknown memory change")
-    if not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_uses'").fetchone():
-        return False
+    if (
+        type(revision) is not int
+        or not db.execute("SELECT 1 FROM sqlite_master WHERE name='memory_uses'").fetchone()
+    ):
+        return False  # both callers hold an int (NOT NULL column); never a notice the read skips
     at = time.time() if now is None else now
     # Existence only: a chat in the Trash when the change finishes still counts, so its notice
     # appears once the chat is restored. A forgotten chat's rows are already deleted, and who may
