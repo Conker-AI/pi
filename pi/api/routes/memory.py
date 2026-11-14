@@ -11,6 +11,7 @@ from pi.memory import beliefs as memory_beliefs
 from pi.memory import forget as memory_forget
 from pi.memory import memory_replies as replies
 from pi.memory import stated as stated_memory
+from pi.memory import upkeep as memory_upkeep
 
 
 def router(app_state, require_key, require_owner):
@@ -84,6 +85,23 @@ def router(app_state, require_key, require_owner):
                 "limit": limit,
                 "after": after,
             },
+        )
+
+    @routes.get(
+        "/memory/upkeep",
+        dependencies=[Depends(require_owner)],
+        responses=described(memory_upkeep.UpkeepPage),
+    )
+    def list_upkeep(
+        unused_days: int = Query(default=90, ge=1, le=3650),
+        limit: int = Query(default=50, ge=1, le=500),
+    ):
+        """Upkeep candidates (duplicates, open contradictions, expired, not recalled), read only.
+
+        A candidate naming a memory with a forget pending or done, or one made from a hidden chat,
+        is left out whole; each kind's `total` drops only by the items left out of this reply."""
+        return memory_upkeep.upkeep(
+            app_state().memory, {"unused_days": unused_days, "limit": limit}
         )
 
     @routes.get("/memory", dependencies=[Depends(require_key)])

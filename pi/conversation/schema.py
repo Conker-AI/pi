@@ -22,7 +22,14 @@ from pi.calls import runtime as calls
 from pi.content import artifacts, attachments
 from pi.context import compaction as context_compaction
 from pi.context import controls as context_controls
-from pi.context import decisions, project_context, projects, research_usage, universal_search
+from pi.context import (
+    decisions,
+    open_loops,
+    project_context,
+    projects,
+    research_usage,
+    universal_search,
+)
 from pi.context import retrieval as context_retrieval
 from pi.context import summaries as context_summaries
 from pi.conversation import (
@@ -161,6 +168,7 @@ def install(db):
     db.executescript(naming.SCHEMA)
     db.executescript(archive.SCHEMA)
     db.executescript(decisions.SCHEMA)
+    db.executescript(open_loops.SCHEMA)
 
 
 SCHEMA = """

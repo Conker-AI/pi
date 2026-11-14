@@ -9661,6 +9661,285 @@
         }
       }
     },
+    "/open-loops": {
+      "get": {
+        "summary": "List Open Loops",
+        "description": "Promises in visible chats, soonest due first and undated last (read only).\n\n`today` is the owner's local date, in the zone the quiet hours use; `overdue` compares\nan open loop's due date with it.",
+        "operationId": "list_open_loops_open_loops_get",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "done",
+                "dropped",
+                "all"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "State"
+            }
+          },
+          {
+            "name": "due_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Due Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add Open Loop",
+        "description": "File one promise for a visible chat, optionally pointing at one of its messages.",
+        "operationId": "add_open_loop_open_loops_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoopAdd"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open-loops/{loop_id}/state": {
+      "post": {
+        "summary": "Change Open Loop State",
+        "description": "Mark a promise done, dropped or open again, also in a forked or closed chat.",
+        "operationId": "change_open_loop_state_open_loops__loop_id__state_post",
+        "parameters": [
+          {
+            "name": "loop_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Loop Id"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoopState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/archive": {
       "post": {
         "summary": "Archive Chats",
@@ -20338,6 +20617,93 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BeliefPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/upkeep": {
+      "get": {
+        "summary": "List Upkeep",
+        "description": "Upkeep candidates (duplicates, open contradictions, expired, not recalled), read only.\n\nA candidate naming a memory with a forget pending or done, or one made from a hidden chat,\nis left out whole; each kind's `total` drops only by the items left out of this reply.",
+        "operationId": "list_upkeep_memory_upkeep_get",
+        "parameters": [
+          {
+            "name": "unused_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 90,
+              "title": "Unused Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpkeepPage"
                 }
               }
             }
@@ -32750,6 +33116,249 @@
         ],
         "title": "LinkSnapshot"
       },
+      "Loop": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "sessionTitle": {
+            "type": "string",
+            "title": "Sessiontitle"
+          },
+          "messageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messageid"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "promisedBy": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "conker"
+            ],
+            "title": "Promisedby"
+          },
+          "dueOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dueon"
+          },
+          "overdue": {
+            "type": "boolean",
+            "title": "Overdue"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done",
+              "dropped"
+            ],
+            "title": "State"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "createdAt": {
+            "type": "number",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "number",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "sessionId",
+          "sessionTitle",
+          "messageId",
+          "quote",
+          "text",
+          "promisedBy",
+          "dueOn",
+          "overdue",
+          "state",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "Loop"
+      },
+      "LoopAdd": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "title": "Session Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "promised_by": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "conker"
+            ],
+            "title": "Promised By",
+            "default": "owner"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,200}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "text"
+        ],
+        "title": "LoopAdd"
+      },
+      "LoopPage": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "title": "Today"
+          },
+          "timeZone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextAfter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextafter"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "today",
+          "timeZone",
+          "items",
+          "nextAfter"
+        ],
+        "title": "LoopPage"
+      },
+      "LoopReceipt": {
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "title": "LoopReceipt"
+      },
+      "LoopState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done",
+              "dropped"
+            ],
+            "title": "State"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483646.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "LoopState"
+      },
       "Mapping": {
         "properties": {
           "hostAddress": {
@@ -38504,6 +39113,169 @@
           "definition"
         ],
         "title": "UpdateTemplate"
+      },
+      "UpkeepItem": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ids"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "conflictId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflictid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids",
+          "reason"
+        ],
+        "title": "UpkeepItem"
+      },
+      "UpkeepKind": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpkeepItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "UpkeepKind"
+      },
+      "UpkeepMemory": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "memoryType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorytype"
+          },
+          "sourceType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcetype"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "needs_review"
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "revision",
+          "memoryType",
+          "sourceType",
+          "state"
+        ],
+        "title": "UpkeepMemory"
+      },
+      "UpkeepPage": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "checkedAt": {
+            "type": "string",
+            "title": "Checkedat"
+          },
+          "memoriesChecked": {
+            "type": "integer",
+            "title": "Memorieschecked"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "exactDuplicates": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "nearDuplicates": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "contradictions": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "expired": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "notRecalled": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "memories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/UpkeepMemory"
+            },
+            "type": "object",
+            "title": "Memories"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "checkedAt",
+          "memoriesChecked",
+          "truncated",
+          "exactDuplicates",
+          "nearDuplicates",
+          "contradictions",
+          "expired",
+          "notRecalled"
+        ],
+        "title": "UpkeepPage"
       },
       "Usage": {
         "properties": {

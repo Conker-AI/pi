@@ -6,6 +6,29 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Docs: calls back into Pi (R-A14).** docs/boundaries.md names the two service cycles (Pi ->
+  ToolGate -> Pi `/inference`, Pi -> MemoryGate -> Pi `/inference`), what stops them recursing and
+  the known risks (waits that shrink inward, `/inference` running on after its caller left). No
+  code change.
+
+- **Open loops (R-M7).** A new table `open_loops` and three owner routes: `GET /open-loops`
+  (`LoopPage`; browser read) lists promises across visible chats, soonest due first and undated
+  last, with the owner's `today` and an `overdue` flag; `POST /open-loops` (`LoopAdd`) files one
+  for a chat, optionally pointing at one of its messages; `POST /open-loops/{id}/state`
+  (`LoopState`) marks it done, dropped or open again, also when its chat is forked or closed. A
+  loop in a forgotten or trashed chat is neither listed nor changed, and forgetting the chat
+  deletes it. The writes take the recovery key until the dashboard has a screen. No migration (a
+  new table). docs/open-loops.md. (#251)
+
+- **Memory upkeep candidates (read-only).** `GET /memory/upkeep` (owner session) passes on
+  MemoryGate's upkeep list in camelCase as `UpkeepPage`. It holds exact and near duplicates, open
+  contradictions, expired memories and ones not recalled for `unused_days` (1-3650, default 90),
+  at most `limit` per kind (1-500, default 50). Each listed memory comes with its words and
+  revision, so Fix and Forget can use the existing routes. A candidate that names a memory with a
+  forget pending or done, or one made from a hidden chat, is left out whole, and that kind's
+  `total` drops by those items. MemoryGate missing or silent is 503 `memory_unavailable`. A
+  MemoryGate without the words (before memorygate#103) still answers, with no `memories`.
+
 - **What Conker believes about you (read-only).** `GET /memory/beliefs` (owner session) lists one
   page of MemoryGate's memory-beliefs list (MemoryGate 0.9.0, memorygate#101) in camelCase as
   `BeliefPage`: origin (stated or concluded), confidence, evidence counts, lineage and open
@@ -14,6 +37,11 @@ be a decision with visible consequences.
 - Type check: the pyright baseline goes from 341 to 27 errors with type-only edits (annotations,
   casts, NoReturn on helpers that always raise, route path aliases at module scope). Behaviour and
   the OpenAPI documents are unchanged (#247).
+- **History looks up named chats** (`pi/conversation/history.py`). `GET /sessions/history`
+  takes an optional `ids=` (comma-separated, at most 50), so Home's "Jump back in" can ask for
+  the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
+  forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
+  `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
 
 ## 0.25.0
 

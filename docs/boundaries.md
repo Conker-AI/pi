@@ -1,6 +1,6 @@
-# Boundaries: turn states, who may call what, Pi and MemoryGate
+# Boundaries: turn states, who may call what, Pi and MemoryGate, calls back into Pi
 
-One page for three things that were spread over many (A-07). Details stay in the linked pages.
+One page for four things that were spread over many (A-07). Details stay in the linked pages.
 
 ## A turn's states
 
@@ -78,3 +78,53 @@ allowlist says no, and expects a refusal, so a new route cannot be reachable by 
 - **Forgetting crosses it once.** Forgetting a chat turns its outbox entries into deletions in the
   same transaction, and what Conker kept in MemoryGate on its own is forgotten there once Pi runs
   again ([forgetting.md](forgetting.md)).
+
+## Calls back into Pi (the service loop)
+
+Pi calls ToolGate and MemoryGate, and both call Pi back for model text (`POST /inference`,
+[inference.md](inference.md)). So the service graph has two cycles. They exist so the owner picks
+every model in one place (Settings, Models). Line numbers are as of this page's commit.
+
+**Loop 1, synchronous: Pi turn -> ToolGate -> Pi `/inference`.**
+
+| Step | Code | Wait |
+| --- | --- | --- |
+| A turn invokes a tool | `pi/turns/loop.py:431` -> `pi/actions/toolgate.py:356` | `PI_TOOLGATE_TIMEOUT_S`, 120 s (`pi/api/startup.py:159`) |
+| An `ollama_generate` tool asks Pi for text | `toolgate/api/dispatch.py:183` -> `toolgate/executors/pi_inference.py:44` | 180 s (`pi_inference.py:20`) |
+| Pi answers with the `tool-text` role | `pi/api/routes/inference.py:28` -> `pi/models/service_inference.py:288` | role wait x tries (`service_inference.py:315`); 300 s per try until the owner sets one (`pi/models/roles.py:50`) |
+
+Only when `TOOLGATE_PI_URL` and `TOOLGATE_PI_SERVICE_KEY` are set; every Conker layout sets them.
+The turn waits in its request thread while ToolGate waits on Pi.
+
+**Loop 2, asynchronous: Pi -> MemoryGate -> Pi `/inference`.** Pi's outbox worker delivers owner
+messages (`pi/memory/service.py:182`) and turns read context (`service.py:229`). Neither waits on a
+model. In MemoryGate (paths under `services/api/app/`) its own worker analyses evidence later
+(`services/processing_worker.py:133`) and asks Pi's `memory-sorting` role
+(`services/ollama_service.py:25` -> `services/pi_inference.py:75`, 90 s). Its `POST /runtime/ask`
+also asks Pi (`routes/runtime.py:320`), but no Pi path calls it, and ToolGate refuses every
+`memorygate` tool with `operation: ask` (`toolgate/api/invocation.py:402`).
+
+**What stops recursion.** `/inference` is a leaf: it calls a model provider only, with no tools and
+no memory (`pi/models/` never calls ToolGate or MemoryGate), and each service may use only its own
+role (`service_inference.py:31`). So the depth is fixed at two hops; nothing can call `/inference`
+again from inside it. Each service has at most 4 calls in flight (`service_inference.py:38`); the
+fifth is told to try again (503). MemoryGate's calls run in the background lane, which a reply can
+preempt (`pi/turns/inference_control.py:166`). The turn holds no local-model slot and no database
+transaction while it waits on ToolGate. No service calls another at startup; compose start order
+(`depends_on`) has no cycle.
+
+**Health crosses too, and ends.** ToolGate's `/health` probes Pi's `/health`
+(`toolgate/api/routes/health.py:118`); Pi's `/health` asks ToolGate `GET /v2/agent/status`
+(`pi/api/server.py:388`), which calls nothing. Pi caches its result for 5 s, ToolGate for 15 s.
+
+**Known risks.**
+- The waits shrink inward: Pi gives up on ToolGate at 120 s, ToolGate on Pi at 180 s, Pi's model
+  call may run 300 s or more. When the turn gives up it parks as `outcome_unknown` (it does not
+  hang, and resuming asks ToolGate about the same action). ToolGate records its own Pi failure as
+  an unknown outcome too. Pi's `/inference` does not notice that its caller left: it keeps the
+  model, and on a local model the one local slot, busy until the role's wait ends.
+- A turn and `/inference` share Pi's request threads (one process, Starlette's default pool of
+  40). If every thread held a turn waiting on an AI tool, `/inference` would wait for a thread
+  until the 120 s timeout. One owner does not reach that, and the 4-call limit keeps
+  `/inference` from filling the pool.
+- A slow model makes an AI tool slow: a turn that calls one can wait up to 120 s.

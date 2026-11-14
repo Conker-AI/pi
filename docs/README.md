@@ -9,7 +9,7 @@ What works end to end in a real deployment is tracked in Conker's
 | | |
 |---|---|
 | [Turns: acting, recording and status](turns.md) | Approvals, `acted_no_reply`, interrupted turns, status words |
-| [Boundaries](boundaries.md) | A turn's states, the three credentials, Pi and MemoryGate |
+| [Boundaries](boundaries.md) | A turn's states, the three credentials, Pi and MemoryGate, calls back into Pi |
 | [Model routing and roles](routing.md) | Which model answers, why, and the helper roles |
 | [Model catalogue and roles](model-roles.md) | Role assignments and adapters |
 | [Model calls for services](inference.md) | MemoryGate and ToolGate use the owner's model roles |
@@ -33,6 +33,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Chat suggestions](chat-suggestions.md) | Jev's next-message suggestions |
 | [Prepared context](turn-context.md) · [Context controls](context-controls.md) · [Context selection](context-retrieval.md) · [Summaries](context-summaries.md) | What the model is given |
 | [Decisions and open threads](decisions.md) | What was decided and what is still open |
+| [Open loops](open-loops.md) | Promises across chats: who promised, by when, done or not |
 
 ## Memory and forgetting
 
