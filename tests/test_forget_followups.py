@@ -12,6 +12,7 @@ import threading
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import httpx
 import pytest
 from test_tool_turns import FakeGate, build
 
@@ -288,3 +289,80 @@ def test_pis_health_says_what_a_forgotten_chat_still_owes(forgotten, monkeypatch
     check = api.health()["checks"]["forget_followups"]
     assert check["status"] == "degraded" and check["approvalWithdrawals"] == 1
     assert "req_1" not in json.dumps(check) and "mem_kept" not in json.dumps(check)
+
+
+class Failing(Corrections):
+    """A memory client whose read or forget fails the way MemoryGate or the network can."""
+
+    def __init__(self, read=None, write=None, receipt=None):
+        super().__init__(revision=2)
+        self.read, self.write, self.receipt = read, write, receipt
+
+    def memory(self, identity):
+        if self.read is not None:
+            raise self.read
+        return super().memory(identity)
+
+    def forget(self, identity, memory_id, revision):
+        if self.write is not None:
+            raise self.write
+        receipt = super().forget(identity, memory_id, revision)
+        return {**receipt, **(self.receipt or {})}
+
+
+def memory_row(store):
+    with store._connect() as db:
+        return dict(db.execute("SELECT * FROM keep_results WHERE kind='memory'").fetchone())
+
+
+def test_without_a_memory_client_nothing_is_drained(forgotten):
+    store, *_ = forgotten
+    assert memory_followups.drain(store, None) == 0
+    assert memory_row(store)["undo"] == "pending"
+
+
+@pytest.mark.parametrize(
+    ("error", "undo", "words"),
+    [
+        (CorrectionError(401), "blocked", "refused Pi's key"),
+        (CorrectionError(403), "blocked", "refused Pi's key"),
+        (CorrectionError(500), "pending", "answered 500"),
+        (httpx.ConnectError("down"), "pending", "did not answer"),
+        (KeyError("revision"), "pending", "did not answer"),
+    ],
+)
+def test_a_memory_that_cannot_be_read_is_retried_later_or_held_with_its_reason(
+    forgotten, error, undo, words
+):
+    store, *_ = forgotten
+    assert memory_followups.drain(store, Failing(read=error), now=1000.0) == 0
+    row = memory_row(store)
+    assert (row["undo"], row["attempts"]) == (undo, 1)
+    assert words in row["error"] and row["next_at"] == 1030.0
+    # Not due yet: nothing is tried; once due it is tried again (and settles when MemoryGate is back).
+    assert memory_followups.drain(store, Failing(read=error), now=1001.0) == 0
+    assert memory_row(store)["attempts"] == 1
+    assert memory_followups.drain(store, Corrections(revision=2), now=1031.0) == 1
+    assert memory_row(store)["undo"] == "done"
+
+
+def test_a_memory_that_changed_since_is_read_again_next_time(forgotten):
+    store, *_ = forgotten
+    changed = Failing(write=CorrectionError(409))
+    assert memory_followups.drain(store, changed, now=1000.0) == 0
+    row = memory_row(store)
+    assert row["revision"] is None and row["undo"] == "pending"
+    assert "changed" in row["error"]
+    assert memory_followups.drain(store, Corrections(revision=3), now=1031.0) == 1
+
+
+def test_a_forget_that_cannot_be_decided_waits_and_a_bad_receipt_is_held(forgotten):
+    store, *_ = forgotten
+    assert memory_followups.drain(store, Failing(write=CorrectionError(500)), now=1000.0) == 0
+    row = memory_row(store)
+    assert row["undo"] == "pending" and row["revision"] == 2 and row["attempts"] == 1
+    bad = Failing(receipt={"status": "not-forgotten"})
+    assert memory_followups.drain(store, bad, now=2000.0) == 0
+    row = memory_row(store)
+    assert row["undo"] == "blocked" and "could not be verified" in row["error"]
+    assert row["attempts"] == 2

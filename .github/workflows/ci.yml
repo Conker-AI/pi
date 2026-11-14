@@ -82,7 +82,7 @@ jobs:
         # The coverage floor is the coverage measured when it arrived, rounded down, so it
         # only stops coverage from falling (.coveragerc names what is measured).
         # pytest-xdist, one worker per CPU: each test uses its own temporary stores.
-        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=91
+        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=92
 
   drills:
     # Each drill breaks guarded lines and expects the tests to notice. Run after the tests

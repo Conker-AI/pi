@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from contextlib import closing
 
@@ -73,3 +74,53 @@ def test_unrelated_source_cannot_certify_recovery(tmp_path):
         store.create_session()
     with pytest.raises(forgetting.ForgettingError, match="does not cover"):
         recovery.preview(unrelated, target)
+
+
+def test_the_source_and_the_target_must_be_two_databases(tmp_path):
+    source, *_ = fixture(tmp_path)
+    with pytest.raises(forgetting.ForgettingError, match="separate recovery database"):
+        recovery.preview(source, source)
+    with pytest.raises(forgetting.ForgettingError, match="separate recovery database"):
+        recovery.replay(source, source, "anything")
+
+
+def test_a_source_in_the_middle_of_forgetting_maintenance_refuses_before_changes(tmp_path):
+    source, target, root, *_ = fixture(tmp_path)
+    with closing(sqlite3.connect(source)) as db:
+        db.execute("INSERT INTO forgetting_maintenance VALUES (1, ?, 'pending')", (root,))
+        db.commit()
+    with pytest.raises(forgetting.ForgettingError, match="Finish source forgetting maintenance"):
+        recovery.preview(source, target)
+    with closing(Store(target)) as store:
+        assert store.get_session(root)["title"] == "erase this"
+
+
+def test_a_target_that_has_no_sessions_cannot_be_certified(tmp_path):
+    source, *_ = fixture(tmp_path)
+    empty = tmp_path / "empty.db"
+    with closing(Store(empty)):
+        pass
+    with pytest.raises(forgetting.ForgettingError, match="does not cover"):
+        recovery.preview(source, empty)
+
+
+def test_the_command_line_previews_replays_and_reports_a_refusal_in_fixed_words(
+    tmp_path, monkeypatch, capsys
+):
+    source, target, root, *_ = fixture(tmp_path)
+
+    def run(*argv):
+        monkeypatch.setattr("sys.argv", ["recovery", *argv])
+        code = recovery.main()
+        return code, capsys.readouterr().out
+
+    paths = ("--source", str(source), "--target", str(target))
+    code, out = run("preview", *paths)
+    plan = json.loads(out)
+    assert code == 0 and plan["promotesRecovery"] is False
+    code, out = run("replay", *paths, "--confirm", "stale")
+    assert code == 1 and "retain the hold" in out and "stale" not in out
+    with closing(Store(target)) as store:
+        assert store.get_session(root)["title"] == "erase this"
+    code, out = run("replay", *paths, "--confirm", plan["confirmation"])
+    assert code == 0 and json.loads(out)["recoveryHeld"] is True
