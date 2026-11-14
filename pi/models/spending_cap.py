@@ -69,6 +69,11 @@ def _preferences(db) -> prefs.OwnerPreferences:
     return prefs.OwnerPreferences.model_validate_json(row["preferences"])
 
 
+def is_enabled(db) -> bool:
+    """Whether the owner's daily cap is switched on; an unreadable setting raises (callers refuse)."""
+    return _preferences(db).spendingCap.enabled
+
+
 def _used(db, day: str) -> dict:
     row = db.execute(
         "SELECT COALESCE(SUM(cost_usd),0) AS cost, COALESCE(SUM(tokens),0) AS tokens, "

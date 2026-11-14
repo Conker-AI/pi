@@ -234,7 +234,7 @@ app.include_router(
     )
 )
 app.include_router(
-    team_execution_api.create_router(lambda: app.state.store, lambda: app.state.loop, require_admin)
+    team_execution_api.create_router(lambda: app.state.store, lambda: app.state.loop, require_owner)
 )
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
