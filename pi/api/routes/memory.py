@@ -6,6 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Path, Query
 
+from pi.conversation import recall_notices
 from pi.core.models import described
 from pi.memory import beliefs as memory_beliefs
 from pi.memory import forget as memory_forget
@@ -123,6 +124,13 @@ def router(app_state, require_key, require_owner):
         Works for a memory since corrected or forgotten: the notes hold no words. Chats that are
         forgotten or in the Trash are left out. `since` is when Pi began noting uses."""
         return memory_uses.listing(app_state().store, memory_id, limit, after)
+
+    @routes.post(
+        "/memory/recall-notices/{notice_id}/dismiss", dependencies=[Depends(require_owner)]
+    )
+    def dismiss_recall_notice(notice_id: str = Path(pattern=recall_notices.NOTICE_ID)):
+        """Hide an Inbox notice that answers used a memory since changed; the uses stay listed."""
+        return recall_notices.dismiss(app_state().store, notice_id)
 
     @routes.get("/memory", dependencies=[Depends(require_key)])
     def memory_status():

@@ -11,6 +11,7 @@ from uuid import NAMESPACE_URL, uuid5
 import httpx
 from pydantic import Field, field_validator
 
+from pi.conversation import recall_notices
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.memory import store as memory_store
@@ -286,6 +287,14 @@ def _finish(store, identity, *, receipt=None, rejection=None):
                 identity,
             ),
         )
+        if receipt:
+            recall_notices.file(
+                db,
+                request_id=identity,
+                memory_id=row["memory_id"],
+                change="corrected",
+                revision=row["expected_revision"],
+            )
         result = _view(_row(db, identity))
         db.commit()
         return result

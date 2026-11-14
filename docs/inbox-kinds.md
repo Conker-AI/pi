@@ -1,8 +1,8 @@
 # Every Inbox kind (2026-11-12)
 
-`GET /inbox` (`pi/agents/inbox.py:inbox`) builds "Needs you" from seven producers. Each has its
+`GET /inbox` (`pi/agents/inbox.py:inbox`) builds "Needs you" from eight producers. Each has its
 own table, routes and rules. This page lists them, checked against the code on this date, so a
-new feature can reuse one instead of adding an eighth. See [inbox.md](inbox.md) for the view itself.
+new feature can reuse one instead of adding a ninth. See [inbox.md](inbox.md) for the view itself.
 
 "Handled" (kinds `job`, `task`, `run`, `plan-reset`) and "Upcoming" (`job`, `task`) only report;
 nothing there waits for the owner, so they are not rows below.
@@ -17,6 +17,7 @@ nothing there waits for the owner, so they are not rows below.
 | Companion suggestions (`schedule/proposals.py`, `proposals`; timer `proposal_worker.py`) | `suggestion` | background worker, a `proposals` model pass over the owner's messages | accept / decline / never: `POST /proposals/{id}/decision`; accepting records a decision only (`grantsExecutionAuthority: false`) | none; a decline hides the same idea 30 days, never for good | none (`proposals_decided_once` trigger) | `conker inspect proposals`, `conker apply proposals` | 3 per pass and the daily suggestion budget (`run_pass`) | yes: every proposal from a pass that read the chat, `proposals.redact` |
 | Plan alerts (`owner/plan_alerts.py`, `notices` kind `plan`) | `plan` | background worker (`PlanAlertWorker`) reading subscription usage | dismiss: `POST /plans/alerts/{id}/dismiss` (recovery key only; not in the browser contract) | ends when the plan window resets (`record`) | none | `conker limits --dismiss ID` | one open alert per plan window (unique index) | n/a: no chat |
 | AI job notes (`schedule/agent_jobs.py`, `notices` kind `agent-job`) | `agent-job` | job run: the AI job's reply had something for the owner (`_note`) | dismiss: `POST /jobs/agent/notes/{id}/dismiss`; the card links to the job's chat | none | none | none found | one per run (`run_id UNIQUE`) | yes: `agent_jobs.redact` |
+| Memory recall notices (`conversation/recall_notices.py`, `notices` kind `memory-recall`) | `memory-recall` | a memory correction or forget finishing (`edits._finish`, `forget.forget`), only when earlier answers used the memory (`memory_uses`) | dismiss: `POST /memory/recall-notices/{id}/dismiss` (owner session or admin key); the card links to each chat; the uses are listed by `GET /memory/{id}/uses` | none | none | `conker memory used ID` lists the uses | one per change request id (`notices` unique on kind and subject) | no chat id is stored: the row holds the memory id, the change and the revision; the counts are read from `memory_uses` in visible chats, so a forgotten or Trashed chat drops out, and a notice that reaches nothing is not shown |
 | Attention (`agents/continuity.py`, `continuity_order` + `continuity_ack`) | `attention` | Pi, from run, task and job-run status events (blocked, failed, awaiting approval or budget, acted with no reply, outcome unknown, interrupted) | acknowledge: `POST /continuity/seen` (admin key; no browser route or dashboard caller found). A job run's approval is answered by its ToolGate card (merge 5) | replaced by a later status of the same run or task (`briefing`) | none | none found | none (Inbox list cut at 50) | hidden, not deleted: `continuity._eligible` |
 
 Not Inbox rows, though named like one:
