@@ -6,7 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- Claude plan: an answer records the model id the runtime resolved from the alias (`haiku` to the exact id the CLI used) only when it is a well-formed id; a missing, empty, non-text or malformed `actualModel` keeps the alias that was asked instead of storing a wrong value (B1, exact model names). (pi#PR)
+- Claude plan: an answer records the model id the runtime resolved from the alias (`haiku` to the exact id the CLI used) only when it is a well-formed id; a missing, empty, non-text or malformed `actualModel` keeps the alias that was asked instead of storing a wrong value (B1, exact model names). (pi#272)
 - Inbox: when a memory correction or forget finishes and earlier answers used that memory, Pi files a `memory-recall` notice (R-U3 step 3), "A memory you corrected was used in N answers in M chats", with up to 20 chat ids. It holds the memory id, the change and the revision only: no words and no chat id. The counts are read from `memory_uses` in chats that are not forgotten and not in the Trash, so the notice drops out when none is left. `POST /memory/recall-notices/{id}/dismiss` hides it (owner session). pi#269
 - Type check: seven more files are clean with type-only casts and one annotation (host operations, team and evaluation saves, the turn loop, model calls, replies, background thinking); the baseline falls from 27 to 12 errors in 6 files. No runtime change (pi#267).
 - Cross-package imports: saving a deep-research plan (`save_plan`) moved unchanged from `pi.context.research` to `pi.turns.research_plan`, and `pi.context.retrieval.resolve` takes the turn's stop guard as a required argument; the edge `context -> turns` is gone (89 -> 88). Behaviour unchanged (pi#266).
