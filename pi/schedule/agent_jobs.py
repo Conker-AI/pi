@@ -45,11 +45,11 @@ from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions, visibility
 from pi.core.errors import ServiceError
+from pi.core.turn_failures import TurnFailed
 from pi.owner import notices
 from pi.owner import preferences as prefs
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
-from pi.turns.failures import TurnFailed
 
 QUIET = "NOTHING"
 PREAMBLE = (
@@ -414,10 +414,10 @@ class AgentJobs:
         session_id = _open_session(self.store, row["job_id"], definition)
         reason = ""
         if agent_hooks.started_by_hook(row["request_id"]):
-            from pi.turns import access
+            from pi.core import outside
 
             # From now on the whole chat holds someone else's text, and none of it goes to memory.
-            access.mark_outside(self.store, session_id)
+            outside.mark_outside(self.store, session_id)
             # The payload is JSON, so "<" only occurs inside its strings; escaping it keeps the
             # same value and stops the caller's text from closing the label early.
             sent = (agent_hooks.sent(self.store, run_id) or "{}").replace("<", "\\u003c")

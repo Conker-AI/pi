@@ -83,7 +83,6 @@ schedule -> conversation
 schedule -> core
 schedule -> models
 schedule -> owner
-schedule -> turns
 setup -> actions
 setup -> core
 setup -> models

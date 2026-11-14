@@ -12,7 +12,9 @@ is one more reason to ask, never a reason to run. ToolGate enforces the floor ag
 "run" only from a key he made a policy delegate. See context/design/automation-and-access.md.
 
 Outside content is any text in the turn the owner did not write: a result from a tool that is not
-Conker's own, a webhook payload (once one arrives, for the whole chat, `mark_outside`), a memory
+Conker's own, a webhook payload (once one arrives, for the whole chat,
+`pi.core.outside.mark_outside`; the writer lives in core so schedule can call it, the reader is
+outside_content() here), a memory
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
 imported or listener content, anything without a readable source), an attachment or a project
 source, or his answer to Conker's question (the question and its options were written by the AI).
@@ -104,16 +106,6 @@ def resolve(*, authorization, sensitive, agent_level, chat, outside):
     if sensitive:
         level, by = "ask", "tool_default"
     return level, by
-
-
-def mark_outside(store, session_id, reason="webhook"):
-    """From now on this chat holds someone else's text: every turn in it (and in its forks) counts
-    as having read outside content, and none of its messages is sent to memory."""
-    with store._connect() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO outside_sessions VALUES (?,?,?)",
-            (session_id, reason, time.time()),
-        )
 
 
 # The chat's own messages and those it inherited from another chat (a reviewed fork).
