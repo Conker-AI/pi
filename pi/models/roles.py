@@ -14,7 +14,7 @@ from pi.core.models import Strict
 from pi.models.providers import Message, ProviderUnavailable, require_images
 
 if TYPE_CHECKING:
-    from pi.turns.routing_memo import Memo
+    from pi.models.routing_memo import Memo
 
 ROLES = (
     "answer",
@@ -452,7 +452,7 @@ def dispatch(
             ):
                 reused = None
             if reused is not None:
-                from pi.turns import inference_control
+                from pi.models import inference_control
 
                 inference_control.check()
                 if guard is not None:

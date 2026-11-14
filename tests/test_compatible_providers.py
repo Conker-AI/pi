@@ -11,8 +11,8 @@ import pytest
 from pi.api import startup
 from pi.conversation import output_settings, upgrades
 from pi.conversation.store import Store
+from pi.models import inference_control, secrets
 from pi.models import roles as model_roles
-from pi.models import secrets
 from pi.models.direct import (
     ADAPTERS,
     DeepSeekProvider,
@@ -24,7 +24,6 @@ from pi.models.direct import (
 )
 from pi.models.providers import ImageInput, Message, ProviderUnavailable
 from pi.models.routing import Router
-from pi.turns import inference_control
 from pi.turns.loop import Loop
 
 # Endpoints from each vendor's documentation (see docs/direct-providers.md).

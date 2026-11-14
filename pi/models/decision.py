@@ -11,12 +11,12 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from pi.models import inference_control
 from pi.models.loopback_http import verification
 from pi.models.providers import Completion, ProviderUnavailable
-from pi.turns import inference_control
 
 if TYPE_CHECKING:
-    from pi.turns.inference_control import Token
+    from pi.models.inference_control import Token
 
 FOLLOW_UP_CHARACTERS = 400
 CONTEXT_CHARACTERS = 200

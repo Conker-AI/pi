@@ -1,1 +1,1 @@
-"""Running a turn: the loop, context assembly, queue, steering, thinking, inference control, tool action identities."""
+"""Running a turn: the loop, context assembly, queue, steering, thinking, tool action identities."""

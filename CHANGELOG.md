@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Cross-package imports: `inference_control` (cancellation of a model call) and `routing_memo` moved unchanged from `pi.turns` to `pi.models`, where the provider adapters that use them live; the edge `models -> turns` is gone. Behaviour unchanged (pi#264).
 
 
 - Cross-package imports: tool action identities (`pi/actions/identities.py`) moved unchanged to `pi.turns.action_identities`, because they are turn bookkeeping (rows reference `turns`, written in the turn's transaction); the edges `actions -> conversation` and `actions -> turns` are gone (92 -> 90). The audit drill follows the new path. No behaviour change (pi#260).

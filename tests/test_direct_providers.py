@@ -11,11 +11,11 @@ import pytest
 from pi.api import startup
 from pi.context import research_usage
 from pi.conversation.store import Store
+from pi.models import inference_control
 from pi.models import roles as model_roles
 from pi.models.direct import AnthropicProvider, OpenAIProvider, configured
 from pi.models.providers import Message, OllamaProvider, ProviderUnavailable
 from pi.models.routing import Router
-from pi.turns import inference_control
 from pi.turns.failures import TurnFailed
 from pi.turns.loop import Loop
 

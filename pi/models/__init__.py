@@ -1,1 +1,1 @@
-"""Model providers and routing: hosted and local adapters, roles, evaluations, secrets, transport."""
+"""Model providers and routing: hosted and local adapters, roles, evaluations, secrets, transport, inference control."""

@@ -155,7 +155,7 @@ def _label(value, limit):
 
 
 def _failure(exc):
-    from pi.turns import inference_control
+    from pi.models import inference_control
 
     token = inference_control.current()
     reason = token.reason if token is not None else None
@@ -222,7 +222,7 @@ def observer(store, execution, role="answer"):
             db.commit()
         started = time.monotonic()
         try:
-            from pi.turns import inference_control
+            from pi.models import inference_control
 
             inference_control.check()
             completion = invoke()

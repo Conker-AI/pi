@@ -7,10 +7,9 @@ import pytest
 from test_spending_cap import Paid, set_cap
 
 from pi.conversation.store import Store
-from pi.models import direct, openrouter, spending_cap
+from pi.models import direct, inference_control, openrouter, spending_cap
 from pi.models.openrouter import ModelInfo, ModelUnusable, OpenRouterProvider
 from pi.models.providers import Message, ProviderUnavailable
-from pi.turns import inference_control
 
 LONG = [Message(role="user", content="q" * 4000)]  # 1,000 tokens held if admitted
 

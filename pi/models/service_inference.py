@@ -22,10 +22,9 @@ from pydantic import Field
 
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
-from pi.models import providers
+from pi.models import inference_control, providers
 from pi.models import roles as model_roles
 from pi.models.providers import Message, ProviderUnavailable
-from pi.turns import inference_control
 
 # Which roles each service may call. Fixed in code: a key cannot widen it.
 SERVICES = {"memorygate": ("memory-sorting",), "toolgate": ("tool-text",)}

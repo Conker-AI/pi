@@ -9,10 +9,11 @@ import pytest
 from pi.actions.toolgate import Tool, ToolGateUnavailable
 from pi.agents import change_requests, draft_capabilities, tool_drafts
 from pi.conversation.store import Store
+from pi.models import inference_control
 from pi.models import roles as model_roles
 from pi.models.providers import Completion
 from pi.models.routing import Router
-from pi.turns import inference_control, tool_drafting
+from pi.turns import tool_drafting
 from pi.turns.loop import Loop
 from tests.test_model_roles import config
 from tests.test_tool_turns import Scripted

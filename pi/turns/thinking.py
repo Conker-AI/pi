@@ -4,9 +4,9 @@ import json
 import threading
 import time
 
+from pi.models import inference_control
 from pi.models import roles as model_roles
 from pi.models.providers import Message
-from pi.turns import inference_control
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS background_thinking (

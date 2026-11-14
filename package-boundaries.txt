@@ -71,7 +71,6 @@ memory -> owner
 models -> conversation
 models -> core
 models -> owner
-models -> turns
 owner -> core
 schedule -> conversation
 schedule -> core

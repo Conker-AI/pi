@@ -125,7 +125,7 @@ class ModelCalls:
             return self._call_controlled(messages, ctx, execution, role)
 
     def _call_controlled(self, messages, ctx, execution, role):
-        from pi.turns import inference_control
+        from pi.models import inference_control
 
         inference_control.check()
         if role == "answer":
@@ -150,7 +150,7 @@ class ModelCalls:
         gave. Falling through is not a silent retry: what was skipped and why
         is returned and recorded on the turn.
         """
-        from pi.turns import inference_control
+        from pi.models import inference_control
 
         def guard():
             inference_control.check()
@@ -173,7 +173,7 @@ class ModelCalls:
 
             adapters = team_execution.metered_providers(self.store, execution, adapters)
             from pi.context import research_usage
-            from pi.turns import routing_memo
+            from pi.models import routing_memo
 
             result = model_roles.dispatch(
                 configuration,

@@ -8,7 +8,7 @@ be committed. Registry entries never outlive the call that owns them.
 import threading
 from contextlib import contextmanager
 
-from pi.turns import inference_control
+from pi.models import inference_control
 
 _lock = threading.Lock()
 _active = {}

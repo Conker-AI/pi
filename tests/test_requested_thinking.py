@@ -15,9 +15,9 @@ from pi.conversation import retries as response_retries
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions
 from pi.conversation.store import Store
+from pi.models import inference_control
 from pi.models import roles as model_roles
 from pi.turns import control as turn_control
-from pi.turns import inference_control
 from pi.turns import queue as turn_queue
 from pi.turns import thinking as background_thinking
 

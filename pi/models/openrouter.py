@@ -26,6 +26,7 @@ from typing import Any
 import httpx
 
 from pi.conversation import citations, live_stream
+from pi.models import inference_control
 from pi.models.direct import collect_chat_stream, provider_stream, sse_events
 from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
@@ -37,7 +38,6 @@ from pi.models.providers import (
     not_billed,
     reported_count,
 )
-from pi.turns import inference_control
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
