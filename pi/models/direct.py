@@ -19,8 +19,10 @@ from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
     Completion,
     Message,
+    NotBilled,
     ProviderUnavailable,
     chat_content,
+    not_billed,
     reported_count,
 )
 
@@ -109,9 +111,9 @@ class _DirectProvider:
     ) -> Completion:
         inference_control.check()
         if not self.api_key or not self.allow_paid:
-            raise ProviderUnavailable("direct provider requires a key and paid-model opt-in")
+            raise NotBilled("direct provider requires a key and paid-model opt-in")
         if not model.strip():
-            raise ProviderUnavailable("unsupported direct text request")
+            raise NotBilled("unsupported direct text request")
         messages = project_tool_evidence(messages)
         payload = self._payload(messages, model)
         try:
@@ -153,7 +155,8 @@ class _DirectProvider:
             inference_control.check()
             # Provider bodies, URLs, and exception text can contain credentials or
             # prompts. Only the exception class crosses the adapter boundary.
-            raise ProviderUnavailable(type(exc).__name__) from None
+            error = NotBilled if not_billed(exc) else ProviderUnavailable
+            raise error(type(exc).__name__) from None
 
 
 class OpenAIProvider(_DirectProvider):
@@ -270,7 +273,7 @@ class AnthropicProvider(_DirectProvider):
         system, turns = [], []
         for message in messages:
             if message.images and message.role != "user":
-                raise ProviderUnavailable("Images require a user attachment message.")
+                raise NotBilled("Images require a user attachment message.")
             if message.role == "system":
                 text = message.content
                 if turns:
@@ -297,7 +300,7 @@ class AnthropicProvider(_DirectProvider):
                 )
                 turns.append({"role": message.role, "content": content})
         if not turns:
-            raise ProviderUnavailable("direct text request requires conversation messages")
+            raise NotBilled("direct text request requires conversation messages")
         payload = {"model": model, "messages": turns, "max_tokens": self.max_tokens}
         if system:
             payload["system"] = system

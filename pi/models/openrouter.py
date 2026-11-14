@@ -32,8 +32,10 @@ from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
     Completion,
     Message,
+    NotBilled,
     ProviderUnavailable,
     chat_content,
+    not_billed,
     reported_count,
 )
 
@@ -289,7 +291,8 @@ class OpenRouterProvider:
             response.raise_for_status()
             return response.json()
         except Exception as exc:
-            raise ProviderUnavailable(type(exc).__name__) from exc
+            error = NotBilled if not_billed(exc) else ProviderUnavailable
+            raise error(type(exc).__name__) from exc
 
     def _streamed(self, payload: dict, model: str, timeout: float) -> dict:
         live_stream.begin_attempt()
@@ -313,7 +316,8 @@ class OpenRouterProvider:
             raise
         except Exception as exc:
             inference_control.check()
-            raise ProviderUnavailable(type(exc).__name__) from exc
+            error = NotBilled if not_billed(exc) else ProviderUnavailable
+            raise error(type(exc).__name__) from exc
 
     @staticmethod
     def _check_model_status(response, model: str) -> None:

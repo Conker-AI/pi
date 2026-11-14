@@ -6,12 +6,16 @@ owner preferences) has two limits for his local day: money, from the cost the pr
 and tokens, which every paid call counts (direct keys report no price, and a price is never
 guessed). Once either is reached, the next paid call is refused before it is sent; the refusal
 is a model refusal, so a role moves on to its fallback (a free or local model) instead of
-failing. A call holds its input's tokens (estimated from its length) from admission, so calls
-in flight together cannot all pass under the cap; its output and price are counted when it
-ends, so a day can end over the cap by at most the answers that were in flight. A call that
-fails after it was sent keeps the input hold (it may have been billed); one the provider refused
-as a model refusal counts nothing. If the ledger itself cannot be read, paid calls are refused
-(fail closed) the same way.
+failing. A call holds its input's tokens (estimated from its length) from admission, and one
+whose input does not fit in what is left of the token limit is refused, so calls in flight
+together cannot all pass under it. Output and price are counted when a call ends, so a day can
+end over the token limit by the answers that were in flight, and over the money limit by the
+whole price of the calls in flight (a price is known only from the provider's report). A call
+that fails after it was sent keeps the input hold (it may have been billed); one the provider
+refused as a model refusal, or one that could not be billed (NotBilled: never sent, or turned
+away for its key, credit or quota), counts nothing. If the ledger itself cannot be read, paid
+calls are refused (fail closed) the same way; a ledger write that fails after a call ended is
+logged and never replaces the call's answer or error.
 
 Subscriptions (ChatGPT, Claude) are flat-rate and local models are free: they are not counted.
 The ledger holds provider and model ids, counts and states, never a prompt or an answer.
@@ -19,12 +23,17 @@ The ledger holds provider and model ids, counts and states, never a prompt or an
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from datetime import UTC, datetime
 
 from pi.models.openrouter import ModelUnusable, PaidModelRefused
+from pi.models.providers import NotBilled
 from pi.owner import preferences as prefs
+from pi.turns import inference_control
+
+log = logging.getLogger(__name__)
 
 KEEP_DAYS = 40
 CHARS_PER_TOKEN = 4
@@ -128,7 +137,8 @@ def _admit(store, provider: str, model: str, held: int, now: datetime) -> str:
         try:
             preferences = _preferences(db)
             day = prefs.local_day(preferences, now)
-            if _reached(preferences.spendingCap, _used(db, day)):
+            cap, used = preferences.spendingCap, _used(db, day)
+            if _reached(cap, used) or (cap.enabled and used["tokens"] + held > cap.tokens):
                 raise CapReached(REACHED)
             db.execute(
                 "INSERT INTO paid_model_calls(id, day, provider, model, state, tokens, "
@@ -153,7 +163,7 @@ def _estimate(messages, text: str) -> int:
 
 def settle(store, identity: str, completion=None, messages=(), *, refused: bool = False) -> None:
     """Count a finished call. A failed one (completion None) keeps its input hold, since it may
-    have been billed; one the provider refused as a model refusal counts nothing."""
+    have been billed; a refused one (a model refusal or NotBilled) counts nothing."""
     if completion is None and refused:
         values = ("failed", None, 0, 0)
     elif completion is None:
@@ -166,6 +176,15 @@ def settle(store, identity: str, completion=None, messages=(), *, refused: bool 
         if not isinstance(cost, int | float) or cost < 0:
             cost = None
         values = ("done", cost, tokens, 0 if known else 1)
+    try:
+        _write(store, identity, values)
+    except Exception as exc:
+        # The row stays running (its input hold counts) until recover_interrupted at the next
+        # start; the call's own answer or error is what the caller gets.
+        log.warning("spending ledger: could not settle %s (%s)", identity, type(exc).__name__)
+
+
+def _write(store, identity: str, values: tuple) -> None:
     with store._connect() as db:
         db.execute(
             "UPDATE paid_model_calls SET state=?, cost_usd=?, tokens=?, tokens_estimated=?, "
@@ -206,10 +225,11 @@ class Capped:
     def complete_bounded(self, messages, *, model: str, timeout: float):
         if not self._paid(model):
             return self._adapter.complete_bounded(messages, model=model, timeout=timeout)
+        inference_control.check()  # a call stopped before it is sent holds nothing
         identity = admit(self._store, self._adapter.name, model, messages)
         try:
             completion = self._adapter.complete_bounded(messages, model=model, timeout=timeout)
-        except ModelUnusable:
+        except (ModelUnusable, NotBilled):
             settle(self._store, identity, refused=True)
             raise
         except BaseException:
@@ -225,10 +245,9 @@ def openrouter_paid(adapter):
     def paid(model: str) -> bool:
         if not adapter.allow_paid:
             return False  # the adapter refuses every paid model itself
-        try:
-            info = adapter.catalogue().get(model)
-        except Exception:
-            return True  # the adapter reads the catalogue again; count it as paid
+        # Without the catalogue the adapter refuses the call before sending it, so its error
+        # (or an owner stop) goes to the caller here, before anything is admitted.
+        info = adapter.catalogue().get(model)
         # A model missing from the catalogue is refused by the adapter before anything is sent.
         return info is not None and not info.is_free
 

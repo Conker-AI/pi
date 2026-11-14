@@ -16,7 +16,8 @@ in a child turn checks the turns up its chain (`caller_turn`). A child that acte
 turn acted. A continuation of a child chat (a fork, automatic or his) is still that call's chat.
 
 Guards, each checked again when the chat is opened, in one write transaction:
-- the target exists, is not archived, and is neither the caller nor any agent up the call chain;
+- the target exists, is not archived, is not the companion (its toolkit is the owner's whole one),
+  and is neither the caller nor any agent up the call chain;
 - depth at most 2 (companion -> A -> B); a depth-2 chat is not offered the tool at all;
 - at most 3 calls per turn and 30 in any 24 hours, in all;
 - never from a team role's turn (its budget does not meter a child) or a run of an AI job
@@ -77,13 +78,16 @@ def initialize(db):
     db.executescript(SCHEMA)
 
 
-# The chat and the chats it continues (each fork's parent is closed as 'forked'), nearest first.
+# The chat and the chats it continues, nearest first: an automatic fork's parent is closed as
+# 'forked'; a message branch (`pi.conversation.forks`) leaves its source open and is recorded.
 _LINEAGE = """
 WITH RECURSIVE up(id, level) AS (
  SELECT ?, 0
  UNION ALL
  SELECT p.id, up.level + 1 FROM up JOIN sessions s ON s.id=up.id
- JOIN sessions p ON p.id=s.parent_id AND p.status='forked' WHERE up.level < 1000
+ JOIN sessions p ON p.id=s.parent_id AND (p.status='forked' OR EXISTS (
+  SELECT 1 FROM message_fork_requests b WHERE b.child_session=s.id AND b.source_session=p.id
+ )) WHERE up.level < 1000
 )
 SELECT c.* FROM up JOIN agent_calls c ON c.child_session_id=up.id ORDER BY up.level LIMIT 1
 """
@@ -207,6 +211,12 @@ def _target(db, wanted):
     if row is None or row["id"] in visibility.kept_from_hidden(db, "agent"):
         raise Refused(f"There is no agent called “{wanted}”. Use an agent's exact name.")
     agent = profiles._get(db, row["id"])
+    if agent["kind"] == "companion":
+        # The companion holds the owner's whole toolkit; a narrower agent never borrows it.
+        raise Refused(
+            "Conker itself cannot be run by another agent. Answer with what you have, or tell "
+            "the owner to ask Conker directly."
+        )
     if agent["archived_at"] is not None:
         raise Refused(
             f"{agent['configuration']['name']} is archived. Only the owner can restore it."
@@ -371,11 +381,13 @@ def _answer(store, request_id):
     return row["turn_id"], row["status"], final, reply
 
 
-def _child_outside(store, outside, child, turn, fallback):
+def _child_outside(store, outside, turn, fallback):
     if turn is None:
         return bool(fallback)
     try:
-        return bool(outside(child, turn, session_settings.execution(store, child, turn)))
+        # The chat the child's turn ran in: a fork of the child chat when its history was long.
+        chat = (store.get_turn(turn) or {})["session_id"]
+        return bool(outside(chat, turn, session_settings.execution(store, chat, turn)))
     except Exception:
         # Unreadable means outside, never an error to the model.
         return True
@@ -442,7 +454,7 @@ def run(loop, args, *, session_id, turn_id, execution, run, outside):
     if turn and turn_id and (store.get_turn(turn) or {}).get("acted"):
         # What the child did, the caller's turn did.
         store.mark_acted(turn_id)
-    child_out = _child_outside(store, outside, child, turn, parent_out)
+    child_out = _child_outside(store, outside, turn, parent_out)
     base = {
         "callId": identity,
         "agentId": agent["id"],

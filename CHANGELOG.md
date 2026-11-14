@@ -12,6 +12,12 @@ be a decision with visible consequences.
 - `GET /insights/tomorrow?hours=24` (owner, pi#257): what Conker will start on its own soon, read-only: jobs the clock fires (next time, how many slots, held while a parked run waits for his answer), watched jobs, and parked approvals that run out in the window. Never his words or tool arguments; hidden chats are left out.
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
 
+- **Spending cap counts only what can be billed (hunt 2, spend-F1).** A paid call that was never sent (OpenRouter catalogue unreachable, an owner stop before sending, Pi's own refusal of the request) or that the provider turned away for its key, credit or quota (HTTP 401, 402, 429; new `NotBilled`, a `ProviderUnavailable`) holds no tokens, so an outage or an empty OpenRouter balance no longer fills the shared token limit and pauses working direct keys. Error reasons are unchanged.
+
+- **Spending cap ledger write never replaces a call's result (spend-F2).** If recording a finished paid call fails (a locked database), the answer or the original error still reaches the caller; the row stays running with its input hold until Pi's next start, and the failure is logged.
+
+- **Spending cap refuses an input larger than what is left of the token limit (spend-F3).** Before, 1,000 tokens of headroom admitted a 1M-token prompt. Money is still counted only from the provider's reported price when a call ends, so the money limit can still be passed by the calls in flight (the module docstring now says so).
+
 - **Hidden chats, hunt 2 (vis-F1).** A fork whose context rules name a message it inherited from a
   parent now in the Trash answers again (the message and its rule are left out, not
   `missing_message`); restoring the parent brings both back.
@@ -29,6 +35,27 @@ be a decision with visible consequences.
 - **Hidden chats, hunt 2 (vis-F5).** `GET /memory-edits/memories/{id}` and
   `GET /memory/forget/{id}` answer 404 for a memory from a hidden chat, and a correction to one is
   refused (404), like the memory explorer. Forgetting it is still allowed.
+- **Agent calls: a message branch of an agent's chat is still that call's chat (hunt 2 tools-F1).**
+  Branching the chat `conker.run_agent` opened (or a continuation of it) left the source open, so
+  the branch lost the call link: its turns took the owner's words as a request, were no longer
+  outside when the caller had read outside content, and could start agents at depth 0. The call
+  link now follows recorded message branches as well as automatic forks.
+
+- **Agent calls: a child whose turn forked is checked in the fork (hunt 2 tools-F3).** The outside
+  check read the child chat although the turn ran in its fork, and only failed safe through an
+  error; it now reads the chat the turn ran in.
+
+- **Agent calls: the companion is never a target (hunt 2 tools-F5).** `conker.run_agent` could run
+  the companion, whose toolkit is the owner's whole one, from an agent he gave only that tool. It is
+  refused now ("Conker itself cannot be run by another agent").
+
+- A tool cron job's run waiting on an approval that expired unanswered is cancelled by the decision sweep (its card withdrawn), so the job runs again instead of being held for good (hunt2 sweep-F1).
+
+- The owner's Change words that arrive after Pi already ended the turn (expired, or the chat took it first) are kept as that chat's draft instead of being dropped (hunt2 sweep-F2, late-answer part).
+
+- The decision sweep keeps each request's grace and try count while it waits, even when more requests wait than one pass reads, so a failing resume is tried at most 3 times (hunt2 sweep-F3).
+
+- Expiry looks only at the requests this pass read from ToolGate as pending, so turns that wait for ever (a zone-less expiry) no longer keep newer expired ones from ending (hunt2 sweep-F4).
 
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
