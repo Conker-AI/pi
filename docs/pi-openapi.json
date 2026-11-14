@@ -20210,6 +20210,151 @@
         }
       }
     },
+    "/memory/beliefs": {
+      "get": {
+        "summary": "List Beliefs",
+        "description": "What Conker believes about the owner, one page at a time (read only).\n\nA memory with a forget pending or done, or made from a hidden chat, is left out; `total`\nand `counts` drop only by the rows left out of this page.",
+        "operationId": "list_beliefs_memory_beliefs_get",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "stated",
+                "concluded",
+                "all"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "current",
+                "needs_review",
+                "all"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "State"
+            }
+          },
+          {
+            "name": "memory_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "fact",
+                    "phase",
+                    "context",
+                    "watch"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Memory Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 600
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BeliefPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory": {
       "get": {
         "summary": "Memory Status",
@@ -25356,6 +25501,298 @@
           "expected_revision"
         ],
         "title": "AutoName"
+      },
+      "Belief": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "memoryType": {
+            "type": "string",
+            "title": "Memorytype"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "stated",
+              "concluded"
+            ],
+            "title": "Origin"
+          },
+          "sourceType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcetype"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "needs_review"
+            ],
+            "title": "State"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          },
+          "reviewBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewby"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "lastRecalledAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrecalledat"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/BeliefEvidence"
+          },
+          "lineage": {
+            "items": {
+              "$ref": "#/components/schemas/BeliefLineage"
+            },
+            "type": "array",
+            "title": "Lineage"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/BeliefConflict"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "text",
+          "memoryType",
+          "origin",
+          "sourceType",
+          "confidence",
+          "state",
+          "validFrom",
+          "validUntil",
+          "reviewBy",
+          "createdAt",
+          "updatedAt",
+          "lastRecalledAt",
+          "evidence",
+          "lineage",
+          "conflicts"
+        ],
+        "title": "Belief"
+      },
+      "BeliefConflict": {
+        "properties": {
+          "conflictId": {
+            "type": "string",
+            "title": "Conflictid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "conflictId",
+          "memoryId"
+        ],
+        "title": "BeliefConflict"
+      },
+      "BeliefCounts": {
+        "properties": {
+          "stated": {
+            "type": "integer",
+            "title": "Stated"
+          },
+          "concluded": {
+            "type": "integer",
+            "title": "Concluded"
+          },
+          "needsReview": {
+            "type": "integer",
+            "title": "Needsreview"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stated",
+          "concluded",
+          "needsReview"
+        ],
+        "title": "BeliefCounts"
+      },
+      "BeliefEvidence": {
+        "properties": {
+          "supporting": {
+            "type": "integer",
+            "title": "Supporting"
+          },
+          "withdrawn": {
+            "type": "integer",
+            "title": "Withdrawn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "supporting",
+          "withdrawn"
+        ],
+        "title": "BeliefEvidence"
+      },
+      "BeliefLineage": {
+        "properties": {
+          "objectType": {
+            "type": "string",
+            "title": "Objecttype"
+          },
+          "objectId": {
+            "type": "string",
+            "title": "Objectid"
+          },
+          "withdrawn": {
+            "type": "boolean",
+            "title": "Withdrawn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "objectType",
+          "objectId",
+          "withdrawn"
+        ],
+        "title": "BeliefLineage"
+      },
+      "BeliefPage": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/BeliefCounts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Belief"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextAfter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextafter"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "total",
+          "counts",
+          "items",
+          "nextAfter"
+        ],
+        "title": "BeliefPage"
       },
       "BrowserAudio": {
         "properties": {
