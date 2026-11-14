@@ -12,6 +12,7 @@ import threading
 import httpx
 from pydantic import Field, model_validator
 
+from pi.conversation import recall_notices
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.memory import store as memory_store
@@ -260,6 +261,13 @@ def forget(store, client, body: Forget) -> dict:
                 "UPDATE memory_forget_operations SET state='forgotten',cached_packages_cleared=?,"
                 "receipt=? WHERE request_id=?",
                 (result["cachedPackagesCleared"], json.dumps(result), body.request_id),
+            )
+            recall_notices.file(
+                db,
+                request_id=body.request_id,
+                memory_id=body.memory_id,
+                change="forgotten",
+                revision=body.expected_revision,
             )
             db.commit()
         return result

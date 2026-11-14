@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pi.agents import asks, change_requests, continuity
+from pi.conversation import recall_notices, visibility
 from pi.conversation import settings as session_settings
-from pi.conversation import visibility
 from pi.owner import plan_alerts, self_check, updates
 from pi.owner import preferences as owner_preferences
 from pi.schedule import agent_jobs, job_hidden, jobs, proposals
@@ -398,6 +398,7 @@ def inbox(store, *, now=None):
     needs_you.extend(change_requests.needs_you(store))
     needs_you.extend(asks.needs_you(store))
     needs_you.extend(agent_jobs.needs_you(store))
+    needs_you.extend(recall_notices.needs_you(store))
 
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
     needs_you = needs_you[:50]  # Limit to 50

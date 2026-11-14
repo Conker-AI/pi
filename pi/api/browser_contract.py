@@ -294,6 +294,8 @@ OWNER_ROUTES = {
         r"/proposals/passes",
         # Hiding one self-check alert; the session alone is enough.
         r"/self-check/alerts/sc_[0-9a-f]{32}/dismiss",
+        # Hiding one "answers used a memory you changed" notice (R-U3); the session alone is enough.
+        r"/memory/recall-notices/mrn_[0-9a-f]{32}/dismiss",
         r"/memory/forget(?:-many)?",
         r"/memory/remember",
         r"/memory/corrections",

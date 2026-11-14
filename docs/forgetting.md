@@ -91,7 +91,7 @@ Its open loops (`open_loops`, [open loops](open-loops.md)) are deleted, the
 promise words with them; while the chat waits in the Trash they are hidden.
 
 Its memory use notes (`memory_uses`: turn, chat and memory id only, no words) are deleted too; a memory
-correction or forget keeps them on purpose, so the chats that used the memory can be listed. `GET /memory/{id}/uses` reads them (visible chats only, ids and chat titles, no words).
+correction or forget keeps them on purpose, so the chats that used the memory can be listed. `GET /memory/{id}/uses` reads them (visible chats only, ids and chat titles, no words). The Inbox notice they feed (`memory-recall`, [inbox kinds](inbox-kinds.md)) stores the memory id, the change and its revision, never a chat id or words, and counts its reach from these rows when read.
 
 Messages retain their original IDs, session IDs, sequence numbers, roles and
 timestamps. Sequences are never renumbered and IDs cannot be replaced. Immutable
