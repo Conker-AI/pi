@@ -108,6 +108,7 @@ be a decision with visible consequences.
   `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
 - **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
 - **Types: Pi's pyright baseline is 0.** The last 12 errors in six files are gone: a float timeout annotated as one, `Loop.remember` typed as optional callable, narrowed optionals in the import offers and the Markdown table reader, and three `# pyright: ignore` lines where the checker is wrong (lxml has no stubs; a pydantic subclass overrides a pinned field). No behaviour change.
+- **Tests: refusal tests for the host repair tools and memory delivery retries; coverage floor 91 -> 92.** The memory delivery repair (`bind-origin`, `retry`), the deletion replay command line and the follow-up drain (no client, unreadable memory, changed since, bad receipt) now have tests for every refusal. Tests and the CI floor only; no behaviour change.
 
 ## 0.25.0
 
