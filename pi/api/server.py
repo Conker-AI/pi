@@ -65,6 +65,7 @@ from pi.api.routes import system_inventory as system_inventory_api
 from pi.api.routes import tasks as tasks_api
 from pi.api.routes import team_execution as team_execution_api
 from pi.api.routes import teams as collaboration_api
+from pi.api.routes import tomorrow as tomorrow_api
 from pi.api.routes import updates as updates_api
 from pi.api.startup import lifespan
 from pi.context import project_sources
@@ -237,6 +238,7 @@ app.include_router(session_settings_api.router(lambda: app.state.store, require_
 app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(decisions_api.router(lambda: app.state.store, require_owner))
 app.include_router(open_loops_api.router(lambda: app.state.store, require_owner))
+app.include_router(tomorrow_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )

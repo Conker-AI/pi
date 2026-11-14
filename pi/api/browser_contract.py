@@ -202,6 +202,7 @@ OWNER_ROUTES = {
         r"/memory/forget-pending",
         # Read-only: what Conker believes about the owner, one page at a time.
         r"/memory/beliefs",
+        r"/insights/tomorrow",  # read-only: what Conker will start on its own soon (R-U10)
         # Read-only: duplicates, contradictions, expired and unused memories to review.
         r"/memory/upkeep",
         # Read-only: promises across visible chats (R-M7). Writes stay recovery-key only until
