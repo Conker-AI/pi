@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from pi.core.models import described
 from pi.memory import beliefs as memory_beliefs
@@ -12,6 +12,7 @@ from pi.memory import forget as memory_forget
 from pi.memory import memory_replies as replies
 from pi.memory import stated as stated_memory
 from pi.memory import upkeep as memory_upkeep
+from pi.memory import uses as memory_uses
 
 
 def router(app_state, require_key, require_owner):
@@ -103,6 +104,22 @@ def router(app_state, require_key, require_owner):
         return memory_upkeep.upkeep(
             app_state().memory, {"unused_days": unused_days, "limit": limit}
         )
+
+    @routes.get(
+        "/memory/{memory_id}/uses",
+        dependencies=[Depends(require_owner)],
+        responses=described(memory_uses.UsePage),
+    )
+    def list_memory_uses(
+        memory_id: str = Path(max_length=memory_uses.MAX_ID),
+        limit: int = Query(default=50, ge=1, le=100),
+        after: str | None = Query(default=None, min_length=1, max_length=200),
+    ):
+        """The answers that used one memory, newest first (read only, ids and chat titles).
+
+        Works for a memory since corrected or forgotten: the notes hold no words. Chats that are
+        forgotten or in the Trash are left out. `since` is when Pi began noting uses."""
+        return memory_uses.listing(app_state().store, memory_id, limit, after)
 
     @routes.get("/memory", dependencies=[Depends(require_key)])
     def memory_status():

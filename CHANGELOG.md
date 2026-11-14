@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with

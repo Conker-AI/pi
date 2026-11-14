@@ -20721,6 +20721,109 @@
         }
       }
     },
+    "/memory/{memory_id}/uses": {
+      "get": {
+        "summary": "List Memory Uses",
+        "description": "The answers that used one memory, newest first (read only, ids and chat titles).\n\nWorks for a memory since corrected or forgotten: the notes hold no words. Chats that are\nforgotten or in the Trash are left out. `since` is when Pi began noting uses.",
+        "operationId": "list_memory_uses_memory__memory_id__uses_get",
+        "parameters": [
+          {
+            "name": "memory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "title": "Memory Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory": {
       "get": {
         "summary": "Memory Status",
@@ -34092,6 +34195,56 @@
         ],
         "title": "MemorySelection"
       },
+      "MemoryUse": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "sessionTitle": {
+            "type": "string",
+            "title": "Sessiontitle"
+          },
+          "turnId": {
+            "type": "string",
+            "title": "Turnid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "context",
+              "recall"
+            ],
+            "title": "Source"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "at": {
+            "type": "number",
+            "title": "At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "sessionTitle",
+          "turnId",
+          "source",
+          "revision",
+          "at"
+        ],
+        "title": "MemoryUse"
+      },
       "Model": {
         "properties": {
           "id": {
@@ -39303,6 +39456,62 @@
           "costCents"
         ],
         "title": "Usage"
+      },
+      "UsePage": {
+        "properties": {
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "chats": {
+            "type": "integer",
+            "title": "Chats"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryUse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "nextAfter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextafter"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryId",
+          "since",
+          "total",
+          "chats",
+          "items",
+          "nextAfter"
+        ],
+        "title": "UsePage"
       },
       "ValidationError": {
         "properties": {

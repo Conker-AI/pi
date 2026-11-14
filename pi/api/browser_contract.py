@@ -204,6 +204,8 @@ OWNER_ROUTES = {
         r"/memory/beliefs",
         # Read-only: duplicates, contradictions, expired and unused memories to review.
         r"/memory/upkeep",
+        # Read-only: the answers that used one memory (ids and chat titles, no words).
+        r"/memory/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}/uses",
         # Read-only: promises across visible chats (R-M7). Writes stay recovery-key only until
         # the dashboard has a screen for them.
         r"/open-loops",
