@@ -473,17 +473,14 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
             )
             return _done(loop, request, tool_id) if run else _filed(request, tool_id)
         if tool_id in (CREATE_AGENT, CREATE_TEAM):
+            allowed = agent_requests.visible(loop, execution, {t.id for t in catalog(execution)})
             request = (
                 agent_requests.file_agent(
-                    loop.store,
-                    args,
-                    agent_requests.visible(loop, execution, {t.id for t in catalog(execution)}),
-                    session_id=session_id,
-                    turn_id=turn_id,
+                    loop.store, args, allowed, session_id=session_id, turn_id=turn_id
                 )
                 if tool_id == CREATE_AGENT
                 else agent_requests.file_team(
-                    loop.store, args, session_id=session_id, turn_id=turn_id
+                    loop.store, args, allowed, session_id=session_id, turn_id=turn_id
                 )
             )
             return _done(loop, request, tool_id) if run else _filed(request, tool_id)
