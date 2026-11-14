@@ -40,6 +40,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
+from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions, visibility
@@ -150,7 +151,7 @@ def create(
         enabled=body.enabled,
         target=AgentTarget(kind="agent", clock=body.clock),
         watch=body.watch,
-        createdBy=created_by,
+        createdBy=cast(Literal["owner", "conker"], created_by),
         privacy=JobPrivacy.model_validate(privacy) if privacy else None,
     )
     with store._connect() as db:
@@ -335,7 +336,7 @@ def _open_session(store, job_id, definition) -> str:
     session_id = session_for(store, job_id)
     session = store.get_session(session_id) if session_id else None
     if session is not None and session["status"] == "open":
-        return session_id
+        return cast(str, session_id)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         replacement = _new_session(store, db, definition)

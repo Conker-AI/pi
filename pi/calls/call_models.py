@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, cast
 
 from pydantic import Field
 
@@ -224,22 +224,26 @@ def browser_view(value):
                 "privacy",
             )
         },
-        events=events,
+        # Pydantic validates the plain dicts into their models.
+        events=cast(Any, events),
         requests=requests,
         eventsTruncated=len(events) != len(value["events"]),
         requestsTruncated=len(requests) != len(value["requests"]),
-        capabilities={
-            "typedTurns": True,
-            "speech": "bounded-audio-turns",
-            "camera": "unavailable",
-            "perception": "unavailable",
-            "emotion": "unavailable",
-            "characterVoice": "adapter-dependent; inspect call capabilities",
-            "channels": "client-owned capture; preferences gate transport",
-            "rawMediaRetention": "none",
-            "audioReplay": "unavailable",
-            "interruption": "cooperative; in-flight effects cannot be recalled",
-        },
+        capabilities=cast(
+            Any,
+            {
+                "typedTurns": True,
+                "speech": "bounded-audio-turns",
+                "camera": "unavailable",
+                "perception": "unavailable",
+                "emotion": "unavailable",
+                "characterVoice": "adapter-dependent; inspect call capabilities",
+                "channels": "client-owned capture; preferences gate transport",
+                "rawMediaRetention": "none",
+                "audioReplay": "unavailable",
+                "interruption": "cooperative; in-flight effects cannot be recalled",
+            },
+        ),
         contentIncluded=bool(events),
     )
 
@@ -259,7 +263,7 @@ def browser_audio_turn(value):
         call=browser_view(value["call"]),
         replayed=value["replayed"],
         audio=value.get("audio"),
-        transcription=transcription,
+        transcription=cast(Any, transcription),
         audioIncluded=value.get("audio") is not None,
         transcriptionIncluded=transcription is not None,
     )

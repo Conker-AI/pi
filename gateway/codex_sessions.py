@@ -2,7 +2,7 @@
 
 import re
 import unicodedata
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 import httpx
 from pydantic import Field, field_validator, model_validator
@@ -124,13 +124,15 @@ def request(transport, action, identity=None, query=b""):
             result = (Catalogue if action == "list" else Status).model_validate(value)
             if action == "list":
                 if (
-                    result.archived != selected["archived"]
-                    or len(result.results) > selected["limit"]
+                    cast(Catalogue, result).archived != cast(dict, selected)["archived"]
+                    or len(cast(Catalogue, result).results) > cast(dict, selected)["limit"]
                 ):
                     raise ValueError()
-                if result.nextCursor is not None and result.nextCursor == selected.get("cursor"):
+                if cast(Catalogue, result).nextCursor is not None and cast(
+                    Catalogue, result
+                ).nextCursor == cast(dict, selected).get("cursor"):
                     raise ValueError()
-            elif result.session.id != identity:
+            elif cast(Status, result).session.id != identity:
                 raise ValueError()
             return result.model_dump()
     except (httpx.HTTPError, ValueError, UnicodeError, RecursionError, TypeError):

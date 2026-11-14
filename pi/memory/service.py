@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 import time
+from typing import Any
 
 import httpx
 
@@ -112,7 +113,7 @@ def _budget_context(package):
         if previous
         else {key: len(package.get(key, [])) for key in CONTEXT_GROUPS}
     )
-    retained = dict.fromkeys(CONTEXT_GROUPS, 0)
+    retained: dict[str, int] = dict.fromkeys(CONTEXT_GROUPS, 0)
     optional = [key for key in ("briefing", "query") if key in package]
     omitted_fields = list(
         dict.fromkeys([*(previous["omitted_fields"] if previous else []), *optional])
@@ -122,7 +123,7 @@ def _budget_context(package):
     }
     result.update({key: [] for key in CONTEXT_GROUPS if key in package})
 
-    def candidate(content, counts, omitted):
+    def candidate(content: dict[str, Any], counts, omitted):
         # Query is only an echo of the already-present user input, not recalled evidence.
         status = "partial" if any(counts.values()) or content.get("briefing") else "empty"
         return {
@@ -180,7 +181,7 @@ class MemoryClient:
     def deliver(self, operation, message, *, agent_id):
         url = "/runtime/conversation/" + message["id"]
         headers = {**self.ingest_headers, "X-Agent-Id": agent_id}
-        arguments = (
+        arguments: dict[str, Any] = (
             {}
             if operation == "delete"
             else {

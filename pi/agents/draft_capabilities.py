@@ -55,7 +55,8 @@ STOP = {
     "every",
     "about",
 }
-OPERATORS = {
+# Looked up with whatever value a draft node carries, so any key may be asked for.
+OPERATORS: dict[object, str] = {
     "add": "plus",
     "subtract": "minus",
     "multiply": "times",

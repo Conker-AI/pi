@@ -3,6 +3,7 @@
 import hashlib
 import json
 import time
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends
 from pydantic import Field
@@ -325,7 +326,7 @@ def _check(store, providers, sid: str, mid: str, body: Check):
             role,
             prompt,
             providers,
-            **({"override": body.model_id} if body.model_id else {}),
+            **cast("dict[str, Any]", {"override": body.model_id} if body.model_id else {}),
         )
 
         parsed = _parse_fact_check_result(decision["completion"].text, source_ids)

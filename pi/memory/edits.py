@@ -5,6 +5,7 @@ import json
 import re
 import threading
 from contextlib import contextmanager
+from typing import NoReturn
 from uuid import NAMESPACE_URL, uuid5
 
 import httpx
@@ -54,7 +55,7 @@ class EditError(ServiceError):
     pass
 
 
-def _error(code, message, status=409):
+def _error(code, message, status=409) -> NoReturn:
     raise EditError(code, message, status)
 
 

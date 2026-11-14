@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import re
+from typing import TYPE_CHECKING, cast
 
 from pi.content.markdown_blocks import Block, ExportLimit, Span, plain
 
@@ -11,6 +12,10 @@ MONO = "Courier New"
 LINK = "0563C1"
 STEP_CM = 0.75  # One list or quote level.
 DEPTH = 8  # Deeper levels draw at this indent.
+
+if TYPE_CHECKING:
+    from docx.styles.style import ParagraphStyle
+    from openpyxl.worksheet.worksheet import Worksheet
 
 
 def _runs(paragraph, part, spans: list[Span], bold=False):
@@ -123,7 +128,7 @@ def docx(blocks: list[Block], title: str) -> bytes:
     document.core_properties.author = "Conker"
     document.core_properties.last_modified_by = "Conker"
     document.core_properties.title = title[:255]
-    document.styles["Normal"].font.size = Pt(11)
+    cast("ParagraphStyle", document.styles["Normal"]).font.size = Pt(11)
     for block in blocks:
         if block.kind == "heading":
             paragraph = document.add_heading("", level=block.level)
@@ -173,7 +178,7 @@ def xlsx(blocks: list[Block], title: str, sheet: str | None = None) -> bytes:
     if not tables:
         raise ExportLimit("no_table")
     book = Workbook()
-    book.remove(book.active)
+    book.remove(cast("Worksheet", book.active))  # A new workbook has one sheet.
     book.properties.creator = "Conker"
     book.properties.title = title[:255]
     taken: set[str] = set()

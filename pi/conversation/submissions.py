@@ -283,7 +283,7 @@ def reserve(
     task_revision=None,
     draft_revision=None,
     attachment_ids=None,
-    queued_entry=None,
+    queued_entry: tuple[str, int] | None = None,
     model_id=None,
     reply_to=None,
     research_mode="off",

@@ -8,6 +8,7 @@ import json
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from pi.content import office_exports
 from pi.content.artifact_models import (
@@ -140,6 +141,10 @@ def _view(db, row, resolve, summary=False):
         count = len(versions)
         first = versions[0] if versions else None
         current = versions[-1]["version"] if versions else 0
+    # Plain dicts here; ArtifactView validates them into their models.
+    source: Any
+    privacy: Any
+    task: Any
     availability, privacy, private = "available", None, False
     source, has_source = None, bool(row["source_session_id"])
     if row["source_session_id"]:

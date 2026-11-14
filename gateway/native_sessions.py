@@ -3,7 +3,7 @@
 import json
 import re
 import unicodedata
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, cast
 
 import httpx
 from pydantic import Field, field_validator, model_validator
@@ -171,7 +171,7 @@ def request(transport, action, identity=None, body=None):
             client.stream(
                 "POST" if action == "stop" else "GET",
                 "http://conker-host" + path,
-                **({"json": body} if body is not None else {}),
+                **cast("dict[str, Any]", {"json": body} if body is not None else {}),
             ) as response,
         ):
             if 300 <= response.status_code < 400:
@@ -198,7 +198,7 @@ def request(transport, action, identity=None, body=None):
                 returned = result.result.id if action == "status" else result.id
                 if returned != identity:
                     raise ValueError()
-            if action == "stop" and result.identity != body["expectedIdentity"]:
+            if action == "stop" and result.identity != cast(dict, body)["expectedIdentity"]:
                 raise ValueError()
             return result.model_dump()
     except (httpx.HTTPError, ValueError, UnicodeError, RecursionError, TypeError):

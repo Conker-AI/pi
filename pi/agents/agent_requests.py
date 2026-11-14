@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import cast
 
 from pydantic import ValidationError
 
@@ -287,7 +288,7 @@ def approve(store, request, *, by, now=None) -> dict:
 
     try:
         if kind == "agent":
-            agents.create(store, body, then=decided)
+            agents.create(store, cast(agents.AgentInput, body), then=decided)
         else:
             teams.save(store, "team", body, then=decided)
     except agents.AgentError as refusal:

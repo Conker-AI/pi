@@ -22,6 +22,7 @@ for it and returns its reply; its guards (depth, loops, counts) live in `pi.agen
 from __future__ import annotations
 
 import re
+from typing import Literal, overload
 
 from pi.actions.toolgate import Tool, ToolResult
 from pi.agents import agent_calls, agent_requests, asks, change_requests, tool_drafts
@@ -297,6 +298,14 @@ def offered(loop, execution, session_id, turn_id) -> list[Tool]:
             loop.store, tool.id, session_id=session_id, turn_id=turn_id, execution=execution
         )
     ]
+
+
+@overload
+def _text(args, name, limit, required: Literal[True] = True) -> str: ...
+
+
+@overload
+def _text(args, name, limit, required: bool) -> str | None: ...
 
 
 def _text(args, name, limit, required=True):

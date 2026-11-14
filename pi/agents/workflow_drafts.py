@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 from functools import partial
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import Field, JsonValue, model_validator
 
@@ -239,7 +239,9 @@ def normalize(
         if edge.get("branch") is not None:
             link["branch"] = edge["branch"]
         links.append(link)
-    budgets = document.get("budgets") if isinstance(document.get("budgets"), dict) else {}
+    budgets = (
+        cast(dict, document.get("budgets")) if isinstance(document.get("budgets"), dict) else {}
+    )
     result = {
         "id": draft_id or slug(name),
         "name": name,

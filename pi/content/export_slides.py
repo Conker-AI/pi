@@ -8,6 +8,7 @@ slide under the same title. Text that would overflow continues on a slide marked
 from __future__ import annotations
 
 import io
+from typing import TYPE_CHECKING, cast
 
 from pi.content.markdown_blocks import Block, ExportLimit, Span, plain
 
@@ -18,6 +19,11 @@ CODE_LINES = 24  # Code lines a slide holds at 12 points.
 TABLE_ROWS = 10
 MONO = "Courier New"
 CONTINUED = " (continued)"
+
+if TYPE_CHECKING:
+    from pptx.slide import Slide
+    from pptx.text.text import TextFrame
+    from pptx.util import Length
 
 
 def _cell(cell, part, text: str, size: int, href: str | None):
@@ -83,7 +89,7 @@ class _Deck:
             from pptx.enum.text import MSO_AUTO_SIZE
             from pptx.util import Inches
 
-            box = self.current.shapes.add_textbox(
+            box = cast("Slide", self.current).shapes.add_textbox(
                 Inches(0.6), Inches(1.45), Inches(12.1), Inches(5.6)
             )
             self.body, self.first = box.text_frame, True
@@ -94,7 +100,8 @@ class _Deck:
     def paragraph(self, spans: list[Span], block: Block, size=18, mono=False, bold=False):
         from pptx.util import Emu, Pt
 
-        paragraph = self.body.paragraphs[0] if self.first else self.body.add_paragraph()
+        body = cast("TextFrame", self.body)  # Every caller runs room() first, which sets it.
+        paragraph = body.paragraphs[0] if self.first else body.add_paragraph()
         self.first = False
         depth = min(block.indent + block.quote, 6)
         if depth:
@@ -135,13 +142,14 @@ class _Deck:
             elif start or self.body is not None or self.used:
                 self.slide(base + CONTINUED)
             # Otherwise the slide holds only a heading so far, and the table goes under it.
-            shape = self.current.shapes.add_table(
+            current = cast("Slide", self.current)  # Set above, or already set when kept.
+            shape = current.shapes.add_table(
                 len(rows) + 1,
                 columns,
                 Inches(0.6),
                 Inches(1.45),
                 Inches(12.1),
-                Inches(0.4) * (len(rows) + 1),
+                cast("Length", Inches(0.4) * (len(rows) + 1)),
             )
             # Cells are written as XML directly: python-pptx's cell lookup rescans the table.
             for cells, row in zip([block.header, *rows], shape.table._tbl.tr_lst, strict=True):
@@ -149,7 +157,7 @@ class _Deck:
                     spans = cells[column] if column < len(cells) else []
                     links = {span.href for span in spans if span.href}
                     link = links.pop() if len(links) == 1 else None
-                    _cell(cell, self.current.part, plain(spans), size, link)
+                    _cell(cell, current.part, plain(spans), size, link)
         self.end()
 
 

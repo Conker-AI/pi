@@ -107,7 +107,7 @@ def totals(db, turn_id):
     return {key: summary["totals"][key] if summary["attempt_count"] else None for key in FIELDS}
 
 
-def _accounted(db, turn_id):
+def _accounted(db, turn_id) -> dict:
     turn = db.execute("SELECT usage_version FROM turns WHERE id=?", (turn_id,)).fetchone()
     if turn is not None and turn[0] == 1:
         return totals(db, turn_id)

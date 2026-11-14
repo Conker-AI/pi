@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -34,6 +35,9 @@ from .operations import fingerprint
 from .store import AuthError, AuthStore
 from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
+
+if TYPE_CHECKING:
+    from pi.models.private_transport import PrivateTransport
 
 COOKIE = "__Host-conker"
 
@@ -239,7 +243,7 @@ def create_app(
                 yield
             finally:
                 if settings.provider_control_url:
-                    app.state.provider_transport.shutdown()
+                    cast("PrivateTransport", app.state.provider_transport).shutdown()
                 if app.state.terminals:
                     app.state.terminals.close()
                 if app.state.terminal_sidecar:

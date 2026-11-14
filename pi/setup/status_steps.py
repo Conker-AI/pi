@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pi.agents import profiles as agents
 from pi.models import roles as model_roles
 from pi.setup import choices as setup_choices
@@ -138,7 +140,12 @@ def _model(store, router):
         )
     )
     readiness = (
-        setup_models.availability(adapter, [selected["route"]]).get(selected["route"])
+        cast(
+            str,
+            setup_models.availability(adapter, [cast(dict, selected)["route"]]).get(
+                cast(dict, selected)["route"]
+            ),
+        )
         if enabled
         else "unavailable"
     )
@@ -163,7 +170,7 @@ def _model(store, router):
             ],
             "model_provider_unavailable",
         )
-    receipt = setup_model_probes.current(store, saved["revision"], selected["id"])
+    receipt = setup_model_probes.current(store, saved["revision"], cast(dict, selected)["id"])
     return _step(
         "model",
         "complete" if receipt is not None else "in_progress",

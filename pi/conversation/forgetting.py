@@ -21,6 +21,7 @@ import time
 import uuid
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 from pi.actions import tool_forgets, withdrawals
 from pi.agents import agent_calls, asks, change_requests, keep, retired_workflows, skills
@@ -295,7 +296,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
     except BaseException:
         db.rollback()
         raise
-    return _receipt(db, plan["root_session_id"])
+    return cast(dict, _receipt(db, plan["root_session_id"]))
 
 
 def forget(path: Path | str, session_id: str, confirmation: str) -> dict:

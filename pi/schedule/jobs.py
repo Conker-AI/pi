@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from pi.core.errors import ServiceError
@@ -455,7 +456,7 @@ def provision_budget(store, identity, adapter):
             action_id=identity,
             agent_id=definition["agentId"],
         )
-        body = BudgetBinding(budget_id=budget_id)
+        body = BudgetBinding(budget_id=cast(Any, budget_id))
     except Exception:
         raise JobError(
             "Recurring allowance is unavailable, exhausted, expired or does not match this run."

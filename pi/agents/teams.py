@@ -3,6 +3,7 @@
 import json
 import time
 import uuid
+from typing import cast
 
 from pydantic import ValidationError
 
@@ -437,7 +438,12 @@ def prepare(store, identity, kind, request):
         }
         if kind == "template":
             version = next(
-                (v for v in current["versions"] if v["version"] == request.version), None
+                (
+                    v
+                    for v in current["versions"]
+                    if v["version"] == cast(Instantiate, request).version
+                ),
+                None,
             )
             if version is None:
                 raise agents.AgentError(
@@ -445,7 +451,11 @@ def prepare(store, identity, kind, request):
                 )
             try:
                 configuration = agents.AgentInput.model_validate(
-                    {**version["definition"]["agent"], **request.overrides, "name": request.name}
+                    {
+                        **version["definition"]["agent"],
+                        **cast(Instantiate, request).overrides,
+                        "name": cast(Instantiate, request).name,
+                    }
                 )
                 Template.limits(configuration)
             except (ValidationError, ValueError) as exc:
@@ -455,9 +465,9 @@ def prepare(store, identity, kind, request):
             agents._unique_name(db, configuration)
             result.update(
                 templateId=identity,
-                templateVersion=request.version,
+                templateVersion=cast(Instantiate, request).version,
                 configuration=configuration.model_dump(),
-                overriddenFields=["name", *request.overrides],
+                overriddenFields=["name", *cast(Instantiate, request).overrides],
             )
         else:
             definition = Team.model_validate(current["definition"])

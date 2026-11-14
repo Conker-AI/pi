@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -224,11 +224,14 @@ def list_agents(store):
         db.execute("BEGIN")
         kept = visibility.kept_from_hidden(db, "agent")
         return AgentCollection(
-            results=[
-                _get(db, row["id"])
-                for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
-                if row["id"] not in kept
-            ]
+            results=cast(
+                list,
+                [
+                    _get(db, row["id"])
+                    for row in db.execute("SELECT id FROM agents ORDER BY created_at,id").fetchall()
+                    if row["id"] not in kept
+                ],
+            )
         ).model_dump()
 
 
@@ -237,13 +240,16 @@ def history(store, identity):
         db.execute("BEGIN")
         _get(db, identity)
         return AgentCollection(
-            results=[
-                _get(db, identity, row["revision"])
-                for row in db.execute(
-                    "SELECT revision FROM agent_versions WHERE agent_id=? ORDER BY revision",
-                    (identity,),
-                ).fetchall()
-            ]
+            results=cast(
+                list,
+                [
+                    _get(db, identity, row["revision"])
+                    for row in db.execute(
+                        "SELECT revision FROM agent_versions WHERE agent_id=? ORDER BY revision",
+                        (identity,),
+                    ).fetchall()
+                ],
+            )
         ).model_dump()
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from pi.actions.toolgate import ToolGateClient
     from pi.conversation.store import Store
     from pi.memory.service import Memory
+    from pi.turns.loop import Loop
 
 
 class Replies:
@@ -94,7 +95,7 @@ class Replies:
             try:
                 if turn["status"] in {"awaiting_approval", "awaiting_budget"}:
                     if action["tool_id"] not in {
-                        tool.id for tool in self._available_tools(execution)
+                        tool.id for tool in cast("Loop", self)._available_tools(execution)
                     }:
                         self.store.finish_turn(turn_id, turn["status"])
                         raise TurnFailed(
@@ -111,15 +112,23 @@ class Replies:
                     turn_control.guard(self.store, execution)
                     actions.state(self.store, action["id"], "dispatching")
                     # The same agent that asked: ToolGate binds the approval to that actor.
-                    outcome = self._gate(execution).invoke(
-                        action["tool_id"],
-                        action["args"],
-                        approval_request_id=turn["approval_request_id"],
-                        action_id=action["id"],
-                        job_id=action["job_id"],
+                    outcome = (
+                        cast("Loop", self)
+                        ._gate(execution)
+                        .invoke(
+                            action["tool_id"],
+                            action["args"],
+                            approval_request_id=turn["approval_request_id"],
+                            action_id=action["id"],
+                            job_id=action["job_id"],
+                        )
                     )
                 else:
-                    outcome = self._gate(execution).check_action(action["id"], action["tool_id"])
+                    outcome = (
+                        cast("Loop", self)
+                        ._gate(execution)
+                        .check_action(action["id"], action["tool_id"])
+                    )
             except ProviderUnavailable as exc:
                 self.store.finish_turn(
                     turn_id,
@@ -207,7 +216,7 @@ class Replies:
                 if acted:
                     raise ActedWithoutReply(turn_id, reason)
                 raise TurnFailed(reason, turn_id)
-            return self._run_bound(
+            return cast("Loop", self)._run_bound(
                 session_id, json.loads(source[0]), turn_id, {}, None, continued=True
             )
         return self._finish_reply(turn_id, session_id, execution, acted, started)
@@ -241,9 +250,9 @@ class Replies:
         try:
             # This path narrates an already recorded action. It never dispatches
             # another tool, so advertising tools here misleads the answer model.
-            history = self._history(session_id, turn_id=turn_id, reply_only=True)
+            history = cast("Loop", self)._history(session_id, turn_id=turn_id, reply_only=True)
             ctx = TurnContext(history_chars=history_size(history), needs_tools=False)
-            route, completion, _skipped = self._call(history, ctx, execution)
+            route, completion, _skipped = cast("Loop", self)._call(history, ctx, execution)
             from pi.context import research
 
             research.validate_narration(execution, completion.text)
@@ -335,10 +344,18 @@ class Replies:
                     text="",
                     model=fields.get("model", "unknown"),
                     provider=fields.get("provider", "unknown"),
-                    **{
-                        key: fields.get(key)
-                        for key in ("input_tokens", "output_tokens", "cached_tokens", "cost_usd")
-                    },
+                    **cast(
+                        "dict[str, Any]",
+                        {
+                            key: fields.get(key)
+                            for key in (
+                                "input_tokens",
+                                "output_tokens",
+                                "cached_tokens",
+                                "cost_usd",
+                            )
+                        },
+                    ),
                 ),
             )
             raise

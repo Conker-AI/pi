@@ -3,6 +3,7 @@
 import hashlib
 import re
 import time
+from typing import NoReturn
 
 import yaml
 from pydantic import Field
@@ -43,7 +44,7 @@ class _UniqueSafeLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep=deep)
 
 
-def _error(code, message, status=422, revision=None):
+def _error(code, message, status=422, revision=None) -> NoReturn:
     raise agents.AgentError(code, message, status, revision)
 
 
