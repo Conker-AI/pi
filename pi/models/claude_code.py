@@ -1,5 +1,7 @@
 """Text-only adapter to the official native CLI; no borrowed OAuth tokens."""
 
+import re
+
 import httpx
 
 from pi.models import inference_control
@@ -7,6 +9,18 @@ from pi.models.chatgpt import ChatGPTProvider
 from pi.models.evidence import project_tool_evidence
 from pi.models.private_transport import PrivateTransport
 from pi.models.providers import Completion, ProviderUnavailable, require_images
+
+# What the subscription runtime accepts as a model id (it passes the alias or id to the CLI).
+_MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,299}")
+
+
+def answering_model(value: dict, requested: str) -> str:
+    """The model id that really answered. The runtime resolves an alias such as `haiku` to the
+    id the CLI used (`actualModel`); a missing, empty or malformed value keeps the alias asked."""
+    actual = value.get("actualModel")
+    if isinstance(actual, str) and _MODEL_ID.fullmatch(actual):
+        return actual
+    return requested
 
 
 class ClaudeCodeProvider(ChatGPTProvider):
@@ -41,7 +55,7 @@ class ClaudeCodeProvider(ChatGPTProvider):
                     raise ValueError()
                 return Completion(
                     text=value["text"],
-                    model=value.get("actualModel") or model,
+                    model=answering_model(value, model),
                     provider=self.name,
                     input_tokens=value.get("inputTokens"),
                     output_tokens=value.get("outputTokens"),
