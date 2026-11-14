@@ -13,6 +13,7 @@ import pytest
 from pi.agents import continuity, definitions, keep, teams
 from pi.agents import profiles as agents
 from pi.agents.team_models import Revision, Team
+from pi.context import projects
 from pi.conversation import archive, forgetting
 from pi.conversation.store import Store
 from pi.schedule import agent_jobs, jobs
@@ -133,7 +134,9 @@ def adopted_job(store, session):
 
 
 def shown(store, job_id):
-    summaries = definitions.summaries(store, archived=True)["results"]
+    summaries = definitions.summaries(store, archived=True, list_projects=projects.list_projects)[
+        "results"
+    ]
     briefing = continuity.briefing(store, limit=100)["items"]
     return {
         "jobs": job_id in {j["id"] for j in jobs.list_jobs(store)},

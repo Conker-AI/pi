@@ -45,7 +45,7 @@ def populate(store):
 
 def test_every_kind_appears_in_the_same_shape(store):
     agent, draft, published, crew, skill, job, project = populate(store)
-    rows = definitions.summaries(store)["results"]
+    rows = definitions.summaries(store, list_projects=projects.list_projects)["results"]
     by_id = {row["id"]: row for row in rows}
     assert [row["kind"] for row in rows] == sorted(
         (row["kind"] for row in rows), key=definitions.KINDS.index
@@ -66,16 +66,26 @@ def test_every_kind_appears_in_the_same_shape(store):
 
 def test_filters_by_kind_search_and_archived(store):
     _, _, _, _, _, _, project = populate(store)
-    assert {row["kind"] for row in definitions.summaries(store, "template")["results"]} == {
-        "template"
-    }
-    found = definitions.summaries(store, search="published")["results"]
+    assert {
+        row["kind"]
+        for row in definitions.summaries(store, "template", list_projects=projects.list_projects)[
+            "results"
+        ]
+    } == {"template"}
+    found = definitions.summaries(store, search="published", list_projects=projects.list_projects)[
+        "results"
+    ]
     assert [row["name"] for row in found] == ["Published template"]
     projects.mutate(
         store, project["id"], projects.Archive(expected_revision=1, archived=True), "archive"
     )
-    assert project["id"] not in {row["id"] for row in definitions.summaries(store)["results"]}
-    archived = definitions.summaries(store, "project", archived=True)["results"]
+    assert project["id"] not in {
+        row["id"]
+        for row in definitions.summaries(store, list_projects=projects.list_projects)["results"]
+    }
+    archived = definitions.summaries(
+        store, "project", archived=True, list_projects=projects.list_projects
+    )["results"]
     assert archived[0]["state"] == "archived" and archived[0]["archivedAt"]
 
 
@@ -84,9 +94,16 @@ def test_long_descriptions_are_shortened_and_job_instructions_stay_out(store):
         store, projects.Fields(name="Long", description="word " * 300, instructions="Be critical")
     )
     jobs.create(store, definition(instructions="private schedule instructions"))
-    row = definitions.summaries(store, "project")["results"][0]
+    row = definitions.summaries(store, "project", list_projects=projects.list_projects)["results"][
+        0
+    ]
     assert len(row["description"]) == definitions.DESCRIPTION and row["description"].endswith("…")
-    assert definitions.summaries(store, "job")["results"][0]["description"] == ""
+    assert (
+        definitions.summaries(store, "job", list_projects=projects.list_projects)["results"][0][
+            "description"
+        ]
+        == ""
+    )
 
 
 def test_team_and_template_rows_skip_snapshots_and_versions(store, monkeypatch):
@@ -94,14 +111,16 @@ def test_team_and_template_rows_skip_snapshots_and_versions(store, monkeypatch):
     collaboration.archive(
         store, crew["id"], "team", profiles.ArchiveAgent(expected_revision=1, archived=True)
     )
-    before = definitions.summaries(store, archived=True)
+    before = definitions.summaries(store, archived=True, list_projects=projects.list_projects)
 
     def forbidden(*args, **kwargs):
         raise AssertionError("the definitions list must not read preparations or versions")
 
     monkeypatch.setattr(collaboration, "list_all", forbidden)
     monkeypatch.setattr(collaboration, "_get", forbidden)
-    assert definitions.summaries(store, archived=True) == before
+    assert (
+        definitions.summaries(store, archived=True, list_projects=projects.list_projects) == before
+    )
     rows = {row["id"]: row for row in before["results"]}
     assert rows[draft["id"]]["state"] == "draft"
     assert rows[published["id"]]["state"] == "published"
