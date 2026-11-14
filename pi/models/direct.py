@@ -22,12 +22,11 @@ from pi.models.providers import (
     ProviderUnavailable,
     chat_content,
     not_billed,
+    reported_count,
 )
 from pi.turns import inference_control
 
-
-def _count(value):
-    return value if type(value) is int and value >= 0 else None
+_count = reported_count
 
 
 @contextmanager

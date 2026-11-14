@@ -141,15 +141,25 @@ def _handled_items(store, day_start):
     """Get completed work since the start of the owner's day."""
     items = []
     with store._connect() as db:
+        hidden_jobs = set(_hidden_jobs(db))
+        marks = ",".join("?" * len(hidden_jobs))
+        # Hidden chats and hidden jobs are left out before the limit, so they take no slot.
+        skip_jobs = (
+            "AND (co.scheduled_run_id IS NULL OR co.scheduled_run_id NOT IN "
+            f"(SELECT id FROM scheduled_runs WHERE job_id IN ({marks})))"
+            if hidden_jobs
+            else ""
+        )
         rows = db.execute(
-            """SELECT co.*, ae.session_id, ae.kind as event_kind, ae.task_id, ae.run_id
+            f"""SELECT co.*, ae.session_id, ae.kind as event_kind, ae.task_id, ae.run_id
                FROM continuity_order co
                LEFT JOIN activity_events ae ON ae.id=co.activity_event_id
                WHERE co.occurred_at >= ? AND co.to_status IN ('complete', 'completed')
+               AND (ae.session_id IS NULL OR NOT {visibility.hidden_sql("ae.session_id")})
+               {skip_jobs}
                ORDER BY co.occurred_at DESC LIMIT 50""",
-            (day_start,),
+            (day_start, *sorted(hidden_jobs)),
         ).fetchall()
-        hidden_jobs = set(_hidden_jobs(db))
 
         for row in rows:
             if row["scheduled_run_id"]:
@@ -302,45 +312,54 @@ def _upcoming_items(store, now):
 def _impact_counts(store, day_start, week_start):
     """Calculate impact counts for today and this week."""
 
+    # One rule (pi.conversation.visibility): a chat in the Trash or forgotten, or made from one,
+    # and the runs of a job kept from one, are not counted.
+    hidden_t = visibility.hidden_sql("t.session_id")
+    hidden_ae = visibility.hidden_sql("ae.session_id")
+
     def _count_period(start_time):
         with store._connect() as db:
+            hidden_jobs = sorted(_hidden_jobs(db))
+            marks = ",".join("?" * len(hidden_jobs))
+            skip_jobs = f"AND job_id NOT IN ({marks})" if hidden_jobs else ""
             answers = db.execute(
-                """SELECT COUNT(*) FROM turns t
+                f"""SELECT COUNT(*) FROM turns t
                    JOIN sessions s ON s.id=t.session_id
                    WHERE t.status='complete' AND t.ended_at >= ?
-                   AND t.session_id NOT IN (SELECT session_id FROM forgotten_sessions)""",
+                   AND NOT {hidden_t}""",
                 (start_time,),
             ).fetchone()[0]
 
             actions = db.execute(
-                """SELECT COUNT(*) FROM tool_actions ta
+                f"""SELECT COUNT(*) FROM tool_actions ta
                    JOIN turns t ON t.id=ta.turn_id
                    JOIN sessions s ON s.id=t.session_id
                    WHERE ta.state='completed' AND ta.created_at >= ?
-                   AND t.session_id NOT IN (SELECT session_id FROM forgotten_sessions)""",
+                   AND NOT {hidden_t}""",
                 (start_time,),
             ).fetchone()[0]
 
             tasks_completed = db.execute(
-                """SELECT COUNT(*) FROM activity_events ae
+                f"""SELECT COUNT(*) FROM activity_events ae
                    JOIN sessions s ON s.id=ae.session_id
                    WHERE ae.kind='task_status' AND ae.to_status='completed'
                    AND ae.occurred_at >= ?
-                   AND ae.session_id NOT IN (SELECT session_id FROM forgotten_sessions)""",
+                   AND NOT {hidden_ae}""",
                 (start_time,),
             ).fetchone()[0]
 
             jobs_completed = db.execute(
                 f"""SELECT COUNT(*) FROM scheduled_runs
-                   WHERE status='completed' AND started_at >= ? AND NOT ({jobs.WAITING_TURN})""",
-                (start_time,),
+                   WHERE status='completed' AND started_at >= ? AND NOT ({jobs.WAITING_TURN})
+                   {skip_jobs}""",
+                (start_time, *hidden_jobs),
             ).fetchone()[0]
 
             cost_result = db.execute(
-                """SELECT COALESCE(SUM(cost_usd), 0) FROM turns t
+                f"""SELECT COALESCE(SUM(cost_usd), 0) FROM turns t
                    JOIN sessions s ON s.id=t.session_id
                    WHERE t.cost_usd IS NOT NULL AND t.ended_at >= ?
-                   AND t.session_id NOT IN (SELECT session_id FROM forgotten_sessions)""",
+                   AND NOT {hidden_t}""",
                 (start_time,),
             ).fetchone()
             cost_usd = float(cost_result[0]) if cost_result[0] else 0.0

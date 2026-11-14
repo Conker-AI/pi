@@ -35,6 +35,7 @@ from pi.models.providers import (
     ProviderUnavailable,
     chat_content,
     not_billed,
+    reported_count,
 )
 from pi.turns import inference_control
 
@@ -237,22 +238,24 @@ class OpenRouterProvider:
         else:
             body = self._posted(payload, model, timeout)
 
-        choices = body.get("choices") or []
-        if not choices:
+        if not isinstance(body, dict):
             raise ProviderUnavailable("provider returned no choices")
-        text = (choices[0].get("message") or {}).get("content")
-        if not isinstance(text, str):
+        choices = body.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            raise ProviderUnavailable("provider returned no choices")
+        message = choices[0].get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
             raise ProviderUnavailable("provider returned no message content")
+        text = message["content"]
 
         try:
-            evidence = citations.from_openrouter_annotations(
-                (choices[0].get("message") or {}).get("annotations")
-            )
+            evidence = citations.from_openrouter_annotations(message.get("annotations"))
         except ValueError as exc:
             raise ProviderUnavailable("provider returned invalid citation metadata") from exc
-        usage = body.get("usage") or {}
-        prompt_tokens = usage.get("prompt_tokens")
-        completion_tokens = usage.get("completion_tokens")
+        reported = body.get("usage")
+        usage = reported if isinstance(reported, dict) else {}
+        prompt_tokens = reported_count(usage.get("prompt_tokens"))
+        completion_tokens = reported_count(usage.get("completion_tokens"))
         # Reported charges include request fees and provider-side accounting.
         # A token-price estimate cannot truthfully replace a missing receipt.
         cost = _price(usage, "cost")
@@ -263,7 +266,9 @@ class OpenRouterProvider:
             provider=self.name,
             input_tokens=prompt_tokens,
             output_tokens=completion_tokens,
-            cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+            cached_tokens=reported_count(
+                (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+            ),
             cost_usd=cost,
             raw={"finish_reason": choices[0].get("finish_reason")},
             citations=evidence,

@@ -15,6 +15,7 @@ from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
+from pi.memory.hidden import memory_hidden
 
 MEMORY_ID = r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}"
 REQUEST_ID = r"[A-Za-z0-9_-]{16,128}"
@@ -126,9 +127,12 @@ def pending(store):
         }
 
 
-def preview(client, identity):
+def preview(client, identity, store=None):
+    """The memory as MemoryGate holds it; one from a hidden chat (with `store`) is not found."""
     _id(identity, MEMORY_ID)
     _configured(client)
+    if memory_hidden(store, client, identity):
+        _error("not_found", "Editable Companion memory not found.", 404)
     try:
         value = client.memory(identity)
         if (
@@ -347,7 +351,7 @@ def apply(store, client, body):
                         "request_conflict", "Correction identity was already used for another edit."
                     )
                 return _view(old)  # Duplicate submit never repeats a remote mutation.
-        current = preview(client, body.memory_id)
+        current = preview(client, body.memory_id, store)
         if current["revision"] != body.expected_revision:
             _error("revision_conflict", "Memory changed. Review the current version first.")
         _admit(store, client, body, digest)
