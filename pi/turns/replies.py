@@ -6,13 +6,13 @@ import json
 import time
 from typing import TYPE_CHECKING, Any, cast
 
-from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ApprovalRequired, ToolGateUnavailable, ToolPending, ToolRefused
 from pi.calls import call_turns
 from pi.conversation import settings as session_settings
 from pi.models.providers import ProviderUnavailable, shown_text
 from pi.models.routing import TurnContext, history_size
+from pi.turns import action_identities as actions
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart
 from pi.turns import steering as turn_steering

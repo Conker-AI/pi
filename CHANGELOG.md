@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Cross-package imports: tool action identities (`pi/actions/identities.py`) moved unchanged to `pi.turns.action_identities`, because they are turn bookkeeping (rows reference `turns`, written in the turn's transaction); the edges `actions -> conversation` and `actions -> turns` are gone (92 -> 90). The audit drill follows the new path. No behaviour change (pi#PR).
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
