@@ -5,7 +5,12 @@ task/run associations and ToolGate boundary. This is an owner-directed coordinat
 it does not infer handoff conditions, spawn background workers or promote results.
 Gateway/frontend wiring and deployment remain separate.
 
-All `/team-runs` routes require the owner Pi key. `POST /from-team/{teamId}` accepts
+All `/team-runs` routes take the owner credential (the browser gateway's owner key, or Pi's
+recovery key); the signed-in browser session is enough, no password. A run starts and a role runs
+only while the owner's daily spending cap is on (`spending_cap_off`, 409; an unreadable cap is
+`spending_cap_unavailable`, 503): every paid call of a role passes that cap, so a run cannot spend
+past it, and turning the cap off asks for the password. Replaying a start by its request id still
+reads the run back. `POST /from-team/{teamId}` accepts
 `request_id`, `expected_revision`, `source_session_id`, `text`,
 `budgetMode: "observed-stop"`, and `acknowledgeCurrentCallMayOvershoot: true`.
 It freezes the team revision, agent versions, configured model roles and current

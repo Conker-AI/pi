@@ -12,7 +12,7 @@ from pi.agents import (
     keep,
     retired_workflows,
     skills,
-    team_execution,
+    team_schema,
     tool_drafts,
 )
 from pi.agents import profiles as agents
@@ -146,7 +146,7 @@ def install(db):
     db.executescript(context_retrieval.SCHEMA)
     db.executescript(collaboration.SCHEMA)
     collaboration.initialize(db)
-    db.executescript(team_execution.SCHEMA)
+    db.executescript(team_schema.SCHEMA)
     db.executescript(artifacts.SCHEMA)
     db.executescript(model_roles.SCHEMA)
     db.executescript(service_inference.SCHEMA)

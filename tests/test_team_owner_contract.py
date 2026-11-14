@@ -13,6 +13,8 @@ from pi.agents import teams as c
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation.store import Store
+from pi.models.routing import Router
+from pi.turns.loop import Loop
 from tests.test_collaboration import config, team
 
 OWNER = "team-owner-control-" + "o" * 32
@@ -244,16 +246,73 @@ def test_exact_browser_routes_and_bounded_pagination(owner):
         ("GET", path + "/versions"),
         ("GET", path + "/versions/1"),
         *[("POST", path + "/" + op) for op in ("archive", "restore", "update")],
+        ("POST", "/team-runs/from-team/" + ids[0]),
+        ("GET", "/team-runs/teamrun_" + "0" * 32),
+        *[
+            ("POST", "/team-runs/teamrun_" + "0" * 32 + "/" + op)
+            for op in ("steps", "reconcile", "finish")
+        ],
     ]:
         assert owner_allowed(method, route) and not runtime_allowed(method, route)
     for method, route in [
         ("GET", "/collaboration"),
         ("POST", path + "/prepare"),
         ("POST", path + "/remove"),
-        ("POST", "/team-runs/from-team/" + ids[0]),
+        ("POST", "/team-runs/from-team/team_short"),
+        ("POST", "/team-runs/teamrun_" + "0" * 32 + "/prepare"),
+        ("GET", "/team-runs/teamrun_" + "0" * 32 + "/steps"),
         ("POST", "/collaboration/templates"),
         ("GET", base + "/team_short"),
         ("GET", path + "/versions/01"),
         ("GET", path + "/versions/1/extra"),
     ]:
         assert not owner_allowed(method, route)
+
+
+def test_the_owner_starts_and_reads_a_team_run_with_the_cap_on_and_is_refused_with_it_off(
+    owner, monkeypatch
+):
+    from test_team_execution import Recorder
+    from test_team_execution import setup as team_setup
+
+    from pi.api.browser_contract import password_write, session_only_write
+    from pi.owner import preferences as prefs
+
+    store, client, headers = owner
+    monkeypatch.setattr(
+        api.app.state, "loop", Loop(store, Router(local_provider=Recorder())), raising=False
+    )
+    record, _ = team_setup(store)
+    session = store.create_session()
+    body = {
+        "request_id": "team_run_request_001",
+        "expected_revision": 1,
+        "source_session_id": session,
+        "text": "Task",
+        "budgetMode": "observed-stop",
+        "acknowledgeCurrentCallMayOvershoot": True,
+    }
+    url = "/team-runs/from-team/" + record["id"]
+    assert client.post(url, json=body).status_code == 401
+    assert client.post(url, json=body, headers={"X-Pi-Gateway-Key": "runtime"}).status_code == 401
+    started = client.post(url, json=body, headers=headers)
+    assert started.status_code == 200
+    run = started.json()
+    assert client.get("/team-runs/" + run["id"], headers=headers).status_code == 200
+    # The signed-in session is enough: the cap bounds what a run can spend, and a run is refused
+    # (below) while it is off, which only the password can change.
+    assert session_only_write("POST", url) and not password_write("POST", url)
+    current = prefs.load(store)
+    document = current["preferences"]
+    document["spendingCap"] = {**document["spendingCap"], "enabled": False}
+    prefs.save(
+        store,
+        prefs.UpdatePreferences(expected_revision=current["revision"], preferences=document),
+    )
+    again = client.post(url, json={**body, "request_id": "team_run_request_002"}, headers=headers)
+    assert again.status_code == 409 and "spending cap" in again.text
+    step = {"request_id": "first_step_request_001", "expected_revision": run["revision"]}
+    refused = client.post(
+        "/team-runs/" + run["id"] + "/steps", json={**step, "roleId": "first"}, headers=headers
+    )
+    assert refused.status_code == 409 and "spending cap" in refused.text
