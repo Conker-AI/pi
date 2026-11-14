@@ -188,7 +188,9 @@ class Loop(ModelCalls, History, Replies):
                     "Explicit agent model mapping is not configured; no fallback was attempted."
                 )
             adapters = self.router.adapters()
-            context_retrieval.resolve(self.store, session_id, identity, adapters)
+            context_retrieval.resolve(
+                self.store, session_id, identity, adapters, turn_control.guard
+            )
             history = self._history(session_id, execution=execution, request_id=identity)
             outgrown = history_size(history) + len(user_text) > self.fork_threshold_chars
             if outgrown and execution.get("replyToMessageId"):
@@ -299,6 +301,7 @@ class Loop(ModelCalls, History, Replies):
         started = time.monotonic() if started is None else started
 
         from pi.context import research
+        from pi.turns import research_plan
 
         published = self._available_tools(execution)
         # Conker's own tools only file requests for the owner's approval (see native_tools).
@@ -340,7 +343,7 @@ class Loop(ModelCalls, History, Replies):
                     and research.plan(self.store, turn_id) is None
                 ):
                     _, planned, _ = self._call([*history, research.PLAN_PROMPT], ctx, execution)
-                    research.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
+                    research_plan.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
                     history = self._history(session_id, tools=available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)
 
