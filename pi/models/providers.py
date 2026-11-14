@@ -16,7 +16,7 @@ from __future__ import annotations
 import contextvars
 import json
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 import httpx
@@ -24,7 +24,7 @@ import httpx
 from pi.core.images import ImageInput
 from pi.core.untrusted_text import strip_invisible
 from pi.models import citations as message_citations
-from pi.models import inference_control, live_stream, local_settings
+from pi.models import effort, inference_control, live_stream, local_settings
 from pi.models.loopback_http import verification
 
 
@@ -93,11 +93,13 @@ class Completion:
 
 @dataclass(frozen=True)
 class Output:
-    """What a caller asks of the answer: JSON only, at most this many tokens, no thinking."""
+    """What a caller asks of the answer: JSON only, at most this many tokens, no thinking, and how
+    hard to think (`effort`, one of pi.models.effort.LEVELS; only the answer call carries it)."""
 
     json: bool = False
     max_tokens: int | None = None
     think: bool | None = None
+    effort: str | None = None
 
 
 _output: contextvars.ContextVar[Output | None] = contextvars.ContextVar("output", default=None)
@@ -112,6 +114,22 @@ def output(value: Output):
         yield
     finally:
         _output.reset(saved)
+
+
+def requested_effort() -> str | None:
+    """The effort level the call in progress was asked for, or None."""
+    wanted = _output.get()
+    return wanted.effort if wanted is not None else None
+
+
+@contextmanager
+def effort_scope(level: str | None):
+    """Ask the calls in this block to think at `level`, keeping any other output request."""
+    if level is None:
+        yield
+        return
+    with output(replace(_output.get() or Output(), effort=level)):
+        yield
 
 
 # Shown under a reply the model stopped at its length limit, so a cut answer never reads as
@@ -238,6 +256,9 @@ class OllamaProvider:
                 }
             if wanted.think is not None:
                 payload["think"] = wanted.think
+            level = effort.ollama_value(model, wanted.effort)
+            if level is not None and wanted.think is None:
+                payload["think"] = level
         try:
             with inference_control.local_capacity(self.local_capacity_key, timeout):
                 if payload["stream"]:
