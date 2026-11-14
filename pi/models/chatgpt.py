@@ -3,6 +3,7 @@
 import json
 import uuid
 from contextlib import ExitStack, contextmanager
+from typing import TYPE_CHECKING, cast
 
 import httpx
 
@@ -10,7 +11,10 @@ from pi.conversation import live_stream
 from pi.models.providers import Completion, ProviderUnavailable, require_images
 from pi.turns import inference_control
 
-ERRORS = {
+if TYPE_CHECKING:
+    from pi.turns.inference_control import Token
+
+ERRORS: dict[object, str] = {
     "not_connected": "Sign in with ChatGPT in Settings > Providers.",
     "sign_in_required": "ChatGPT sign-in expired. Reconnect in Settings > Providers.",
     "usage_limit": "ChatGPT usage limit reached.",
@@ -70,7 +74,7 @@ class ChatGPTProvider:
 
     @contextmanager
     def cancelable_request(self):
-        token = inference_control.current()
+        token = cast("Token | None", inference_control.current())
         if token is None or not self.request_cancellation:
             yield {}
             return

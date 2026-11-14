@@ -6,11 +6,19 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **What Conker believes about you (read-only).** `GET /memory/beliefs` (owner session) lists one
+  page of MemoryGate's memory-beliefs list (MemoryGate 0.9.0, memorygate#101) in camelCase as
+  `BeliefPage`: origin (stated or concluded), confidence, evidence counts, lineage and open
+  conflicts, with the filters and cursor passed on. A memory with a forget pending or done, or made
+  from a hidden chat, is left out; MemoryGate missing or silent is 503 `memory_unavailable` (#248).
+- Type check: the pyright baseline goes from 341 to 27 errors with type-only edits (annotations,
+  casts, NoReturn on helpers that always raise, route path aliases at module scope). Behaviour and
+  the OpenAPI documents are unchanged (#247).
 - **History looks up named chats** (`pi/conversation/history.py`). `GET /sessions/history`
   takes an optional `ids=` (comma-separated, at most 50), so Home's "Jump back in" can ask for
   the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
   forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
-  `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged.
+  `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
 
 ## 0.25.0
 

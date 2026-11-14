@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 from pi.host import inventory, inventory_models
 from pi.host import targets as system_targets
 
+RequestPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{16,100}$")]
+
 
 def router(store, gate, authorize):
     routes = APIRouter(prefix="/system/inventory", dependencies=[Depends(authorize)])
 
     def invoke(function, *args):
         return function(store(), gate(), *args)
-
-    RequestPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{16,100}$")]
 
     def no_store(response):
         response.headers["Cache-Control"] = "no-store"

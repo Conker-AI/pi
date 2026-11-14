@@ -36,6 +36,7 @@ import json
 import sqlite3
 import time
 import uuid
+from typing import Any
 
 from pi.agents import profiles
 from pi.conversation import settings as session_settings
@@ -524,7 +525,7 @@ def expand(store, role, text):
         return text
     if not isinstance(observation, dict) or observation.get("tool") != RUN_AGENT_ID:
         return text
-    result = observation.get("result")
+    result: Any = observation.get("result")
     identity = result.get("callId") if isinstance(result, dict) else None
     if not isinstance(identity, str) or result.get("status") != "done":
         return text

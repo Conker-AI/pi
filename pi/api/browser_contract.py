@@ -200,6 +200,8 @@ OWNER_ROUTES = {
         r"/memory/objects/[a-z]+/[A-Za-z0-9_-]+",
         r"/memory/forget/[A-Za-z0-9_.:-]+",
         r"/memory/forget-pending",
+        # Read-only: what Conker believes about the owner, one page at a time.
+        r"/memory/beliefs",
         r"/memory/corrections/pending",
         r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}",

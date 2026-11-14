@@ -7,7 +7,7 @@ import json
 import math
 import time
 import uuid
-from typing import Literal
+from typing import Any, Literal, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -176,7 +176,7 @@ def save_case(store, definition, identity=None, revision=None):
                 (identity, definition.name.casefold(), now),
             )
         else:
-            revision += 1
+            revision = cast(int, revision) + 1
             db.execute(
                 "UPDATE model_evaluation_cases SET name_key=?,revision=? WHERE id=?",
                 (definition.name.casefold(), revision, identity),
@@ -307,7 +307,7 @@ def _reserve(store, identity, request):
 def _usage(completion):
     values = {}
     for key in ("input_tokens", "output_tokens", "cached_tokens", "cost_usd"):
-        value = getattr(completion, key, None)
+        value: Any = getattr(completion, key, None)
         numeric = type(value) in (int, float) if key == "cost_usd" else type(value) is int
         values[key] = value if numeric and math.isfinite(value) and value >= 0 else None
     return values

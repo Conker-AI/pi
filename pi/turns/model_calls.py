@@ -166,6 +166,8 @@ class ModelCalls:
             else None
         )
         if configuration is not None:
+            # configuration came from execution, so execution is set here.
+            execution = cast("dict", execution)
             adapters = self.router.adapters()
             from pi.agents import team_execution
 

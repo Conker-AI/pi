@@ -6,6 +6,7 @@ import json
 import math
 import struct
 import time
+from typing import NoReturn
 from urllib.parse import urlsplit
 
 import httpx
@@ -30,7 +31,7 @@ class SpeechError(ServiceError, RuntimeError):
         super().__init__(code, message, status)
 
 
-def _fail(code, status, message):
+def _fail(code, status, message) -> NoReturn:
     raise SpeechError(code, status, message)
 
 

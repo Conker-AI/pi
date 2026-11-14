@@ -6,7 +6,7 @@ import json
 import math
 import socket
 from contextlib import contextmanager, suppress
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,6 +14,9 @@ import httpx
 from pi.models.loopback_http import verification
 from pi.models.providers import Completion, ProviderUnavailable
 from pi.turns import inference_control
+
+if TYPE_CHECKING:
+    from pi.turns.inference_control import Token
 
 FOLLOW_UP_CHARACTERS = 400
 CONTEXT_CHARACTERS = 200
@@ -28,7 +31,7 @@ def _request_control(client):
     DNS/connect before a handle exists still use the configured phase timeout.
     Disconnecting does not claim that the decision service stopped its compute.
     """
-    token = inference_control.current()
+    token = cast("Token | None", inference_control.current())
     if token is None:
         yield {}
         return
@@ -291,7 +294,11 @@ class DecisionProvider:
         Oversize, busy and offline inputs preserve the baseline ordering.
         """
         records = package.get("memories", [])
-        receipt = {"status": "not_needed", "method": "relative-relevance", "provider": self.name}
+        receipt: dict = {
+            "status": "not_needed",
+            "method": "relative-relevance",
+            "provider": self.name,
+        }
         ordered = records
         if 2 <= len(records) <= 8:
             try:

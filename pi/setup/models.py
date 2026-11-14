@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, cast
 
 from pydantic import Field
 
 from pi.core.models import Strict
 from pi.models import roles as model_roles
 from pi.setup import model_probes as setup_model_probes
+
+_Status = Literal["ready", "unverified", "unavailable"]
 
 
 class Candidate(Strict):
@@ -44,14 +46,14 @@ class Activated(Strict):
     probe: setup_model_probes.ProbeReceipt
 
 
-def availability(adapter, routes) -> dict[str, str]:
+def availability(adapter: Any, routes) -> dict[str, str]:
     """One bounded provider observation per options read, with route-specific results."""
     if adapter is None:
         return dict.fromkeys(routes, "unavailable")
     try:
         check = getattr(adapter, "health_models", None)
         if callable(check):
-            observed = check(list(routes))
+            observed: dict[str, Any] = cast(dict, check(list(routes)))
         else:
             health = adapter.health()
             observed = dict.fromkeys(routes, health)
@@ -100,7 +102,7 @@ def options(store, router) -> Options:
                     providerName=provider["name"],
                     name=model["name"],
                     route=model["route"],
-                    status=statuses[model["providerId"]][model["route"]],
+                    status=cast(_Status, statuses[model["providerId"]][model["route"]]),
                     selected=model["id"] == selected,
                     execution=(
                         "local"
@@ -140,7 +142,7 @@ def options(store, router) -> Options:
                     providerName="Local model",
                     name=route,
                     route=route,
-                    status=statuses[local.name][route],
+                    status=cast(_Status, statuses[local.name][route]),
                     selected=False,
                     execution="local",
                     dataNotice="The setup test stays on this server.",

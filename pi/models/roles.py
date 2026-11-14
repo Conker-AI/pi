@@ -6,12 +6,15 @@ import hashlib
 import json
 import math
 from functools import partial
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import Field, model_validator
 
 from pi.core.models import Strict
 from pi.models.providers import Message, ProviderUnavailable, require_images
+
+if TYPE_CHECKING:
+    from pi.turns.routing_memo import Memo
 
 ROLES = (
     "answer",
@@ -214,12 +217,12 @@ def follow_answer(value):
             "failure": answer.get("failure", "stop") if backups else "stop",
             "fallbackModelIds": backups,
         }
-        for name, role in roles.items()
+        for name, role in cast(dict, roles).items()
         if name != "answer" and isinstance(role, dict) and role.get("followAnswer") is True
     }
     if not followed:
         return value
-    settings = {**value["roleSettings"], "roles": {**roles, **followed}}
+    settings = {**value["roleSettings"], "roles": {**cast(dict, roles), **followed}}
     return {**value, "roleSettings": settings}
 
 
@@ -284,7 +287,7 @@ def decision_evidence(completion):
         return {}
     result = {}
     for key in ("confidence", "elapsed_ms", "inputCharacters"):
-        item = value.get(key)
+        item: Any = value.get(key)
         if type(item) in (int, float) and math.isfinite(item) and item >= 0:
             result[key] = item
     if value.get("inputScope") in ("latest-user-request", "recent-exchange", "complexity-excerpt"):
@@ -391,7 +394,7 @@ def dispatch(
     assignment = config.roleSettings.roles[role]
     if not assignment.enabled or (role != "answer" and harness_disabled):
         raise SelectionError("Model role is disabled by configuration or privacy.")
-    eligible = {
+    eligible: dict[str | None, Model] = {
         m.id: m
         for m in config.models
         if m.enabled
@@ -440,7 +443,7 @@ def dispatch(
             key = _routing_key(
                 routing_memo, config, configuration_revision, providers, route_messages
             )
-            reused = routing_memo.get(key) if key is not None else None
+            reused = cast("Memo", routing_memo).get(key) if key is not None else None
             # Role restrictions can change independently of the typed choices.
             primary = config.roleSettings.roles["routing"].modelId
             if reused is not None and (
@@ -484,7 +487,7 @@ def dispatch(
                     and len(decision["attempts"]) == 1
                     and decision["attempts"][0]["status"] == "completed"
                 ):
-                    routing_memo.put(key, selected, decision["attempts"][0])
+                    cast("Memo", routing_memo).put(key, selected, decision["attempts"][0])
         except (ValueError, TypeError, SelectionError):
             if guard is not None:
                 guard()

@@ -158,8 +158,11 @@ def _address_scope(value):
 
 def browser_observation(value, key):
     observed = ObservedEnvelope.model_validate(value)
-    process_ids = {row.id: _opaque("process", row.id, key) for row in observed.processes.results}
-    container_ids = {
+    # Looked up by optional ids: a missing id finds nothing.
+    process_ids: dict[str | None, str] = {
+        row.id: _opaque("process", row.id, key) for row in observed.processes.results
+    }
+    container_ids: dict[str | None, str] = {
         row.id: _opaque("container", row.id, key) for row in observed.containers.results
     }
     processes = [

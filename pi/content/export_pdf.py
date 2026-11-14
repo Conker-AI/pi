@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import Any, Literal, cast
 from xml.sax.saxutils import escape
 
 from pi.content.markdown_blocks import Block, ExportLimit, Span
@@ -50,7 +51,11 @@ def _fonts():
         bold = face + "-Bold"
         italic = face + "-Italic" if face == "ConkerSans" else face
         both = face + "-BoldItalic" if face == "ConkerSans" else bold
-        for weight, slant, name in ((0, 0, face), (1, 0, bold), (0, 1, italic), (1, 1, both)):
+        faces = cast(
+            "tuple[tuple[Literal[0, 1], Literal[0, 1], str], ...]",
+            ((0, 0, face), (1, 0, bold), (0, 1, italic), (1, 1, both)),
+        )
+        for weight, slant, name in faces:
             addMapping(face, weight, slant, name)
 
 
@@ -112,7 +117,7 @@ class _Styles:
         depth = min(block.indent + block.quote, DEPTH)
         key = (id(base), depth, bool(block.marker), bool(block.quote))
         if key not in self.cache:
-            look = {"textColor": self.quote_color} if block.quote else {}
+            look: dict[str, Any] = {"textColor": self.quote_color} if block.quote else {}
             self.cache[key] = self.make(
                 f"P{len(self.cache)}",
                 parent=base or self.body,
@@ -136,7 +141,9 @@ class _Styles:
                 fontSize=size,
                 leading=size * 1.25,
                 spaceAfter=0,
-                alignment={"center": TA_CENTER, "right": TA_RIGHT}.get(align, TA_LEFT),
+                alignment=cast(
+                    "dict[str | None, Literal[0, 1, 2]]", {"center": TA_CENTER, "right": TA_RIGHT}
+                ).get(align, TA_LEFT),
             )
         return self.cache[key]
 

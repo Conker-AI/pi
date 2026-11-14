@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
 
 from pi.core.models import described
+from pi.memory import beliefs as memory_beliefs
 from pi.memory import forget as memory_forget
 from pi.memory import memory_replies as replies
 from pi.memory import stated as stated_memory
@@ -55,6 +58,33 @@ def router(app_state, require_key, require_owner):
     def remember_memory(body: stated_memory.Remember):
         """Add one memory in the owner's own words; the same request id never stores it twice."""
         return stated_memory.remember(getattr(app_state(), "memory_corrections", None), body)
+
+    @routes.get(
+        "/memory/beliefs",
+        dependencies=[Depends(require_owner)],
+        responses=described(memory_beliefs.BeliefPage),
+    )
+    def list_beliefs(
+        origin: Literal["stated", "concluded", "all"] = "all",
+        state: Literal["current", "needs_review", "all"] = "all",
+        memory_type: Literal["fact", "phase", "context", "watch"] | None = None,
+        limit: int = Query(default=50, ge=1, le=100),
+        after: str | None = Query(default=None, min_length=1, max_length=600),
+    ):
+        """What Conker believes about the owner, one page at a time (read only).
+
+        A memory with a forget pending or done, or made from a hidden chat, is left out; `total`
+        and `counts` drop only by the rows left out of this page."""
+        return memory_beliefs.beliefs(
+            app_state().memory,
+            {
+                "origin": origin,
+                "state": state,
+                "memory_type": memory_type,
+                "limit": limit,
+                "after": after,
+            },
+        )
 
     @routes.get("/memory", dependencies=[Depends(require_key)])
     def memory_status():

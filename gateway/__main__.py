@@ -11,6 +11,7 @@ import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlsplit
 
 from .store import AuthError, AuthStore
@@ -143,7 +144,7 @@ def main() -> None:
         config = Config.environment()
         config.validate()
         certificate, key = create_certificate(
-            Path(config.database).parent, urlsplit(config.origin).hostname
+            Path(config.database).parent, cast(str, urlsplit(config.origin).hostname)
         )
         uvicorn.run(
             create_app(config),
@@ -301,7 +302,7 @@ def main() -> None:
 
         config = Config.environment()
         config.validate()
-        renew_certificate(Path(args.db).parent, urlsplit(config.origin).hostname)
+        renew_certificate(Path(args.db).parent, cast(str, urlsplit(config.origin).hostname))
         print("Certificate renewed. Restart the gateway and trust the newly exported certificate.")
     elif args.command == "certificate":
         print((Path(args.db).parent / "tls.crt").read_text(), end="")

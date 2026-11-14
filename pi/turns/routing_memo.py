@@ -37,7 +37,7 @@ class Memo:
         self.key = self.value = None
 
 
-_current = ContextVar("routing_memo", default=None)
+_current: "ContextVar[Memo | None]" = ContextVar("routing_memo", default=None)
 
 
 @contextmanager

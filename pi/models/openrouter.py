@@ -21,6 +21,7 @@ import math
 import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 import httpx
 
@@ -63,7 +64,7 @@ class ModelInfo:
 
 def _price(pricing: dict, key: str) -> float | None:
     try:
-        value = pricing.get(key)
+        value: Any = pricing.get(key)
         if isinstance(value, bool):
             return None
         price = float(value)
