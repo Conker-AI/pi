@@ -13,7 +13,7 @@ be a decision with visible consequences.
   (`LoopState`) marks it done, dropped or open again, also when its chat is forked or closed. A
   loop in a forgotten or trashed chat is neither listed nor changed, and forgetting the chat
   deletes it. The writes take the recovery key until the dashboard has a screen. No migration (a
-  new table). docs/open-loops.md.
+  new table). docs/open-loops.md. (#251)
 
 - **Memory upkeep candidates (read-only).** `GET /memory/upkeep` (owner session) passes on
   MemoryGate's upkeep list in camelCase as `UpkeepPage`. It holds exact and near duplicates, open
