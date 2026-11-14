@@ -17,7 +17,7 @@ Rules:
 
 - The request reads only the typed draft. It saves nothing and grants nothing; privacy, model
   eligibility, budgets and ToolGate apply when the message is sent.
-- Exactly three settings plus one reason each (at most 160 characters). Unknown keys, unknown values,
+- Three settings plus one reason each (at most 160 characters), and optionally a fourth, `effort` (light, medium, high or max) with `reasons.effort`; a reply without effort is still valid and carries none, and an effort without its reason (or the reverse) fails closed. Unknown keys, unknown values,
   non-boolean `think` or missing reasons fail closed with 503; the owner chooses the settings.
 - No helpers, no proposal: a chat (or a new-chat draft) with harness processing disabled gets 409,
   and no model is called. An unknown or forgotten conversation gets 404; no model catalogue gets 503.

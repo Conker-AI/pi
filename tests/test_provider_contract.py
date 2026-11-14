@@ -77,7 +77,9 @@ def renamed(usage):
 
 def openrouter():
     provider = OpenRouterProvider(KEY, allow_paid=True)
-    provider._guard_cost = lambda model: SimpleNamespace(supports_images=True)
+    provider._guard_cost = lambda model: SimpleNamespace(
+        supports_images=True, supports_reasoning=False
+    )
     return provider
 
 

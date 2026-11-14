@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from pydantic import Field, model_validator
 
 from pi.core.models import Strict
-from pi.models.providers import Message, ProviderUnavailable, require_images
+from pi.models.providers import Message, ProviderUnavailable, effort_scope, require_images
 
 if TYPE_CHECKING:
     from pi.models.routing_memo import Memo
@@ -381,12 +381,15 @@ def dispatch(
     configuration_revision=None,
     hints=None,
     minimum_timeout_ms=None,
+    effort=None,
 ):
     """Adapters are server-owned; stored IDs cannot create credentials or transports.
 
     Returns completion plus visible attempt metadata. Transport timeouts bound each
     request's inactivity; they are not a guarantee that a remote server stopped work.
     `minimum_timeout_ms` lets a caller doing longer work wait longer than the role's limit.
+    `effort` (pi.models.effort.LEVELS) is asked only of the answer role's own call, never of the
+    routing helper this function calls for itself; a model without a control ignores it.
     """
     config = Configuration.model_validate(configuration)
     if role not in ROLES:
@@ -529,18 +532,19 @@ def dispatch(
                 model=model.route,
                 timeout=max(assignment.timeoutMs, minimum_timeout_ms or 0) / 1000,
             )
-            completion = (
-                observe_call(
-                    invoke,
-                    provider=getattr(adapter, "name", model.providerId),
-                    model=model.route,
-                    role=role,
-                    provider_id=model.providerId,
-                    model_id=model.id,
+            with effort_scope(effort if role == "answer" else None):
+                completion = (
+                    observe_call(
+                        invoke,
+                        provider=getattr(adapter, "name", model.providerId),
+                        model=model.route,
+                        role=role,
+                        provider_id=model.providerId,
+                        model_id=model.id,
+                    )
+                    if observe_call is not None
+                    else invoke()
                 )
-                if observe_call is not None
-                else invoke()
-            )
         except ProviderUnavailable:
             if guard is not None:
                 guard()

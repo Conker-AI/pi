@@ -25,7 +25,7 @@ from typing import Any
 
 import httpx
 
-from pi.models import citations, inference_control, live_stream
+from pi.models import citations, effort, inference_control, live_stream
 from pi.models.direct import collect_chat_stream, provider_stream, sse_events
 from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
@@ -36,6 +36,7 @@ from pi.models.providers import (
     chat_content,
     not_billed,
     reported_count,
+    requested_effort,
 )
 
 CATALOGUE_URL = "https://openrouter.ai/api/v1/models"
@@ -52,6 +53,7 @@ class ModelInfo:
     supports_tools: bool
     pricing: dict | None = None
     supports_images: bool = False
+    supports_reasoning: bool = False
 
     @property
     def is_free(self) -> bool:
@@ -101,6 +103,7 @@ def _model_info(entry: dict) -> ModelInfo | None:
         supports_tools="tools" in (entry.get("supported_parameters") or []),
         pricing=pricing,
         supports_images="image" in inputs,
+        supports_reasoning="reasoning" in (entry.get("supported_parameters") or []),
     )
 
 
@@ -232,6 +235,9 @@ class OpenRouterProvider:
             "model": model,
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
         }
+        level = effort.openrouter_value(requested_effort(), info.supports_reasoning)
+        if level is not None:
+            payload["reasoning"] = {"effort": level}
         if live_stream.active() or inference_control.current() is not None:
             body = self._streamed(payload, model, timeout)
         else:

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
-from pi.models import live_stream
+from pi.models import effort, live_stream
 from pi.models import roles as model_roles
 from pi.models.openrouter import ModelUnusable
 from pi.models.providers import Message, ProviderUnavailable
@@ -20,6 +20,24 @@ RETRY = (
     'tool request and nothing else, as valid JSON in the form {{"tool": "<exact listed tool ID>", '
     '"args": {{...}}}}, or only your answer to the owner with no JSON in it.'
 )
+
+
+def without_effort(execution):
+    """The same snapshot with the chat's effort left out, for a call that is not the answer itself
+    (the deep-research plan)."""
+    output = (execution or {}).get("output")
+    if not output or "effort" not in output:
+        return execution
+    return {**execution, "output": {k: v for k, v in output.items() if k != "effort"}}
+
+
+def answer_effort(execution) -> str | None:
+    """The chat's effort level for the answer call; none in a call (spoken answers must be quick)
+    or for anything but the companion's own turn (team roles, agent calls)."""
+    if execution.get("callExecution") or execution.get("kind", "companion") != "companion":
+        return None
+    level = (execution.get("output") or {}).get("effort")
+    return level if level in effort.LEVELS else None
 
 
 def identity_scopes(tool_ids):
@@ -191,6 +209,7 @@ class ModelCalls:
                 ),
                 configuration_revision=execution["modelConfigurationRevision"],
                 hints=ctx.owner_hints() if role == "answer" else None,
+                effort=answer_effort(execution) if role == "answer" else None,
             )
             completion = result["completion"]
             evidence = {

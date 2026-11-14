@@ -31672,6 +31672,38 @@
         ],
         "title": "Edge"
       },
+      "EffortSupport": {
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "title": "Modelid"
+          },
+          "providerId": {
+            "type": "string",
+            "title": "Providerid"
+          },
+          "applies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applies"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "modelId",
+          "providerId",
+          "applies"
+        ],
+        "title": "EffortSupport",
+        "description": "Whether the effort reaches one model that may answer: True, False, or None when Pi learns\nit only when it asks the provider (a Claude model's capability list, an OpenRouter model's\nparameters). Where it is False the chosen effort is ignored for that model."
+      },
       "EnhancedPrompt": {
         "properties": {
           "text": {
@@ -35207,6 +35239,18 @@
             ],
             "title": "Level",
             "default": "auto"
+          },
+          "effort": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "light",
+              "medium",
+              "high",
+              "max"
+            ],
+            "title": "Effort",
+            "default": "auto"
           }
         },
         "additionalProperties": false,
@@ -35221,6 +35265,13 @@
           },
           "output": {
             "$ref": "#/components/schemas/Output"
+          },
+          "effortSupport": {
+            "items": {
+              "$ref": "#/components/schemas/EffortSupport"
+            },
+            "type": "array",
+            "title": "Effortsupport"
           }
         },
         "additionalProperties": false,

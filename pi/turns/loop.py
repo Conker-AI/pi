@@ -53,7 +53,7 @@ from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking
 from pi.turns.failures import ActedWithoutReply, TurnFailed
 from pi.turns.history import History
-from pi.turns.model_calls import ModelCalls
+from pi.turns.model_calls import ModelCalls, without_effort
 from pi.turns.replies import Replies
 
 # A turn that would exceed this many characters of history triggers a fork.
@@ -343,7 +343,9 @@ class Loop(ModelCalls, History, Replies):
                     execution.get("researchMode") == "deep"
                     and research.plan(self.store, turn_id) is None
                 ):
-                    _, planned, _ = self._call([*history, research.PLAN_PROMPT], ctx, execution)
+                    _, planned, _ = self._call(
+                        [*history, research.PLAN_PROMPT], ctx, without_effort(execution)
+                    )
                     research_plan.save_plan(self.store, turn_id, planned.text, self.max_tool_steps)
                     history = self._history(session_id, tools=available, turn_id=turn_id)
                 route, completion, skipped = self._call(history, ctx, execution)

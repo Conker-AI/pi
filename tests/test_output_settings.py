@@ -47,6 +47,7 @@ class TestOutputSettings:
             "length": "auto",
             "language": "auto",
             "level": "auto",
+            "effort": "auto",
         }
 
         # Snapshot should be None for all auto values
@@ -79,6 +80,7 @@ class TestOutputSettings:
             "length": "short",
             "language": "ru",
             "level": "auto",
+            "effort": "auto",
         }
 
         # Load should return the same
@@ -187,6 +189,7 @@ class TestOutputSettings:
             "length": "short",
             "language": "ru",
             "level": "auto",
+            "effort": "auto",
         }
 
     def test_messages_building(self):
@@ -358,6 +361,7 @@ class TestOutputSettings:
             "length": "short",
             "language": "ru",
             "level": "auto",
+            "effort": "auto",
         }
 
     def test_turn_snapshot_includes_output(self, store, session_id):
@@ -480,14 +484,22 @@ def test_routes_accept_the_admin_and_owner_keys(http):
     admin = {"X-Pi-Key": "synthetic-admin"}
     response = client.get(f"/sessions/{session}/output", headers=admin)
     assert response.status_code == 200
-    assert response.json() == {"revision": 0, "output": output_settings.AUTO_WITH_LEVEL}
+    assert response.json() == {
+        "revision": 0,
+        "output": output_settings.AUTO_WITH_LEVEL,
+        "effortSupport": [],
+    }
     body = {
         "expected_revision": 0,
         "output": {"format": "table", "length": "short", "language": "ru"},
     }
     response = client.post(f"/sessions/{session}/output", headers=admin, json=body)
     assert response.status_code == 200
-    assert response.json() == {"revision": 1, "output": {**body["output"], "level": "auto"}}
+    assert response.json() == {
+        "revision": 1,
+        "output": {**body["output"], "level": "auto", "effort": "auto"},
+        "effortSupport": [],
+    }
     stale = client.post(f"/sessions/{session}/output", headers=admin, json=body)
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "revision_conflict"
     assert client.get("/sessions/ses_missing/output", headers=admin).status_code == 404

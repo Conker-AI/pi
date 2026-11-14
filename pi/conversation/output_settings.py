@@ -1,6 +1,9 @@
 """Output settings: the answer's format, length and language for one chat. Auto leaves it to the model.
 
 The level sets how short and simple answers are; Auto follows the owner's `chats.language_level`.
+The effort sets how hard the answering model thinks (light, medium, high, max; Auto leaves it to the
+model). It is not prompt text: it reaches the answer call as the provider's own control, and a model
+with none ignores it, which the reply says (`effortSupport`).
 
 Interactive answers are the owner's choice for every chat (`chats.interactive_answers` in the owner
 settings document): when they apply, the turn is taught the catalog of parts Conker's dashboard can
@@ -18,12 +21,13 @@ from pydantic import Field
 
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
+from pi.models import effort as model_effort
 from pi.models.providers import Message
 from pi.owner import settings as owner_settings
 
 AUTO = {"format": "auto", "length": "auto", "language": "auto"}
 # The stored shape with the level key, as load reports it for a chat with nothing set.
-AUTO_WITH_LEVEL = {**AUTO, "level": "auto"}
+AUTO_WITH_LEVEL = {**AUTO, "level": "auto", "effort": "auto"}
 # "auto" or a BCP 47 tag such as "ru" or "en-GB".
 LANGUAGE = r"^(auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})$"
 FORMATS = {
@@ -86,6 +90,17 @@ class Output(Strict):
     length: Literal["auto", "short", "medium", "long"] = "auto"
     language: str = Field(default="auto", max_length=35, pattern=LANGUAGE)
     level: Literal["auto", "strict", "plain", "normal", "deep"] = "auto"
+    effort: Literal["auto", "light", "medium", "high", "max"] = "auto"
+
+
+class EffortSupport(Strict):
+    """Whether the effort reaches one model that may answer: True, False, or None when Pi learns
+    it only when it asks the provider (a Claude model's capability list, an OpenRouter model's
+    parameters). Where it is False the chosen effort is ignored for that model."""
+
+    modelId: str
+    providerId: str
+    applies: bool | None
 
 
 class Update(Strict):
@@ -98,6 +113,7 @@ class OutputDocument(Strict):
 
     revision: int
     output: Output
+    effortSupport: list[EffortSupport] = Field(default_factory=list)
 
 
 class OutputError(ServiceError):
@@ -138,14 +154,49 @@ def _stored(db, session_id):
     output = json.loads(row["output"])
     # A row saved before the level existed has no level; Auto keeps it following the owner.
     output.setdefault("level", "auto")
+    output.setdefault("effort", "auto")
     return row["revision"], output
+
+
+def effort_support(store, session_id=None) -> list[dict]:
+    """Per model that may answer this chat, whether effort reaches it. Empty when no models are
+    configured. The chat's own agent model, when it pins one, is the only candidate; a model the
+    owner picks for a single message is not known here."""
+    from pi.conversation import settings as session_settings
+    from pi.models import roles as model_roles
+
+    configuration = model_roles.load(store)["configuration"]
+    if configuration is None:
+        return []
+    models = {item["id"]: item for item in configuration["models"]}
+    pinned = {}
+    if session_id is not None:
+        chat = session_settings.execution(store, session_id)
+        pinned = {"configuration": chat.get("configuration")}
+    return [
+        {
+            "modelId": identity,
+            "providerId": models[identity]["providerId"],
+            "applies": model_effort.applies(
+                models[identity]["providerId"], models[identity]["route"]
+            ),
+        }
+        for identity in dict.fromkeys(
+            _answer_models({"modelConfiguration": configuration, **pinned})
+        )
+        if identity in models
+    ]
 
 
 def load(store, session_id) -> dict:
     with store._connect() as db:
         _session(db, session_id)
         revision, output = _stored(db, session_id)
-    return {"revision": revision, "output": output}
+    return {
+        "revision": revision,
+        "output": output,
+        "effortSupport": effort_support(store, session_id),
+    }
 
 
 def save(store, session_id, body: Update) -> dict:
@@ -165,7 +216,11 @@ def save(store, session_id, body: Update) -> dict:
             (session_id, revision + 1, body.output.model_dump_json()),
         )
         db.commit()
-    return {"revision": revision + 1, "output": body.output.model_dump()}
+    return {
+        "revision": revision + 1,
+        "output": body.output.model_dump(),
+        "effortSupport": effort_support(store, session_id),
+    }
 
 
 def snapshot(db, session_id) -> dict | None:
@@ -191,6 +246,10 @@ def snapshot(db, session_id) -> dict | None:
         output = {**output, "level": resolved}
     else:
         output = {key: value for key, value in output.items() if key != "level"}
+    # Effort rides the snapshot only when chosen, so a chat that never set it still compares
+    # equal to AUTO and a queued message from before the setting still matches.
+    if output.get("effort", "auto") == "auto":
+        output = {key: value for key, value in output.items() if key != "effort"}
     return None if output == AUTO else output
 
 

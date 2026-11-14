@@ -13,7 +13,7 @@ from typing import cast
 
 import httpx
 
-from pi.models import inference_control, live_stream
+from pi.models import effort, inference_control, live_stream
 from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (
     Completion,
@@ -23,6 +23,7 @@ from pi.models.providers import (
     chat_content,
     not_billed,
     reported_count,
+    requested_effort,
 )
 
 _count = reported_count
@@ -166,11 +167,15 @@ class OpenAIProvider(_DirectProvider):
         return {"Authorization": f"Bearer {self.api_key}"}
 
     def _payload(self, messages, model):
-        return {
+        payload = {
             "model": model,
             "messages": [{"role": m.role, "content": chat_content(m)} for m in messages],
             "store": False,
         }
+        level = effort.openai_value(model, requested_effort())
+        if level is not None:
+            payload["reasoning_effort"] = level
+        return payload
 
     def _stream_options(self):
         return {"stream": True, "stream_options": {"include_usage": True}}
@@ -209,6 +214,8 @@ class OpenAICompatibleProvider(OpenAIProvider):
     def _payload(self, messages, model):
         payload = super()._payload(messages, model)
         del payload["store"]
+        # `reasoning_effort` is OpenAI's own parameter; another vendor's models are not asked.
+        payload.pop("reasoning_effort", None)
         return payload
 
 
@@ -303,6 +310,14 @@ class AnthropicProvider(_DirectProvider):
         payload = {"model": model, "messages": turns, "max_tokens": self.max_tokens}
         if system:
             payload["system"] = system
+        requested = requested_effort()
+        if requested is not None:
+            # Sent only when the model's own capability list names the level.
+            level = effort.anthropic_value(
+                requested, effort.anthropic_levels(self.api_key, model, self._headers())
+            )
+            if level is not None:
+                payload["output_config"] = {"effort": level}
         return payload
 
     def _stream_options(self):

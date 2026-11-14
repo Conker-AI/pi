@@ -158,3 +158,39 @@ def test_hard_complexity_reaches_the_routing_model_as_an_owner_hint():
         sent = json.loads(router.messages[0][1].content)
         assert sent.get("ownerHints") == expected
         assert sent["task"] == [{"role": "user", "content": "Compare these laptops"}]
+
+
+WITH_EFFORT = {**VALID, "effort": "high", "reasons": {**VALID["reasons"], "effort": "Needs care."}}
+
+
+def test_a_proposal_may_carry_an_effort_with_its_reason(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = propose(store, Adapter(json.dumps(WITH_EFFORT)))
+    assert result["effort"] == "high" and result["reasons"]["effort"] == "Needs care."
+
+
+def test_a_proposal_without_effort_is_still_good_and_carries_none(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = propose(store, Adapter(json.dumps(VALID)))
+    assert "effort" not in result and "effort" not in result["reasons"]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        json.dumps({**WITH_EFFORT, "effort": "xhigh"}),
+        json.dumps({**WITH_EFFORT, "effort": "auto"}),
+        json.dumps({**WITH_EFFORT, "effort": None}),
+        json.dumps({**WITH_EFFORT, "reasons": VALID["reasons"]}),
+        json.dumps({**VALID, "reasons": {**VALID["reasons"], "effort": "Needs care."}}),
+        json.dumps({**WITH_EFFORT, "reasons": {**WITH_EFFORT["reasons"], "effort": " "}}),
+    ],
+)
+def test_a_malformed_effort_fails_closed(tmp_path, reply):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        with pytest.raises(auto_settings.ProposalError) as raised:
+            propose(store, Adapter(reply))
+    assert raised.value.status == 503 and raised.value.code == "unavailable"

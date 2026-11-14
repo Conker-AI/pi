@@ -66,7 +66,7 @@ not returned. Requests do not follow redirects or retry automatically.
 
 The Conker browser shows configured readiness but does not accept credentials or
 endpoints. This module does not implement dynamic
-direct-model discovery, multimodal/native-tool payloads, reasoning-effort controls,
+direct-model discovery, multimodal/native-tool payloads,
 streaming, or direct-provider citation translation. Pi's existing text tool
 protocol remains separate from provider-native tool calls. Frontend wiring and
 provider-native account management.

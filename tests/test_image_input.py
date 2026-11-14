@@ -82,7 +82,9 @@ def test_real_adapters_transmit_image_in_provider_format(monkeypatch, kind):
     }[kind]()
     if kind == "openrouter":
         monkeypatch.setattr(
-            adapter, "_guard_cost", lambda model: SimpleNamespace(supports_images=True)
+            adapter,
+            "_guard_cost",
+            lambda model: SimpleNamespace(supports_images=True, supports_reasoning=False),
         )
     assert (
         adapter.complete([Message("user", "Describe", (image,))], model="synthetic").text == "red"
@@ -194,7 +196,9 @@ def test_private_image_cannot_be_reused_with_weaker_privacy(tmp_path):
 def test_text_only_catalogue_model_never_receives_image(monkeypatch):
     adapter = OpenRouterProvider("synthetic")
     monkeypatch.setattr(
-        adapter, "_guard_cost", lambda model: SimpleNamespace(supports_images=False)
+        adapter,
+        "_guard_cost",
+        lambda model: SimpleNamespace(supports_images=False, supports_reasoning=False),
     )
     monkeypatch.setattr(
         httpx, "post", lambda *a, **kw: pytest.fail("Image sent to text-only model")
