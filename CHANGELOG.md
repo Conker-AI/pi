@@ -26,6 +26,19 @@ be a decision with visible consequences.
 - **Hidden chats, hunt 2 (vis-F5).** `GET /memory-edits/memories/{id}` and
   `GET /memory/forget/{id}` answer 404 for a memory from a hidden chat, and a correction to one is
   refused (404), like the memory explorer. Forgetting it is still allowed.
+- **Agent calls: a message branch of an agent's chat is still that call's chat (hunt 2 tools-F1).**
+  Branching the chat `conker.run_agent` opened (or a continuation of it) left the source open, so
+  the branch lost the call link: its turns took the owner's words as a request, were no longer
+  outside when the caller had read outside content, and could start agents at depth 0. The call
+  link now follows recorded message branches as well as automatic forks.
+
+- **Agent calls: a child whose turn forked is checked in the fork (hunt 2 tools-F3).** The outside
+  check read the child chat although the turn ran in its fork, and only failed safe through an
+  error; it now reads the chat the turn ran in.
+
+- **Agent calls: the companion is never a target (hunt 2 tools-F5).** `conker.run_agent` could run
+  the companion, whose toolkit is the owner's whole one, from an agent he gave only that tool. It is
+  refused now ("Conker itself cannot be run by another agent").
 
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 

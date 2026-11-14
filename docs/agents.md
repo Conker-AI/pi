@@ -102,12 +102,14 @@ submission and reply message).
 - The owner's Stop on the caller's turn stops every call it started (and theirs): Pi stops the
   running child turns, and each guard in a child turn checks the turns up its chain. A child that
   acted marks the caller's turn acted.
-- A continuation of a child chat (an automatic or reviewed fork) is still that call's chat: depth,
-  the chain, no owner request and outside carry over.
+- A continuation of a child chat (an automatic or reviewed fork, or a message branch of it) is
+  still that call's chat: depth, the chain, no owner request and outside carry over. A child turn
+  that forked is checked for outside content in the fork it ran in.
 - No turn in a child chat has an owner request (`access.owner_text` is empty), so his words never
   approve anything there; if the caller had read outside content, every turn in the child counts
   as outside; the caller counts the reply as outside unless the result's `outside` is false.
-- Refused: an unknown or archived agent; the caller itself or any agent up the chain; depth past 2
+- Refused: an unknown or archived agent; the companion (its toolkit is the owner's whole one, so
+  a narrower agent would borrow it); the caller itself or any agent up the chain; depth past 2
   (a depth-2 chat is not offered the tool); a fourth call in one turn; a 31st call in 24 hours;
   a team role's turn (its budget would not meter the child) and a run of an AI job.
 
