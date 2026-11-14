@@ -6,7 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
-- `GET /insights/quiet?days=7` (owner, pi#PR): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
+- `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
   the code unchanged (setup, models, memory, agents, calls, content and schedule no longer reach into each
   other's modules; `pi.turns.failures` keeps re-exporting what moved to `pi.core`). Behaviour, routes and the
