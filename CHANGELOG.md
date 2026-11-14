@@ -23,6 +23,11 @@ be a decision with visible consequences.
 - Type check: the pyright baseline goes from 341 to 27 errors with type-only edits (annotations,
   casts, NoReturn on helpers that always raise, route path aliases at module scope). Behaviour and
   the OpenAPI documents are unchanged (#247).
+- **History looks up named chats** (`pi/conversation/history.py`). `GET /sessions/history`
+  takes an optional `ids=` (comma-separated, at most 50), so Home's "Jump back in" can ask for
+  the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
+  forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
+  `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
 
 ## 0.25.0
 
