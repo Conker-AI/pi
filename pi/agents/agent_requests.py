@@ -268,6 +268,7 @@ def _checked(kind, payload):
         if (
             body.memory.scope != "conversation"
             or body.toolAccess
+            or body.skillIds
             or body.modelId is not None
             or NEVER_GIVEN & set(body.toolIds)
         ):

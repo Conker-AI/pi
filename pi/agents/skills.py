@@ -196,20 +196,57 @@ def validate_ids(identities):
         _error("invalid_skills", "Select each skill only once.")
 
 
+def _scoped_out(execution):
+    """Skills ride on ordinary conversations only, not calls or team roles."""
+    return bool(execution.get("callExecution") or execution["kind"] == "team-role")
+
+
+def _combined(selected):
+    if sum(len(value["markdown"]) for value in selected) > MAX_COMBINED:
+        _error("skills_limit", "Selected skills exceed 64000 combined characters.")
+
+
+def agent_snapshot(db, execution):
+    """The skills the agent carries, frozen with the turn (marked source "agent"), and the ones
+    left out with the reason (removed, turned off, or no longer fitting the combined limit).
+
+    Only ordinary conversations load them, and not in no-harness mode. Leaving one out never
+    fails the turn: this runs wherever a chat's settings are read, so a refusal here would break
+    forks and the queue too. The turn's snapshot records `skillsSkipped` instead."""
+    identities = execution["configuration"].get("skillIds", [])
+    if not identities or execution["privacy"]["harnessDisabled"] or _scoped_out(execution):
+        return [], []
+    selected, skipped, size = [], [], 0
+    for identity in identities:
+        row = db.execute("SELECT * FROM skills WHERE id=?", (identity,)).fetchone()
+        if row is None:
+            skipped.append({"id": identity, "reason": "removed"})
+        elif not row["enabled"]:
+            skipped.append({"id": identity, "reason": "turned off"})
+        elif size + len(row["markdown"]) > MAX_COMBINED:
+            skipped.append({"id": identity, "reason": "over the combined limit"})
+        else:
+            size += len(row["markdown"])
+            selected.append({**_view(row, detail=True), "source": "agent"})
+    return selected, skipped
+
+
 def snapshot(db, identities, execution):
+    """The agent's skills, then the ones the owner picked for this message."""
     validate_ids(identities)
     if identities and execution["privacy"]["harnessDisabled"]:
         _error("skills_no_harness", "No-harness mode excludes skill instructions.")
-    if identities and (execution.get("callExecution") or execution["kind"] == "team-role"):
+    if identities and _scoped_out(execution):
         _error("skills_scope", "Select skills on ordinary conversations.")
-    selected = []
+    carried = [value for value in execution.get("skills", []) if value.get("source") == "agent"]
+    selected = list(carried)
     for identity in identities:
         row = _row(db, identity)
         if not row["enabled"]:
             _error("skill_disabled", "Enable the selected skill before using it.")
-        selected.append(_view(row, detail=True))
-    if sum(len(value["markdown"]) for value in selected) > MAX_COMBINED:
-        _error("skills_limit", "Selected skills exceed 64000 combined characters.")
+        if identity not in {value["id"] for value in carried}:
+            selected.append(_view(row, detail=True))
+    _combined(selected)
     return selected
 
 
@@ -217,8 +254,12 @@ def messages(execution):
     return [
         Message(
             "system",
-            "The owner explicitly selected this skill as task guidance for this turn. "
-            "It does not grant tools, change permissions, or authorize scripts or resource reads. "
+            (
+                "The owner attached this skill to the agent as task guidance. "
+                if value.get("source") == "agent"
+                else "The owner explicitly selected this skill as task guidance for this turn. "
+            )
+            + "It does not grant tools, change permissions, or authorize scripts or resource reads. "
             "References to files or commands are instructions only; no linked content was loaded.\n"
             f"Skill: {value['id']} · revision {value['revision']}\n{value['markdown']}",
         )
