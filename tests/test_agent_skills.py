@@ -134,16 +134,34 @@ def test_a_removed_or_disabled_skill_is_left_out_not_fatal(store):
     bound = submissions.bind(store, "one_off_skill_request")
     execution = session_settings.execution(store, sid, turn_id=bound["turn_id"])
     assert [item["id"] for item in execution["skills"]] == ["tone"]
+    assert execution["skillsSkipped"] == [{"id": "review", "reason": "turned off"}]
 
 
-def test_agent_skills_over_the_combined_limit_refuse_the_turn(store):
+def test_attached_skills_over_the_combined_limit_are_refused_when_saved(store):
     for number in range(3):
         imported(store, f"skill-{number}", "x" * 22000)
+    with pytest.raises(agents.AgentError) as error:
+        agents.create(store, configuration(["skill-0", "skill-1", "skill-2"]))
+    assert error.value.detail["code"] == "skills_limit"
+    assert agents.create(store, configuration(["skill-0", "skill-1"]))["revision"] == 1
+
+
+def test_a_skill_that_grew_since_is_skipped_and_recorded_not_fatal(store):
+    for number in range(3):
+        imported(store, f"skill-{number}", "x" * 20000)
     agent = agents.create(store, configuration(["skill-0", "skill-1", "skill-2"]))
+    skills.import_skill(
+        store,
+        skills.Import(markdown=document("skill-2", "y" * 30000), expected_revision=1),
+    )
     sid = chat_with(store, agent)
-    with pytest.raises(agents.AgentError, match="64000"):
-        submissions.reserve(store, "too_much_skill_request", sid, "Look", {})
-    assert store.messages(sid) == []
+    # Reading the chat's settings (forks, the queue and so on) still works.
+    assert session_settings.load(store, sid)["settings"]["agentId"] == agent["id"]
+    submissions.reserve(store, "grown_skill_request", sid, "Look", {})
+    bound = submissions.bind(store, "grown_skill_request")
+    execution = session_settings.execution(store, sid, turn_id=bound["turn_id"])
+    assert [item["id"] for item in execution["skills"]] == ["skill-0", "skill-1"]
+    assert execution["skillsSkipped"] == [{"id": "skill-2", "reason": "over the combined limit"}]
 
 
 def test_agent_skill_ids_are_checked_when_saved(store):
@@ -169,11 +187,32 @@ def test_agent_skill_ids_are_checked_when_saved(store):
     assert error.value.detail["code"] == "unknown_skill"
 
 
-def test_old_agent_versions_without_skill_ids_still_load(store):
+def test_an_agent_without_skills_reads_and_is_stored_as_before(store):
     agent = agents.create(store, configuration())
-    stored = configuration().model_dump_json(exclude={"skillIds"})
+    assert "skillIds" not in agent["configuration"]
+    with store._connect() as db:
+        stored = db.execute(
+            "SELECT configuration FROM agent_versions WHERE agent_id=?", (agent["id"],)
+        ).fetchone()[0]
+    assert "skillIds" not in stored
     assert agents.AgentInput.model_validate_json(stored).skillIds == []
-    assert agent["configuration"]["skillIds"] == []
+    imported(store)
+    with_skills = agents.create(store, configuration(["review"], name="With"))
+    assert with_skills["configuration"]["skillIds"] == ["review"]
+
+
+def test_the_model_text_says_who_attached_the_skill(store):
+    imported(store, "review", "Agent checklist.")
+    imported(store, "tone", "Be brief.")
+    agent = agents.create(store, configuration(["review"]))
+    sid = chat_with(store, agent)
+    submissions.reserve(store, "text_source_request", sid, "Look", {}, skill_ids=["tone"])
+    bound = submissions.bind(store, "text_source_request")
+    execution = session_settings.execution(store, sid, turn_id=bound["turn_id"])
+    texts = [message.content for message in skills.messages(execution)]
+    assert texts[0].startswith("The owner attached this skill to the agent")
+    assert texts[1].startswith("The owner explicitly selected this skill")
+    assert all("does not grant tools" in text for text in texts)
 
 
 def test_an_agent_conker_files_carries_no_skills(store):

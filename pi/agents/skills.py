@@ -207,21 +207,28 @@ def _combined(selected):
 
 
 def agent_snapshot(db, execution):
-    """The skills the agent carries, frozen with the turn (marked source "agent").
+    """The skills the agent carries, frozen with the turn (marked source "agent"), and the ones
+    left out with the reason (removed, turned off, or no longer fitting the combined limit).
 
-    Only ordinary conversations load them, and not in no-harness mode. A skill the owner has
-    since removed or turned off is left out; one the registry can no longer fit under the
-    combined limit refuses the turn, so nothing is cut silently."""
+    Only ordinary conversations load them, and not in no-harness mode. Leaving one out never
+    fails the turn: this runs wherever a chat's settings are read, so a refusal here would break
+    forks and the queue too. The turn's snapshot records `skillsSkipped` instead."""
     identities = execution["configuration"].get("skillIds", [])
     if not identities or execution["privacy"]["harnessDisabled"] or _scoped_out(execution):
-        return []
-    selected = []
+        return [], []
+    selected, skipped, size = [], [], 0
     for identity in identities:
         row = db.execute("SELECT * FROM skills WHERE id=?", (identity,)).fetchone()
-        if row is not None and row["enabled"]:
+        if row is None:
+            skipped.append({"id": identity, "reason": "removed"})
+        elif not row["enabled"]:
+            skipped.append({"id": identity, "reason": "turned off"})
+        elif size + len(row["markdown"]) > MAX_COMBINED:
+            skipped.append({"id": identity, "reason": "over the combined limit"})
+        else:
+            size += len(row["markdown"])
             selected.append({**_view(row, detail=True), "source": "agent"})
-    _combined(selected)
-    return selected
+    return selected, skipped
 
 
 def snapshot(db, identities, execution):
@@ -247,8 +254,12 @@ def messages(execution):
     return [
         Message(
             "system",
-            "The owner explicitly selected this skill as task guidance for this turn. "
-            "It does not grant tools, change permissions, or authorize scripts or resource reads. "
+            (
+                "The owner attached this skill to the agent as task guidance. "
+                if value.get("source") == "agent"
+                else "The owner explicitly selected this skill as task guidance for this turn. "
+            )
+            + "It does not grant tools, change permissions, or authorize scripts or resource reads. "
             "References to files or commands are instructions only; no linked content was loaded.\n"
             f"Skill: {value['id']} · revision {value['revision']}\n{value['markdown']}",
         )

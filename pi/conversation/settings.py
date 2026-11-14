@@ -238,9 +238,11 @@ def _snapshot(db, identity):
     if owner:
         snapshot["owner"] = owner
     snapshot = calls.execution_snapshot(db, identity, snapshot)
-    carried = skills.agent_snapshot(db, snapshot)
+    carried, skipped = skills.agent_snapshot(db, snapshot)
     if carried:
         snapshot["skills"] = carried
+    if skipped:
+        snapshot["skillsSkipped"] = skipped
     require_inherited_privacy(db, identity, snapshot)
     return snapshot
 

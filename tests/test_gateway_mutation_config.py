@@ -19,7 +19,7 @@ from tests.test_gateway_mutation import agent_configuration, config, team_defini
         (
             {"operation": "create", "configuration": agent_configuration()},
             "/agents",
-            {**agent_configuration(), "skillIds": []},
+            agent_configuration(),
         ),
         (
             {
@@ -31,7 +31,7 @@ from tests.test_gateway_mutation import agent_configuration, config, team_defini
             "/agents/companion/update",
             {
                 "expected_revision": 4,
-                "configuration": {**agent_configuration(), "skillIds": []},
+                "configuration": agent_configuration(),
             },
         ),
         (

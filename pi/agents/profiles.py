@@ -46,7 +46,11 @@ class AgentInput(Strict):
     memory: MemorySelection
     # Skills this agent always carries, by reference (the registry's skill ids). Loaded as the
     # per-message picker loads them, at the start of each turn; a skill never grants a tool.
-    skillIds: list[str] = Field(default_factory=list, max_length=MAX_SKILLS)
+    # Left out of stored and shown configurations while empty, so an agent without skills reads
+    # and compares exactly as before this field existed (queued messages, a rolled-back Pi).
+    skillIds: list[str] = Field(
+        default_factory=list, max_length=MAX_SKILLS, exclude_if=lambda value: not value
+    )
 
     @field_validator("name", "role", "instructions")
     @classmethod
@@ -284,10 +288,16 @@ def _unique_name(db, configuration, identity=None):
 
 def _skills_exist(db, configuration):
     """Every attached skill is in the registry now (a later removal is handled at turn start)."""
-    known = {row[0] for row in db.execute("SELECT id FROM skills")}
-    missing = [value for value in configuration.skillIds if value not in known]
+    from pi.agents import skills
+
+    sizes = {row[0]: row[1] for row in db.execute("SELECT id,length(markdown) FROM skills")}
+    missing = [value for value in configuration.skillIds if value not in sizes]
     if missing:
         raise AgentError("unknown_skill", f"Skill {missing[0]} is not in the registry.", 422)
+    if sum(sizes[value] for value in configuration.skillIds) > skills.MAX_COMBINED:
+        raise AgentError(
+            "skills_limit", "The attached skills exceed 64000 combined characters.", 422
+        )
 
 
 def create(store, configuration: AgentInput, *, then=None):
