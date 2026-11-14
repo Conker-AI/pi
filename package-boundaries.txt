@@ -70,7 +70,6 @@ gateway -> schedule
 gateway -> setup
 host -> actions
 host -> core
-memory -> agents
 memory -> context
 memory -> conversation
 memory -> core

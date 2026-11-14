@@ -137,8 +137,8 @@ def migrate(db):
 
 
 def pin_destination(store, message_id, agent_id):
-    from pi.agents import profiles as agents
     from pi.conversation import settings as session_settings
+    from pi.core.errors import ServiceError
 
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
@@ -156,7 +156,7 @@ def pin_destination(store, message_id, agent_id):
             ).fetchone()
             try:
                 floor = session_settings.inherited_privacy(db, origin[0]) if origin else None
-            except agents.AgentError:
+            except ServiceError:
                 raise ValueError(
                     "Inherited source privacy is unavailable; memory ingestion is excluded."
                 ) from None
