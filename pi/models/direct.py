@@ -15,12 +15,16 @@ import httpx
 
 from pi.conversation import live_stream
 from pi.models.evidence import project_tool_evidence
-from pi.models.providers import Completion, Message, ProviderUnavailable, chat_content
+from pi.models.providers import (
+    Completion,
+    Message,
+    ProviderUnavailable,
+    chat_content,
+    reported_count,
+)
 from pi.turns import inference_control
 
-
-def _count(value):
-    return value if type(value) is int and value >= 0 else None
+_count = reported_count
 
 
 @contextmanager
