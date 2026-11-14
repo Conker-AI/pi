@@ -47,6 +47,7 @@ from pi.conversation.store import Store
 from pi.core import migrations
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
+from pi.memory import uses as memory_uses
 from pi.schedule import tasks
 from pi.turns import access as turn_access
 from pi.turns import context as turn_context
@@ -243,6 +244,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         calls.redact(db, plan["session_ids"])
         citations.redact(db, plan["session_ids"])
         memory_store.redact(db, plan["session_ids"])
+        memory_uses.redact(db, plan["session_ids"])
         tasks.redact(db, plan["session_ids"])
         submissions.redact(db, plan["session_ids"])
         # Review data can quote the chat (judge reasons, claims, decisions): delete it all.

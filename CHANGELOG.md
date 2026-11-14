@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 - **Docs: calls back into Pi (R-A14).** docs/boundaries.md names the two service cycles (Pi ->
   ToolGate -> Pi `/inference`, Pi -> MemoryGate -> Pi `/inference`), what stops them recursing and
   the known risks (waits that shrink inward, `/inference` running on after its caller left). No
