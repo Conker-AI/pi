@@ -19,8 +19,9 @@ ever; the chat still continues it when opened.
 ToolGate keeps an approval it let expire as pending (its Inbox card says it expired), so Pi ends
 a parked chat or AI-job turn itself once its `approval_expires_at` is `EXPIRY_GRACE` seconds
 past: the chat says the approval expired and nothing was done, the Inbox lists it under Handled,
-and an AI job's next run is no longer held back. The grace is longer than a decision's own
-(`GRACE` plus a pass), so an answer given just before the expiry is still acted on first. A turn
+and an AI job's next run is no longer held back. A tool cron job's run waiting on an expired
+approval is cancelled the same way, so the job runs again. The grace is longer than a
+decision's own (`GRACE` plus a pass), so an answer given just before the expiry is still acted on first. A turn
 is ended only when ToolGate answered "pending" for it in the same pass: while ToolGate cannot be
 read (down, no key, an error) nothing is expired, so an approval given meanwhile is never lost.
 """
@@ -86,25 +87,45 @@ def _expires(value) -> float | None:
     return moment.timestamp() if moment.tzinfo is not None else None
 
 
-def expire(store, now, pending, limit=50) -> int:
-    """End parked turns whose approval expired unanswered; how many were ended. Only a request
-    ToolGate just answered "pending" for (`pending`) is ended; an unreadable or zone-less expiry
-    is never guessed: that turn keeps waiting."""
+def _past(value, now) -> bool:
+    expires = _expires(value)
+    return expires is not None and now >= expires + EXPIRY_GRACE
+
+
+def expire(store, now, pending) -> int:
+    """End parked turns and tool cron runs whose approval expired unanswered; how many were
+    ended. Only a request ToolGate just answered "pending" for (`pending`, this pass's random
+    sample) is looked at, so turns that wait for ever never crowd out a newer one; an unreadable
+    or zone-less expiry is never guessed: that work keeps waiting. An expired run is cancelled
+    (`jobs.cancel_run` also withdraws its card), so its job runs again."""
+    if not pending:
+        return 0
+    ids = sorted(pending)
+    marks = ",".join("?" * len(ids))
     with store._connect() as db:
-        rows = db.execute(
+        turns = db.execute(
             "SELECT id, session_id, approval_request_id, approval_tool_id, approval_expires_at "
-            "FROM turns "
-            "WHERE status='awaiting_approval' AND approval_expires_at IS NOT NULL "
-            "ORDER BY started_at LIMIT ?",
-            (limit,),
+            f"FROM turns WHERE status='awaiting_approval' AND approval_request_id IN ({marks})",
+            ids,
+        ).fetchall()
+        runs = db.execute(
+            "SELECT id, expires FROM (SELECT id, "
+            "CASE WHEN json_valid(receipt) THEN json_extract(receipt,'$.request_id') END AS asked, "
+            "CASE WHEN json_valid(receipt) THEN json_extract(receipt,'$.expires_at') END AS expires "
+            f"FROM scheduled_runs WHERE status='awaiting_approval') WHERE asked IN ({marks})",
+            ids,
         ).fetchall()
     ended = 0
-    for row in rows:
-        expires = _expires(row["approval_expires_at"])
-        if row["approval_request_id"] not in pending:
-            continue
-        if expires is not None and now >= expires + EXPIRY_GRACE:
+    for row in turns:
+        if _past(row["approval_expires_at"], now):
             ended += answers.close(store, dict(row), expired=True)
+    for row in runs:
+        if not _past(row["expires"], now):
+            continue
+        try:
+            ended += not jobs.cancel_run(store, row["id"])["replayed"]
+        except jobs.JobError:
+            continue  # resumed or cancelled meanwhile: someone else took it
     return ended
 
 
@@ -117,7 +138,10 @@ def sweep(store, toolgate, loop, executor=None, limit=50, seen=None, now=None) -
     seen = {} if seen is None else seen
     with store._connect() as db:
         pending = waiting(db, limit)
-    for gone in set(seen) - {request_id for request_id, _ in pending}:
+    # A request left out of this pass's sample keeps its grace and tries; only one that nothing
+    # waits on any more is forgotten, so TRIES holds however many wait.
+    sampled = {request_id for request_id, _ in pending}
+    for gone in [r for r in seen if r not in sampled and answers.waiting(store, r) is None]:
         del seen[gone]
     handed, undecided = 0, set()
     for request_id, agent in pending:
@@ -144,7 +168,7 @@ def sweep(store, toolgate, loop, executor=None, limit=50, seen=None, now=None) -
         )
         handed += result.get("continued") != "nothing_waiting"
     # Only requests ToolGate itself still calls pending: a decided or unreadable one never ends.
-    expire(store, now, undecided, limit)
+    expire(store, now, undecided)
     return handed
 
 
