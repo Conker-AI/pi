@@ -6,6 +6,15 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Memory upkeep candidates (read-only).** `GET /memory/upkeep` (owner session) passes on
+  MemoryGate's upkeep list in camelCase as `UpkeepPage`. It holds exact and near duplicates, open
+  contradictions, expired memories and ones not recalled for `unused_days` (1-3650, default 90),
+  at most `limit` per kind (1-500, default 50). Each listed memory comes with its words and
+  revision, so Fix and Forget can use the existing routes. A candidate that names a memory with a
+  forget pending or done, or one made from a hidden chat, is left out whole, and that kind's
+  `total` drops by those items. MemoryGate missing or silent is 503 `memory_unavailable`. A
+  MemoryGate without the words (before memorygate#103) still answers, with no `memories`.
+
 - **What Conker believes about you (read-only).** `GET /memory/beliefs` (owner session) lists one
   page of MemoryGate's memory-beliefs list (MemoryGate 0.9.0, memorygate#101) in camelCase as
   `BeliefPage`: origin (stated or concluded), confidence, evidence counts, lineage and open

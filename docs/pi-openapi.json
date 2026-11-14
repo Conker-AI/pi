@@ -20355,6 +20355,93 @@
         }
       }
     },
+    "/memory/upkeep": {
+      "get": {
+        "summary": "List Upkeep",
+        "description": "Upkeep candidates (duplicates, open contradictions, expired, not recalled), read only.\n\nA candidate naming a memory with a forget pending or done, or one made from a hidden chat,\nis left out whole; each kind's `total` drops only by the items left out of this reply.",
+        "operationId": "list_upkeep_memory_upkeep_get",
+        "parameters": [
+          {
+            "name": "unused_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3650,
+              "minimum": 1,
+              "default": 90,
+              "title": "Unused Days"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpkeepPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory": {
       "get": {
         "summary": "Memory Status",
@@ -38504,6 +38591,169 @@
           "definition"
         ],
         "title": "UpdateTemplate"
+      },
+      "UpkeepItem": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ids"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "conflictId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflictid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids",
+          "reason"
+        ],
+        "title": "UpkeepItem"
+      },
+      "UpkeepKind": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UpkeepItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "UpkeepKind"
+      },
+      "UpkeepMemory": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "memoryType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorytype"
+          },
+          "sourceType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcetype"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "needs_review"
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "revision",
+          "memoryType",
+          "sourceType",
+          "state"
+        ],
+        "title": "UpkeepMemory"
+      },
+      "UpkeepPage": {
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "title": "Agentid"
+          },
+          "checkedAt": {
+            "type": "string",
+            "title": "Checkedat"
+          },
+          "memoriesChecked": {
+            "type": "integer",
+            "title": "Memorieschecked"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "exactDuplicates": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "nearDuplicates": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "contradictions": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "expired": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "notRecalled": {
+            "$ref": "#/components/schemas/UpkeepKind"
+          },
+          "memories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/UpkeepMemory"
+            },
+            "type": "object",
+            "title": "Memories"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agentId",
+          "checkedAt",
+          "memoriesChecked",
+          "truncated",
+          "exactDuplicates",
+          "nearDuplicates",
+          "contradictions",
+          "expired",
+          "notRecalled"
+        ],
+        "title": "UpkeepPage"
       },
       "Usage": {
         "properties": {

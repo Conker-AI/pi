@@ -202,6 +202,8 @@ OWNER_ROUTES = {
         r"/memory/forget-pending",
         # Read-only: what Conker believes about the owner, one page at a time.
         r"/memory/beliefs",
+        # Read-only: duplicates, contradictions, expired and unused memories to review.
+        r"/memory/upkeep",
         r"/memory/corrections/pending",
         r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}",
