@@ -115,8 +115,10 @@ class History:
                     "uncertainty honestly.",
                 )
             )
-        known_history = context_controls.history(self.store, session_id)
-        selected_history = context_controls.select_history(policy, known_history, retrieved_ids)
+        known_history, hidden_ids = context_controls.history_and_hidden(self.store, session_id)
+        selected_history = context_controls.select_history(
+            policy, known_history, retrieved_ids, hidden_ids
+        )
         cancelled = context_controls.cancelled_input_ids(self.store, selected_history)
         if cancelled:
             messages.append(

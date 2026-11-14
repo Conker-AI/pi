@@ -150,14 +150,32 @@ def _mark(store, sessions, table: str, on: bool) -> list[str]:
     return ids
 
 
+# Upward arm for the chat of an AI job Conker kept from a chat, while the owner has not adopted
+# it: the same link pi.conversation.visibility follows downward (_JOB_CHAT).
+_KEPT_FROM = (
+    " UNION SELECT up.child, k.session_id FROM up "
+    "JOIN agent_job_sessions j ON j.session_id=up.id "
+    "JOIN keep_results k ON k.kind='ai_job' AND k.target_id=j.job_id "
+    "JOIN scheduled_jobs sj ON sj.id=j.job_id "
+    "AND json_extract(sj.definition,'$.createdBy') IS NOT 'owner'"
+)
+
+
 def _refuse_hidden_parents(db, ids) -> None:
-    """Refuse restoring a chat while a chat it was made from is still in the Trash, unless that
-    chat is restored in the same request; the caller's transaction is rolled back."""
+    """Refuse restoring a chat while a chat it was made from (its parents, or the chat a kept AI
+    job came from) is still in the Trash, unless that chat is restored in the same request; the
+    caller's transaction is rolled back."""
     marks = ",".join("?" * len(ids))
+    tables = ("agent_job_sessions", "keep_results", "scheduled_jobs")
+    kept = all(
+        db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone()
+        for table in tables
+    )
     rows = db.execute(
         "WITH RECURSIVE up(child, id) AS ("
-        f"SELECT id, parent_id FROM sessions WHERE id IN ({marks}) "
-        "UNION SELECT up.child, s.parent_id FROM up JOIN sessions s ON s.id=up.id) "
+        f"SELECT id, id FROM sessions WHERE id IN ({marks}) "
+        "UNION SELECT up.child, s.parent_id FROM up JOIN sessions s ON s.id=up.id"
+        f"{_KEPT_FROM if kept else ''}) "
         "SELECT up.child, up.id FROM up JOIN session_trash t ON t.session_id=up.id "
         f"WHERE up.id NOT IN ({marks}) ORDER BY up.child, up.id",
         [*ids, *ids],
