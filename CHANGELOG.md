@@ -6,6 +6,15 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Open loops (R-M7).** A new table `open_loops` and three owner routes: `GET /open-loops`
+  (`LoopPage`; browser read) lists promises across visible chats, soonest due first and undated
+  last, with the owner's `today` and an `overdue` flag; `POST /open-loops` (`LoopAdd`) files one
+  for a chat, optionally pointing at one of its messages; `POST /open-loops/{id}/state`
+  (`LoopState`) marks it done, dropped or open again, also when its chat is forked or closed. A
+  loop in a forgotten or trashed chat is neither listed nor changed, and forgetting the chat
+  deletes it. The writes take the recovery key until the dashboard has a screen. No migration (a
+  new table). docs/open-loops.md. (#251)
+
 - **Memory upkeep candidates (read-only).** `GET /memory/upkeep` (owner session) passes on
   MemoryGate's upkeep list in camelCase as `UpkeepPage`. It holds exact and near duplicates, open
   contradictions, expired memories and ones not recalled for `unused_days` (1-3650, default 90),
