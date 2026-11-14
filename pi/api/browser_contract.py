@@ -290,6 +290,8 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]+/settings",
         # Next-message suggestions for one chat: Jev reads its last exchange and saves nothing.
         r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
+        # Jev rewrites an unsent draft; nothing is saved or sent, so the session alone is enough.
+        r"/prompts/enhance",
         *CHAT_WRITES,
         r"/proposals/passes",
         # Hiding one self-check alert; the session alone is enough.

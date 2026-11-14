@@ -53,6 +53,7 @@ from pi.api.routes import output_settings as output_settings_api
 from pi.api.routes import owner_preferences as owner_preferences_api
 from pi.api.routes import plan_alerts as plan_alerts_api
 from pi.api.routes import projects as projects_api
+from pi.api.routes import prompts as prompts_api
 from pi.api.routes import proposals as proposals_api
 from pi.api.routes import self_check as self_check_api
 from pi.api.routes import session_settings as session_settings_api
@@ -248,6 +249,9 @@ app.include_router(
     suggestions_api.router(
         lambda: app.state.store, lambda: app.state.router.adapters(), require_owner
     )
+)
+app.include_router(
+    prompts_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
 app.include_router(
     artifacts_api.router(lambda: app.state.store, require_owner, session_settings.source_privacy)
