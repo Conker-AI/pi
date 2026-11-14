@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from pi.setup.status_models import OPERATIONS, SetupStatus
@@ -31,11 +32,21 @@ def _current_step(steps):
     return None
 
 
-def load(store, *, owner_key_configured, memory, toolgate, router, speech=None, now=None):
+def load(
+    store,
+    *,
+    owner_key_configured,
+    memory,
+    toolgate,
+    router,
+    companion: Callable[[], dict],
+    speech=None,
+    now=None,
+):
     observed = (now or datetime.now(UTC)).astimezone(UTC)
     steps = [
         _security(store, owner_key_configured),
-        _companion(store),
+        _companion(store, companion),
         _model(store, router),
         _memory(store, memory),
         _capabilities(store, toolgate, speech),

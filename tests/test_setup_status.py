@@ -16,6 +16,15 @@ from pi.setup import status as setup_status
 OWNER = "setup-owner-key-" + "o" * 32
 
 
+def companion_reader(store):
+    def read():
+        record = agents.get(store, "companion")
+        agents.AgentInput.model_validate(record["configuration"])
+        return record
+
+    return read
+
+
 class Memory:
     def __init__(self, status="ok", configured=True):
         self.client = object() if configured else None
@@ -144,6 +153,7 @@ def test_default_projection_is_ordered_truthful_and_restart_stable(tmp_path):
             memory=Memory(configured=False),
             toolgate=None,
             router=Router(),
+            companion=companion_reader(store),
         ).model_dump(mode="json")
     with closing(Store(path)) as store:
         second = setup_status.load(
@@ -152,6 +162,7 @@ def test_default_projection_is_ordered_truthful_and_restart_stable(tmp_path):
             memory=Memory(configured=False),
             toolgate=None,
             router=Router(),
+            companion=companion_reader(store),
         ).model_dump(mode="json")
 
     assert first["schemaVersion"] == 1
@@ -214,6 +225,7 @@ def test_persisted_revisions_and_live_checks_drive_status(tmp_path):
             memory=Memory(),
             toolgate=ToolGate(count=2),
             router=router,
+            companion=companion_reader(store),
             speech=Speech(),
         ).model_dump(mode="json")
 
@@ -261,6 +273,7 @@ def test_configured_but_unverified_dependencies_are_degraded(tmp_path):
             memory=Memory(status="unavailable"),
             toolgate=ToolGate(status="degraded"),
             router=Router(Adapter(status="unavailable")),
+            companion=companion_reader(store),
         )
     states = {step.id: step.state for step in result.steps}
     assert states["model"] == "degraded"
@@ -305,6 +318,7 @@ def test_explicit_optional_skips_advance_to_required_boundaries(tmp_path):
             memory=Memory(configured=False),
             toolgate=None,
             router=router,
+            companion=companion_reader(store),
         )
 
     steps = {step.id: step for step in result.steps}
@@ -337,6 +351,7 @@ def test_healthy_optional_services_wait_for_owner_choice(tmp_path):
             memory=Memory(),
             toolgate=ToolGate(count=2),
             router=router,
+            companion=companion_reader(store),
         )
 
     steps = {step.id: step for step in result.steps}

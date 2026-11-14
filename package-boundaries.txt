@@ -90,7 +90,6 @@ schedule -> models
 schedule -> owner
 schedule -> turns
 setup -> actions
-setup -> agents
 setup -> core
 setup -> models
 turns -> actions
