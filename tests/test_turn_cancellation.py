@@ -204,7 +204,7 @@ def test_stopped_turn_does_not_block_future_settings_or_work(tmp_path):
 
 
 def test_restart_preserves_stop_but_not_at_cost_of_unknown_effect(tmp_path):
-    from pi.actions import identities as actions
+    from pi.turns import action_identities as actions
 
     with closing(Store(tmp_path / "pi.db")) as store:
         stopped = store.start_turn(store.create_session())

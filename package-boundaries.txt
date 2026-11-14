@@ -1,9 +1,7 @@
 # Cross-package imports in Pi, checked by scripts/check_package_boundaries.py.
 # These existed when the packages arrived (2026-10-15). Delete an edge once it is gone;
 # add one only on purpose, with the reason in the commit.
-actions -> conversation
 actions -> models
-actions -> turns
 agents -> conversation
 agents -> core
 agents -> models

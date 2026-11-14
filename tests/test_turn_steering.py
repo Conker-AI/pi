@@ -189,7 +189,7 @@ def test_owner_route_pending_restart_and_forgetting(tmp_path, monkeypatch):
 
 
 def test_late_steer_before_action_admission_does_not_leave_stale_proposal(tmp_path, monkeypatch):
-    from pi.actions import identities as actions
+    from pi.turns import action_identities as actions
 
     with closing(Store(tmp_path / "pi.db")) as store:
         sid = store.create_session()

@@ -25,7 +25,6 @@ import time
 import uuid
 from typing import Any, cast
 
-from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import (
     ApprovalRequired,
@@ -46,6 +45,7 @@ from pi.models.providers import ProviderUnavailable, shown_text
 from pi.models.routing import Router, TurnContext, history_size
 from pi.schedule import tasks
 from pi.turns import access, native_tools, tool_drafting
+from pi.turns import action_identities as actions
 from pi.turns import control as turn_control
 from pi.turns import steering as turn_steering
 from pi.turns import thinking as background_thinking

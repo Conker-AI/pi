@@ -7,11 +7,11 @@ import httpx
 import pytest
 from test_tool_turns import CALL, FakeGate, build
 
-from pi.actions import identities as actions
 from pi.actions.toolgate import ToolGateClient, ToolPending
 from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.models.providers import ProviderUnavailable
+from pi.turns import action_identities as actions
 from pi.turns.failures import TurnFailed
 
 
