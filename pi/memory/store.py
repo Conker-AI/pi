@@ -3,6 +3,8 @@
 import json
 import time
 
+from pi.memory import uses
+
 MAX_CONTENT_CHARACTERS = 16000
 
 _MESSAGE_SETTINGS = """COALESCE(
@@ -274,6 +276,10 @@ def save_context(store, turn_id, status, package=None):
                 time.time(),
             ),
         )
+        if package:
+            turn = db.execute("SELECT session_id FROM turns WHERE id=?", (turn_id,)).fetchone()
+            if turn:
+                uses.record(db, turn_id, turn["session_id"], package, "context")
         db.commit()
 
 
