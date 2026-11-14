@@ -3,6 +3,7 @@
 import json
 import threading
 import time
+from typing import Any
 
 from pi.models import inference_control
 from pi.models import roles as model_roles
@@ -294,7 +295,8 @@ class Thinking:
     def _run(self, session_id, turn_id, messages, context, execution, control):
         store = self.loop.store
         try:
-            completion = evidence = None
+            completion: Any = None
+            evidence = None
             for attempt in range(2):
                 acquired = False
                 queued_at = time.monotonic()

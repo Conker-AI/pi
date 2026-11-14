@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Type check: seven more files are clean with type-only casts and one annotation (host operations, team and evaluation saves, the turn loop, model calls, replies, background thinking); the baseline falls from 27 to 12 errors in 6 files. No runtime change (pi#267).
 - Cross-package imports: saving a deep-research plan (`save_plan`) moved unchanged from `pi.context.research` to `pi.turns.research_plan`, and `pi.context.retrieval.resolve` takes the turn's stop guard as a required argument; the edge `context -> turns` is gone (89 -> 88). Behaviour unchanged (pi#266).
 - Cross-package imports: `live_stream` moved unchanged to `pi.models`; the evidence shape and OpenRouter mapping of `citations` (`Citation`, `normalize`, `from_openrouter_annotations`) moved to `pi.models.citations` (`pi.conversation.citations` keeps the stored table, save/read/redact and re-exports them); `auto_settings.propose` takes the chat-privacy lookup as a required keyword. The edge `models -> conversation` is gone (89 -> 88). Behaviour unchanged (pi#265).
 - Cross-package imports: `inference_control` (cancellation of a model call) and `routing_memo` moved unchanged from `pi.turns` to `pi.models`, where the provider adapters that use them live; the edge `models -> turns` is gone. Behaviour unchanged (pi#264).
