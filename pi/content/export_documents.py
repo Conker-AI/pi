@@ -22,7 +22,7 @@ def _runs(paragraph, part, spans: list[Span], bold=False):
     """Runs written as XML directly: python-docx's run API costs ~10x more per cell."""
     from docx.opc.constants import RELATIONSHIP_TYPE
     from docx.oxml.ns import qn
-    from lxml import etree
+    from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
     links: dict[str, str] = {}
     for span in spans:
@@ -101,7 +101,7 @@ def _rule(paragraph):
 def _table(document, block: Block):
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
-    from lxml import etree
+    from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 
     table = document.add_table(rows=1 + len(block.rows), cols=len(block.header))
     table.style = "Table Grid"

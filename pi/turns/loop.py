@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any, cast
 
 from pi.actions import tools as tool_protocol
@@ -81,7 +82,7 @@ class Loop(ModelCalls, History, Replies):
         self.fork_threshold_chars = fork_threshold_chars
         self.toolgate = toolgate
         # Stores an approved memory word for word (MemoryGate statement route), when connected.
-        self.remember = None
+        self.remember: Callable[..., Any] | None = None
         # A ceiling on how many times one turn may act. Not a safety boundary -
         # ToolGate is that - but a model looping on a failing tool would
         # otherwise spend indefinitely without ever answering.

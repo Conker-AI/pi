@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def _cell(cell, part, text: str, size: int, href: str | None):
     """One table cell's text; size is in hundredths of a point."""
-    from lxml import etree
+    from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
     from pptx.opc.constants import RELATIONSHIP_TYPE
     from pptx.oxml.ns import qn
 

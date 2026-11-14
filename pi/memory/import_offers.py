@@ -225,8 +225,11 @@ class Offers:
                 (row["message_id"],),
             ).fetchone():
                 return "gone"
+        client = self.client
+        if client is None:
+            return "paused"
         try:
-            evidence = self.client.offer(event(row))
+            evidence = client.offer(event(row))
         except (httpx.HTTPError, ValueError, TypeError, RecursionError) as exc:
             code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             if code in (401, 403, 404, 429):
@@ -303,7 +306,9 @@ def status(store, offers: Offers | None) -> dict:
         )
     configured = offers is not None and offers.client is not None
     waiting = counts.get("pending", 0)
-    problem = (offers.problem or offers.erase_problem) if configured else None
+    problem = (
+        (offers.problem or offers.erase_problem) if offers is not None and configured else None
+    )
     if problem is None and erasing.get("missing", 0):
         problem = (
             f"MemoryGate did not have {erasing['missing']} words of deleted imported chats. "
