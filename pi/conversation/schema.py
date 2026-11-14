@@ -54,6 +54,7 @@ from pi.memory import edits as memory_edits
 from pi.memory import imports as assistant_imports
 from pi.memory import proposals as memory_proposals
 from pi.memory import store as memory_store
+from pi.memory import uses as memory_uses
 from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.models import service_inference, spending_cap
@@ -169,6 +170,7 @@ def install(db):
     db.executescript(archive.SCHEMA)
     db.executescript(decisions.SCHEMA)
     db.executescript(open_loops.SCHEMA)
+    db.executescript(memory_uses.SCHEMA)
 
 
 SCHEMA = """

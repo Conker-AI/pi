@@ -90,6 +90,9 @@ from the resumable queues.
 Its open loops (`open_loops`, [open loops](open-loops.md)) are deleted, the
 promise words with them; while the chat waits in the Trash they are hidden.
 
+Its memory use notes (`memory_uses`: turn, chat and memory id only, no words) are deleted too; a memory
+correction or forget keeps them on purpose, so the chats that used the memory can be listed.
+
 Messages retain their original IDs, session IDs, sequence numbers, roles and
 timestamps. Sequences are never renumbered and IDs cannot be replaced. Immutable
 receipts record deletion ID, time, affected session IDs, message/turn counts

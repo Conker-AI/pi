@@ -27,6 +27,7 @@ from typing import cast
 from pi.actions.toolgate import Tool, ToolResult
 from pi.conversation import hidden_records
 from pi.memory import store as memory_store
+from pi.memory import uses as memory_uses
 
 RECALL = "conker.recall"
 MAX_QUERY = 500
@@ -132,6 +133,7 @@ def call(loop, args, *, session_id, turn_id, run=True) -> ToolResult:
             "INSERT INTO recall_results VALUES (?,?,?,?,?)",
             (identity, session_id, turn_id, json.dumps(found, ensure_ascii=False), time.time()),
         )
+        memory_uses.record(db, turn_id, session_id, found, "recall")
         db.commit()
     return ToolResult(
         ok=True,
