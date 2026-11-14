@@ -70,7 +70,6 @@ host -> core
 memory -> conversation
 memory -> core
 memory -> owner
-models -> actions
 models -> conversation
 models -> core
 models -> owner

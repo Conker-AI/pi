@@ -191,7 +191,7 @@ class OllamaProvider:
     def complete_bounded(
         self, messages: list[Message], *, model: str, timeout: float
     ) -> Completion:
-        from pi.actions.evidence import project_tool_evidence  # imports Message from here
+        from pi.models.evidence import project_tool_evidence  # imports Message from here
 
         if any(m.role == "tool" for m in messages):
             messages = project_tool_evidence(messages)

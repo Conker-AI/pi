@@ -17,7 +17,6 @@ from test_memory_prompt import empty_package
 from test_project_context import setup
 from test_tool_turns import CALL, FakeGate, build
 
-from pi.actions.evidence import INSTRUCTIONS
 from pi.actions.toolgate import ToolResult
 from pi.content import attachments
 from pi.conversation import settings as session_settings
@@ -26,6 +25,7 @@ from pi.core.untrusted_text import strip_invisible
 from pi.memory import store as memory_store
 from pi.models import providers
 from pi.models.claude_code import ClaudeCodeProvider
+from pi.models.evidence import INSTRUCTIONS
 from pi.models.providers import Message
 from pi.models.routing import Router
 from pi.schedule import agent_hooks, agent_jobs

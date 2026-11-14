@@ -25,9 +25,9 @@ from typing import Any
 
 import httpx
 
-from pi.actions.evidence import project_tool_evidence
 from pi.conversation import citations, live_stream
 from pi.models.direct import collect_chat_stream, provider_stream, sse_events
+from pi.models.evidence import project_tool_evidence
 from pi.models.providers import Completion, Message, ProviderUnavailable, chat_content
 from pi.turns import inference_control
 
