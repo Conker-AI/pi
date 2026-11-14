@@ -40,6 +40,7 @@ from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import forgetting as forgetting_api
 from pi.api.routes import inbox as inbox_api
 from pi.api.routes import inference as inference_api
+from pi.api.routes import insights as insights_api
 from pi.api.routes import jobs as jobs_api
 from pi.api.routes import memory as memory_api
 from pi.api.routes import memory_edits as memory_edits_api
@@ -237,6 +238,7 @@ app.include_router(session_settings_api.router(lambda: app.state.store, require_
 app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(decisions_api.router(lambda: app.state.store, require_owner))
 app.include_router(open_loops_api.router(lambda: app.state.store, require_owner))
+app.include_router(insights_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )

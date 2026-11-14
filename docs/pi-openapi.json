@@ -9940,6 +9940,81 @@
         }
       }
     },
+    "/insights/quiet": {
+      "get": {
+        "summary": "Quiet",
+        "description": "The last `days` days against the `days` before: what asked for the owner, what did not.",
+        "operationId": "quiet_insights_quiet_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuietInsights"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/archive": {
       "post": {
         "summary": "Archive Chats",
@@ -36050,6 +36125,137 @@
           "urgentExceptions"
         ],
         "title": "QuietHours"
+      },
+      "QuietInsights": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "current": {
+            "$ref": "#/components/schemas/QuietWindow"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/QuietWindow"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "days",
+          "current",
+          "previous"
+        ],
+        "title": "QuietInsights"
+      },
+      "QuietWindow": {
+        "properties": {
+          "since": {
+            "type": "number",
+            "title": "Since"
+          },
+          "until": {
+            "type": "number",
+            "title": "Until"
+          },
+          "handledWithoutAsking": {
+            "type": "integer",
+            "title": "Handledwithoutasking"
+          },
+          "asked": {
+            "type": "integer",
+            "title": "Asked"
+          },
+          "changeRequestsRaised": {
+            "type": "integer",
+            "title": "Changerequestsraised"
+          },
+          "questionsAsked": {
+            "type": "integer",
+            "title": "Questionsasked"
+          },
+          "noticesRaised": {
+            "type": "integer",
+            "title": "Noticesraised"
+          },
+          "approved": {
+            "type": "integer",
+            "title": "Approved"
+          },
+          "declined": {
+            "type": "integer",
+            "title": "Declined"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "questionsAnswered": {
+            "type": "integer",
+            "title": "Questionsanswered"
+          },
+          "questionsDismissed": {
+            "type": "integer",
+            "title": "Questionsdismissed"
+          },
+          "upVotes": {
+            "type": "integer",
+            "title": "Upvotes"
+          },
+          "downVotes": {
+            "type": "integer",
+            "title": "Downvotes"
+          },
+          "medianAnswerSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mediananswerseconds"
+          },
+          "quietShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quietshare"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "since",
+          "until",
+          "handledWithoutAsking",
+          "asked",
+          "changeRequestsRaised",
+          "questionsAsked",
+          "noticesRaised",
+          "approved",
+          "declined",
+          "failed",
+          "questionsAnswered",
+          "questionsDismissed",
+          "upVotes",
+          "downVotes",
+          "medianAnswerSeconds",
+          "quietShare"
+        ],
+        "title": "QuietWindow"
       },
       "Receipt": {
         "properties": {
