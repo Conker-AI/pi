@@ -7,7 +7,6 @@ from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.models import roles as model_roles
 from pi.models.providers import Message
-from pi.turns import control as turn_control
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS submission_context (
@@ -137,8 +136,11 @@ def _selected(text, candidates):
     return ids
 
 
-def resolve(store, session_id, request_id, providers):
-    """Called only by the newly reserved submission's owner before turn binding."""
+def resolve(store, session_id, request_id, providers, stop_guard):
+    """Called only by the newly reserved submission's owner before turn binding.
+
+    `stop_guard(store, execution)` raises when the owner stopped the turn; it is required, so no
+    caller can skip the stop check."""
     receipt = read(store, session_id, request_id=request_id)
     if receipt is None:
         raise context_controls.ContextError(
@@ -255,7 +257,7 @@ def resolve(store, session_id, request_id, providers):
             ],
             providers,
             harness_disabled=False,
-            guard=lambda: turn_control.guard(store, execution),
+            guard=lambda: stop_guard(store, execution),
         )
         # Recorded before the answer is checked: an unusable answer was still paid for.
         evidence = {
