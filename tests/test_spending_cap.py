@@ -75,11 +75,11 @@ def test_paid_calls_are_counted_and_the_meter_shows_them(store):
 
 
 def test_the_token_limit_stops_the_next_paid_call_before_it_is_sent(store):
-    set_cap(store, tokens=200)
+    set_cap(store, tokens=250)
     paid = Paid()  # direct keys report tokens but no price
     capped = spending_cap.Capped(paid, store, lambda model: True)
     ask(capped)  # 150 tokens
-    ask(capped)  # 300: over, but it was admitted while under
+    ask(capped)  # 300: over, but its 100-token input fitted when it was admitted
     with pytest.raises(spending_cap.CapReached) as stopped:
         ask(capped)
     assert len(paid.calls) == 2
@@ -146,9 +146,8 @@ def test_calls_in_flight_hold_their_input_so_they_cannot_all_pass(store):
     set_cap(store, tokens=250)
     long = [Message(role="user", content="z" * 800)]  # 200 tokens held each
     spending_cap.admit(store, "openai", "gpt-paid", long)
-    spending_cap.admit(store, "openai", "gpt-paid", long)  # 200 < 250: admitted
     with pytest.raises(spending_cap.CapReached):
-        spending_cap.admit(store, "openai", "gpt-paid", long)  # 400 held: stopped
+        spending_cap.admit(store, "openai", "gpt-paid", long)  # 200 held + 200 > 250: stopped
 
 
 def test_a_ledger_that_cannot_be_read_pauses_paid_calls_as_a_model_refusal(store):

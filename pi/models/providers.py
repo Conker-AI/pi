@@ -138,6 +138,20 @@ class ProviderUnavailable(RuntimeError):
         self.reason = reason
 
 
+class NotBilled(ProviderUnavailable):
+    """The call failed where nothing can be billed: Pi never sent it, or the provider turned
+    it away before any work (bad key, no credit, quota). The daily cap counts nothing for it."""
+
+
+# Answers that reject the key, the credit or the rate before the provider does any work.
+UNBILLED_STATUS = frozenset({401, 402, 429})
+
+
+def not_billed(exc: BaseException) -> bool:
+    """Whether an HTTP failure is a rejection that costs nothing (UNBILLED_STATUS)."""
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in UNBILLED_STATUS
+
+
 class Provider(Protocol):
     name: str
 

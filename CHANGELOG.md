@@ -7,6 +7,13 @@ be a decision with visible consequences.
 ## Unreleased
 
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
+
+- **Spending cap counts only what can be billed (hunt 2, spend-F1).** A paid call that was never sent (OpenRouter catalogue unreachable, an owner stop before sending, Pi's own refusal of the request) or that the provider turned away for its key, credit or quota (HTTP 401, 402, 429; new `NotBilled`, a `ProviderUnavailable`) holds no tokens, so an outage or an empty OpenRouter balance no longer fills the shared token limit and pauses working direct keys. Error reasons are unchanged.
+
+- **Spending cap ledger write never replaces a call's result (spend-F2).** If recording a finished paid call fails (a locked database), the answer or the original error still reaches the caller; the row stays running with its input hold until Pi's next start, and the failure is logged.
+
+- **Spending cap refuses an input larger than what is left of the token limit (spend-F3).** Before, 1,000 tokens of headroom admitted a 1M-token prompt. Money is still counted only from the provider's reported price when a call ends, so the money limit can still be passed by the calls in flight (the module docstring now says so).
+
 - **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
 
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
