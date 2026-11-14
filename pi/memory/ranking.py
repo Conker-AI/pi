@@ -1,6 +1,7 @@
 """Catalogue-selected ranking of authorized memory previews; originals stay intact."""
 
 import json
+from typing import Any
 
 from pi.context import research_usage
 from pi.models import roles as model_roles
@@ -29,7 +30,7 @@ class ConfiguredMemoryRanker:
         ):
             return package
         records = package.get("memories", [])
-        receipt = {"status": "not_needed", "method": "relative-relevance"}
+        receipt: dict[str, Any] = {"status": "not_needed", "method": "relative-relevance"}
         ordered = records
         if 2 <= len(records) <= 8:
             try:

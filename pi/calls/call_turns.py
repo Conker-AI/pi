@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import cast
 
 from pi.calls.call_models import Send
 from pi.calls.call_records import CallError, _digest, _live, _row, _view, get
@@ -143,7 +144,7 @@ def run(store, loop, identity, body: Send, *, speech=None, audio=None, mime="aud
             voice = accepted["character"]["profile"]["studio"]["voice"]
             if voice["source"] == "reference":
                 full = characters.snapshot(db, agent_id)
-                voice_reference = full["profile"]["studio"]["voice"]["reference"]
+                voice_reference = cast(dict, full)["profile"]["studio"]["voice"]["reference"]
         db.execute(
             "INSERT INTO "
             "call_requests(request_id,call_id,generation,payload_hash,input_kind,state,"

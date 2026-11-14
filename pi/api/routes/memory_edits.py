@@ -1,5 +1,7 @@
 """Narrow owner-only memory correction surface; never a generic memory proxy."""
 
+from typing import TYPE_CHECKING, cast
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -8,6 +10,10 @@ from pi.core.models import described
 from pi.memory import delivery as memory_delivery
 from pi.memory import edits
 from pi.memory import memory_replies as replies
+
+if TYPE_CHECKING:
+    from pi.memory.corrections import Client as CorrectionClient
+    from pi.memory.service import MemoryClient
 
 
 class BoundedRoute(APIRoute):
@@ -54,6 +60,9 @@ def router(store, client, companion, authorize):
         value, memory = client(), companion()
         if value is None or memory is None:
             edits._configured(None)
+        # _configured(None) always raises, so both are set from here on.
+        value = cast("CorrectionClient", value)
+        memory = cast("MemoryClient", memory)
         if (value.agent_id, value.destination) != (
             memory.agent_id,
             memory_delivery.destination_digest(memory.http.base_url),

@@ -11,6 +11,7 @@ reached the gateway answers in the helper's own refusal shape, so the screen rea
 from __future__ import annotations
 
 import re
+from typing import Any, cast
 
 import httpx
 
@@ -135,7 +136,7 @@ def request(transport, socket: str, method: str, path: str, body: dict | None = 
             client.stream(
                 method,
                 "http://conker-host" + path,
-                **({"json": body} if body is not None else {}),
+                **cast("dict[str, Any]", {"json": body} if body is not None else {}),
             ) as response,
         ):
             status = response.status_code

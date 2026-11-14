@@ -32,6 +32,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
+from typing import cast
 
 from pi.actions import identities as actions
 from pi.actions.toolgate import ToolResult
@@ -190,7 +191,8 @@ def save(store, turn_id, text, fields):
             _pause(delay)
     _keep(_Waiting(store, turn_id, text, dict(fields), held))
     log.warning("An answer was not saved (%s); it waits for the database.", type(failure).__name__)
-    raise NotSaved(NOT_SAVED) from failure
+    # Every way out of the loop that reaches here set failure (the loop runs at least once).
+    raise NotSaved(NOT_SAVED) from cast(sqlite3.DatabaseError, failure)
 
 
 def _saved(store, turn_id):

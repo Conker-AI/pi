@@ -19,6 +19,7 @@ import hashlib
 import json
 import time
 import uuid
+from typing import Any
 
 from pi.conversation import chat_preferences
 from pi.core.errors import ServiceError
@@ -102,7 +103,7 @@ def offerable(message: import_formats.Message) -> bool:
     return message.author == "user" and not message.shortened and len(message.text) <= MAX_OFFER
 
 
-def _known(db, source, chat):
+def _known(db, source, chat) -> tuple[Any, list[Any]]:
     """The chat's id and its messages not saved yet; a chat the owner deleted adds nothing."""
     gone = db.execute(
         "SELECT id FROM imported_chat_deletions WHERE source=? AND export_id=?",

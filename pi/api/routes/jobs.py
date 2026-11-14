@@ -1,12 +1,15 @@
 """Bounded owner schedule control with redacted run evidence."""
 
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
 from pi.core.models import Strict
 from pi.schedule import agent_hooks, agent_jobs, job_models, jobs
+
+JobPath = Annotated[str, Path(pattern=r"^job_[a-f0-9]{32}$")]
+RunPath = Annotated[str, Path(pattern=r"^scheduled_[a-f0-9]{32}$")]
 
 
 class RunRequest(Strict):
@@ -18,9 +21,6 @@ def router(store, authorize, executor=None):
 
     def call(function, *args, **kwargs):
         return function(store(), *args, **kwargs)
-
-    JobPath = Annotated[str, Path(pattern=r"^job_[a-f0-9]{32}$")]
-    RunPath = Annotated[str, Path(pattern=r"^scheduled_[a-f0-9]{32}$")]
 
     @routes.get("", response_model=job_models.JobCollection)
     def listing(
@@ -41,7 +41,7 @@ def router(store, authorize, executor=None):
     @routes.get("/agent/notes", response_model=job_models.AgentJobNoteCollection)
     def agent_job_notes():
         """What AI jobs found for the owner, newest first, until dismissed."""
-        return job_models.AgentJobNoteCollection(results=call(agent_jobs.notes))
+        return job_models.AgentJobNoteCollection(results=cast(Any, call(agent_jobs.notes)))
 
     @routes.post("/agent/notes/{identity}/dismiss")
     def dismiss_agent_job_note(identity: Annotated[str, Path(pattern=agent_jobs.NOTE_ID)]):

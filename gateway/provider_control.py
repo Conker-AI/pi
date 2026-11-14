@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 import httpx
 from pydantic import Field, ValidationError
@@ -79,16 +79,19 @@ class ProviderControlError(ValueError):
 
 def validate_operation(body: dict) -> dict:
     try:
-        model = {
-            "stage": Stage,
-            "verify": Action,
-            "activate": Action,
-            "recover": Action,
-            "discard": Action,
-            "record-revoked": Revocation,
-            "paid-policy": PaidPolicy,
-            "recover-paid-policy": PaidRecovery,
-        }.get(body.get("operation"))
+        model = cast(
+            "dict[object, type[Strict]]",
+            {
+                "stage": Stage,
+                "verify": Action,
+                "activate": Action,
+                "recover": Action,
+                "discard": Action,
+                "record-revoked": Revocation,
+                "paid-policy": PaidPolicy,
+                "recover-paid-policy": PaidRecovery,
+            },
+        ).get(body.get("operation"))
         if model is None:
             raise ValueError()
         return model.model_validate(body).model_dump(mode="json")

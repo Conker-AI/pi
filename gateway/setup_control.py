@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import BinaryIO
+from typing import BinaryIO, Literal, cast, overload
 
 import httpx
 from pydantic import ValidationError
@@ -38,6 +38,30 @@ def _owner_headers(config: Config) -> dict[str, str]:
         "Accept": "application/json",
         "X-Pi-Owner-Key": config.pi_owner_key,
     }
+
+
+@overload
+def _request_json(
+    config: Config,
+    client: httpx.Client,
+    method: str,
+    path: str,
+    *,
+    body: dict | None = None,
+    missing: Literal[False] = False,
+) -> dict: ...
+
+
+@overload
+def _request_json(
+    config: Config,
+    client: httpx.Client,
+    method: str,
+    path: str,
+    *,
+    body: dict | None = None,
+    missing: bool,
+) -> dict | None: ...
 
 
 def _request_json(
@@ -254,7 +278,7 @@ def set_setup_choice(
         raise SetupControlError("Pi returned a mismatched setup choice.")
     value = ChoiceInput(
         requestId=f"setup-choice-{step}-{uuid.uuid4()}",
-        choice=choice,
+        choice=cast(Literal["accept", "include", "skip"], choice),
         expectedRevision=observed.revision,
     )
     saved = _request_json(config, client, "POST", path, body=value.model_dump(mode="json"))

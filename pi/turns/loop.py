@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from pi.actions import identities as actions
 from pi.actions import tools as tool_protocol
@@ -357,7 +357,11 @@ class Loop(ModelCalls, History, Replies):
             if execution.get("researchMode") == "web":
                 limit = 1
             elif execution.get("researchMode") == "deep":
-                limit = min(limit, research.plan(self.store, turn_id)["search_limit"])
+                # Deep research saved its plan above (save_plan raises otherwise).
+                limit = min(
+                    limit,
+                    cast("dict[str, Any]", research.plan(self.store, turn_id))["search_limit"],
+                )
             for step in range(max(0, limit - used)):
                 route, completion, call = self._requested(
                     route, completion, history, ctx, execution, allowed, available
@@ -368,13 +372,17 @@ class Loop(ModelCalls, History, Replies):
                     research.validate_call(call, self.store, turn_id)
                 ran = False
                 try:
-                    action = actions.prepare(
-                        self.store,
-                        turn_id,
-                        call.tool_id,
-                        call.args,
-                        ToolGateClient.new_action_id(),
-                        proposal=completion.text,
+                    # prepare returns the action row it has just inserted.
+                    action = cast(
+                        "dict[str, Any]",
+                        actions.prepare(
+                            self.store,
+                            turn_id,
+                            call.tool_id,
+                            call.args,
+                            ToolGateClient.new_action_id(),
+                            proposal=completion.text,
+                        ),
                     )
                 except turn_steering.Pending:
                     turn_steering.discarded(self.store, turn_id, completion)
@@ -506,7 +514,11 @@ class Loop(ModelCalls, History, Replies):
                         {"tool": call.tool_id, "result": outcome.result}, ensure_ascii=False
                     )
 
-                if actions.latest(self.store, turn_id)["state"] != "completed":
+                # The action row prepared above exists, so latest is never None here.
+                if (
+                    cast("dict[str, Any]", actions.latest(self.store, turn_id))["state"]
+                    != "completed"
+                ):
                     self.store.append_message(
                         session_id,
                         "tool",

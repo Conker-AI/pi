@@ -26,7 +26,7 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pi.conversation import visibility
 from pi.core.errors import ServiceError
@@ -198,7 +198,9 @@ def _parse(text: str, aliases: dict[str, str], limit: int, blocked: set[str]) ->
     for item in items:
         if not isinstance(item, dict):
             continue
-        fields = {key: item.get(key) for key in ("title", "suggestion", "ifApproved")}
+        fields: dict[str, Any] = {
+            key: item.get(key) for key in ("title", "suggestion", "ifApproved")
+        }
         if not all(isinstance(value, str) and value.strip() for value in fields.values()):
             continue
         cited = item.get("evidence")

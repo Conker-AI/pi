@@ -61,8 +61,8 @@ CASES = [
     (
         "F2-unknown-cost-is-zero",
         "pi/models/openrouter.py",
-        "value = pricing.get(key)",
-        "value = pricing.get(key) or 0.0",
+        "value: Any = pricing.get(key)",
+        "value: Any = pricing.get(key) or 0.0",
         MODELS,
     ),
     (
@@ -100,11 +100,8 @@ CASES = [
     (
         "F2b-unknown-redispatches",
         "pi/turns/replies.py",
-        'outcome = self._gate(execution).check_action(action["id"], action["tool_id"])',
-        (
-            "outcome = self._gate(execution).invoke("
-            'action["tool_id"], action["args"], action_id=action["id"])'
-        ),
+        '.check_action(action["id"], action["tool_id"])',
+        '.invoke(action["tool_id"], action["args"], action_id=action["id"])',
         EXEC,
     ),
     (

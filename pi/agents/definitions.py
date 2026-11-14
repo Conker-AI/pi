@@ -8,7 +8,7 @@ never writes, and it includes nothing a kind's own list would not already show.
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import Field
 
@@ -170,4 +170,4 @@ def summaries(store, kind: str | None = None, *, archived: bool = False, search:
         and (not needle or needle in (row["name"] + " " + row["description"]).casefold())
     ]
     rows.sort(key=lambda row: (KINDS.index(row["kind"]), row["name"].casefold(), row["id"]))
-    return Collection(results=rows).model_dump()
+    return Collection(results=cast(list, rows)).model_dump()

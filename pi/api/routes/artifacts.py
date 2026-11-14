@@ -1,10 +1,12 @@
 """Bounded artifact routes for exact owner-browser and recovery-admin use."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from pi.content import artifact_models, artifacts, office_exports
+
+ArtifactPath = Annotated[str, Path(pattern=r"^artifact_[0-9a-f]{32}$")]
 
 
 def attachment(content: bytes, mime: str, filename: str, readable: str | None = None):
@@ -29,8 +31,6 @@ def router(store, authorize, resolve=None):
         except ValueError as exc:
             raise HTTPException(422, "Invalid artifact content.") from exc
 
-    ArtifactPath = Annotated[str, Path(pattern=r"^artifact_[0-9a-f]{32}$")]
-
     @routes.get("", response_model=artifact_models.ArtifactCollection)
     def listing(
         limit: int = Query(default=50, ge=1, le=100),
@@ -38,7 +38,8 @@ def router(store, authorize, resolve=None):
     ):
         rows = run(artifacts.list_artifacts, limit=limit + 1, cursor=cursor)
         return artifact_models.ArtifactCollection(
-            results=rows[:limit], nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None
+            results=cast(Any, rows[:limit]),
+            nextCursor=rows[limit - 1]["id"] if len(rows) > limit else None,
         )
 
     @routes.post("", response_model=artifact_models.ArtifactView)

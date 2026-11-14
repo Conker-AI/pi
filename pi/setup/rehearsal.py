@@ -8,7 +8,7 @@ import re
 import sqlite3
 import time
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal, cast
 
 from pydantic import Field
 
@@ -410,7 +410,7 @@ def status(store, *, now: datetime | None = None) -> Status:
         "outcome_unknown": "The approval outcome is uncertain and will not be repeated.",
         "invalid_policy": "The test tool did not require owner approval as expected.",
     }
-    approval_phase = Phase(state=projected, detail=details[projected])
+    approval_phase = Phase(state=cast(Any, projected), detail=details[projected])
     ready = all(
         phase.state == "complete" for phase in (conversation_phase, memory_phase, approval_phase)
     )
@@ -451,7 +451,7 @@ def finalize(store, *, now: datetime | None = None) -> setup_receipts.Receipt:
             "Complete one conversation, review memory, and finish the harmless approval flow.",
             409,
         )
-    digest = _rehearsal_digest(conversation, memory, approval)
+    digest = cast(str, _rehearsal_digest(conversation, memory, approval))
     if current is not None and current.evidenceDigest == digest:
         return current
     completed = datetime.fromtimestamp(
