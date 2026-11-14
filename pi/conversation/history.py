@@ -18,6 +18,8 @@ MAX_CURSOR = 196
 MAX_TITLE = 300
 MAX_PREVIEW = 400
 MAX_PAGE_BYTES = 256 * 1024
+# `ids` names at most this many chats, so one lookup is one page.
+MAX_IDS = 50
 _ID = re.compile(r"[A-Za-z0-9_-]{1,128}", re.ASCII)
 _CURSOR = re.compile(r"h1\.([0-9a-f]{64})\.([A-Za-z0-9_-]{1,128})", re.ASCII)
 _FORGOTTEN = "(s.status='forgotten' OR f.session_id IS NOT NULL)"
@@ -51,14 +53,14 @@ def _unavailable():
 
 def request_arguments(params):
     """Validate the whole query, including unknown or repeated fields."""
-    if set(params) - {"q", "limit", "cursor", "archived", "trashed", "sort"} or any(
+    if set(params) - {"q", "limit", "cursor", "archived", "trashed", "sort", "ids"} or any(
         len(params.getlist(key)) != 1 for key in params
     ):
         _invalid_request()
     raw_limit = params.get("limit", "50")
     if not re.fullmatch(r"[0-9]{1,2}", raw_limit, re.ASCII):
         _invalid_request()
-    return {
+    arguments = {
         "limit": int(raw_limit),
         "q": params.get("q"),
         "cursor": params.get("cursor"),
@@ -66,12 +68,35 @@ def request_arguments(params):
         "trashed": params.get("trashed", "exclude"),
         "sort": params.get("sort", "newest"),
     }
+    if "ids" in params:
+        # Comma-separated; checked for size before it is split.
+        if len(params["ids"]) > MAX_IDS * 129:
+            _invalid_request()
+        arguments["ids"] = params["ids"].split(",")
+    return arguments
 
 
-def _arguments(limit, q, cursor, archived="exclude", sort="newest", trashed="exclude"):
+def _chat_ids(ids):
+    """At most MAX_IDS distinct chat ids, or None when the caller named none."""
+    if ids is None:
+        return None
+    if (
+        not isinstance(ids, (list, tuple))
+        or not 1 <= len(ids) <= MAX_IDS
+        or not all(isinstance(value, str) and _ID.fullmatch(value) for value in ids)
+    ):
+        _invalid_request()
+    return tuple(dict.fromkeys(ids))
+
+
+def _arguments(limit, q, cursor, archived="exclude", sort="newest", trashed="exclude", ids=None):
     if type(limit) is not int or not 1 <= limit <= 50:
         _invalid_request()
     if archived not in ARCHIVED or trashed not in TRASHED or sort not in ORDERS:
+        _invalid_request()
+    ids = _chat_ids(ids)
+    # Named chats are looked up only among the visible ones: the Trash view takes no ids.
+    if ids is not None and trashed != "exclude":
         _invalid_request()
     if q is not None and (not isinstance(q, str) or len(q) > MAX_QUERY or "\x00" in q):
         _invalid_request()
@@ -85,6 +110,8 @@ def _arguments(limit, q, cursor, archived="exclude", sort="newest", trashed="exc
         )
         if trashed != "exclude":
             bound += f"\x00{trashed}"
+        if ids is not None:
+            bound += "\x00ids\x00" + ",".join(sorted(ids))
         digest = hashlib.sha256(bound.encode("utf-8")).hexdigest()
     except UnicodeError:
         _invalid_request()
@@ -96,7 +123,7 @@ def _arguments(limit, q, cursor, archived="exclude", sort="newest", trashed="exc
         if match is None or match[1] != digest:
             _invalid_cursor()
         anchor = match[2]
-    return normalized, digest, anchor
+    return normalized, digest, anchor, ids
 
 
 def _text(value, maximum):
@@ -146,9 +173,22 @@ def _record(row):
 
 
 def page(
-    store, *, limit=50, q=None, cursor=None, archived="exclude", sort="newest", trashed="exclude"
+    store,
+    *,
+    limit=50,
+    q=None,
+    cursor=None,
+    archived="exclude",
+    sort="newest",
+    trashed="exclude",
+    ids=None,
 ):
-    normalized, digest, anchor = _arguments(limit, q, cursor, archived, sort, trashed)
+    """One page of the directory; `ids` narrows it to those chats that are still visible.
+
+    With `ids`, a forgotten chat is left out instead of listed as a tombstone, so a client that
+    remembers chats it opened (Home's "Jump back in") gets back only the ones it may still show.
+    """
+    normalized, digest, anchor, ids = _arguments(limit, q, cursor, archived, sort, trashed, ids)
     keys, direction = ORDERS[sort]
     key = "(" + ",".join(keys) + ")"
     joins = (
@@ -175,7 +215,14 @@ def page(
         )
         where, values = [], []
         where.append(TRASHED[trashed])
-        if trashed == "exclude":
+        if ids is not None:
+            # Hidden covers forgotten, trashed and every chat made from one (visibility).
+            where.append(f"NOT {visibility.hidden_sql('s.id')}")
+            where.append(f"s.id IN ({','.join('?' * len(ids))})")
+            values.extend(ids)
+            if ARCHIVED[archived]:
+                where.append(ARCHIVED[archived])
+        elif trashed == "exclude":
             # A chat made from a hidden one (a fork of a trashed chat, a kept job's chat) is
             # hidden with it; forgotten chats stay listed as tombstones.
             where.append(f"({_FORGOTTEN} OR NOT {visibility.hidden_sql('s.id')})")
