@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Cross-package imports: saving a deep-research plan (`save_plan`) moved unchanged from `pi.context.research` to `pi.turns.research_plan`, and `pi.context.retrieval.resolve` takes the turn's stop guard as a required argument; the edge `context -> turns` is gone (89 -> 88). Behaviour unchanged (pi#PR).
 - Cross-package imports: `inference_control` (cancellation of a model call) and `routing_memo` moved unchanged from `pi.turns` to `pi.models`, where the provider adapters that use them live; the edge `models -> turns` is gone. Behaviour unchanged (pi#264).
 
 
