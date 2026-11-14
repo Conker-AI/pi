@@ -7,6 +7,8 @@ be a decision with visible consequences.
 ## Unreleased
 
 
+
+- Cross-package imports: tool action identities (`pi/actions/identities.py`) moved unchanged to `pi.turns.action_identities`, because they are turn bookkeeping (rows reference `turns`, written in the turn's transaction); the edges `actions -> conversation` and `actions -> turns` are gone (92 -> 90). The audit drill follows the new path. No behaviour change (pi#260).
 - One contract test for every HTTP model adapter (OpenRouter, OpenAI, Gemini, xAI, Mistral, DeepSeek, Groq, Anthropic, Ollama): answer shape, reported token counts, cut answers, refusals that leak no key, vendor body or prompt, malformed answers, no redirects or proxies (pi#258). It found two gaps, now fixed: OpenRouter and Ollama kept token counts that were not non-negative integers (the daily cap counts them) and crashed instead of refusing on a body that was not an object; one `reported_count` rule now serves all adapters.
 - `GET /insights/tomorrow?hours=24` (owner, pi#257): what Conker will start on its own soon, read-only: jobs the clock fires (next time, how many slots, held while a parked run waits for his answer), watched jobs, and parked approvals that run out in the window. Never his words or tool arguments; hidden chats are left out.
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.

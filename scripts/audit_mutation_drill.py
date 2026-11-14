@@ -92,7 +92,7 @@ CASES = [
     ),
     (
         "F2b-negative-receipt-marks-acted",
-        "pi/actions/identities.py",
+        "pi/turns/action_identities.py",
         "int(outcome.changed)",
         "1",
         EXEC,
@@ -140,7 +140,7 @@ CASES = [
     ),
     (
         "F4-receipt-observation-lost",
-        "pi/actions/identities.py",
+        "pi/turns/action_identities.py",
         'WHERE id=?", (action["id"],))\n        db.commit()',
         'WHERE id=?", (action["id"],))\n        pass',
         EXEC,

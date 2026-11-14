@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pi.actions import identities as actions
 from pi.actions import tool_forgets, withdrawals
 from pi.agents import (
     agent_calls,
@@ -77,6 +76,7 @@ from pi.setup import protection as setup_protection
 from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
 from pi.turns import access as turn_access
+from pi.turns import action_identities as actions
 from pi.turns import context as turn_context
 from pi.turns import control as turn_control
 from pi.turns import queue as turn_queue

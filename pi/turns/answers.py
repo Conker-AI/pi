@@ -15,10 +15,10 @@ import logging
 import threading
 import time
 
-from pi.actions import identities as actions
 from pi.agents import asks, inbox
 from pi.conversation import drafts, submissions
 from pi.schedule import tasks
+from pi.turns import action_identities as actions
 
 log = logging.getLogger(__name__)
 
