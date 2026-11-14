@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from pi.api.browser_contract import owner_allowed
 from pi.context import open_loops as loops
-from pi.conversation import archive
+from pi.conversation import archive, forget_queue
 from pi.conversation.store import Store
 
 ADMIN = {"X-Pi-Key": "synthetic-admin"}
@@ -190,6 +190,28 @@ def test_a_trashed_chats_loops_are_hidden_until_it_is_restored(store):
         assert refused.value.status == 404
     archive.trash(store, archive.Trash(sessions=[trashed], trashed=False))
     assert ids(listing(store, "all")) == [hidden["id"], shown["id"], in_branch["id"]]
+    assert loops.change_state(store, hidden["id"], loops.LoopState(state="done"))["loop"]
+
+
+def test_delete_forever_from_the_trash_removes_the_loops_at_the_next_start(tmp_path):
+    path = tmp_path / "pi.db"
+    with closing(Store(path)) as store:
+        kept, trashed = store.create_session(), store.create_session()
+        child = store.create_session(parent_id=trashed)
+        message = store.append_message(trashed, "user", "I'll call the bank")
+        shown = add(store, kept, "Keep this")
+        add(store, trashed, "Call the bank", message_id=message["id"])
+        add(store, child, "In a branch")
+        archive.trash(store, archive.Trash(sessions=[trashed], trashed=True))
+    forget_queue.queue(path, [{"sessionId": trashed, "sessionIds": [trashed, child]}])
+    forget_queue.run_pending(path)  # what Pi runs at startup, before the Store opens
+    [result] = forget_queue.overview(path)["results"]
+    assert result["state"] == "done"
+    with closing(Store(path)) as store:
+        assert ids(listing(store, "all")) == [shown["id"]]
+        with store._connect() as db:
+            rows = db.execute("SELECT session_id, text FROM open_loops").fetchall()
+    assert [tuple(row) for row in rows] == [(kept, "Keep this")]
 
 
 def test_the_open_cap_counts_only_open_loops(store, monkeypatch):

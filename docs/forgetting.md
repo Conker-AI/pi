@@ -87,6 +87,8 @@ actions are not undone. Turn outcome, `acted`, accounting, tool/approval IDs and
 timestamps remain as execution facts. The session becomes `forgotten` and
 cannot accept messages, fork, or resume any turn. Its parked turns disappear
 from the resumable queues.
+Its open loops (`open_loops`, [open loops](open-loops.md)) are deleted, the
+promise words with them; while the chat waits in the Trash they are hidden.
 
 Messages retain their original IDs, session IDs, sequence numbers, roles and
 timestamps. Sequences are never renumbered and IDs cannot be replaced. Immutable
