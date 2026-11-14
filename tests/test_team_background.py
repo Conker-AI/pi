@@ -195,3 +195,43 @@ def test_too_many_steps_at_once_are_refused_not_queued(store, monkeypatch):
     assert team_execution.get(store, second["id"])["steps"] == []
     gate.go.set()
     wait_for(slots_free, "the slot to be free")
+
+
+def test_a_thread_that_cannot_start_blocks_the_run_and_frees_the_slot(store, monkeypatch):
+    record, _ = setup(store)
+    run = start(store, record, store.create_session())
+    client = client_for(store, Recorder())
+
+    def cannot(self):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", cannot)
+    with pytest.raises(RuntimeError):
+        team_background.execute_in_background(
+            store, None, run["id"], team_models.Step(**step_body(run))
+        )
+    monkeypatch.undo()
+    assert state(store, run) == "blocked" and slots_free()
+    assert client.get(f"/team-runs/{run['id']}", headers=HEADERS).json()["state"] == "blocked"
+
+
+def test_a_replay_is_answered_even_while_every_slot_is_taken(store, monkeypatch):
+    gate = Gate()
+    record, _ = setup(store)
+    run = start(store, record, store.create_session())
+    client = client_for(store, Recorder(callback=gate))
+    assert post_step(client, run).status_code == 202
+    assert gate.entered.wait(20)
+    taken = [team_background._slots.acquire(blocking=False) for _ in range(5)]
+    try:
+        again = post_step(client, run)
+        assert again.status_code == 202 and again.json()["state"] == "running"
+        changed = post_step(client, run, conditionReviewed=True)
+        assert changed.status_code == 409
+        assert changed.json()["detail"]["code"] == "request_conflict"
+    finally:
+        for got in taken:
+            if got:
+                team_background._slots.release()
+        gate.go.set()
+    wait_for(slots_free, "the slot to be free")

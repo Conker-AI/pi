@@ -491,15 +491,30 @@ def finish_step(store, runtime, identity, started: Started):
             task_expected_revision=1,
         )
     except Exception:
-        with store._connect() as db:
-            db.execute(
-                "UPDATE team_steps SET state='blocked' WHERE id=? AND state='running'", (step_id,)
-            )
-            db.execute(
-                "UPDATE team_runs SET state='blocked' WHERE id=? AND state='running'", (identity,)
-            )
+        mark_blocked(store, identity, step_id)
         raise
     return reconcile(store, identity)
+
+
+def mark_blocked(store, identity, step_id) -> None:
+    """A step that could not run or finish: the step and its run stop (only while running)."""
+    with store._connect() as db:
+        db.execute(
+            "UPDATE team_steps SET state='blocked' WHERE id=? AND state='running'", (step_id,)
+        )
+        db.execute(
+            "UPDATE team_runs SET state='blocked' WHERE id=? AND state='running'", (identity,)
+        )
+
+
+def step_exists(store, identity, request_id) -> bool:
+    with store._connect() as db:
+        return (
+            db.execute(
+                "SELECT 1 FROM team_steps WHERE run_id=? AND request_id=?", (identity, request_id)
+            ).fetchone()
+            is not None
+        )
 
 
 def reconcile(store, identity):

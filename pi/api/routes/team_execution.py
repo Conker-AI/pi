@@ -17,7 +17,10 @@ def create_router(store_provider, loop_provider, authorize):
     def get(identity: str):
         return teams.get(store_provider(), identity)
 
-    @router.post("/{identity}/steps")
+    @router.post(
+        "/{identity}/steps",
+        responses={202: {"description": "Started in the background; read the run until done."}},
+    )
     def execute(identity: str, body: team_models.Step, response: Response):
         if body.background:
             result = team_background.execute_in_background(
