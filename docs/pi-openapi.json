@@ -38334,6 +38334,11 @@
             "type": "boolean",
             "title": "Conditionreviewed",
             "default": false
+          },
+          "background": {
+            "type": "boolean",
+            "title": "Background",
+            "default": false
           }
         },
         "additionalProperties": false,

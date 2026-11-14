@@ -25,6 +25,15 @@ edge. The condition is displayed in the frozen definition for owner review; Pi
 does not pretend to evaluate its natural language. Task completion criteria still
 require owner review.
 
+`POST /{runId}/steps` runs the role inside the call by default. A caller that cannot hold an HTTP
+call (a screen, an `@team` mention) sends `"background": true`: Pi records the step, checks
+everything that can refuse it (the spending cap, run state, limits) and answers `202` with the run
+in state `running`; the role then runs on its own thread, and the caller reads
+`GET /{runId}` until the state is no longer `running` (`ready`, `held` or `blocked`; a Pi
+restart leaves `interrupted`). At most two background steps run at once (`team_busy`, 409,
+otherwise). The flag is not part of the request's identity: repeating the same `request_id`
+never starts a second turn. Nothing else changes: the owner still reviews each handoff.
+
 `GET /{runId}` returns the frozen definitions, step/task/session references,
 requested and actual models, reported usage and latency, and explicit limit semantics.
 `POST /{runId}/reconcile` inspects the existing submission after a separately authorized

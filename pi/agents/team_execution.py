@@ -5,6 +5,7 @@ import json
 import math
 import time
 import uuid
+from dataclasses import dataclass
 from typing import NoReturn
 
 from pi.agents import profiles as agents
@@ -339,9 +340,29 @@ def _role_input(store, run, definition, role, edge, previous_message) -> str:
     return prompt
 
 
+@dataclass(frozen=True)
+class Started:
+    """A role step recorded and ready to run: the claim is written, the turn has not started."""
+
+    session_id: str
+    prompt: str
+    task_id: str
+    step_id: str
+    request_id: str
+
+
 def execute(store, runtime, identity, body):
+    """Record a role step and run it to its end inside this call."""
+    started = begin(store, identity, body)
+    if started is None:
+        return get(store, identity)  # Inspection only, even after an uncertain outcome.
+    return finish_step(store, runtime, identity, started)
+
+
+def begin(store, identity, body) -> Started | None:
+    """Check and record one role step. None when this request id already ran (a replay)."""
     body = Step.model_validate(body.model_dump())
-    digest = _hash({"run": identity, **body.model_dump()})
+    digest = _hash({"run": identity, **body.model_dump(exclude={"background"})})
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         run = _row(db, identity)
@@ -351,7 +372,7 @@ def execute(store, runtime, identity, body):
         if prior:
             if prior["payload_hash"] != digest:
                 _error("request_conflict", "This step request was already used.")
-            return get(store, identity)  # Inspection only, even after an uncertain outcome.
+            return None
         if run["revision"] != body.expected_revision:
             _error("revision_conflict", "Reload the team run before dispatch.")
         if run["state"] != "ready":
@@ -455,9 +476,19 @@ def execute(store, runtime, identity, body):
             "UPDATE team_runs SET state='running',revision=revision+1 WHERE id=?", (identity,)
         )
         db.commit()
+    return Started(sid, prompt, task_id, step_id, body.request_id)
+
+
+def finish_step(store, runtime, identity, started: Started):
+    """Run the recorded step's turn, then read where it ended."""
+    step_id = started.step_id
     try:
         runtime.run_turn(
-            sid, prompt, request_id=body.request_id, task_id=task_id, task_expected_revision=1
+            started.session_id,
+            started.prompt,
+            request_id=started.request_id,
+            task_id=started.task_id,
+            task_expected_revision=1,
         )
     except Exception:
         with store._connect() as db:
