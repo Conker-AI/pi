@@ -75,7 +75,6 @@ memory -> conversation
 memory -> core
 memory -> models
 memory -> owner
-memory -> turns
 models -> actions
 models -> conversation
 models -> core
