@@ -382,3 +382,84 @@ def test_an_older_database_keeps_its_rows_and_takes_the_new_kinds(tmp_path):
     done = call(loop, native_tools.CREATE_AGENT, AGENT, chat(store), run=True)
     assert done.result["status"] == "done"
     store.close()
+
+
+# --- a team never hands on more than its maker holds ---------------------------------------
+
+
+def filed_role_tools(store):
+    [request] = change_requests.listing(store)
+    return [role["toolIds"] for role in request["payload"]["roles"]]
+
+
+def test_a_role_gets_only_the_tools_the_caller_can_use(store):
+    loop, _ = build(store, [], FakeGate())
+    owner_agent(store, "Mailer", tools=("t_echo", "mail.send", native_tools.CREATE_TEAM))
+    owner_agent(store, "Plain")
+    args = {
+        "name": "Mixed crew",
+        "objective": "Draft and check.",
+        "roles": [
+            {"name": "Send", "agent": "Mailer", "instructions": "Send it."},
+            {"name": "Check", "agent": "Plain", "instructions": "Check it."},
+        ],
+    }
+    assert (
+        call(loop, native_tools.CREATE_TEAM, args, chat(store)).result["status"]
+        == "waiting_for_owner"
+    )
+    # `mail.send` is not a tool this caller can use, and the delegation tools are never handed on.
+    assert filed_role_tools(store) == [["t_echo"], ["t_echo"]]
+
+
+def test_a_narrow_caller_cannot_widen_a_role_past_its_own_tools(store):
+    loop, _ = build(store, [], FakeGate())
+    narrow = owner_agent(store, "Narrow", tools=())
+    owner_agent(store, "Wide", tools=("t_echo",))
+    owner_agent(store, "Other", tools=("t_echo",))
+    session = chat(store, agent_id=narrow["id"])
+    args = {
+        "name": "Crew",
+        "objective": "Do it.",
+        "roles": [
+            {"name": "One", "agent": "Wide", "instructions": "Do one."},
+            {"name": "Two", "agent": "Other", "instructions": "Do two."},
+        ],
+    }
+    assert (
+        call(loop, native_tools.CREATE_TEAM, args, session).result["status"] == "waiting_for_owner"
+    )
+    assert filed_role_tools(store) == [[], []]
+
+
+@pytest.mark.parametrize("reference", ["companion", "Conker"])
+def test_the_companion_is_refused_as_a_team_role(store, reference):
+    loop, _ = build(store, [], FakeGate())
+    owner_agent(store, "Helper")
+    companion = next(a for a in agents.list_agents(store)["results"] if a["kind"] == "companion")
+    given = companion["id"] if reference == "companion" else companion["configuration"]["name"]
+    args = {
+        "name": "Crew",
+        "objective": "Do it.",
+        "roles": [
+            {"name": "One", "agent": given, "instructions": "Do one."},
+            {"name": "Two", "agent": "Helper", "instructions": "Do two."},
+        ],
+    }
+    refused = call(loop, native_tools.CREATE_TEAM, args, chat(store))
+    assert refused.result["status"] == "refused" and "Conker itself" in refused.result["message"]
+    assert change_requests.listing(store) == []
+
+
+def test_a_filed_team_carrying_a_delegation_tool_is_not_made(store):
+    loop, _ = build(store, [], FakeGate())
+    call(loop, native_tools.CREATE_TEAM, team_args(store), chat(store))
+    [request] = change_requests.listing(store)
+    payload = request["payload"]
+    payload["roles"][0]["toolIds"] = [native_tools.RUN_AGENT]
+    with store._connect() as db:
+        db.execute(
+            "UPDATE change_requests SET payload=? WHERE id=?", (json.dumps(payload), request["id"])
+        )
+    assert change_requests.approve(store, request["id"])["state"] == "failed"
+    assert teams.owner_list(store).results == []

@@ -13,6 +13,7 @@ from pi.agents import teams as collaboration
 from pi.agents.team_models import Finish, Start, Step
 from pi.conversation import settings as session_settings
 from pi.conversation import submissions, visibility
+from pi.models import spending_cap
 from pi.models.providers import ProviderUnavailable
 from pi.schedule import tasks
 
@@ -33,81 +34,24 @@ _ROLE_CONTEXT_POLICY = (
 )
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS team_runs (
- id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, payload_hash TEXT NOT NULL,
- team_id TEXT NOT NULL REFERENCES collaboration_records(id),
- source_session_id TEXT NOT NULL REFERENCES sessions(id),
- root_session_id TEXT NOT NULL REFERENCES sessions(id), input_message_id TEXT NOT NULL,
- snapshot TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
- state TEXT NOT NULL DEFAULT 'ready', created_at REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS team_steps (
- id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES team_runs(id),
- request_id TEXT UNIQUE NOT NULL, payload_hash TEXT NOT NULL,
- role_id TEXT NOT NULL, handoff_id TEXT,
- session_id TEXT UNIQUE NOT NULL REFERENCES sessions(id),
- task_id TEXT NOT NULL, snapshot TEXT NOT NULL, source_ids TEXT NOT NULL,
- previous_message_id TEXT, with_citations INTEGER NOT NULL,
- state TEXT NOT NULL DEFAULT 'running', created_at REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS team_model_calls (
- id TEXT PRIMARY KEY, step_id TEXT NOT NULL REFERENCES team_steps(id),
- provider TEXT NOT NULL, requested_model TEXT NOT NULL, actual_model TEXT,
- state TEXT NOT NULL DEFAULT 'running', input_tokens INTEGER, output_tokens INTEGER,
- cost_usd REAL, latency_ms INTEGER
-);
-CREATE TRIGGER IF NOT EXISTS team_submission_identity BEFORE INSERT ON turn_submissions
-WHEN EXISTS (SELECT 1 FROM team_steps WHERE session_id=NEW.requested_session_id
- AND request_id!=NEW.request_id)
-BEGIN SELECT RAISE(ABORT,'team sessions accept only their reserved step'); END;
-CREATE TRIGGER IF NOT EXISTS team_context_fixed BEFORE UPDATE ON context_policies
-WHEN EXISTS(SELECT 1 FROM team_steps WHERE session_id=NEW.session_id)
-BEGIN SELECT RAISE(ABORT,'team step context is fixed'); END;
-CREATE TRIGGER IF NOT EXISTS team_context_no_replace BEFORE INSERT ON context_policies
-WHEN EXISTS(SELECT 1 FROM team_steps WHERE session_id=NEW.session_id)
-BEGIN SELECT RAISE(ABORT,'team step context is fixed'); END;
-"""
-for _table, _columns in {
-    "team_runs": [
-        "id",
-        "request_id",
-        "payload_hash",
-        "team_id",
-        "source_session_id",
-        "root_session_id",
-        "input_message_id",
-        "snapshot",
-    ],
-    "team_steps": [
-        "id",
-        "run_id",
-        "request_id",
-        "payload_hash",
-        "role_id",
-        "handoff_id",
-        "session_id",
-        "task_id",
-        "snapshot",
-        "source_ids",
-        "previous_message_id",
-        "with_citations",
-    ],
-}.items():
-    _changed = " OR ".join(f"NEW.{key} IS NOT OLD.{key}" for key in _columns)
-    SCHEMA += f"""
-CREATE TRIGGER IF NOT EXISTS {_table}_fixed BEFORE UPDATE ON {_table}
-WHEN {_changed} BEGIN SELECT RAISE(ABORT,'team execution input is immutable'); END;
-CREATE TRIGGER IF NOT EXISTS {_table}_no_delete BEFORE DELETE ON {_table}
-BEGIN SELECT RAISE(ABORT,'team execution receipts are retained'); END;
-CREATE TRIGGER IF NOT EXISTS {_table}_no_replace BEFORE INSERT ON {_table}
-WHEN EXISTS(SELECT 1 FROM {_table} WHERE id=NEW.id)
-BEGIN SELECT RAISE(ABORT,'team execution identity is permanent'); END;
-"""
-
-
 def _error(code, message, status=409) -> NoReturn:
     raise agents.AgentError(code, message, status)
+
+
+def _require_cap(db) -> None:
+    """A team run only goes on while the owner's daily spending cap is on: every paid call of a
+    role passes that cap, and a run that could spend past it asks the owner to turn it back on
+    first (which asks for his password). A cap that cannot be read refuses too."""
+    try:
+        enabled = spending_cap.is_enabled(db)
+    except Exception:
+        _error("spending_cap_unavailable", spending_cap.UNAVAILABLE, 503)
+    if not enabled:
+        _error(
+            "spending_cap_off",
+            "The daily spending cap is off, so a team run could spend without a limit. "
+            "Turn the cap on in Settings first.",
+        )
 
 
 def _hash(value):
@@ -168,6 +112,7 @@ def start(store, team_id, body):
                 _error("request_conflict", "This run request was already used.")
             identity = prior["id"]
         else:
+            _require_cap(db)
             current = collaboration._get(db, team_id, "team", body.expected_revision, active=True)
             definition = team_models.Team.model_validate(current["definition"])
             profiles = collaboration._team_agents(db, definition)
@@ -411,6 +356,7 @@ def execute(store, runtime, identity, body):
             _error("revision_conflict", "Reload the team run before dispatch.")
         if run["state"] != "ready":
             _error("run_blocked", "Resolve this run before dispatching another role.")
+        _require_cap(db)
         snapshot = json.loads(run["snapshot"])
         definition = snapshot["definition"]
         role = next((r for r in definition["roles"] if r["id"] == body.roleId), None)

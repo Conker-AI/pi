@@ -156,6 +156,7 @@ OWNER_ROUTES = {
         r"/collaboration/teams/team_[0-9a-f]{32}",
         r"/collaboration/teams/team_[0-9a-f]{32}/versions",
         r"/collaboration/teams/team_[0-9a-f]{32}/versions/[1-9][0-9]{0,9}",
+        r"/team-runs/teamrun_[0-9a-f]{32}",
         r"/artifacts/artifact_[0-9a-f]{32}",
         r"/artifacts/artifact_[0-9a-f]{32}/export",
         r"/jobs",
@@ -245,6 +246,11 @@ OWNER_ROUTES = {
         r"/artifacts",
         r"/collaboration/teams",
         r"/collaboration/teams/team_[0-9a-f]{32}/(?:update|archive|restore)",
+        # Team runs: start one from a saved team, run a role, reconcile, finish. The daily
+        # spending cap bounds what a run can spend, and Pi refuses to start or step one while the
+        # cap is off, so the signed-in session is enough (turning the cap off asks for the password).
+        r"/team-runs/from-team/team_[0-9a-f]{32}",
+        r"/team-runs/teamrun_[0-9a-f]{32}/(?:steps|reconcile|finish)",
         r"/artifacts/from-message",
         r"/artifacts/artifact_[0-9a-f]{32}/(?:versions|restore|archive)",
         r"/jobs/job_[0-9a-f]{32}/(?:state|run)",
