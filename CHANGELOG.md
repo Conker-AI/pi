@@ -6,6 +6,12 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **What Conker believes about you (read-only).** `GET /memory/beliefs` (owner session) lists one
+  page of MemoryGate's memory-beliefs list (MemoryGate 0.9.0, memorygate#101) in camelCase as
+  `BeliefPage`: origin (stated or concluded), confidence, evidence counts, lineage and open
+  conflicts, with the filters and cursor passed on. A memory with a forget pending or done, or made
+  from a hidden chat, is left out; MemoryGate missing or silent is 503 `memory_unavailable` (#PR).
+
 ## 0.25.0
 
 - **A skipped update stays skipped when its release comes back** (`pi/owner/updates.py`).
