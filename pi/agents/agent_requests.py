@@ -150,10 +150,27 @@ def _agent(db, reference) -> dict:
         raise Refused(
             f"The agent “{agent['configuration']['name']}” is archived; nothing was filed."
         )
+    if agent["kind"] == "companion":
+        # The companion holds the owner's whole toolkit; a team role never borrows it (the same
+        # rule as `conker.run_agent`).
+        raise Refused(
+            "Conker itself cannot be a role in a team. Use an agent made for the role; "
+            "nothing was filed."
+        )
     return agent
 
 
-def _definition(name, objective, roles) -> Team:
+def _role_tools(agent, allowed) -> list[str]:
+    """The role's tools: the agent's own, narrowed to what the caller can use this turn and never
+    the create or delegation tools, so a team never hands on more than its maker holds."""
+    return [
+        tool
+        for tool in agent["configuration"]["toolIds"]
+        if tool in allowed and tool not in NEVER_GIVEN
+    ]
+
+
+def _definition(name, objective, roles, allowed) -> Team:
     count = len(roles)
     budget = {"maxTurns": 1, "maxTokens": ROLE_TOKENS, "maxCostCents": ROLE_CENTS}
     try:
@@ -167,7 +184,7 @@ def _definition(name, objective, roles) -> Team:
                         "name": role_name,
                         "agentId": agent["id"],
                         "instructions": instructions,
-                        "toolIds": agent["configuration"]["toolIds"],
+                        "toolIds": _role_tools(agent, allowed),
                         "memory": {"scope": "none", "memoryIds": []},
                         "context": {"mode": "task_only", "sourceIds": []},
                         "budget": budget,
@@ -198,8 +215,9 @@ def _definition(name, objective, roles) -> Team:
         raise ValueError(f"The team is not valid: {first['msg']}") from None
 
 
-def file_team(store, args, *, session_id, turn_id) -> dict:
-    """File a request for a new linear team of existing agents."""
+def file_team(store, args, allowed, *, session_id, turn_id) -> dict:
+    """File a request for a new linear team of existing agents; `allowed` are the tool ids the
+    caller may hand on (a role gets its agent's tools narrowed to these)."""
     name = _text(args, "name", 80)
     objective = _text(args, "objective", 2000)
     given = args.get("roles")
@@ -221,7 +239,7 @@ def file_team(store, args, *, session_id, turn_id) -> dict:
                     _text(value, "instructions", 8000),
                 )
             )
-        definition = _definition(name, objective, roles)
+        definition = _definition(name, objective, roles, allowed)
         _name_free(db, "team", definition.name)
         try:
             teams._team_agents(db, definition)
@@ -256,7 +274,7 @@ def _checked(kind, payload):
             raise ValueError("Not an agent Conker may ask for.")
         return body
     body = Team.model_validate(payload)
-    if any(role.memory.scope != "none" for role in body.roles):
+    if any(role.memory.scope != "none" or NEVER_GIVEN & set(role.toolIds) for role in body.roles):
         raise ValueError("Not a team Conker may ask for.")
     return body
 
