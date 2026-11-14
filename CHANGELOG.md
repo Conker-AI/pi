@@ -7,6 +7,8 @@ be a decision with visible consequences.
 ## Unreleased
 
 - Cross-package imports: `inference_control` (cancellation of a model call) and `routing_memo` moved unchanged from `pi.turns` to `pi.models`, where the provider adapters that use them live; the edge `models -> turns` is gone. Behaviour unchanged (pi#264).
+
+
 - Cross-package imports: tool action identities (`pi/actions/identities.py`) moved unchanged to `pi.turns.action_identities`, because they are turn bookkeeping (rows reference `turns`, written in the turn's transaction); the edges `actions -> conversation` and `actions -> turns` are gone (92 -> 90). The audit drill follows the new path. No behaviour change (pi#260).
 - One contract test for every HTTP model adapter (OpenRouter, OpenAI, Gemini, xAI, Mistral, DeepSeek, Groq, Anthropic, Ollama): answer shape, reported token counts, cut answers, refusals that leak no key, vendor body or prompt, malformed answers, no redirects or proxies (pi#258). It found two gaps, now fixed: OpenRouter and Ollama kept token counts that were not non-negative integers (the daily cap counts them) and crashed instead of refusing on a body that was not an object; one `reported_count` rule now serves all adapters.
 - `GET /insights/tomorrow?hours=24` (owner, pi#257): what Conker will start on its own soon, read-only: jobs the clock fires (next time, how many slots, held while a parked run waits for his answer), watched jobs, and parked approvals that run out in the window. Never his words or tool arguments; hidden chats are left out.
@@ -100,6 +102,7 @@ be a decision with visible consequences.
   the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
   forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
   `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
+- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
 
 ## 0.25.0
 
