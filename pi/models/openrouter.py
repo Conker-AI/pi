@@ -25,8 +25,7 @@ from typing import Any
 
 import httpx
 
-from pi.conversation import citations, live_stream
-from pi.models import inference_control
+from pi.models import citations, inference_control, live_stream
 from pi.models.direct import collect_chat_stream, provider_stream, sse_events
 from pi.models.evidence import project_tool_evidence
 from pi.models.providers import (

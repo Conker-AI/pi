@@ -7,9 +7,9 @@ import httpx
 import pytest
 
 from pi.context import research_usage
-from pi.conversation import live_stream
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.models import live_stream
 from pi.models.providers import Message, OllamaProvider
 
 

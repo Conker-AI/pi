@@ -36,11 +36,12 @@ from pi.actions.toolgate import (
 )
 from pi.context import controls as context_controls
 from pi.context import retrieval as context_retrieval
-from pi.conversation import live_stream, submissions
 from pi.conversation import settings as session_settings
+from pi.conversation import submissions
 from pi.conversation.store import Store
 from pi.memory import store as memory_store
 from pi.memory.service import Memory
+from pi.models import live_stream
 from pi.models.providers import ProviderUnavailable, shown_text
 from pi.models.routing import Router, TurnContext, history_size
 from pi.schedule import tasks

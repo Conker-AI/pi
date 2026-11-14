@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import httpx
 
-from pi.conversation import live_stream
-from pi.models import inference_control
+from pi.models import inference_control, live_stream
 from pi.models.providers import Completion, ProviderUnavailable, require_images
 
 if TYPE_CHECKING:

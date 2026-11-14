@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from pi.conversation import live_stream
+from pi.models import live_stream
 from pi.models.chatgpt import ChatGPTProvider, configured
 from pi.models.providers import Message, ProviderUnavailable
 

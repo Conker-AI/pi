@@ -67,7 +67,6 @@ host -> core
 memory -> conversation
 memory -> core
 memory -> owner
-models -> conversation
 models -> core
 models -> owner
 owner -> core

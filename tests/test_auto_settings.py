@@ -40,7 +40,10 @@ def configured(store, routing_enabled=True):
 
 def propose(store, adapter, **body):
     return auto_settings.propose(
-        store, {"one": adapter}, auto_settings.Request(text="Best laptop under $1000?", **body)
+        store,
+        {"one": adapter},
+        auto_settings.Request(text="Best laptop under $1000?", **body),
+        source_privacy=session_settings.source_privacy,
     )
 
 
