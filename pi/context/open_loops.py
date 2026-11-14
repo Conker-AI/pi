@@ -40,15 +40,17 @@ CREATE INDEX IF NOT EXISTS open_loops_listed ON open_loops(state, due_on, create
 CREATE INDEX IF NOT EXISTS open_loops_session ON open_loops(session_id);
 """
 
-# Open loops at once, across every chat: a runaway writer cannot fill the table.
+# Open loops at once in the chats the owner can see (adding one and opening one again both
+# count), so a runaway writer cannot bury the list. Done and dropped loops are not capped.
 MAX_OPEN = 1000
 MAX_TEXT = 500
 QUOTE_CHARS = 300
 LOOP_ID = r"^loop_[0-9a-f]{32}$"
-# Sorts after every real date, so undated loops come last.
+# Sorts after every real date, so undated loops come last; a due date must come before it.
 UNDATED = "9999-12-31"
 NOT_THERE = "That open loop is not there."
 BAD_CURSOR = "Use the nextAfter value the last page gave."
+CURSOR_GONE = "The promise that page ended at is gone; start again from the first page."
 
 
 class LoopError(ServiceError):
@@ -117,15 +119,30 @@ def _due(value: str | None) -> str | None:
     if value is None:
         return None
     try:
-        return date.fromisoformat(value).isoformat()
+        due = date.fromisoformat(value).isoformat()
     except ValueError:
+        due = UNDATED
+    if due >= UNDATED:
         raise LoopError(
-            "invalid_date", "Give the due date as a real YYYY-MM-DD date.", 422
-        ) from None
+            "invalid_date", f"Give the due date as a real YYYY-MM-DD date before {UNDATED}.", 422
+        )
+    return due
 
 
 def _hidden_filter() -> str:
     return f"s.status<>'forgotten' AND NOT {visibility.hidden_sql('l.session_id')}"
+
+
+def _check_room(db) -> None:
+    """Refuse one more open loop when the visible chats already hold MAX_OPEN."""
+    count = db.execute(
+        "SELECT COUNT(*) FROM open_loops l JOIN sessions s ON s.id=l.session_id "
+        f"WHERE l.state='open' AND {_hidden_filter()}"
+    ).fetchone()[0]
+    if count >= MAX_OPEN:
+        raise LoopError(
+            "too_many", f"There are already {MAX_OPEN} open loops; close some first.", 409
+        )
 
 
 def _visible_session(db, session_id: str) -> None:
@@ -192,11 +209,7 @@ def add(store, body: LoopAdd) -> dict:
         _visible_session(db, body.session_id)
         if body.message_id is not None:
             _check_message(db, body.session_id, body.message_id)
-        count = db.execute("SELECT COUNT(*) FROM open_loops WHERE state='open'").fetchone()[0]
-        if count >= MAX_OPEN:
-            raise LoopError(
-                "too_many", f"There are already {MAX_OPEN} open loops; close some first.", 409
-            )
+        _check_room(db)
         now = time.time()
         loop_id = "loop_" + uuid.uuid4().hex
         db.execute(
@@ -236,6 +249,8 @@ def change_state(store, loop_id: str, body: LoopState) -> dict:
                 revision=current["revision"],
             )
         if body.state != current["state"]:
+            if body.state == "open":
+                _check_room(db)
             db.execute(
                 "UPDATE open_loops SET state=?, revision=revision+1, updated_at=? WHERE id=?",
                 (body.state, time.time(), loop_id),
@@ -265,8 +280,8 @@ def listing(store, state: str, due_before: date | None, limit: int, after: str |
                 "SELECT COALESCE(due_on,?) AS due, created_at, id FROM open_loops WHERE id=?",
                 (UNDATED, after),
             ).fetchone()
-            if anchor is None:
-                raise LoopError("invalid_cursor", BAD_CURSOR, 422)
+            if anchor is None:  # well formed, so it was ours: its chat was forgotten since
+                raise LoopError("cursor_gone", CURSOR_GONE, 422)
             where.append(f"({order}) > (?,?,?)")
             params.extend([anchor["due"], anchor["created_at"], anchor["id"]])
         rows = db.execute(

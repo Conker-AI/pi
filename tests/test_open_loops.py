@@ -99,10 +99,23 @@ def test_pages_walk_every_loop_once_and_a_bad_cursor_is_refused(store):
         if after is None:
             break
     assert sorted(seen) == sorted(item["id"] for item in made) and len(seen) == 5
-    for cursor in ("not-a-loop", "loop_" + "0" * 32):
-        with pytest.raises(loops.LoopError) as refused:
-            listing(store, after=cursor)
-        assert (refused.value.code, refused.value.status) == ("invalid_cursor", 422)
+    with pytest.raises(loops.LoopError) as refused:
+        listing(store, after="not-a-loop")
+    assert (refused.value.code, refused.value.status) == ("invalid_cursor", 422)
+
+
+def test_a_cursor_whose_loop_was_forgotten_says_to_start_again(store):
+    kept, forgotten = store.create_session(), store.create_session()
+    add(store, forgotten, due_on=SOON)
+    add(store, kept, due_on=LATER)
+    page = listing(store, limit=1)
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        loops.redact(db, [forgotten])
+        db.commit()
+    with pytest.raises(loops.LoopError) as gone:
+        listing(store, after=page["nextAfter"])
+    assert (gone.value.code, gone.value.status) == ("cursor_gone", 422)
 
 
 def test_done_dropped_and_open_again_also_in_a_forked_or_closed_chat(store):
@@ -149,9 +162,11 @@ def test_adding_refuses_bad_text_another_chats_message_and_hidden_chats(store):
     with pytest.raises(loops.LoopError) as foreign:
         add(store, session, message_id=elsewhere["id"])
     assert (foreign.value.code, foreign.value.status) == ("outside_boundary", 422)
-    with pytest.raises(loops.LoopError) as impossible:
-        add(store, session, due_on="2026-02-30")
-    assert (impossible.value.code, impossible.value.status) == ("invalid_date", 422)
+    for due in ("2026-02-30", loops.UNDATED):  # the sentinel would sort as undated
+        with pytest.raises(loops.LoopError) as impossible:
+            add(store, session, due_on=due)
+        assert (impossible.value.code, impossible.value.status) == ("invalid_date", 422)
+    assert add(store, session, due_on="9999-12-30")["dueOn"] == "9999-12-30"
     archive.trash(store, archive.Trash(sessions=[other], trashed=True))
     set_status(store, session, "forgotten")
     for target in (other, session, "ses_0000000000000000"):
@@ -186,6 +201,24 @@ def test_the_open_cap_counts_only_open_loops(store, monkeypatch):
     assert (full.value.code, full.value.status) == ("too_many", 409)
     loops.change_state(store, first["id"], loops.LoopState(state="done"))
     assert add(store, session)["state"] == "open"
+    with pytest.raises(loops.LoopError) as reopened:
+        loops.change_state(store, first["id"], loops.LoopState(state="open"))
+    assert (reopened.value.code, reopened.value.status) == ("too_many", 409)
+    assert loops.change_state(store, first["id"], loops.LoopState(state="dropped"))
+
+
+def test_the_open_cap_counts_only_loops_the_owner_can_see(store, monkeypatch):
+    monkeypatch.setattr(loops, "MAX_OPEN", 2)
+    trashed, kept = store.create_session(), store.create_session()
+    add(store, trashed), add(store, trashed)
+    archive.trash(store, archive.Trash(sessions=[trashed], trashed=True))
+    first = add(store, kept)
+    add(store, kept)
+    with pytest.raises(loops.LoopError) as full:
+        add(store, kept)
+    assert (full.value.code, full.value.status) == ("too_many", 409)
+    loops.change_state(store, first["id"], loops.LoopState(state="done"))
+    assert loops.change_state(store, first["id"], loops.LoopState(state="open"))["loop"]
 
 
 def test_routes_names_models_and_keys(store, client):
