@@ -237,7 +237,7 @@ def from_markdown(text: str) -> list[Block]:
 
 def _table(tokens, index):
     table = Block("table")
-    row: list[list[Span]] | None = None
+    row: list[list[Span]] = []
     in_head = False
     while tokens[index].type != "table_close":
         token = tokens[index]

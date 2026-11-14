@@ -263,7 +263,8 @@ class ArtifactSummary(Strict):
 
 
 class ArtifactView(ArtifactSummary):
-    contentIncluded: bool
+    # The summary pins it to False; a view may say True (pyright wants a default for the override).
+    contentIncluded: bool  # pyright: ignore[reportGeneralTypeIssues]
     versions: list[ArtifactVersion] = Field(max_length=100)
 
 

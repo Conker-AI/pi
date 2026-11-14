@@ -115,7 +115,7 @@ class SpeechClient:
         tts_model="",
         voice="",
         *,
-        timeout=30,
+        timeout: float = 30,
         transport=None,
         character_voice="unsupported",
         audio_decoder="",
