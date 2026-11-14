@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Docs: calls back into Pi (R-A14).** docs/boundaries.md names the two service cycles (Pi ->
+  ToolGate -> Pi `/inference`, Pi -> MemoryGate -> Pi `/inference`), what stops them recursing and
+  the known risks (waits that shrink inward, `/inference` running on after its caller left). No
+  code change.
+
 - **Open loops (R-M7).** A new table `open_loops` and three owner routes: `GET /open-loops`
   (`LoopPage`; browser read) lists promises across visible chats, soonest due first and undated
   last, with the owner's `today` and an `overdue` flag; `POST /open-loops` (`LoopAdd`) files one

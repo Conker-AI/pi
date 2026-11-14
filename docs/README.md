@@ -9,7 +9,7 @@ What works end to end in a real deployment is tracked in Conker's
 | | |
 |---|---|
 | [Turns: acting, recording and status](turns.md) | Approvals, `acted_no_reply`, interrupted turns, status words |
-| [Boundaries](boundaries.md) | A turn's states, the three credentials, Pi and MemoryGate |
+| [Boundaries](boundaries.md) | A turn's states, the three credentials, Pi and MemoryGate, calls back into Pi |
 | [Model routing and roles](routing.md) | Which model answers, why, and the helper roles |
 | [Model catalogue and roles](model-roles.md) | Role assignments and adapters |
 | [Model calls for services](inference.md) | MemoryGate and ToolGate use the owner's model roles |
