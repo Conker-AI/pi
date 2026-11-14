@@ -161,7 +161,7 @@ def list_cases(store):
 def save_case(store, definition, identity=None, revision=None):
     definition = Case.model_validate(definition.model_dump())
     if identity is not None:
-        Update(expected_revision=revision, definition=definition)
+        Update(expected_revision=cast(int, revision), definition=definition)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         if identity is not None:

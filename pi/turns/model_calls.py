@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
@@ -231,7 +231,7 @@ class ModelCalls:
             provider = self.router.provider_for(route)
             from pi.context import research_usage
 
-            provider = research_usage.wrap(self.store, execution, provider, role)
+            provider = cast("Any", research_usage.wrap(self.store, execution, provider, role))
             turn_control.guard(self.store, execution)
             try:
                 from pi.models.providers import require_images

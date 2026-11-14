@@ -304,7 +304,7 @@ class Replies:
         if outcome.action_id:
             actions.state(self.store, outcome.action_id, outcome.status)
         self.store.finish_turn(turn_id, outcome.status, detail=outcome.message)
-        turn = self.store.get_turn(turn_id)
+        turn = cast("dict", self.store.get_turn(turn_id))
         return {
             "turn_id": turn_id,
             "session_id": turn["session_id"],

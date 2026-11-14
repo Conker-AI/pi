@@ -321,7 +321,7 @@ class Loop(ModelCalls, History, Replies):
                 delegation.append(bool(check and check()))
             return delegation[0]
 
-        acted = bool(self.store.get_turn(turn_id)["acted"])
+        acted = bool(cast("dict", self.store.get_turn(turn_id))["acted"])
         context = dict(context or {})
         # Only published tools need a tool-capable model; Conker's own requests do not.
         context.setdefault("needs_tools", bool(published))

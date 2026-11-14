@@ -1,15 +1,8 @@
 # pyright basic-mode errors per file when the type check arrived; counts may only shrink.
 # Lower or delete a line when its file improves (scripts/check_types.py says which).
-gateway/host_ops.py 2
-pi/agents/teams.py 1
 pi/api/startup.py 2
 pi/content/artifact_models.py 1
 pi/content/export_documents.py 2
 pi/content/export_slides.py 1
 pi/content/markdown_blocks.py 3
 pi/memory/import_offers.py 3
-pi/models/evaluations.py 1
-pi/turns/loop.py 1
-pi/turns/model_calls.py 1
-pi/turns/replies.py 3
-pi/turns/thinking.py 6

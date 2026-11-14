@@ -112,10 +112,12 @@ def answers(path: str, body: dict | None, value: dict) -> bool:
             and type(value.get("damagedRecords")) is int
         )
     if path == "/host/read":
-        return value.get("operation") == body["operation"] and isinstance(value.get("result"), dict)
+        return value.get("operation") == cast("dict", body)["operation"] and isinstance(
+            value.get("result"), dict
+        )
     if path == "/host/ops":
         return receipt(value) and all(
-            value.get(key) == body[key] for key in ("id", "operation", "arguments")
+            value.get(key) == cast("dict", body)[key] for key in ("id", "operation", "arguments")
         )
     return receipt(value) and value["id"] == path.removeprefix("/host/ops/")
 

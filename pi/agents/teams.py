@@ -343,7 +343,7 @@ def save(store, kind, definition, identity=None, revision=None, *, owner_view=Fa
     """Create or update one record; `then(db, record)` is saved with it or neither is."""
     definition = _validated(kind, definition)
     if identity is not None:
-        Revision(expected_revision=revision)
+        Revision(expected_revision=cast(int, revision))
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         if identity is not None:
