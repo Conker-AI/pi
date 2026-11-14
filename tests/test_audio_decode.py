@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from pi.calls import audio_decode
 from pi.calls.speech import SpeechClient, SpeechError, validate_wav
-from pi.content import audio_decode
 
 
 @pytest.mark.parametrize(

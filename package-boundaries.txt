@@ -24,7 +24,6 @@ api -> schedule
 api -> setup
 api -> turns
 calls -> agents
-calls -> content
 calls -> context
 calls -> conversation
 calls -> core
