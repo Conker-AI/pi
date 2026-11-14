@@ -27,7 +27,7 @@ from pi.actions import tool_forgets, withdrawals
 from pi.agents import agent_calls, asks, change_requests, keep, retired_workflows, skills
 from pi.calls import runtime as calls
 from pi.content import artifacts, attachment_files, attachments
-from pi.context import compaction, decisions
+from pi.context import compaction, decisions, open_loops
 from pi.context import summaries as context_summaries
 from pi.conversation import (
     archive,
@@ -250,6 +250,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
             judgements,
             fact_checks,
             decisions,
+            open_loops,
             compaction,
             naming,
             output_settings,

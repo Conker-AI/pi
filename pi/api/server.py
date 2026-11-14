@@ -47,6 +47,7 @@ from pi.api.routes import model_evaluations as model_evaluations_api
 from pi.api.routes import model_profiles as model_profiles_api
 from pi.api.routes import model_roles as model_roles_api
 from pi.api.routes import naming as naming_api
+from pi.api.routes import open_loops as open_loops_api
 from pi.api.routes import output_settings as output_settings_api
 from pi.api.routes import owner_preferences as owner_preferences_api
 from pi.api.routes import plan_alerts as plan_alerts_api
@@ -235,6 +236,7 @@ app.include_router(
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(decisions_api.router(lambda: app.state.store, require_owner))
+app.include_router(open_loops_api.router(lambda: app.state.store, require_owner))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
