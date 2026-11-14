@@ -16,6 +16,7 @@ from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.memory import store as memory_store
 from pi.memory.corrections import CorrectionError
+from pi.memory.hidden import memory_hidden
 
 
 class Forget(Strict):
@@ -161,14 +162,17 @@ def pending(store):
     }
 
 
-def preview(client, memory_id: str) -> dict:
-    """The exact current text and revision the owner is about to forget."""
+def preview(client, memory_id: str, store=None) -> dict:
+    """The exact current text and revision the owner is about to forget; a memory from a hidden
+    chat (with `store`) is not found, so its words are not shown."""
     if client is None:
         raise ForgetError(
             "not_configured",
             "Forgetting needs the memory correction capability (PI_MEMORY_CORRECTION_*).",
             503,
         )
+    if memory_hidden(store, client, memory_id):
+        raise ForgetError("not_found", "Memory not found.", 404)
     try:
         current = client.memory(memory_id)
     except CorrectionError as exc:

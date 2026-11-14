@@ -9940,6 +9940,81 @@
         }
       }
     },
+    "/insights/tomorrow": {
+      "get": {
+        "summary": "Tomorrow",
+        "description": "What starts on its own in the next `hours` hours; nothing is run or changed.",
+        "operationId": "tomorrow_insights_tomorrow_get",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 168,
+              "minimum": 1,
+              "default": 24,
+              "title": "Hours"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tomorrow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/insights/quiet": {
       "get": {
         "summary": "Quiet",
@@ -38811,6 +38886,154 @@
         ],
         "title": "TitleDocument",
         "description": "A chat's name and how it got it (D-01): `source` is None until it is named."
+      },
+      "Tomorrow": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "since": {
+            "type": "number",
+            "title": "Since"
+          },
+          "until": {
+            "type": "number",
+            "title": "Until"
+          },
+          "hours": {
+            "type": "integer",
+            "title": "Hours"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/TomorrowJob"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "runsPlanned": {
+            "type": "integer",
+            "title": "Runsplanned"
+          },
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/TomorrowApproval"
+            },
+            "type": "array",
+            "title": "Approvals"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "since",
+          "until",
+          "hours",
+          "jobs",
+          "runsPlanned",
+          "approvals"
+        ],
+        "title": "Tomorrow"
+      },
+      "TomorrowApproval": {
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "title": "Sessionid"
+          },
+          "toolId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolid"
+          },
+          "expiresAt": {
+            "type": "number",
+            "title": "Expiresat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sessionId",
+          "toolId",
+          "expiresAt"
+        ],
+        "title": "TomorrowApproval"
+      },
+      "TomorrowJob": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "clock",
+              "watch"
+            ],
+            "title": "Trigger"
+          },
+          "createdBy": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "conker"
+            ],
+            "title": "Createdby"
+          },
+          "nextAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextat"
+          },
+          "runs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs"
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "trigger",
+          "createdBy",
+          "nextAt",
+          "runs",
+          "held"
+        ],
+        "title": "TomorrowJob"
       },
       "ToolGatePolicySummary": {
         "properties": {

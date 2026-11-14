@@ -27,7 +27,10 @@ def router(app_state, require_key, require_owner):
 
     @routes.get("/memory/forget/{memory_id}", dependencies=[Depends(require_owner)])
     def preview_memory_forget(memory_id: str):
-        return memory_forget.preview(getattr(app_state(), "memory_corrections", None), memory_id)
+        state = app_state()
+        return memory_forget.preview(
+            getattr(state, "memory_corrections", None), memory_id, state.store
+        )
 
     @routes.post(
         "/memory/forget",

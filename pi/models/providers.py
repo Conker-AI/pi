@@ -123,6 +123,13 @@ CUT_NOTE = "\n\n(This answer was cut off: it reached the model's length limit.)"
 _CUT = {"length", "max_tokens"}
 
 
+def reported_count(value) -> int | None:
+    """A token count a provider reported, or None when it is not a non-negative integer.
+
+    The daily cap counts these, so a string, a float, a bool or a negative number is never kept."""
+    return value if type(value) is int and value >= 0 else None
+
+
 def shown_text(completion) -> str:
     """The reply as the owner sees it: the model's text, with a note when it was cut short."""
     raw = completion.raw if isinstance(completion.raw, dict) else {}
@@ -240,7 +247,8 @@ class OllamaProvider:
         except Exception as exc:
             raise ProviderUnavailable(f"{type(exc).__name__}") from exc
 
-        text = (body.get("message") or {}).get("content")
+        message = body.get("message") if isinstance(body, dict) else None
+        text = message.get("content") if isinstance(message, dict) else None
         if not isinstance(text, str):
             raise ProviderUnavailable("provider returned no message content")
 
@@ -249,8 +257,8 @@ class OllamaProvider:
             text=text,
             model=body.get("model", model),
             provider=self.name,
-            input_tokens=body.get("prompt_eval_count"),
-            output_tokens=body.get("eval_count"),
+            input_tokens=reported_count(body.get("prompt_eval_count")),
+            output_tokens=reported_count(body.get("eval_count")),
             cached_tokens=cached if type(cached) is int and 0 <= cached <= 2**31 - 1 else None,
             # Local inference has no per-token price. None, not 0.0: the second
             # would be a claim about money that this adapter cannot make, and
