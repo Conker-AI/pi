@@ -137,10 +137,11 @@ def replay(store, turn_id):
     permissions. This reader cannot authorize work or reconstruct missing inputs.
     """
     from pi.agents import profiles as agents
-    from pi.content import attachment_turns, attachments
+    from pi.content import attachments
     from pi.context import project_context
     from pi.conversation import settings as session_settings
     from pi.models.providers import Message
+    from pi.turns import attachment_turns
 
     turn = store.get_turn(turn_id)
     if turn is None or turn["status"] != "complete":

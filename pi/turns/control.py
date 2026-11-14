@@ -88,8 +88,8 @@ def _stop_calls(store, turn_id):
 
 
 def cancel_submission(store, request_id):
-    from pi.content import attachment_turns
     from pi.conversation import submissions
+    from pi.turns import attachment_turns
 
     requested_at = None
     with store._connect() as db:

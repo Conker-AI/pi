@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends
 from pydantic import Field
 
 from pi.agents import profiles as agents
-from pi.content import attachment_turns, attachments
+from pi.content import attachments
 from pi.conversation import chat_preferences, submissions
 from pi.conversation import settings as session_settings
 from pi.core.models import Strict
 from pi.schedule import tasks
+from pi.turns import attachment_turns
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversation_queues (

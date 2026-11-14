@@ -4,9 +4,10 @@ from contextlib import closing
 
 from test_attachment_turns import Provider, upload
 
-from pi.content import attachment_turns, attachments
+from pi.content import attachments
 from pi.conversation.store import Store
 from pi.models.routing import Router
+from pi.turns import attachment_turns
 from pi.turns.loop import Loop
 
 

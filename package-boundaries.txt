@@ -31,7 +31,6 @@ calls -> models
 calls -> owner
 content -> conversation
 content -> core
-content -> models
 context -> agents
 context -> content
 context -> conversation
