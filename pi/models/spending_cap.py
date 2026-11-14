@@ -28,10 +28,10 @@ import secrets
 import time
 from datetime import UTC, datetime
 
+from pi.models import inference_control
 from pi.models.openrouter import ModelUnusable, PaidModelRefused
 from pi.models.providers import NotBilled
 from pi.owner import preferences as prefs
-from pi.turns import inference_control
 
 log = logging.getLogger(__name__)
 
