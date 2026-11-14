@@ -10544,6 +10544,79 @@
         }
       }
     },
+    "/prompts/enhance": {
+      "post": {
+        "summary": "Enhance",
+        "description": "A clearer, better organised version of the draft, with notes on what changed.",
+        "operationId": "enhance_prompts_enhance_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pi__agents__prompt_enhance__Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnhancedPrompt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/artifacts": {
       "get": {
         "summary": "Listing",
@@ -31599,6 +31672,51 @@
         ],
         "title": "Edge"
       },
+      "EnhancedPrompt": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "modelId": {
+            "type": "string",
+            "title": "Modelid"
+          },
+          "templateId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Templateid"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "notes",
+          "modelId"
+        ],
+        "title": "EnhancedPrompt"
+      },
       "Enqueue": {
         "properties": {
           "request_id": {
@@ -40136,6 +40254,59 @@
           "inputsConfigured"
         ],
         "title": "WatchSummary"
+      },
+      "pi__agents__prompt_enhance__Request": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^ses_[0-9a-f]{16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "privacy": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "enum": [
+                "memoryDisabled",
+                "harnessDisabled"
+              ]
+            },
+            "type": "object",
+            "title": "Privacy"
+          },
+          "templateId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Templateid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "Request"
       },
       "pi__agents__skills__State": {
         "properties": {
