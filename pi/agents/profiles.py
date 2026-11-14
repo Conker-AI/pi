@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from typing import Literal, cast
@@ -11,6 +12,9 @@ from pydantic import Field, field_validator, model_validator
 from pi.conversation import visibility
 from pi.core.errors import ServiceError
 from pi.core.models import Strict, references
+
+MAX_SKILLS = 3
+SKILL_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 class MemorySelection(Strict):
@@ -40,6 +44,9 @@ class AgentInput(Strict):
         default_factory=dict, max_length=1000
     )
     memory: MemorySelection
+    # Skills this agent always carries, by reference (the registry's skill ids). Loaded as the
+    # per-message picker loads them, at the start of each turn; a skill never grants a tool.
+    skillIds: list[str] = Field(default_factory=list, max_length=MAX_SKILLS)
 
     @field_validator("name", "role", "instructions")
     @classmethod
@@ -64,6 +71,15 @@ class AgentInput(Strict):
     @classmethod
     def access(cls, values):
         references(list(values))
+        return values
+
+    @field_validator("skillIds")
+    @classmethod
+    def skills(cls, values):
+        if len(set(values)) != len(values) or not all(
+            len(value) <= 64 and SKILL_ID.fullmatch(value) for value in values
+        ):
+            raise ValueError("Give each skill id once, as lowercase letters, digits and hyphens.")
         return values
 
 
@@ -266,6 +282,14 @@ def _unique_name(db, configuration, identity=None):
         )
 
 
+def _skills_exist(db, configuration):
+    """Every attached skill is in the registry now (a later removal is handled at turn start)."""
+    known = {row[0] for row in db.execute("SELECT id FROM skills")}
+    missing = [value for value in configuration.skillIds if value not in known]
+    if missing:
+        raise AgentError("unknown_skill", f"Skill {missing[0]} is not in the registry.", 422)
+
+
 def create(store, configuration: AgentInput, *, then=None):
     """A new agent; `then(db, agent)` is saved with it or neither is."""
     configuration = AgentInput.model_validate(configuration.model_dump())
@@ -276,6 +300,7 @@ def create(store, configuration: AgentInput, *, then=None):
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         _unique_name(db, configuration)
+        _skills_exist(db, configuration)
         identity = "agent_" + uuid.uuid4().hex
         _insert(db, identity, "agent", configuration, time.time())
         result = _get(db, identity)
@@ -330,6 +355,7 @@ def update(store, identity, request: UpdateAgent):
         if current["archived_at"] is not None:
             raise AgentError("archived", "Restore this agent before editing it.")
         _unique_name(db, request.configuration, identity)
+        _skills_exist(db, request.configuration)
         result = _append(db, current, request.configuration, None, "updated")
         db.commit()
     return result

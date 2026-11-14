@@ -183,7 +183,9 @@ def _view(db, row):
         "updated_at": row["updated_at"],
         "content_status": "available" if available else "forgotten",
         "research_mode": selected.get("researchMode", "off") if available and selection else None,
-        "skill_ids": [skill["id"] for skill in selected.get("skills", [])],
+        "skill_ids": [
+            skill["id"] for skill in selected.get("skills", []) if skill.get("source") != "agent"
+        ],
         "model_id": selected.get("answerModelId"),
         "think": selected.get("think", False) if available else False,
         "draft_revision": draft[0] if available and draft else None,

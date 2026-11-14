@@ -196,20 +196,50 @@ def validate_ids(identities):
         _error("invalid_skills", "Select each skill only once.")
 
 
+def _scoped_out(execution):
+    """Skills ride on ordinary conversations only, not calls or team roles."""
+    return bool(execution.get("callExecution") or execution["kind"] == "team-role")
+
+
+def _combined(selected):
+    if sum(len(value["markdown"]) for value in selected) > MAX_COMBINED:
+        _error("skills_limit", "Selected skills exceed 64000 combined characters.")
+
+
+def agent_snapshot(db, execution):
+    """The skills the agent carries, frozen with the turn (marked source "agent").
+
+    Only ordinary conversations load them, and not in no-harness mode. A skill the owner has
+    since removed or turned off is left out; one the registry can no longer fit under the
+    combined limit refuses the turn, so nothing is cut silently."""
+    identities = execution["configuration"].get("skillIds", [])
+    if not identities or execution["privacy"]["harnessDisabled"] or _scoped_out(execution):
+        return []
+    selected = []
+    for identity in identities:
+        row = db.execute("SELECT * FROM skills WHERE id=?", (identity,)).fetchone()
+        if row is not None and row["enabled"]:
+            selected.append({**_view(row, detail=True), "source": "agent"})
+    _combined(selected)
+    return selected
+
+
 def snapshot(db, identities, execution):
+    """The agent's skills, then the ones the owner picked for this message."""
     validate_ids(identities)
     if identities and execution["privacy"]["harnessDisabled"]:
         _error("skills_no_harness", "No-harness mode excludes skill instructions.")
-    if identities and (execution.get("callExecution") or execution["kind"] == "team-role"):
+    if identities and _scoped_out(execution):
         _error("skills_scope", "Select skills on ordinary conversations.")
-    selected = []
+    carried = [value for value in execution.get("skills", []) if value.get("source") == "agent"]
+    selected = list(carried)
     for identity in identities:
         row = _row(db, identity)
         if not row["enabled"]:
             _error("skill_disabled", "Enable the selected skill before using it.")
-        selected.append(_view(row, detail=True))
-    if sum(len(value["markdown"]) for value in selected) > MAX_COMBINED:
-        _error("skills_limit", "Selected skills exceed 64000 combined characters.")
+        if identity not in {value["id"] for value in carried}:
+            selected.append(_view(row, detail=True))
+    _combined(selected)
     return selected
 
 

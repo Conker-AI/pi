@@ -25002,6 +25002,14 @@
           },
           "memory": {
             "$ref": "#/components/schemas/MemorySelection"
+          },
+          "skillIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Skillids"
           }
         },
         "additionalProperties": false,

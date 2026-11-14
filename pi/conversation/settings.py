@@ -197,7 +197,7 @@ def _snapshot(db, identity):
     if frozen is not None:
         require_inherited_privacy(db, identity, frozen)
         return frozen
-    from pi.agents import characters
+    from pi.agents import characters, skills
     from pi.calls import runtime as calls
     from pi.context import project_context
 
@@ -238,6 +238,9 @@ def _snapshot(db, identity):
     if owner:
         snapshot["owner"] = owner
     snapshot = calls.execution_snapshot(db, identity, snapshot)
+    carried = skills.agent_snapshot(db, snapshot)
+    if carried:
+        snapshot["skills"] = carried
     require_inherited_privacy(db, identity, snapshot)
     return snapshot
 
@@ -391,6 +394,7 @@ def reserve(
     if model_id is not None:
         snapshot["answerModelId"] = model_id
     if skill_ids:
+        # The agent's own skills first, then this message's picks, one list.
         snapshot["skills"] = skills.snapshot(db, skill_ids, snapshot)
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
