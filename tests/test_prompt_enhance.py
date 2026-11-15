@@ -225,6 +225,9 @@ FENCED = "Do:\n```py\nx=1\n```"
         ("[Role] You are an expert. Write a post.", "[Role] You are an expert. Write a post."),
         ("{name}, write a blog.", "{name}, write a blog."),
         (FENCED, FENCED),
+        ("```json" + GOOD + "```", BETTER),
+        ("```" + GOOD + "```", BETTER),
+        ("```json\n" + json.dumps({"text": FENCED}) + "\n```", FENCED),
         (json.dumps({"text": "Hidden\U000e0041‮ removed"}), "Hidden removed"),
     ],
 )

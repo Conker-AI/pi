@@ -48,7 +48,7 @@ INSTRUCTIONS = (
     'what you changed", ...]}.'
 )
 # One fenced block around the whole reply; a fence inside the prompt is the owner's own text.
-_FENCE = re.compile(r"\A```[A-Za-z]*[ \t]*\n(?P<inner>(?:(?!```).)*?)\s*```\Z", re.DOTALL)
+_FENCE = re.compile(r"\A```(?:[A-Za-z]+(?=[\s{\[]))?\s*(?P<inner>.*?)\s*```\Z", re.DOTALL)
 _JSON_OBJECT = re.compile(r'\A\{\s*"')
 
 
