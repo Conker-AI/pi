@@ -11,10 +11,12 @@ log = logging.getLogger(__name__)
 
 
 class ProposalWorker:
-    def __init__(self, store, router, *, interval_hours=24.0, check_seconds=3600.0):
+    def __init__(
+        self, store, router, *, interval_hours=24.0, check_seconds=3600.0, offer_loops=None
+    ):
         if interval_hours <= 0 or check_seconds <= 0:
             raise ValueError("Proposal intervals must be positive.")
-        self.store, self.router = store, router
+        self.store, self.router, self.offer_loops = store, router, offer_loops
         self.interval_seconds, self.check_seconds = interval_hours * 3600, check_seconds
         self._stop = threading.Event()
         self._thread = None
@@ -23,7 +25,9 @@ class ProposalWorker:
         if not proposals.due(self.store, self.interval_seconds):
             return None
         enabled, complete = proposals.model_call(self.store, self.router)
-        return proposals.run_pass(self.store, complete, role_enabled=enabled)
+        return proposals.run_pass(
+            self.store, complete, role_enabled=enabled, offer_loops=self.offer_loops
+        )
 
     def _run(self):
         while not self._stop.is_set():

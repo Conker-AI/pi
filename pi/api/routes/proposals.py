@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
+from pi.context import loop_offers
 from pi.schedule import proposals
 
 
@@ -28,6 +29,8 @@ def router(app_state, require_key, require_owner):
     def run_proposal_pass():
         """Owner-requested pass. Budget, quiet hours and the role setting still apply."""
         enabled, complete = proposals.model_call(app_state().store, app_state().router)
-        return proposals.run_pass(app_state().store, complete, role_enabled=enabled)
+        return proposals.run_pass(
+            app_state().store, complete, role_enabled=enabled, offer_loops=loop_offers.offer
+        )
 
     return routes
