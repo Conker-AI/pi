@@ -493,7 +493,11 @@ def finish_step(store, runtime, identity, started: Started):
     except Exception:
         mark_blocked(store, identity, step_id)
         raise
-    return reconcile(store, identity)
+    try:
+        return reconcile(store, identity)
+    except Exception:  # the turn ran but could not be read: no `running` run without a thread
+        mark_blocked(store, identity, step_id)
+        raise
 
 
 def mark_blocked(store, identity, step_id) -> None:
@@ -535,6 +539,9 @@ def reconcile(store, identity):
         status = submissions._view(db, receipt)["status"] if receipt else "unknown"
         if run["state"] == "running" and status in ("running", "preparing", "unknown"):
             return get(store, identity)
+        # A held step the owner approved has its turn resumed: it is still working, not blocked.
+        if run["state"] == "held" and status in ("running", "preparing"):
+            return get(store, identity)
         state = (
             "complete"
             if status == "complete"
@@ -547,10 +554,12 @@ def reconcile(store, identity):
             _limits(db, run, step["role_id"])
         except agents.AgentError:
             ready = False
+        run_state = "ready" if ready else "held" if state == "held" else "blocked"
+        if step["state"] == state and run["state"] == run_state:
+            return get(store, identity)  # nothing changed: a poller must not move the revision
         db.execute("UPDATE team_steps SET state=? WHERE id=?", (state, step["id"]))
         db.execute(
-            "UPDATE team_runs SET state=?,revision=revision+1 WHERE id=?",
-            ("ready" if ready else "held" if state == "held" else "blocked", identity),
+            "UPDATE team_runs SET state=?,revision=revision+1 WHERE id=?", (run_state, identity)
         )
         db.commit()
     return get(store, identity)
