@@ -13,6 +13,7 @@ from pi.actions.toolgate import ToolGateClient
 from pi.agents import team_execution, tool_drafts
 from pi.calls import runtime as calls
 from pi.calls import speech
+from pi.context import loop_briefing, loop_offers
 from pi.context import retrieval as context_retrieval
 from pi.conversation import forget_queue
 from pi.conversation.store import Store
@@ -273,7 +274,9 @@ async def lifespan(app: FastAPI):
     )
     app.state.loop.remember = correction.remember if correction is not None else None
     if app.state.job_executor is not None:
-        app.state.job_executor = AgentJobs(store, app.state.loop, app.state.job_executor)
+        app.state.job_executor = AgentJobs(
+            store, app.state.loop, app.state.job_executor, briefing=loop_briefing.for_job
+        )
     scheduler = None
     if os.environ.get("PI_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
         if app.state.job_executor is None:
@@ -301,6 +304,7 @@ async def lifespan(app: FastAPI):
             store,
             app.state.router,
             interval_hours=float(os.environ.get("PI_PROPOSALS_INTERVAL_HOURS", "24")),
+            offer_loops=loop_offers.offer,
         )
         proposal_worker.start()
     plan_worker = None
