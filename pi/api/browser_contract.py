@@ -213,6 +213,9 @@ OWNER_ROUTES = {
         # Read-only: promises across visible chats (R-M7). Writes stay recovery-key only until
         # the dashboard has a screen for them.
         r"/open-loops",
+        # The owner's prompt templates, starters included (R-F8).
+        r"/prompts/templates",
+        r"/prompts/templates/(?:tpl_[0-9a-f]{32}|starter-[a-z0-9]+(?:-[a-z0-9]+)*)",
         r"/memory/corrections/pending",
         r"/memory/corrections/memories/[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}",
         r"/memory/corrections/[A-Za-z0-9_-]{16,128}",
@@ -298,6 +301,10 @@ OWNER_ROUTES = {
         r"/sessions/[A-Za-z0-9_-]{1,128}/suggestions",
         # Jev rewrites an unsent draft; nothing is saved or sent, so the session alone is enough.
         r"/prompts/enhance",
+        # His own prompt templates: create, replace and delete. A template grants nothing, so the
+        # session alone is enough.
+        r"/prompts/templates",
+        r"/prompts/templates/(?:tpl_[0-9a-f]{32}|starter-[a-z0-9]+(?:-[a-z0-9]+)*)(?:/delete)?",
         *CHAT_WRITES,
         r"/proposals/passes",
         # Hiding one self-check alert; the session alone is enough.

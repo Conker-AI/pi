@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from test_spending_cap import Paid, set_cap
 from test_suggestions import Recording, config
 
-from pi.agents import prompt_enhance
+from pi.agents import prompt_enhance, prompt_templates
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.conversation import settings as session_settings
@@ -73,6 +73,7 @@ def test_the_model_is_sent_only_the_instructions_and_the_draft(store):
         "modelId": "a",
         "templateId": None,
         "fields": {},
+        "missing": [],
     }
     [messages] = adapter.messages
     assert [m.role for m in messages] == ["system", "user"]
@@ -157,12 +158,13 @@ def test_the_owner_default_for_new_chats_applies_to_an_unsaved_chat(store):
     assert refused.value.code == "helpers_off"
 
 
-def test_a_template_id_is_refused_not_ignored(store):
+def test_an_unknown_template_id_is_a_404_before_any_call(store):
     configured(store)
     adapter = Recording(GOOD)
-    with pytest.raises(prompt_enhance.EnhanceError) as refused:
-        run(store, {"one": adapter}, templateId="research")
-    assert (refused.value.code, refused.value.status) == ("templates_unavailable", 422)
+    for template_id in ("research", "tpl_" + "0" * 32, "starter-nope"):
+        with pytest.raises(prompt_templates.TemplateError) as refused:
+            run(store, {"one": adapter}, templateId=template_id)
+        assert (refused.value.code, refused.value.status) == ("template_not_found", 404)
     assert adapter.calls == []
 
 

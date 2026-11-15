@@ -109,6 +109,10 @@ OWNER_CONFIGURATION = {
     "owner_search_settings",
     # Settings by registry id (look, defaults, limits): chosen by the owner, never chat text.
     "owner_settings",
+    # The owner's prompt templates and the marker that the starters were seeded: his forms, never
+    # chat text (the wand sends a draft to the model but saves nothing).
+    "prompt_template_seed",
+    "prompt_templates",
     "projects",
     "scheduled_jobs",
     "scheduled_runs",

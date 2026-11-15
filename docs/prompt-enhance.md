@@ -15,11 +15,12 @@ Body (`Request`):
 | `text` | the draft, 1 to 8000 characters, not blank |
 | `sessionId` | optional; the chat the draft is for, so its privacy applies |
 | `privacy` | optional `memoryDisabled` / `harnessDisabled` of a chat that is not saved yet; it can only add privacy, never remove it |
-| `templateId` | refused with 422 `templates_unavailable`: prompt templates live only in the dashboard, so this version only rewrites |
+| `templateId` | optional; fill this prompt template from the draft instead of rewriting it ([prompt templates](prompt-templates.md)); an unknown id is 404 `template_not_found` |
 
-Reply (`EnhancedPrompt`): `text` (the rewrite), `notes` (up to 5 short notes on what changed),
-`modelId` (the catalogue model that wrote it), `templateId` (always `null` for now) and `fields`
-(always empty for now).
+Reply (`EnhancedPrompt`): `text` (the rewrite, or the filled template's prompt), `notes` (up to 5
+short notes on what changed), `modelId` (the catalogue model that wrote it), and, for a template,
+`templateId`, `fields` (each accepted field value by id) and `missing` (labels of required fields
+still empty). Without a template they are `null`, `{}` and `[]`.
 
 What is sent: one model call. The model gets fixed instructions and the draft, nothing else: no
 memory, no history, no agent text. It uses the drafting model when the owner set one, otherwise
