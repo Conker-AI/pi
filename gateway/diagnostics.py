@@ -99,7 +99,7 @@ def collect_diagnostics(config, auth, client: httpx.Client) -> dict[str, Any]:
         _finding(
             "runtime",
             "services",
-            "Conker runtime",
+            "Conker's main service",
             pi.get("status", "unknown") if pi else "unavailable",
         ),
         _finding(

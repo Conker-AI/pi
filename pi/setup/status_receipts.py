@@ -56,7 +56,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 _evidence(
                     f"setup.receipt.{identity}",
                     "degraded",
-                    "Setup evidence receipts could not be read from Pi's durable store.",
+                    "Saved setup proof could not be read.",
                 )
             ],
             missing_reason,
@@ -70,7 +70,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 _evidence(
                     f"setup.receipt.{identity}",
                     "missing",
-                    f"No owner-attested {identity} evidence receipt is recorded.",
+                    f"The {identity} check has no saved proof yet.",
                 )
             ],
             missing_reason,
@@ -84,7 +84,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 _evidence(
                     f"setup.receipt.{identity}",
                     "degraded",
-                    f"Recorded {identity} evidence for {receipt.subject} is stale.",
+                    f"The saved proof for the {identity} check ({receipt.subject}) is out of date.",
                     receipt.revision,
                 )
             ],
@@ -140,7 +140,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 _evidence(
                     "setup.receipt.rehearsal",
                     "degraded",
-                    "Setup evidence receipts could not be read from Pi's durable store.",
+                    "Saved setup proof could not be read.",
                 )
             ],
             stale_reason,
@@ -154,7 +154,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
                 _evidence(
                     "setup.receipt.rehearsal",
                     "degraded",
-                    "Rehearsal evidence no longer matches the current memory choice or workflow proofs.",
+                    "The saved rehearsal proof no longer matches the current memory choice or workflow checks.",
                     receipt.revision,
                 )
             ],
@@ -187,7 +187,7 @@ def _receipt_step(store, identity, *, now, toolgate=None):
             _evidence(
                 f"setup.receipt.{identity}",
                 "ok",
-                f"Owner-attested {identity} evidence for {receipt.subject} is current.",
+                f"The {identity} check for {receipt.subject} has current proof.",
                 receipt.revision,
             )
         ],

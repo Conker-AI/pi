@@ -123,6 +123,7 @@ be a decision with visible consequences.
 - Auto no longer refuses a whole proposal when the model gives a reason for effort but no effort; the three settings are kept. (#PR)
 - A Claude model's effort capability lookup waits at most 1.5 s (was 5 s) before an answer, and a failed lookup is remembered for five minutes. (#PR)
 - Memory recall notices: a second change to a memory no longer re-counts answers already notified (or files a notice when no new answer used it), and many notices that reach only trashed chats can no longer hide an older live one. (#PR)
+- Plain words in setup status and Server check: "Conker runtime" is "Conker's main service", and setup evidence lines say a check "has no saved proof yet" instead of "no owner-attested evidence receipt". (#PR)
 
 ## 0.25.0
 
