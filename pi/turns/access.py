@@ -61,6 +61,7 @@ native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
 native_schedule = "conker.schedule"
 native_remember = "conker.remember"
+native_promise = "conker.promise"
 native_recall = "conker.recall"
 native_create_agent = "conker.create_agent"
 native_create_team = "conker.create_team"
@@ -355,10 +356,11 @@ def decide(loop, tool, args, *, execution, session_id, turn_id, native, delegate
     )
     if level == "blocked":
         return None, by, ""
-    if outside and tool.id == native_remember:
+    if outside and tool.id in (native_remember, native_promise):
         # A memory shapes every later chat, and a page can talk the reviewer round as easily as the
         # model: after someone else's text he decides it himself (one tap in the Inbox), whatever
         # his loosening. His own typed "remember" is saved with his message (pi.memory.delivery).
+        # A promise is the same: it would sit in every Morning check-in until he closes it.
         return "ask", by, ""
     if level == "allow" and outside and native(tool.id) and tool.id != native_recall:
         # Keep after outside content (a cron job): someone else's text could be planting it, so

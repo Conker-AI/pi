@@ -27,9 +27,10 @@ from typing import Literal, overload
 from pi.actions.toolgate import Tool, ToolResult
 from pi.agents import agent_calls, agent_requests, asks, change_requests, tool_drafts
 from pi.agents.profiles import AgentError
+from pi.context import open_loops
 from pi.conversation import settings as session_settings
 from pi.schedule import agent_jobs
-from pi.turns import access, recall
+from pi.turns import access, promises, recall
 
 SCHEDULE = "conker.schedule"
 DRAFT_TOOL = "conker.draft_tool"
@@ -145,6 +146,7 @@ CATALOG = (
         ],
         "auto",
     ),
+    promises.TOOL,
     recall.TOOL,
     Tool(
         CREATE_AGENT,
@@ -238,7 +240,7 @@ def owns(tool_id: str) -> bool:
 
 
 # Never offered, and refused, in a private chat or in a run of an AI job.
-PRIVATE_REFUSED = {REMEMBER, SCHEDULE, recall.RECALL, CREATE_AGENT, CREATE_TEAM}
+PRIVATE_REFUSED = {REMEMBER, promises.PROMISE, SCHEDULE, recall.RECALL, CREATE_AGENT, CREATE_TEAM}
 JOB_REFUSED = {SCHEDULE, DRAFT_TOOL, CREATE_AGENT, CREATE_TEAM, RUN_AGENT}
 
 
@@ -275,8 +277,8 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
         if tool_id == recall.RECALL:
             return "This chat is private (memory off), so memory is not searched here."
         return (
-            "This chat is private (memory off), so nothing from it is remembered, scheduled or "
-            "made into an agent or team. "
+            "This chat is private (memory off), so nothing from it is remembered, tracked, "
+            "scheduled or made into an agent or team. "
             "Tell the owner they can do it from a chat with memory on."
         )
     if tool_id in JOB_REFUSED and job_run(store, turn_id):
@@ -291,13 +293,15 @@ def refused(store, tool_id, *, session_id, turn_id, execution) -> str | None:
 
 def offered(loop, execution, session_id, turn_id) -> list[Tool]:
     """Conker's own tools for this turn: the agent's selection, minus what the turn may not use."""
-    return [
+    tools = [
         tool
         for tool in catalog(execution)
         if not refused(
             loop.store, tool.id, session_id=session_id, turn_id=turn_id, execution=execution
         )
     ]
+    # The model has no clock: the promise tool says today, the owner's day, for its due date.
+    return [promises.dated(loop.store, t) if t.id == promises.PROMISE else t for t in tools]
 
 
 @overload
@@ -356,7 +360,11 @@ def _done(loop, request, tool_id) -> ToolResult:
     Conker's daily job limit reached), it waits for the owner."""
     try:
         decided = change_requests.approve(
-            loop.store, request["id"], memory=loop.remember, by="conker"
+            loop.store,
+            request["id"],
+            memory=loop.remember,
+            loops=open_loops.approve_request,
+            by="conker",
         )
     except change_requests.ChangeRequestError:
         return _filed(request, tool_id)
@@ -374,6 +382,9 @@ def _done(loop, request, tool_id) -> ToolResult:
                 f"Remembered: \u201c{request['payload']['text'][:140]}\u201d. The chat shows the owner a quiet note with Undo, "
                 "and it is in Memory, where they can forget it."
                 if request["kind"] == "memory"
+                else f"Tracked: “{request['payload']['text'][:140]}”. It is on the owner's "
+                "open-loops list and in Handled in their Inbox, where they can mark it done."
+                if request["kind"] == "promise"
                 else f"Done: \u201c{title}\u201d. It is listed in the owner's Inbox under Handled, "
                 "where they can undo it."
             ),
@@ -507,6 +518,9 @@ def call(loop, tool_id, args, *, session_id, turn_id, execution, run=False) -> T
                 },
                 tool_id=tool_id,
             )
+        if tool_id == promises.PROMISE:
+            request = promises.file(loop, args, session_id=session_id, turn_id=turn_id)
+            return _done(loop, request, tool_id) if run else _filed(request, tool_id)
         text = _text(args, "text", 2000)
         request = change_requests.file(
             loop.store,
