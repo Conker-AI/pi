@@ -33,7 +33,7 @@ from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models.providers import Message
 from pi.owner import preferences as prefs
-from pi.schedule import proactive_budget
+from pi.schedule import loop_candidates, proactive_budget
 
 MAX_EVIDENCE_MESSAGES = 200
 MAX_EVIDENCE_CHARACTERS = 24_000
@@ -261,8 +261,14 @@ def _finish(store, pass_id, state, reason=None, **fields):
     return {"passId": pass_id, "state": state, "reason": reason, **fields}
 
 
-def run_pass(store, complete, *, now: datetime | None = None, role_enabled: bool = True) -> dict:
+def run_pass(
+    store, complete, *, now: datetime | None = None, role_enabled: bool = True, offer_loops=None
+) -> dict:
     """One analysis pass. `complete(messages)` calls the owner's proposals model.
+
+    `offer_loops(db, candidates, now)` (`pi.context.loop_offers.offer`), when given, also lets the
+    model name promises the owner made; they are filed in the pass's own transaction as requests
+    he must approve (L2), never saved.
 
     States: `skipped` (nothing spent), `denied` (budget or quiet hours), `failed`
     (model or output unusable; the watermark stays so the evidence is reread),
@@ -316,7 +322,10 @@ def run_pass(store, complete, *, now: datetime | None = None, role_enabled: bool
     )
     declined = "\n".join(f"- {title}" for title in declined_titles) or "(none)"
     messages = [
-        Message("system", INSTRUCTIONS.format(limit=limit)),
+        Message(
+            "system",
+            INSTRUCTIONS.format(limit=limit) + (loop_candidates.addendum() if offer_loops else ""),
+        ),
         Message("user", f"Already declined:\n{declined}\n\nRecent owner messages:\n{listing}"),
     ]
     window = {
@@ -327,6 +336,11 @@ def run_pass(store, complete, *, now: datetime | None = None, role_enabled: bool
     try:
         completion = complete(messages)
         found = _parse(completion.text, aliases, limit, set(blocked))
+        by_alias = {
+            a: {"id": i["id"], "session_id": i["session_id"]}
+            for a, i in zip(aliases, evidence, strict=True)
+        }
+        loops = loop_candidates.parse(completion.text, by_alias) if offer_loops else []
     except Exception:
         # Output and provider errors may echo private text; only the state is kept.
         return _finish(store, pass_id, "failed", "model_or_output_unusable", **window)
@@ -350,6 +364,8 @@ def run_pass(store, complete, *, now: datetime | None = None, role_enabled: bool
                 ),
             )
             created += 1
+        if loops and offer_loops is not None:
+            offer_loops(db, loops, now.timestamp())
         db.execute(
             "INSERT INTO proposal_watermark VALUES (1, ?) "
             "ON CONFLICT(singleton) DO UPDATE SET position=excluded.position",

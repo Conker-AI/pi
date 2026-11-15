@@ -67,7 +67,7 @@ def test_due_calls_the_pass_with_the_bound_completion(engine):
     timer = worker(store)
     assert timer.tick() == {"passId": "pps_1", "state": "completed"}
     assert model_call.calls == [((store, "router"), {})]
-    assert run_pass.calls == [((store, complete), {"role_enabled": True})]
+    assert run_pass.calls == [((store, complete), {"role_enabled": True, "offer_loops": None})]
 
 
 def test_failed_pass_leaves_no_exception_text_in_the_log(monkeypatch, caplog):

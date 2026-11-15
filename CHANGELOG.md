@@ -125,6 +125,7 @@ be a decision with visible consequences.
 - A Claude model's effort capability lookup waits at most 1.5 s (was 5 s) before an answer, and a failed lookup is remembered for five minutes. (#283)
 - Memory recall notices: a second change to a memory no longer re-counts answers already notified (or files a notice when no new answer used it), and many notices that reach only trashed chats can no longer hide an older live one. (#283)
 - Plain words in setup status and Server check: "Conker runtime" is "Conker's main service", and setup evidence lines say a check "has no saved proof yet" instead of "no owner-attested evidence receipt". (#283)
+- **Open loops: offers and the Morning check-in.** The proposal pass can offer an open loop from a promise the owner wrote in his own messages ("I'll send Maya the invoice Friday"): it appears as a `promise` request in his Inbox and nothing is saved until he approves it; a declined offer is never made again, hidden, private, job, team and agent-call chats are never read, at most 2 per pass. The Morning check-in's input lists the open loops due today or overdue (up to 10, plain text, nothing when there are none) (#282)
 
 ## 0.25.0
 

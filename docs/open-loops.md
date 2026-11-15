@@ -55,5 +55,31 @@ same access layers as `conker.remember`:
 Approving makes the loop in the same transaction as the decision; a chat that is gone or a full
 list leaves the request open.
 
-Not yet: suggesting the owner's promises from chat, and the Morning check-in reading due loops.
+## Offers from the owner's own words (L2)
+
+The proposal pass (`pi/schedule/proposals.py`, owner's `proposals` role on) may also name a promise
+the owner wrote ("I'll send Maya the invoice Friday"). The same model call returns `openLoops`
+(at most 2 a pass; the code is `pi/schedule/loop_candidates.py`, the filing `pi/context/loop_offers.py`).
+Each becomes a `promise` change request in his Inbox, the card `conker.promise` uses; nothing is
+saved until he approves it, and approving makes the loop in the same transaction as the decision.
+
+- Only his own messages: user messages in chats he can see, outside private-memory chats. Chats whose
+  "user" text Pi or a model wrote (AI jobs, team roles, agent calls) are never offered, and
+  assistant text and tool results are never shown to the model for this.
+- Hidden, trashed and forgotten chats are not read, and are checked again when the offer is written.
+- The offered words are a stretch of his own message (case and spacing aside); a paraphrase is dropped, and the card quotes the message ("You wrote: ...").
+- Declining is remembered: one offer per message, ever, and a wording already offered (any state) or already an open loop in a visible chat is not offered again from another message.
+- The per-chat (3) and overall (20) open-request caps apply; a full Inbox skips the offer, the
+  pass still completes. A due date that is not a real day or is already past is dropped; the
+  offer stays, without a date.
+- It shares the pass's schedule, quiet hours and daily suggestion budget; no extra model call.
+
+## The Morning check-in (L3)
+
+The built-in Morning check-in's input ends with the open loops due today or overdue, soonest
+first, at most 10 (`pi/context/loop_briefing.py`, passed into `AgentJobs` as `briefing`): a fenced
+`<open-loops>` block, one JSON-quoted line per loop (no newline, control character or `<` survives), marked as data, not instructions, through `listing`, so hidden chats never appear. With none
+due nothing is added; no other job gets the list. Limit: a repeated dispatch of one run rebuilds
+the text, so a loop closed in between makes the replay differ and the run fail as a conflict.
+
 Design: context/design/open-loops.md in the Conker workspace.
