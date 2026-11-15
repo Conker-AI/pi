@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from contextlib import closing
 
 import httpx
@@ -291,3 +292,51 @@ def test_dismiss_hides_the_notice_once_and_a_bad_id_is_not_found(setup, api):
     assert missing.status_code == 404
     other = api.post(f"/memory/recall-notices/plan_{'0' * 32}/dismiss", headers=ADMIN)
     assert other.status_code == 422
+
+
+def test_a_second_change_counts_only_answers_not_already_notified(setup):
+    store, client, remote = setup
+    use(store, store.create_session(), revision=3)
+    correct(store, client)
+    remote.revision = 4
+    [first] = items(store)
+    recall_notices.dismiss(store, first["id"])
+    # No answer used revision 4: a second change has nothing new to tell.
+    correct(store, client, request="correction_request_0002", revision=4)
+    assert items(store) == [] and len(stored(store)) == 1
+    later = store.create_session()
+    remote.revision = 5
+    use(store, later, revision=5)
+    correct(store, client, request="correction_request_0003", revision=5)
+    [second] = items(store)
+    assert (second["answers"], second["chats"], second["sessionIds"]) == (1, 1, [later])
+
+
+def test_dead_notices_never_hide_an_older_one_that_reaches_a_visible_chat(setup):
+    store, _, _ = setup
+    visible = store.create_session()
+    use(store, visible, memory="mem-live")
+    with store._connect() as db:
+        recall_notices.file(
+            db,
+            request_id="live_request_00000001",
+            memory_id="mem-live",
+            change="corrected",
+            revision=3,
+            now=time.time() + 1,
+        )
+    dead = store.create_session()
+    for index in range(recall_notices.MAX_OPEN + 1):
+        use(store, dead, memory=f"mem-dead-{index}")
+    with store._connect() as db:
+        for index in range(recall_notices.MAX_OPEN + 1):
+            recall_notices.file(
+                db,
+                request_id=f"dead_request_{index:08d}",
+                memory_id=f"mem-dead-{index}",
+                change="corrected",
+                revision=3,
+                now=time.time() + 10 + index,
+            )
+    archive.trash(store, archive.Trash(sessions=[dead], trashed=True))
+    assert [i["memoryId"] for i in recall_notices.needs_you(store)] == ["mem-live"]
