@@ -36,14 +36,39 @@ def _identity(request_id: str) -> str:
     return "mrn_" + uuid.uuid5(uuid.NAMESPACE_URL, f"pi-memory-recall:{request_id}").hex
 
 
+# Uses an earlier notice of the same memory did not already cover: a revision above the one that
+# notice named (up to this one), or, for a use with no revision, one recorded after that notice.
+_NEW_USE = (
+    "u.memory_id=? AND u.recorded_at<=? AND ((u.revision IS NOT NULL AND u.revision>? "
+    "AND u.revision<=?) OR (u.revision IS NULL AND u.recorded_at>?))"
+)
+
+
+def _floor(db, memory_id: str, before: float) -> tuple[int, float]:
+    """The revision and time of the newest earlier notice for this memory (dismissed or not)."""
+    row = db.execute(
+        "SELECT json_extract(facts,'$.revision') AS revision, created_at FROM notices "
+        "WHERE kind=? AND json_extract(facts,'$.memoryId')=? AND created_at<? "
+        "ORDER BY created_at DESC LIMIT 1",
+        (notices.MEMORY_RECALL, memory_id, before),
+    ).fetchone()
+    if row is None or type(row["revision"]) is not int:
+        return -1, 0.0
+    return row["revision"], row["created_at"]
+
+
+def _args(db, memory_id: str, revision: int, until: float) -> tuple:
+    low, low_at = _floor(db, memory_id, until)
+    return memory_id, until, low, revision, low_at
+
+
 def _reach(db, memory_id: str, revision: int, until: float):
-    """Uses of the memory as it was (up to `revision`, before `until`) in visible chats."""
+    """New uses of the memory as it was (up to `revision`, before `until`) in visible chats."""
     return db.execute(
         "SELECT COUNT(*), COUNT(DISTINCT u.session_id) FROM memory_uses u "
         "JOIN sessions s ON s.id=u.session_id "
-        f"WHERE u.memory_id=? AND u.recorded_at<=? AND (u.revision IS NULL OR u.revision<=?) "
-        f"AND {_VISIBLE}",
-        (memory_id, until, revision),
+        f"WHERE {_NEW_USE} AND {_VISIBLE}",
+        _args(db, memory_id, revision, until),
     ).fetchone()
 
 
@@ -65,9 +90,8 @@ def file(
     # appears once the chat is restored. A forgotten chat's rows are already deleted, and who may
     # be seen is decided again every time the Inbox is read.
     if not db.execute(
-        "SELECT 1 FROM memory_uses WHERE memory_id=? AND recorded_at<=? "
-        "AND (revision IS NULL OR revision<=?) LIMIT 1",
-        (memory_id, at, revision),
+        f"SELECT 1 FROM memory_uses u WHERE {_NEW_USE} LIMIT 1",
+        _args(db, memory_id, revision, at),
     ).fetchone():
         return False
     return notices.insert(
@@ -91,14 +115,17 @@ def _title(change: str, answers: int, chats: int) -> str:
 
 
 def needs_you(store) -> list[dict]:
-    """Open notices that still reach a visible answer, for the Inbox (newest first)."""
+    """Open notices that still reach a visible answer, for the Inbox (newest first).
+    Notices that reach nothing are skipped before the limit counts, so they cannot hide a live one."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT * FROM notices WHERE kind=? AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT ?",
-            (notices.MEMORY_RECALL, MAX_OPEN),
+            "SELECT * FROM notices WHERE kind=? AND dismissed_at IS NULL ORDER BY created_at DESC",
+            (notices.MEMORY_RECALL,),
         ).fetchall()
         items = []
         for row in rows:
+            if len(items) >= MAX_OPEN:
+                break
             facts = notices.facts(row)
             memory_id, revision = facts.get("memoryId"), facts.get("revision")
             if not isinstance(memory_id, str) or type(revision) is not int:
@@ -112,10 +139,9 @@ def needs_you(store) -> list[dict]:
                 found[0]
                 for found in db.execute(
                     "SELECT u.session_id FROM memory_uses u JOIN sessions s ON s.id=u.session_id "
-                    "WHERE u.memory_id=? AND u.recorded_at<=? AND (u.revision IS NULL "
-                    f"OR u.revision<=?) AND {_VISIBLE} "
+                    f"WHERE {_NEW_USE} AND {_VISIBLE} "
                     "GROUP BY u.session_id ORDER BY MAX(u.recorded_at) DESC LIMIT ?",
-                    (memory_id, row["created_at"], revision, MAX_CHATS),
+                    (*_args(db, memory_id, revision, row["created_at"]), MAX_CHATS),
                 )
             ]
             items.append(

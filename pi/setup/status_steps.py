@@ -25,9 +25,9 @@ def _security(store, owner_key_configured):
         _evidence(
             "pi.conversation.store",
             "ok" if store_health.get("status") == "ok" else "degraded",
-            "Pi durable store is available."
+            "Conker's saved data is available."
             if store_health.get("status") == "ok"
-            else "Pi durable store could not be verified.",
+            else "Conker's saved data could not be checked.",
         ),
     ]
     if store_health.get("status") != "ok":
@@ -193,7 +193,7 @@ def _model(store, router):
                 "ok" if receipt is not None else "missing",
                 "The selected answer model produced a valid setup response."
                 if receipt is not None
-                else "The selected answer model has not produced a verified setup response.",
+                else "The selected answer model has not yet passed a setup test.",
                 receipt.configurationRevision if receipt is not None else saved["revision"],
             ),
         ],

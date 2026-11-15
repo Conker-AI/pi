@@ -213,12 +213,21 @@ def test_the_ledger_row_holds_no_draft_text(store):
     assert len(rows) == 1 and "dogs" not in json.dumps(rows, default=str)
 
 
+FENCED = "Do:\n```py\nx=1\n```"
+
+
 @pytest.mark.parametrize(
     "reply, text",
     [
         (GOOD, BETTER),
         ("```json\n" + GOOD + "\n```", BETTER),
         ("A plain rewritten prompt.", "A plain rewritten prompt."),
+        ("[Role] You are an expert. Write a post.", "[Role] You are an expert. Write a post."),
+        ("{name}, write a blog.", "{name}, write a blog."),
+        (FENCED, FENCED),
+        ("```json" + GOOD + "```", BETTER),
+        ("```" + GOOD + "```", BETTER),
+        ("```json\n" + json.dumps({"text": FENCED}) + "\n```", FENCED),
         (json.dumps({"text": "Hidden\U000e0041‮ removed"}), "Hidden removed"),
     ],
 )
@@ -230,7 +239,7 @@ def test_usable_replies_are_accepted_and_cleaned(store, reply, text):
 @pytest.mark.parametrize(
     "reply",
     [
-        "{not json",
+        '{"text": "cut',
         json.dumps({"text": ""}),
         json.dumps({"text": 5}),
         json.dumps(["list"]),

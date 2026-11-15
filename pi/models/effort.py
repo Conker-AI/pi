@@ -42,6 +42,7 @@ _ROUTE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
 CAPABILITY_URL = "https://api.anthropic.com/v1/models/"
 CAPABILITY_TTL = 3600.0
 CAPABILITY_FAILED_TTL = 300.0
+CAPABILITY_TIMEOUT = 1.5  # seconds a Stop or deadline can wait on the first uncached lookup
 _capabilities: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
 
 
@@ -80,7 +81,7 @@ def anthropic_levels(api_key: str, route: str, headers: dict) -> frozenset[str] 
         response = httpx.get(
             CAPABILITY_URL + quote(route, safe=""),
             headers=headers,
-            timeout=5.0,
+            timeout=CAPABILITY_TIMEOUT,
             follow_redirects=False,
             trust_env=False,
         )

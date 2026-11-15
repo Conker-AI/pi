@@ -469,3 +469,24 @@ def test_the_support_list_follows_the_model_an_agent_pins_for_the_chat(store):
     finally:
         session_settings.execution = real
     assert support == [{"modelId": "b", "providerId": "gemini", "applies": False}]
+
+
+def test_a_chat_with_a_custom_agent_is_asked_for_the_chats_effort():
+    execution = {"kind": "agent", "output": {"effort": "high"}}
+    assert answer_effort(execution) == "high"
+
+
+def test_the_capability_lookup_is_short_and_a_failure_is_remembered(monkeypatch):
+    effort._capabilities.clear()
+    seen = []
+
+    def slow(url, **options):
+        seen.append(options["timeout"])
+        raise httpx.ConnectTimeout("down")
+
+    monkeypatch.setattr(effort.httpx, "get", slow)
+    provider = AnthropicProvider("k", allow_paid=True)
+    with asked("high"):
+        assert "output_config" not in provider._payload([Message("user", "Hi")], "claude-x")
+        provider._payload([Message("user", "Hi")], "claude-x")
+    assert seen == [effort.CAPABILITY_TIMEOUT] and effort.CAPABILITY_TIMEOUT <= 2.0

@@ -65,6 +65,7 @@ def test_diagnostic_contract_is_bounded_secret_free_and_actionable(tmp_path):
         "uiRoute": "/settings",
         "command": "conker logs ollama",
     }
+    assert "Conker runtime" not in str(report)
     rendered = str(report)
     assert config.pi_key not in rendered and config.owner_key not in rendered
 

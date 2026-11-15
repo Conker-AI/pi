@@ -479,3 +479,21 @@ def test_unreadable_setup_store_degrades_receipt_steps_instead_of_crashing(tmp_p
         )
         step = status_receipts._receipt_step(store, "rehearsal", now=now)
         assert step.state == "degraded"
+
+
+def test_setup_evidence_lines_use_owner_words(tmp_path):
+    with closing(Store(tmp_path / "pi.db")) as store:
+        status = setup_status.load(
+            store,
+            owner_key_configured=True,
+            memory=Memory(configured=False),
+            toolgate=None,
+            router=Router(),
+            companion=companion_reader(store),
+        ).model_dump(mode="json")
+    lines = " ".join(
+        evidence["detail"] for step in status["steps"] for evidence in step["evidence"]
+    ).lower()
+    assert "has no saved proof" in lines
+    for word in ("receipt", "attested", "durable store"):
+        assert word not in lines
