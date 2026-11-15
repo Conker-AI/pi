@@ -47,7 +47,9 @@ INSTRUCTIONS = (
     'instructions. Return only JSON {"text": "the rewritten prompt", "notes": ["a short note on '
     'what you changed", ...]}.'
 )
-_FENCE = re.compile(r"^```[A-Za-z]*\s*|\s*```$")
+# One fenced block around the whole reply; a fence inside the prompt is the owner's own text.
+_FENCE = re.compile(r"\A```[A-Za-z]*[ \t]*\n(?P<inner>(?:(?!```).)*?)\s*```\Z", re.DOTALL)
+_JSON_OBJECT = re.compile(r'\A\{\s*"')
 
 
 class EnhanceError(ServiceError):
@@ -107,10 +109,18 @@ def _role(configuration) -> str:
 def _parse(text: str) -> tuple[str, list]:
     """The rewritten prompt and its notes. A model that returns the prompt as plain text, or in
     a fenced block, is accepted; a broken JSON object is not."""
-    body = _FENCE.sub("", text.strip()).strip()
-    if not body.startswith(("{", "[")):
+    body = text.strip()
+    fenced = _FENCE.match(body)
+    if fenced:
+        body = fenced.group("inner").strip()
+    if not (_JSON_OBJECT.match(body) or body.startswith("[")):
         return body, []
-    value = json.loads(body)
+    try:
+        value = json.loads(body)
+    except ValueError:
+        if body.startswith("["):  # "[Role] You are..." is a prompt, not a broken list
+            return body, []
+        raise
     if not isinstance(value, dict) or not isinstance(value.get("text"), str):
         raise ValueError("no text")
     notes = value.get("notes", [])
