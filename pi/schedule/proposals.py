@@ -364,7 +364,7 @@ def run_pass(
                 ),
             )
             created += 1
-        if loops:
+        if loops and offer_loops is not None:
             offer_loops(db, loops, now.timestamp())
         db.execute(
             "INSERT INTO proposal_watermark VALUES (1, ?) "

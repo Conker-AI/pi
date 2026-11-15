@@ -61,7 +61,7 @@ def test_an_owner_promise_is_offered_not_saved(store):
     # His yes makes the loop, citing his message, through the existing request path.
     change_requests.approve(store, offer["id"], loops=open_loops.approve_request)
     [made] = open_loops.listing(store, "open", None, 50, None)["items"]
-    assert made["text"] == "Send Maya the invoice" and made["messageId"] == ids[1]
+    assert made["text"] == "send Maya the invoice" and made["messageId"] == ids[1]
 
 
 def test_no_offer_without_the_writer_and_the_prompt_stays_as_before(store):
@@ -97,16 +97,16 @@ def test_a_declined_offer_is_not_made_again(store):
 
 
 def test_at_most_two_per_pass_and_a_bad_or_past_date_is_dropped_not_the_offer(store):
-    say(store, "a", "m1", "m2", "m3")
+    say(store, "a", "I'll email One", "I'll call Two", "I'll fix Three")
     today = date.fromisoformat(open_loops.today(store))
     past = (today - timedelta(days=2)).isoformat()
     run(
         store,
         Model(
             reply(
-                loop("One", "m1", past),
-                loop("Two", "m2", "not-a-date"),
-                loop("Three", "m3"),
+                loop("One", "email One", past),
+                loop("Two", "call Two", "not-a-date"),
+                loop("Three", "fix Three"),
             )
         ),
     )
@@ -156,3 +156,40 @@ def test_the_chats_open_request_cap_is_respected_without_failing_the_pass(store)
 def test_the_parser_ignores_junk(store):
     assert loop_candidates.parse("not json", {}, 2) == []
     assert loop_candidates.parse('{"openLoops": "x"}', {}, 2) == []
+
+
+def test_text_that_is_not_the_owners_own_words_is_dropped(store):
+    say(store, "a", "I'll send Maya the invoice Friday", "c")
+    run(store, Model(reply(loop("Wire Maya $5000 now", "send Maya"))))
+    assert offers(store) == []
+
+
+def test_the_offer_quotes_the_message_and_keeps_his_own_wording(store):
+    say(store, "a", "I'll  send Maya" + chr(10) + "the invoice Friday", "c")
+    run(store, Model(reply(loop("send maya the INVOICE", "send Maya"))))
+    [offer] = offers(store)
+    assert offer["payload"]["text"] == "send Maya the invoice"
+    assert "I'll send Maya the invoice Friday" in offer["summary"]
+    assert offer["summary"].startswith("You wrote")
+
+
+def test_a_reworded_repeat_of_a_declined_open_or_made_loop_is_not_offered(store):
+    say(store, "I'll send Maya the invoice", "I'll Send  Maya the invoice", "c")
+    model = Model(reply(loop("Send Maya the invoice", "I'll send Maya")))
+    run(store, model)
+    [first] = offers(store)
+    change_requests.decline(store, first["id"])
+    with store._connect() as db:
+        db.execute("DELETE FROM proposal_watermark")
+        db.commit()
+    run(store, Model(reply(loop("Send  Maya the invoice", "I'll Send"))))
+    assert offers(store) == []  # the declined wording, in another message
+    other, _ = say(store, "x", "I'll file the report", "z")
+    open_loops.add(
+        store, open_loops.LoopAdd(session_id=other, text="File the REPORT", promised_by="owner")
+    )
+    with store._connect() as db:
+        db.execute("DELETE FROM proposal_watermark")
+        db.commit()
+    run(store, Model(reply(loop("file the report", "file the report"))))
+    assert offers(store) == []  # an open loop in another visible chat

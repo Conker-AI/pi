@@ -19,7 +19,7 @@ ADDENDUM = """
 Also look for promises the owner made in their own messages ("I'll send Maya the invoice \
 Friday", "remind me after the exam"): a real commitment to do something, not a wish, a question \
 or something they asked you to do. Add them under "openLoops" (always include the key; use [] \
-when there are none), at most {limit}: {{"openLoops": [{{"text": "short sentence, e.g. Send Maya \
+when there are none), at most {limit}: {{"openLoops": [{{"text": "the promise copied word for word from that message, e.g. send Maya \
 the invoice", "dueOn": "YYYY-MM-DD only when the words fix a day, else null", "evidence": \
 "e3"}}]}}. "evidence" is the one alias of the message that holds the promise."""
 

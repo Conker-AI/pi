@@ -67,7 +67,8 @@ saved until he approves it, and approving makes the loop in the same transaction
   "user" text Pi or a model wrote (AI jobs, team roles, agent calls) are never offered, and
   assistant text and tool results are never shown to the model for this.
 - Hidden, trashed and forgotten chats are not read, and are checked again when the offer is written.
-- Declining is remembered: one offer per message, ever, whatever its state.
+- The offered words are a stretch of his own message (case and spacing aside); a paraphrase is dropped, and the card quotes the message ("You wrote: ...").
+- Declining is remembered: one offer per message, ever, and a wording already offered (any state) or already an open loop in a visible chat is not offered again from another message.
 - The per-chat (3) and overall (20) open-request caps apply; a full Inbox skips the offer, the
   pass still completes. A due date that is not a real day or is already past is dropped; the
   offer stays, without a date.
@@ -76,8 +77,8 @@ saved until he approves it, and approving makes the loop in the same transaction
 ## The Morning check-in (L3)
 
 The built-in Morning check-in's input ends with the open loops due today or overdue, soonest
-first, at most 10 (`pi/context/loop_briefing.py`, passed into `AgentJobs` as `briefing`): plain
-lines marked as data, not instructions, through `listing`, so hidden chats never appear. With none
+first, at most 10 (`pi/context/loop_briefing.py`, passed into `AgentJobs` as `briefing`): a fenced
+`<open-loops>` block, one JSON-quoted line per loop (no newline, control character or `<` survives), marked as data, not instructions, through `listing`, so hidden chats never appear. With none
 due nothing is added; no other job gets the list. Limit: a repeated dispatch of one run rebuilds
 the text, so a loop closed in between makes the replay differ and the run fail as a conflict.
 
