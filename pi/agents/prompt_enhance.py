@@ -106,13 +106,17 @@ def _role(configuration) -> str:
     return role
 
 
+def _unfence(text: str) -> str:
+    """The reply without one fence that wraps all of it; inner fences are the owner's own text."""
+    body = text.strip()
+    fenced = _FENCE.match(body)
+    return fenced.group("inner").strip() if fenced else body
+
+
 def _parse(text: str) -> tuple[str, list]:
     """The rewritten prompt and its notes. A model that returns the prompt as plain text, or in
     a fenced block, is accepted; a broken JSON object is not."""
-    body = text.strip()
-    fenced = _FENCE.match(body)
-    if fenced:
-        body = fenced.group("inner").strip()
+    body = _unfence(text)
     if not (_JSON_OBJECT.match(body) or body.startswith("[")):
         return body, []
     try:
@@ -171,7 +175,7 @@ def _unavailable(seen: list) -> EnhanceError:
 def _fields(text: str) -> tuple[dict, list]:
     """The model's field values and notes. A fenced block is accepted; anything that is not a
     JSON object with a `fields` object is not."""
-    value = json.loads(_FENCE.sub("", text.strip()).strip())
+    value = json.loads(_unfence(text))
     if not isinstance(value, dict) or not isinstance(value.get("fields"), dict):
         raise ValueError("no fields")
     notes = value.get("notes", [])
