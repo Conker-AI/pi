@@ -72,3 +72,19 @@ def test_a_reconcile_that_fails_after_the_turn_ran_does_not_leave_the_run_runnin
         execute(store, Recorder(), run)
     monkeypatch.undo()
     assert teams.get(store, run["id"])["state"] == "blocked"
+
+
+def test_a_held_run_whose_turn_was_cut_off_by_a_restart_ends_blocked_and_can_be_cancelled(store):
+    from pi.agents import team_models
+
+    run = _after_first_step(store)
+    _hold(store, run["id"], "running")
+    store.mark_interrupted_turns()  # what Pi does at start for a turn left `running`
+    blocked = teams.reconcile(store, run["id"])
+    assert blocked["state"] == "blocked"
+    cancelled = teams.finish(
+        store,
+        run["id"],
+        team_models.Finish(expected_revision=blocked["revision"], state="cancelled"),
+    )
+    assert cancelled["state"] == "cancelled"
