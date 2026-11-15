@@ -16,6 +16,7 @@ owner did not leave tools out at setup:
 |---|---|---|
 | `conker.schedule` | an AI job: name, instructions, repeat (hours, daily, weekly, webhook) | creates the AI job (`agent_jobs.create`) in the owner's time zone |
 | `conker.draft_tool` | a tool request, drafted in the background from the tools Conker can use (see below) | once it is ready, the owner's browser saves it in ToolGate's editor and reports the draft id; the owner publishes it there |
+| `conker.promise` | one promise (`text`, `by` owner or conker, `due_on`), for the open-loops list | makes the open loop in the request's chat (`open_loops.approve_request`) in the same transaction as the decision; a chat that is gone (404) or 1000 open loops (409) leaves the request open. Never Keep-linked: the loop is deleted with its chat. After outside content it always waits for him ([open loops](open-loops.md)) |
 | `conker.remember` | one stated fact | stores the exact text through MemoryGate's correction capability (`PUT /runtime/corrections/remember/{request id}`), so a retry never stores it twice; if memory is not connected or does not answer, the request stays open (503) |
 
 Calling one records a change request (`pi/agents/change_requests.py`) and answers at once with
@@ -123,7 +124,7 @@ lists open requests (`kind: "change-request"`). Forgetting a chat deletes its re
 ## What Conker makes on its own (2026-10-29)
 
 - **Private chats:** a chat with memory off (or inheriting it from messages it carries, or with a
-  message said while it was off) is never offered `conker.remember` or `conker.schedule`, and a
+  message said while it was off) is never offered `conker.remember`, `conker.promise` or `conker.schedule`, and a
   call is refused (`status: "refused"`). A job the owner approves from a request filed in a chat
   that is private by then gets a private chat of its own (`privacy` in the job's definition),
   kept for every replacement chat.

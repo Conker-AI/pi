@@ -61,4 +61,5 @@ MIGRATIONS = (
     Migration("0005-keep-result-agent-team", keep.widen_kinds, rebuild=True),
     # Plan alerts and AI job notes into one notices table (ids kept); the two old tables go.
     Migration("0006-notices", notices.merge_old_tables),
+    Migration("0007-change-request-promise", change_requests.widen_promise, rebuild=True),
 )

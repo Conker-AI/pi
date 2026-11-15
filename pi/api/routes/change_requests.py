@@ -13,6 +13,7 @@ from pydantic import Field
 
 from pi.agents import change_requests, tool_drafts
 from pi.agents.inbox_replies import ChangeRequestList
+from pi.context import open_loops
 from pi.core.models import Strict, described
 from pi.turns import answers, tool_drafting
 
@@ -61,7 +62,9 @@ def router(store, authorize, memory_writer=lambda: None, loop=lambda: None):
     def approve(identity: RequestPath):
         """Make a cron job or memory real exactly as filed."""
         change_requests.shown(store(), identity)
-        return change_requests.approve(store(), identity, memory=memory_writer())
+        return change_requests.approve(
+            store(), identity, memory=memory_writer(), loops=open_loops.approve_request
+        )
 
     @routes.post("/{identity}/saved", responses=view)
     def saved(identity: RequestPath, body: change_requests.DraftSaved):

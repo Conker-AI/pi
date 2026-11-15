@@ -27887,7 +27887,8 @@
               "tool_draft",
               "memory",
               "agent",
-              "team"
+              "team",
+              "promise"
             ],
             "title": "Kind"
           },
