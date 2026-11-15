@@ -120,6 +120,7 @@ be a decision with visible consequences.
 - Agents: an agent carries up to three skills by reference (`skillIds` in its configuration; left out of stored and shown configurations while empty, so agents without skills read, compare and roll back exactly as before). Saving checks each id against the registry (`unknown_skill`, 422) and the 64000-character combined limit (`skills_limit`, 422). The skills load at the start of every ordinary turn, frozen with it like a picked skill (system text says the owner attached it to the agent; 64000 combined characters with the message's own picks; none in no-harness chats, calls or team roles), appear in the turn's `skills` marked `source: agent`, and a retry offers back only the owner's picks. A skill never grants a tool or access. A skill removed, turned off or grown past the combined limit since is left out and named in the turn's `skillsSkipped`, never a refusal of the chat's settings or queue. `conker.create_agent` still files agents with none. (#276)
 - Chat effort now reaches the answer call of a chat that uses its own agent, as the settings reply already said; team roles and calls still ignore it. (#PR)
 - Prompt enhance keeps a closing code fence inside the rewritten prompt and accepts a plain-text rewrite that starts with a bracket or brace. (#PR)
+- Auto no longer refuses a whole proposal when the model gives a reason for effort but no effort; the three settings are kept. (#PR)
 
 ## 0.25.0
 

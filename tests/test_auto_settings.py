@@ -177,6 +177,15 @@ def test_a_proposal_without_effort_is_still_good_and_carries_none(tmp_path):
     assert "effort" not in result and "effort" not in result["reasons"]
 
 
+def test_a_reason_for_an_effort_that_was_not_chosen_is_dropped_not_fatal(tmp_path):
+    reply = {**VALID, "reasons": {**VALID["reasons"], "effort": "Needs care."}}
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = propose(store, Adapter(json.dumps(reply)))
+    assert "effort" not in result and "effort" not in result["reasons"]
+    assert result["complexity"] == VALID["complexity"]
+
+
 @pytest.mark.parametrize(
     "reply",
     [
@@ -184,7 +193,6 @@ def test_a_proposal_without_effort_is_still_good_and_carries_none(tmp_path):
         json.dumps({**WITH_EFFORT, "effort": "auto"}),
         json.dumps({**WITH_EFFORT, "effort": None}),
         json.dumps({**WITH_EFFORT, "reasons": VALID["reasons"]}),
-        json.dumps({**VALID, "reasons": {**VALID["reasons"], "effort": "Needs care."}}),
         json.dumps({**WITH_EFFORT, "reasons": {**WITH_EFFORT["reasons"], "effort": " "}}),
     ],
 )

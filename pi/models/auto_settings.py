@@ -67,7 +67,9 @@ def parse(text: str) -> dict:
     reasons = value["reasons"]
     if (
         not isinstance(reasons, dict)
-        or set(reasons) != set(chosen)
+        # A reason for an effort the model did not choose is dropped, not fatal.
+        or set(reasons) - {"effort"} != set(chosen) - {"effort"}
+        or ("effort" in chosen and "effort" not in reasons)
         or not all(
             isinstance(reason, str) and 0 < len(reason.strip()) <= REASON_LIMIT
             for reason in reasons.values()
