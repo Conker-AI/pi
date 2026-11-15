@@ -21,52 +21,52 @@ be a decision with visible consequences.
 - `GET /insights/tomorrow?hours=24` (owner, pi#257): what Conker will start on its own soon, read-only: jobs the clock fires (next time, how many slots, held while a parked run waits for his answer), watched jobs, and parked approvals that run out in the window. Never his words or tool arguments; hidden chats are left out.
 - `GET /insights/quiet?days=7` (owner, pi#255): is Conker getting quieter? Counts for the last `days` days and the `days` before them: actions handled without asking, change requests, questions and notices raised, approved/declined/failed, median wait for an answer, thumbs and a quiet share. Counts only, never his words; hidden chats count for nothing.
 
-- **Spending cap counts only what can be billed (hunt 2, spend-F1).** A paid call that was never sent (OpenRouter catalogue unreachable, an owner stop before sending, Pi's own refusal of the request) or that the provider turned away for its key, credit or quota (HTTP 401, 402, 429; new `NotBilled`, a `ProviderUnavailable`) holds no tokens, so an outage or an empty OpenRouter balance no longer fills the shared token limit and pauses working direct keys. Error reasons are unchanged.
+- **Spending cap counts only what can be billed (hunt 2, spend-F1).** A paid call that was never sent (OpenRouter catalogue unreachable, an owner stop before sending, Pi's own refusal of the request) or that the provider turned away for its key, credit or quota (HTTP 401, 402, 429; new `NotBilled`, a `ProviderUnavailable`) holds no tokens, so an outage or an empty OpenRouter balance no longer fills the shared token limit and pauses working direct keys. Error reasons are unchanged. (#261)
 
-- **Spending cap ledger write never replaces a call's result (spend-F2).** If recording a finished paid call fails (a locked database), the answer or the original error still reaches the caller; the row stays running with its input hold until Pi's next start, and the failure is logged.
+- **Spending cap ledger write never replaces a call's result (spend-F2).** If recording a finished paid call fails (a locked database), the answer or the original error still reaches the caller; the row stays running with its input hold until Pi's next start, and the failure is logged. (#261)
 
-- **Spending cap refuses an input larger than what is left of the token limit (spend-F3).** Before, 1,000 tokens of headroom admitted a 1M-token prompt. Money is still counted only from the provider's reported price when a call ends, so the money limit can still be passed by the calls in flight (the module docstring now says so).
+- **Spending cap refuses an input larger than what is left of the token limit (spend-F3).** Before, 1,000 tokens of headroom admitted a 1M-token prompt. Money is still counted only from the provider's reported price when a call ends, so the money limit can still be passed by the calls in flight (the module docstring now says so). (#261)
 
 - **Hidden chats, hunt 2 (vis-F1).** A fork whose context rules name a message it inherited from a
   parent now in the Trash answers again (the message and its rule are left out, not
-  `missing_message`); restoring the parent brings both back.
+  `missing_message`); restoring the parent brings both back. (#259)
 
 - **Hidden chats, hunt 2 (vis-F2).** Inbox Handled leaves out hidden chats and hidden kept jobs
-  before its 50-row limit, so a trashed busy chat no longer pushes visible work out.
+  before its 50-row limit, so a trashed busy chat no longer pushes visible work out. (#259)
 
 - **Hidden chats, hunt 2 (vis-F3).** Inbox impact counts (answers, actions, tasks, jobs, cost)
   follow the one visibility rule: chats in the Trash, chats made from a hidden chat and runs of a
-  hidden kept job are not counted (before, only forgotten chats were left out).
+  hidden kept job are not counted (before, only forgotten chats were left out). (#259)
 
 - **Hidden chats, hunt 2 (vis-F4).** Restoring the chat of an AI job Conker kept while the chat it
-  was kept from is still in the Trash is refused (`restore_parent_first`), as for forks.
+  was kept from is still in the Trash is refused (`restore_parent_first`), as for forks. (#259)
 
 - **Hidden chats, hunt 2 (vis-F5).** `GET /memory-edits/memories/{id}` and
   `GET /memory/forget/{id}` answer 404 for a memory from a hidden chat, and a correction to one is
-  refused (404), like the memory explorer. Forgetting it is still allowed.
+  refused (404), like the memory explorer. Forgetting it is still allowed. (#259)
 - **Agent calls: a message branch of an agent's chat is still that call's chat (hunt 2 tools-F1).**
   Branching the chat `conker.run_agent` opened (or a continuation of it) left the source open, so
   the branch lost the call link: its turns took the owner's words as a request, were no longer
   outside when the caller had read outside content, and could start agents at depth 0. The call
-  link now follows recorded message branches as well as automatic forks.
+  link now follows recorded message branches as well as automatic forks. (#262)
 
 - **Agent calls: a child whose turn forked is checked in the fork (hunt 2 tools-F3).** The outside
   check read the child chat although the turn ran in its fork, and only failed safe through an
-  error; it now reads the chat the turn ran in.
+  error; it now reads the chat the turn ran in. (#262)
 
 - **Agent calls: the companion is never a target (hunt 2 tools-F5).** `conker.run_agent` could run
   the companion, whose toolkit is the owner's whole one, from an agent he gave only that tool. It is
-  refused now ("Conker itself cannot be run by another agent").
+  refused now ("Conker itself cannot be run by another agent"). (#262)
 
-- A tool cron job's run waiting on an approval that expired unanswered is cancelled by the decision sweep (its card withdrawn), so the job runs again instead of being held for good (hunt2 sweep-F1).
+- A tool cron job's run waiting on an approval that expired unanswered is cancelled by the decision sweep (its card withdrawn), so the job runs again instead of being held for good (hunt2 sweep-F1). (#263)
 
-- The owner's Change words that arrive after Pi already ended the turn (expired, or the chat took it first) are kept as that chat's draft instead of being dropped (hunt2 sweep-F2, late-answer part).
+- The owner's Change words that arrive after Pi already ended the turn (expired, or the chat took it first) are kept as that chat's draft instead of being dropped (hunt2 sweep-F2, late-answer part). (#263)
 
-- The decision sweep keeps each request's grace and try count while it waits, even when more requests wait than one pass reads, so a failing resume is tried at most 3 times (hunt2 sweep-F3).
+- The decision sweep keeps each request's grace and try count while it waits, even when more requests wait than one pass reads, so a failing resume is tried at most 3 times (hunt2 sweep-F3). (#263)
 
-- Expiry looks only at the requests this pass read from ToolGate as pending, so turns that wait for ever (a zone-less expiry) no longer keep newer expired ones from ending (hunt2 sweep-F4).
+- Expiry looks only at the requests this pass read from ToolGate as pending, so turns that wait for ever (a zone-less expiry) no longer keep newer expired ones from ending (hunt2 sweep-F4). (#263)
 
-- **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows.
+- **Memory use notes (R-U3, step 1).** Pi keeps `memory_uses` (turn, chat, memory id, revision when known, source `context` or `recall`; ids only, no words) beside each saved recall package and `conker.recall` result. A correction or forget wipes the packages but not these rows, so "which chats used this memory" stays answerable. Forgetting a chat deletes its rows. Nothing reads them yet (route and notice follow); old turns have no rows. (#254)
 
 - Cross-package imports: 11 of Pi's package-to-package import edges are gone (103 -> 92), by moves with
   the code unchanged (setup, models, memory, agents, calls, content and schedule no longer reach into each
@@ -76,7 +76,7 @@ be a decision with visible consequences.
 - **Docs: calls back into Pi (R-A14).** docs/boundaries.md names the two service cycles (Pi ->
   ToolGate -> Pi `/inference`, Pi -> MemoryGate -> Pi `/inference`), what stops them recursing and
   the known risks (waits that shrink inward, `/inference` running on after its caller left). No
-  code change.
+  code change. (#252)
 
 - **Open loops (R-M7).** A new table `open_loops` and three owner routes: `GET /open-loops`
   (`LoopPage`; browser read) lists promises across visible chats, soonest due first and undated
@@ -94,7 +94,7 @@ be a decision with visible consequences.
   revision, so Fix and Forget can use the existing routes. A candidate that names a memory with a
   forget pending or done, or one made from a hidden chat, is left out whole, and that kind's
   `total` drops by those items. MemoryGate missing or silent is 503 `memory_unavailable`. A
-  MemoryGate without the words (before memorygate#103) still answers, with no `memories`.
+  MemoryGate without the words (before memorygate#103) still answers, with no `memories`. (#250)
 
 - **What Conker believes about you (read-only).** `GET /memory/beliefs` (owner session) lists one
   page of MemoryGate's memory-beliefs list (MemoryGate 0.9.0, memorygate#101) in camelCase as
@@ -109,13 +109,13 @@ be a decision with visible consequences.
   the chats it remembers instead of finding them only among the 50 newest. Hidden, trashed and
   forgotten chats never come back (archived ones only with `archived=include`; no `ids` with
   `trashed=only`); pages and cursors work as before. Without `ids` the reply is unchanged (#249).
-- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read.
-- **Types: Pi's pyright baseline is 0.** The last 12 errors in six files are gone: a float timeout annotated as one, `Loop.remember` typed as optional callable, narrowed optionals in the import offers and the Markdown table reader, and three `# pyright: ignore` lines where the checker is wrong (lxml has no stubs; a pydantic subclass overrides a pinned field). No behaviour change.
-- **Tests: refusal tests for the host repair tools and memory delivery retries; coverage floor 91 -> 92.** The memory delivery repair (`bind-origin`, `retry`), the deletion replay command line and the follow-up drain (no client, unreadable memory, changed since, bad receipt) now have tests for every refusal. Tests and the CI floor only; no behaviour change.
-- **`conker.create_team` hands on no more than its maker holds.** A role gets its agent's tools narrowed to the tools the calling agent can use in that turn, never the create or delegation tools (`conker.create_agent`, `conker.create_team`, `conker.run_agent`), and Conker's companion is refused as a team role (the same rule as `conker.run_agent`). A filed team that carries a delegation tool is not made when approved. Before, a role copied its agent's whole tool list. Running a team is still the owner's.
-- **The owner can run a team.** `/team-runs` (start from a saved team, run a role, read, reconcile, finish) takes the owner credential as well as the recovery key, and the browser contract allows it for the signed-in session with no password. A run starts and a role runs only while the daily spending cap is on: with the cap off Pi answers `spending_cap_off` (409), with an unreadable cap `spending_cap_unavailable` (503), and replaying a start by its request id still reads the run back. Every paid call of a role passes the cap (counted in the ledger, refused when reached, the second role stopped after the first reaches it, fail closed), which tests now prove. The team run tables moved to `pi/agents/team_schema.py` (a pure move).
-- **Team steps can run in the background.** `POST /team-runs/{id}/steps` takes `background: true`: Pi records the step after every check (spending cap, run state, limits), answers `202` with the run `running`, and the role runs on its own thread; read `GET /team-runs/{id}` until it is `ready`, `held` or `blocked` (`interrupted` after a restart). At most two at once (`team_busy`, 409). A replay of the same request id starts no second turn, and the default (wait in the call) is unchanged. `execute` is split into `begin` and `finish_step`; the thread lives in `pi/agents/team_background.py`.
-- Agents: an agent carries up to three skills by reference (`skillIds` in its configuration; left out of stored and shown configurations while empty, so agents without skills read, compare and roll back exactly as before). Saving checks each id against the registry (`unknown_skill`, 422) and the 64000-character combined limit (`skills_limit`, 422). The skills load at the start of every ordinary turn, frozen with it like a picked skill (system text says the owner attached it to the agent; 64000 combined characters with the message's own picks; none in no-harness chats, calls or team roles), appear in the turn's `skills` marked `source: agent`, and a retry offers back only the owner's picks. A skill never grants a tool or access. A skill removed, turned off or grown past the combined limit since is left out and named in the turn's `skillsSkipped`, never a refusal of the chat's settings or queue. `conker.create_agent` still files agents with none.
+- **Which answers used a memory (R-U3, step 2).** Owner `GET /memory/{id}/uses` lists the turns that used one memory, newest first, with chat title, source and the memory's revision then; counts of uses and chats; `since` says when Pi began noting uses. Read only, ids and titles only (no memory words), so it works for a memory since corrected or forgotten. A forgotten or Trashed chat is left out and returns on restore. The browser contract allows the read. (#256)
+- **Types: Pi's pyright baseline is 0.** The last 12 errors in six files are gone: a float timeout annotated as one, `Loop.remember` typed as optional callable, narrowed optionals in the import offers and the Markdown table reader, and three `# pyright: ignore` lines where the checker is wrong (lxml has no stubs; a pydantic subclass overrides a pinned field). No behaviour change. (#268)
+- **Tests: refusal tests for the host repair tools and memory delivery retries; coverage floor 91 -> 92.** The memory delivery repair (`bind-origin`, `retry`), the deletion replay command line and the follow-up drain (no client, unreadable memory, changed since, bad receipt) now have tests for every refusal. Tests and the CI floor only; no behaviour change. (#270)
+- **`conker.create_team` hands on no more than its maker holds.** A role gets its agent's tools narrowed to the tools the calling agent can use in that turn, never the create or delegation tools (`conker.create_agent`, `conker.create_team`, `conker.run_agent`), and Conker's companion is refused as a team role (the same rule as `conker.run_agent`). A filed team that carries a delegation tool is not made when approved. Before, a role copied its agent's whole tool list. Running a team is still the owner's. (#273)
+- **The owner can run a team.** `/team-runs` (start from a saved team, run a role, read, reconcile, finish) takes the owner credential as well as the recovery key, and the browser contract allows it for the signed-in session with no password. A run starts and a role runs only while the daily spending cap is on: with the cap off Pi answers `spending_cap_off` (409), with an unreadable cap `spending_cap_unavailable` (503), and replaying a start by its request id still reads the run back. Every paid call of a role passes the cap (counted in the ledger, refused when reached, the second role stopped after the first reaches it, fail closed), which tests now prove. The team run tables moved to `pi/agents/team_schema.py` (a pure move). (#274)
+- **Team steps can run in the background.** `POST /team-runs/{id}/steps` takes `background: true`: Pi records the step after every check (spending cap, run state, limits), answers `202` with the run `running`, and the role runs on its own thread; read `GET /team-runs/{id}` until it is `ready`, `held` or `blocked` (`interrupted` after a restart). At most two at once (`team_busy`, 409). A replay of the same request id starts no second turn, and the default (wait in the call) is unchanged. `execute` is split into `begin` and `finish_step`; the thread lives in `pi/agents/team_background.py`. (#277)
+- Agents: an agent carries up to three skills by reference (`skillIds` in its configuration; left out of stored and shown configurations while empty, so agents without skills read, compare and roll back exactly as before). Saving checks each id against the registry (`unknown_skill`, 422) and the 64000-character combined limit (`skills_limit`, 422). The skills load at the start of every ordinary turn, frozen with it like a picked skill (system text says the owner attached it to the agent; 64000 combined characters with the message's own picks; none in no-harness chats, calls or team roles), appear in the turn's `skills` marked `source: agent`, and a retry offers back only the owner's picks. A skill never grants a tool or access. A skill removed, turned off or grown past the combined limit since is left out and named in the turn's `skillsSkipped`, never a refusal of the chat's settings or queue. `conker.create_agent` still files agents with none. (#276)
 
 ## 0.25.0
 
