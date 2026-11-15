@@ -121,6 +121,7 @@ be a decision with visible consequences.
 - Chat effort now reaches the answer call of a chat that uses its own agent, as the settings reply already said; team roles and calls still ignore it. (#PR)
 - Prompt enhance keeps a closing code fence inside the rewritten prompt and accepts a plain-text rewrite that starts with a bracket or brace. (#PR)
 - Auto no longer refuses a whole proposal when the model gives a reason for effort but no effort; the three settings are kept. (#PR)
+- A Claude model's effort capability lookup waits at most 1.5 s (was 5 s) before an answer, and a failed lookup is remembered for five minutes. (#PR)
 
 ## 0.25.0
 
