@@ -6,8 +6,12 @@ set), counted by the daily spending cap like every paid call and refused with it
 The model sees only fixed instructions and the draft: no memory, no history, no agent text. A
 chat with helper models off is refused, because the draft would reach a helper model. The reply is
 untrusted text the owner reads before sending: hidden characters are removed and a reply the model
-cut at its length limit is refused. Prompt templates have no backend yet, so this version only
-rewrites; a template id is refused rather than ignored.
+cut at its length limit is refused.
+
+With a `templateId` the same call fills that template's fields from the draft instead of rewriting
+it (`pi.agents.template_fill`): the model gets fixed instructions plus the template and the draft as
+data, Pi checks every value it returns against its field and builds the text itself. An unknown id
+is a 404. Same cap, same privacy rules, nothing saved, nothing sent.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from pi.agents import prompt_templates, template_fill
 from pi.conversation import chat_preferences
 from pi.conversation import settings as session_settings
 from pi.core.errors import ServiceError
@@ -69,7 +74,10 @@ class EnhancedPrompt(Strict):
     notes: list[str]
     modelId: str
     templateId: str | None = None
-    fields: dict[str, str] = Field(default_factory=dict)
+    # With a template: each field the model filled and Pi accepted, by field id.
+    fields: dict[str, str | list[str] | bool] = Field(default_factory=dict)
+    # With a template: labels of the required fields still empty.
+    missing: list[str] = Field(default_factory=list)
 
 
 def _privacy(store, body: Request) -> dict:
@@ -150,12 +158,19 @@ def _unavailable(seen: list) -> EnhanceError:
     return EnhanceError("unavailable", "The model did not answer. Try again.", 503)
 
 
+def _fields(text: str) -> tuple[dict, list]:
+    """The model's field values and notes. A fenced block is accepted; anything that is not a
+    JSON object with a `fields` object is not."""
+    value = json.loads(_FENCE.sub("", text.strip()).strip())
+    if not isinstance(value, dict) or not isinstance(value.get("fields"), dict):
+        raise ValueError("no fields")
+    notes = value.get("notes", [])
+    return value["fields"], notes if isinstance(notes, list) else []
+
+
 def enhance(store, providers, body: Request) -> dict:
-    """The rewritten draft, its notes and the model that wrote it. Saves and sends nothing."""
-    if body.templateId is not None:
-        raise EnhanceError(
-            "templates_unavailable", "Prompt templates are not available on the server yet.", 422
-        )
+    """The rewritten draft, or the draft's template filled in, with notes and the model that
+    wrote it. Saves and sends nothing."""
     privacy = _privacy(store, body)
     if privacy["harnessDisabled"] or body.privacy.get("harnessDisabled"):
         raise EnhanceError(
@@ -163,6 +178,7 @@ def enhance(store, providers, body: Request) -> dict:
             "Prompt enhancement needs helper models, which are off for this chat.",
             409,
         )
+    template = prompt_templates.get(store, body.templateId) if body.templateId else None
     configuration = model_roles.load(store)["configuration"]
     if configuration is None:
         raise EnhanceError(
@@ -171,10 +187,13 @@ def enhance(store, providers, body: Request) -> dict:
             503,
         )
     role = _role(configuration)
-    messages = [
-        Message("system", INSTRUCTIONS),
-        Message("user", json.dumps({"text": body.text}, ensure_ascii=False)),
-    ]
+    if template is None:
+        messages = [
+            Message("system", INSTRUCTIONS),
+            Message("user", json.dumps({"text": body.text}, ensure_ascii=False)),
+        ]
+    else:
+        messages = template_fill.messages(template, body.text)
     from pi.agents import workflow_drafts
 
     seen: list = []
@@ -195,21 +214,32 @@ def enhance(store, providers, body: Request) -> dict:
     ):
         raise _unavailable(seen) from None
     completion = decision["completion"]
+    values: dict = {}
     try:
         if provider_module.shown_text(completion) != completion.text:
             raise ValueError("the model stopped at its length limit")
-        text, notes = _parse(completion.text)
-        text = strip_invisible(text).strip()
-        if not text or len(text) > REPLY_LIMIT:
+        if template is None:
+            text, notes = _parse(completion.text)
+            text = strip_invisible(text).strip()
+        else:
+            raw, notes = _fields(completion.text)
+            values = template_fill.checked(template, raw)
+            text = template_fill.compile_prompt(template, values) if values else ""
+        if len(text) > REPLY_LIMIT or (not text and template is None):
             raise ValueError("unusable text")
     except (ValueError, TypeError):
         raise EnhanceError(
             "unusable", "The model's answer could not be used. Try again.", 502
         ) from None
+    if template is not None and not values:
+        raise EnhanceError(
+            "nothing_filled", "The draft did not match any field of this template.", 422
+        )
     return {
         "text": text,
         "notes": _clean_notes(notes),
         "modelId": decision["modelId"],
-        "templateId": None,
-        "fields": {},
+        "templateId": template["id"] if template else None,
+        "fields": values,
+        "missing": template_fill.missing(template, values) if template else [],
     }

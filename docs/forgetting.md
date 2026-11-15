@@ -90,6 +90,9 @@ from the resumable queues.
 Its open loops (`open_loops`, [open loops](open-loops.md)) are deleted, the
 promise words with them; while the chat waits in the Trash they are hidden.
 
+The owner's prompt templates (`prompt_templates`, [prompt templates](prompt-templates.md)) are his
+own forms, not chat text, so forgetting a chat leaves them alone; the wand saves nothing from a draft.
+
 Its memory use notes (`memory_uses`: turn, chat and memory id only, no words) are deleted too; a memory
 correction or forget keeps them on purpose, so the chats that used the memory can be listed. `GET /memory/{id}/uses` reads them (visible chats only, ids and chat titles, no words). The Inbox notice they feed (`memory-recall`, [inbox kinds](inbox-kinds.md)) stores the memory id, the change and its revision, never a chat id or words, and counts its reach from these rows when read.
 

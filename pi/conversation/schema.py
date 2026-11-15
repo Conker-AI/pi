@@ -10,6 +10,7 @@ from pi.agents import (
     characters,
     continuity,
     keep,
+    prompt_templates,
     retired_workflows,
     skills,
     team_schema,
@@ -170,6 +171,7 @@ def install(db):
     db.executescript(archive.SCHEMA)
     db.executescript(decisions.SCHEMA)
     db.executescript(open_loops.SCHEMA)
+    prompt_templates.initialize(db)
     db.executescript(memory_uses.SCHEMA)
 
 
