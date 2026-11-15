@@ -82,6 +82,7 @@ def test_ids_are_append_only():
         "0004-change-request-agent-team",
         "0005-keep-result-agent-team",
         "0006-notices",
+        "0007-change-request-promise",
     ]
 
 
@@ -110,6 +111,10 @@ def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path):
             assert {"change_requests_open", "keep_results_session", "keep_results_undo"} <= indexes
             db.execute(
                 "INSERT INTO change_requests VALUES ('c2','team','t','s','{}',NULL,NULL,'open',"
+                "NULL,1,NULL)"
+            )
+            db.execute(  # the promise kind is allowed once an older table is widened
+                "INSERT INTO change_requests VALUES ('c3','promise','t','s','{}',NULL,NULL,'open',"
                 "NULL,1,NULL)"
             )
             assert db.execute("PRAGMA foreign_key_check").fetchall() == []

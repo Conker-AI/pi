@@ -199,8 +199,20 @@ def _one(db, loop_id: str, today: str) -> dict:
     return _view(row, today)
 
 
-def add(store, body: LoopAdd) -> dict:
-    """File one loop for a visible chat; the message, when named, must be that chat's."""
+def today(store) -> str:
+    """The owner's local date, for words that name a day (`conker.promise`)."""
+    with store._connect() as db:
+        return _today(db)[0]
+
+
+def due_date(value: str | None) -> str | None:
+    """A due date checked as a real day before the far-future sentinel (None stays None)."""
+    return _due(value)
+
+
+def add(store, body: LoopAdd, then=None) -> dict:
+    """File one loop for a visible chat; the message, when named, must be that chat's. `then(db,
+    loop)` runs in the same transaction, so a decision that made the loop is saved with it."""
     body = LoopAdd.model_validate(body.model_dump())
     text = _clean(body.text)
     due_on = _due(body.due_on)
@@ -226,10 +238,29 @@ def add(store, body: LoopAdd) -> dict:
                 now,
             ),
         )
-        today, _ = _today(db)
-        loop = _one(db, loop_id, today)
+        day, _ = _today(db)
+        loop = _one(db, loop_id, day)
+        if then is not None:
+            then(db, loop)
         db.commit()
     return {"loop": loop}
+
+
+def approve_request(store, request: dict, then) -> dict:
+    """Make the loop a `promise` change request asked for, with its decision in the same
+    transaction (`pi.agents.change_requests.approve`). ValueError: the request is no longer valid."""
+    payload = request["payload"]
+    try:
+        body = LoopAdd(
+            session_id=request.get("sessionId") or "",
+            text=payload["text"],
+            promised_by=payload["by"],
+            due_on=payload.get("dueOn"),
+            message_id=payload.get("messageId"),
+        )
+    except (KeyError, TypeError) as invalid:
+        raise ValueError("The requested promise is no longer valid.") from invalid
+    return add(store, body, then=then)
 
 
 def change_state(store, loop_id: str, body: LoopState) -> dict:

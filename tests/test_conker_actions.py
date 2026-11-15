@@ -222,6 +222,7 @@ def test_a_job_run_cannot_make_a_job_or_draft_a_tool(store):
     execution = session_settings.execution(store, session, turn)
     assert ids(native_tools.offered(loop, execution, session, turn)) == [
         "conker.ask",
+        "conker.promise",
         "conker.recall",
         "conker.remember",
     ]

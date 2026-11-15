@@ -34,6 +34,26 @@ Hidden chats: a loop in a forgotten or trashed chat, or in a branch of one, is n
 changed (404) until the chat is restored. Forgetting a chat deletes its loops
 ([forgetting](forgetting.md)).
 
-Not yet: Conker filing its own promises (a native tool), suggesting the owner's from chat, and
-the Morning check-in reading due loops. Design: context/design/open-loops.md in the Conker
-workspace.
+## `conker.promise`
+
+Conker files a loop itself with the native tool `conker.promise` (`pi/turns/promises.py`,
+authorization `auto`): `text` (up to 500), `by` (`owner`, the default, or `conker`) and `due_on`
+(`YYYY-MM-DD`, only when the words fix a day). The model has no clock, so the tool's description
+says today's date in the owner's zone, and a date already past is refused with that date. It
+files a `promise` change request ([change requests](change-requests.md)) and goes through the
+same access layers as `conker.remember`:
+
+- where his settings let it go ahead (the default), the loop is made at once, listed in Inbox
+  Handled, and cites the turn's own input message when the owner wrote it (never Pi's preamble of
+  a job run or a team role);
+- once the turn has read outside content (a page, a webhook, another agent's reply), it always
+  waits for his tap in the Inbox, whatever his loosening, and the AI reviewer is never asked: a
+  page could talk the reviewer round, and a promise would sit in every Morning check-in until he
+  closed it;
+- a private chat (memory off) is never offered it and a call is refused.
+
+Approving makes the loop in the same transaction as the decision; a chat that is gone or a full
+list leaves the request open.
+
+Not yet: suggesting the owner's promises from chat, and the Morning check-in reading due loops.
+Design: context/design/open-loops.md in the Conker workspace.
