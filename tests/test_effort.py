@@ -469,3 +469,8 @@ def test_the_support_list_follows_the_model_an_agent_pins_for_the_chat(store):
     finally:
         session_settings.execution = real
     assert support == [{"modelId": "b", "providerId": "gemini", "applies": False}]
+
+
+def test_a_chat_with_a_custom_agent_is_asked_for_the_chats_effort():
+    execution = {"kind": "agent", "output": {"effort": "high"}}
+    assert answer_effort(execution) == "high"

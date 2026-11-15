@@ -33,8 +33,8 @@ def without_effort(execution):
 
 def answer_effort(execution) -> str | None:
     """The chat's effort level for the answer call; none in a call (spoken answers must be quick)
-    or for anything but the companion's own turn (team roles, agent calls)."""
-    if execution.get("callExecution") or execution.get("kind", "companion") != "companion":
+    or in a team role. The companion and the chat's own agent both take it."""
+    if execution.get("callExecution") or execution.get("kind") == "team-role":
         return None
     level = (execution.get("output") or {}).get("effort")
     return level if level in effort.LEVELS else None
