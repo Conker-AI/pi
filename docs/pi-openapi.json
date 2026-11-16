@@ -21418,6 +21418,69 @@
         }
       }
     },
+    "/memory/recall-notices": {
+      "get": {
+        "summary": "List Recall Notices",
+        "description": "Open notices that earlier answers used a memory since changed (read only).\n\nIds, counts and chat titles, no words. Only visible chats count: a chat that is forgotten\nor in the Trash is left out, and a notice that reaches no visible answer is not listed.",
+        "operationId": "list_recall_notices_memory_recall_notices_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecallNoticePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/memory/recall-notices/{notice_id}/dismiss": {
       "post": {
         "summary": "Dismiss Recall Notice",
@@ -36971,6 +37034,142 @@
           "quietShare"
         ],
         "title": "QuietWindow"
+      },
+      "RecallChat": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RecallChat"
+      },
+      "RecallNotice": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "memory-recall",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "since": {
+            "type": "number",
+            "title": "Since"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "corrected",
+              "forgotten",
+              "changed"
+            ],
+            "title": "Change"
+          },
+          "answers": {
+            "type": "integer",
+            "title": "Answers"
+          },
+          "chats": {
+            "type": "integer",
+            "title": "Chats"
+          },
+          "sessionIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sessionids"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/RecallChat"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RecallSource"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "since",
+          "memoryId",
+          "change",
+          "answers",
+          "chats",
+          "sessionIds",
+          "sessions",
+          "source"
+        ],
+        "title": "RecallNotice"
+      },
+      "RecallNoticePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecallNotice"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RecallNoticePage"
+      },
+      "RecallSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "memory-recall",
+            "title": "Kind"
+          },
+          "noticeId": {
+            "type": "string",
+            "title": "Noticeid"
+          },
+          "memoryId": {
+            "type": "string",
+            "title": "Memoryid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "noticeId",
+          "memoryId"
+        ],
+        "title": "RecallSource"
       },
       "Receipt": {
         "properties": {
