@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Inbox: `GET /memory/recall-notices` (owner session, read only) lists the open `memory-recall` notices for the dashboard card: id, change (corrected, forgotten), answer and chat counts and up to 20 chats as id plus title. Same rule as the Inbox and `GET /memory/{id}/uses`: only visible chats (a forgotten or Trashed chat, or one made from it, is left out), no words, and a notice that reaches no visible answer is not listed. `GET /inbox` items also carry `sessions` (id and title) beside `sessionIds`. pi#285
+
 ## 0.26.0
 
 - Team runs: reconciling a held run whose approved turn is running or preparing leaves it held (it was marked blocked, which made the role's next model call refuse); reconciling with nothing changed no longer moves the run's revision; a run whose result could not be read right after its turn ran ends blocked instead of staying running with no thread. (#281)

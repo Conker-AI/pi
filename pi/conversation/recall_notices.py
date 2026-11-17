@@ -15,9 +15,11 @@ from __future__ import annotations
 import re
 import time
 import uuid
+from typing import Literal
 
 from pi.conversation import visibility
 from pi.core.errors import ServiceError
+from pi.core.models import Strict
 from pi.owner import notices
 
 NOTICE_ID = r"^mrn_[0-9a-f]{32}$"
@@ -30,6 +32,35 @@ _VISIBLE = f"s.status<>'forgotten' AND NOT {visibility.hidden_sql('u.session_id'
 
 class RecallNoticeError(ServiceError):
     pass
+
+
+class RecallChat(Strict):
+    id: str
+    title: str  # "" for a chat with no name yet
+
+
+class RecallSource(Strict):
+    kind: Literal["memory-recall"]
+    noticeId: str
+    memoryId: str
+
+
+class RecallNotice(Strict):
+    kind: Literal["memory-recall"]
+    id: str
+    title: str
+    since: float
+    memoryId: str
+    change: Literal["corrected", "forgotten", "changed"]
+    answers: int
+    chats: int
+    sessionIds: list[str]
+    sessions: list[RecallChat]  # the same chats as sessionIds, with their titles
+    source: RecallSource
+
+
+class RecallNoticePage(Strict):
+    items: list[RecallNotice]
 
 
 def _identity(request_id: str) -> str:
@@ -135,10 +166,11 @@ def needs_you(store) -> list[dict]:
                 continue
             recorded = facts.get("change")
             change = recorded if isinstance(recorded, str) and recorded in CHANGES else "changed"
-            sessions = [
-                found[0]
+            chat_rows = [
+                (found[0], found[1] or "")
                 for found in db.execute(
-                    "SELECT u.session_id FROM memory_uses u JOIN sessions s ON s.id=u.session_id "
+                    "SELECT u.session_id, s.title FROM memory_uses u "
+                    "JOIN sessions s ON s.id=u.session_id "
                     f"WHERE {_NEW_USE} AND {_VISIBLE} "
                     "GROUP BY u.session_id ORDER BY MAX(u.recorded_at) DESC LIMIT ?",
                     (*_args(db, memory_id, revision, row["created_at"]), MAX_CHATS),
@@ -154,7 +186,8 @@ def needs_you(store) -> list[dict]:
                     "change": change,
                     "answers": answers,
                     "chats": chats,
-                    "sessionIds": sessions,
+                    "sessionIds": [identity for identity, _ in chat_rows],
+                    "sessions": [{"id": identity, "title": name} for identity, name in chat_rows],
                     "source": {
                         "kind": "memory-recall",
                         "noticeId": row["id"],
@@ -163,6 +196,11 @@ def needs_you(store) -> list[dict]:
                 }
             )
     return items
+
+
+def listing(store) -> dict:
+    """The open notices for the owner's Inbox card, the same list the Inbox reads."""
+    return {"items": needs_you(store)}
 
 
 def dismiss(store, identity: str, *, now: float | None = None) -> dict:

@@ -125,6 +125,18 @@ def router(app_state, require_key, require_owner):
         forgotten or in the Trash are left out. `since` is when Pi began noting uses."""
         return memory_uses.listing(app_state().store, memory_id, limit, after)
 
+    @routes.get(
+        "/memory/recall-notices",
+        dependencies=[Depends(require_owner)],
+        responses=described(recall_notices.RecallNoticePage),
+    )
+    def list_recall_notices():
+        """Open notices that earlier answers used a memory since changed (read only).
+
+        Ids, counts and chat titles, no words. Only visible chats count: a chat that is forgotten
+        or in the Trash is left out, and a notice that reaches no visible answer is not listed."""
+        return recall_notices.listing(app_state().store)
+
     @routes.post(
         "/memory/recall-notices/{notice_id}/dismiss", dependencies=[Depends(require_owner)]
     )
