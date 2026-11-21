@@ -137,6 +137,22 @@ def test_reads_need_the_session_not_a_password(host, operation):
     assert len(seen) == 1
 
 
+def test_update_check_fails_fast_when_the_helper_is_busy_but_other_reads_wait(host):
+    client, headers, seen, reply = host
+    for operation, wait in (("update.check", 5), ("services.status", 120)):
+        body = {"operation": operation, "arguments": {}}
+        assert client.post("/api/host/read", json=body, headers=headers).status_code == 200
+        assert seen[-1].extensions["timeout"]["read"] == wait
+
+    def busy(wire):
+        raise httpx.ReadTimeout("helper busy", request=wire)
+
+    reply["answer"] = busy
+    body = {"operation": "update.check", "arguments": {}}
+    response = client.post("/api/host/read", json=body, headers=headers)
+    assert response.status_code == 503 and response.json()["error"] == "host_unavailable"
+
+
 @pytest.mark.parametrize(
     "body",
     [
