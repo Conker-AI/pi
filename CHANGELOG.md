@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.29.0
+
 - Host reads: `POST /api/host/read` accepts `update.check` (arguments `{}`, session only, no password): the host starts a check for a newer Conker release in the background and answers at once with its state, so the dashboard can check on entering the app. (#289)
 
 ## 0.28.0
