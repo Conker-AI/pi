@@ -61,7 +61,6 @@ def test_proposal_returns_the_typed_settings_with_reasons(tmp_path):
     "reply",
     [
         "not json",
-        json.dumps({**VALID, "model": "b"}),
         json.dumps({**VALID, "complexity": "medium"}),
         json.dumps({**VALID, "research": "maybe"}),
         json.dumps({**VALID, "think": "yes"}),
@@ -202,3 +201,53 @@ def test_a_malformed_effort_fails_closed(tmp_path, reply):
         with pytest.raises(auto_settings.ProposalError) as raised:
             propose(store, Adapter(reply))
     assert raised.value.status == 503 and raised.value.code == "unavailable"
+
+
+def test_the_model_is_chosen_from_the_answer_models_the_owner_offers(tmp_path):
+    reply = {
+        **VALID,
+        "model": "b",
+        "reasons": {**VALID["reasons"], "model": "A small one is enough."},
+    }
+    adapter = Adapter(json.dumps(reply))
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = propose(store, adapter)
+    assert result["answerModelId"] == "b" and result["reasons"]["model"] == "A small one is enough."
+    assert result["modelId"] == "a", "modelId stays the routing model that made the proposal"
+
+
+def test_a_model_that_is_not_on_offer_is_dropped_not_fatal(tmp_path):
+    reply = {**VALID, "model": "zzz", "reasons": {**VALID["reasons"], "model": "Because."}}
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        result = propose(store, Adapter(json.dumps(reply)))
+    assert "answerModelId" not in result and "model" not in result["reasons"]
+    assert result["complexity"] == VALID["complexity"]
+
+
+def test_the_mode_and_the_models_reach_the_routing_model_as_data():
+    models = [{"id": "a", "name": "A", "about": "A"}, {"id": "b", "name": "B", "about": "B"}]
+    value = config()
+    assert auto_settings.answer_models(value) == models
+    value["roleSettings"]["roles"]["answer"]["eligibleModelIds"] = ["a"]
+    assert auto_settings.answer_models(value) == [], "one model is no choice"
+    for mode in auto_settings.MODES:
+        assert auto_settings.MODE_INSTRUCTIONS[mode]
+
+
+def test_the_routing_model_is_told_the_mode(tmp_path):
+    seen = Recording(json.dumps(VALID))
+    with closing(Store(tmp_path / "pi.db")) as store:
+        configured(store)
+        auto_settings.propose(
+            store,
+            {"one": seen},
+            auto_settings.Request(text="Best laptop under $1000?", mode="deep"),
+            source_privacy=session_settings.source_privacy,
+        )
+    sent = json.loads(seen.messages[0][1].content)
+    assert sent["guidance"] == auto_settings.MODE_INSTRUCTIONS["deep"]
+    assert [m["id"] for m in sent["models"]] == ["a", "b"]
+    with pytest.raises(ValueError):
+        auto_settings.Request(text="x", mode="reckless")

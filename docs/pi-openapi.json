@@ -42216,6 +42216,17 @@
             "type": "boolean",
             "title": "Harness Disabled",
             "default": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "fast",
+              "balanced",
+              "deep"
+            ],
+            "title": "Mode",
+            "default": "auto"
           }
         },
         "additionalProperties": false,

@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Auto settings: `POST /models/auto-settings` takes an optional `mode` (`auto`, `fast`, `balanced`, `deep`) that tells the routing model what the owner wants, and returns `answerModelId`, the answer model it chose from the owner's list (with `reasons.model`), when two or more are offered. (#287)
 ## 0.27.0
 
 - Inbox: `GET /memory/recall-notices` (owner session, read only) lists the open `memory-recall` notices for the dashboard card: id, change (corrected, forgotten), answer and chat counts and up to 20 chats as id plus title. Same rule as the Inbox and `GET /memory/{id}/uses`: only visible chats (a forgotten or Trashed chat, or one made from it, is left out), no words, and a notice that reaches no visible answer is not listed. `GET /inbox` items also carry `sessions` (id and title) beside `sessionIds`. pi#285
