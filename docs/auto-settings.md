@@ -1,7 +1,7 @@
 # Auto settings
 
 In Auto mode the composer asks Pi for settings before the owner sends a message. Runtime
-`POST /models/auto-settings` takes `{text, session_id?, harness_disabled?}` and returns:
+`POST /models/auto-settings` takes `{text, session_id?, harness_disabled?, mode?}` and returns:
 
 ```json
 {"complexity": "hard", "think": true, "research": "web",
@@ -15,6 +15,11 @@ screen, so the proposal itself decides nothing.
 
 Rules:
 
+- `mode` (`auto`, `fast`, `balanced` or `deep`, default `auto`) is a bias, not a table: the routing
+  model is told what the owner wants (cheap and quick, balanced, thorough) and decides every value
+  itself. When the answer role offers two or more models, the reply may also carry `answerModelId`,
+  the one it chose from that list (with `reasons.model`); an id that is not on offer is dropped. `modelId`
+  stays the routing model that made the proposal, not the model to answer with.
 - The request reads only the typed draft. It saves nothing and grants nothing; privacy, model
   eligibility, budgets and ToolGate apply when the message is sent.
 - Three settings plus one reason each (at most 160 characters), and optionally a fourth, `effort` (light, medium, high or max) with `reasons.effort`; a reply without effort is still valid and carries none, and an effort without its reason (or the reverse) fails closed. Unknown keys, unknown values,
