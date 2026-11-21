@@ -178,8 +178,8 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `GET /api/control/pi/inference/usage?limit=` | session | the JSON control relay (read-only) |
 | `POST /api/control/pi/jobs/{id}/adopt` `{"expected_revision"}` | password | the JSON control relay (taking a job Conker made as the owner's own) |
 | `GET /api/host/ops`, `GET /api/host/ops/{id}` | session | the host helper's receipts |
-| `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list` |
-| `POST /api/host/ops` `{"id","operation","arguments"}` | session | the helper's actions: `backup.verify`, `services.restart`, `backup.run` |
+| `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list`, `update.check` (starts a release check, never blocks) |
+| `POST /api/host/ops` `{"id","operation","arguments"}` | session | the helper's actions: `backup.verify`, `services.restart`, `backup.run`; `update.run` also asks for the password |
 | `GET /api/owner/tool-settings` | session | ToolGate `GET /v2/owner/settings` |
 | `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | session | ToolGate `PUT /v2/owner/settings` |
 | `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |

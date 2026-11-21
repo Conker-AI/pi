@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- Host reads: `POST /api/host/read` accepts `update.check` (arguments `{}`, session only, no password): the host starts a check for a newer Conker release in the background and answers at once with its state, so the dashboard can check on entering the app.
+
 ## 0.28.0
 
 - Auto settings: `POST /models/auto-settings` takes an optional `mode` (`auto`, `fast`, `balanced`, `deep`) that tells the routing model what the owner wants, and returns `answerModelId`, the answer model it chose from the owner's list (with `reasons.model`), when two or more are offered. (#287)

@@ -23,7 +23,7 @@ SNAPSHOT = r"snapshot-\d{8}T\d{6}Z-[0-9a-f]{8}"
 VERSION = r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}"
 OPERATION = r"[a-z]+(?:\.[a-z]+)+"
 # Operation -> its arguments and their patterns (conker scripts/host_ops.py OPERATIONS).
-READS = {"services.status": {}, "backup.list": {}}
+READS = {"services.status": {}, "backup.list": {}, "update.check": {}}
 ACTIONS = {
     "backup.verify": {"snapshot": SNAPSHOT},
     "services.restart": {"service": SERVICE},
