@@ -125,7 +125,7 @@ def test_receipts_are_read_with_the_session_and_passed_through_unchanged(host):
     assert len(seen) == 3
 
 
-@pytest.mark.parametrize("operation", ["services.status", "backup.list"])
+@pytest.mark.parametrize("operation", ["services.status", "backup.list", "update.check"])
 def test_reads_need_the_session_not_a_password(host, operation):
     client, headers, seen, _ = host
     body = {"operation": operation, "arguments": {}}
@@ -135,6 +135,22 @@ def test_reads_need_the_session_not_a_password(host, operation):
     assert json.loads(seen[0].content) == body and seen[0].url.path == "/host/read"
     assert client.post("/api/host/read", json=body).status_code == 403  # no CSRF
     assert len(seen) == 1
+
+
+def test_update_check_fails_fast_when_the_helper_is_busy_but_other_reads_wait(host):
+    client, headers, seen, reply = host
+    for operation, wait in (("update.check", 5), ("services.status", 120)):
+        body = {"operation": operation, "arguments": {}}
+        assert client.post("/api/host/read", json=body, headers=headers).status_code == 200
+        assert seen[-1].extensions["timeout"]["read"] == wait
+
+    def busy(wire):
+        raise httpx.ReadTimeout("helper busy", request=wire)
+
+    reply["answer"] = busy
+    body = {"operation": "update.check", "arguments": {}}
+    response = client.post("/api/host/read", json=body, headers=headers)
+    assert response.status_code == 503 and response.json()["error"] == "host_unavailable"
 
 
 @pytest.mark.parametrize(
@@ -147,6 +163,9 @@ def test_reads_need_the_session_not_a_password(host, operation):
         {"operation": "services.status"},
         {"operation": "services.status", "arguments": {}, "id": OP_ID},
         {"operation": ["services.status"], "arguments": {}},
+        {"operation": "update.check", "arguments": {"version": "1.2.3"}},
+        {"operation": "update.check"},
+        {"operation": "update.check", "arguments": {}, "id": OP_ID},
     ],
 )
 def test_a_read_outside_the_allowlist_never_reaches_the_helper(host, body):
@@ -193,6 +212,7 @@ def test_actions_need_only_the_session_and_forward_the_exact_body(host, operatio
     "body",
     [
         {"id": OP_ID, "operation": "services.status", "arguments": {}},
+        {"id": OP_ID, "operation": "update.check", "arguments": {}},
         {"id": OP_ID, "operation": "services.stop", "arguments": {"service": "pi"}},
         {"id": OP_ID, "operation": "services.restart", "arguments": {"service": "Pi; rm"}},
         {"id": OP_ID, "operation": "services.restart", "arguments": {}},

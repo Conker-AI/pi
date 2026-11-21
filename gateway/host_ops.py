@@ -23,7 +23,7 @@ SNAPSHOT = r"snapshot-\d{8}T\d{6}Z-[0-9a-f]{8}"
 VERSION = r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}"
 OPERATION = r"[a-z]+(?:\.[a-z]+)+"
 # Operation -> its arguments and their patterns (conker scripts/host_ops.py OPERATIONS).
-READS = {"services.status": {}, "backup.list": {}}
+READS = {"services.status": {}, "backup.list": {}, "update.check": {}}
 ACTIONS = {
     "backup.verify": {"snapshot": SNAPSHOT},
     "services.restart": {"service": SERVICE},
@@ -41,7 +41,9 @@ MAX_ANSWER = 262144
 MAX_REFUSAL = 4096
 # Reads run docker and `conker setup protection` (up to 60 s); starting an action checks the
 # same facts first. Receipts are read from the journal.
-TIMEOUTS = {"receipts": 30, "read": 120, "start": 120}
+# update.check never blocks in the helper (it answers at once), and the dashboard calls it on every
+# entry, return and refresh: a busy helper must fail fast, not hold a gateway worker for 120 s.
+TIMEOUTS = {"receipts": 30, "read": 120, "start": 120, "check": 5}
 
 
 class HostOpsError(Exception):
@@ -127,6 +129,8 @@ def request(transport, socket: str, method: str, path: str, body: dict | None = 
     if transport is None and not socket:
         raise HostOpsError(503, "host_unavailable", "Server actions are not set up on this server.")
     kind = "receipts" if method == "GET" else "read" if path == "/host/read" else "start"
+    if kind == "read" and (body or {}).get("operation") == "update.check":
+        kind = "check"
     try:
         with (
             httpx.Client(

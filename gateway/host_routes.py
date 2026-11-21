@@ -197,10 +197,10 @@ def router(app, session, admit_write):
     @routes.post("/api/host/ops")
     @routes.post("/api/host/read")
     async def host_operations(request: Request, identity: str | None = None):
-        """Server actions (ADR-0014): the receipts, the two reads (services.status, backup.list)
-        and the actions: backup.verify, services.restart and backup.run with his session (none of
-        them deletes or replaces anything), update.run with his password too. Answers are the
-        helper's own."""
+        """Server actions (ADR-0014): the receipts, three reads (services.status, backup.list,
+        update.check) and the actions: backup.verify, services.restart and backup.run with his
+        session (none of them deletes or replaces anything), update.run with his password too.
+        Answers are the helper's own."""
         from starlette.concurrency import run_in_threadpool
 
         from . import host_ops
