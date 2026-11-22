@@ -14,7 +14,7 @@ from pi.agents import change_requests, keep, tool_drafts
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.core import owner_preferences as prefs
-from pi.schedule import agent_jobs, jobs, proactive_budget
+from pi.schedule import agent_job_text, agent_jobs, jobs, proactive_budget
 from pi.schedule.job_models import AgentJobCreate, StateChange, Timing
 from pi.turns import access, native_tools
 
@@ -209,7 +209,7 @@ def test_in_a_run_of_the_owners_job_only_the_saved_instructions_count(store):
             "WHERE t.turn_id=? AND t.purpose='input'",
             (receipt["turnId"],),
         ).fetchone()
-    started = agent_jobs.when(NOON, "Asia/Jerusalem")
+    started = agent_job_text.when(NOON, "Asia/Jerusalem")
     assert "Thursday, 29 October 2026" in started and started in sent
     # The preamble and the run's date and time are Pi's, so neither counts as the owner's request.
     assert access.owner_text(store, receipt["turnId"]) == "Look at my calendar."
