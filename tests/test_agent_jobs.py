@@ -12,7 +12,7 @@ from pi.agents import inbox
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, password_write, session_only_write
 from pi.conversation.store import Store
-from pi.schedule import agent_jobs, job_models, job_notes, jobs
+from pi.schedule import agent_job_text, agent_jobs, job_models, job_notes, jobs
 from pi.turns.failures import TurnFailed
 
 OWNER = "agent-jobs-owner-control-key-" + "o" * 32
@@ -137,10 +137,10 @@ def test_a_run_is_told_its_date_and_time_in_the_jobs_zone(store):
 
 def test_the_date_follows_the_jobs_own_zone():
     instant = datetime.fromisoformat("2026-11-01T23:30:00+00:00").timestamp()
-    assert agent_jobs.when(instant, "Asia/Tokyo").startswith(
+    assert agent_job_text.when(instant, "Asia/Tokyo").startswith(
         "This run started on Monday, 2 November 2026 (2026-11-02) at 08:30, Asia/Tokyo time"
     )
-    assert agent_jobs.when(instant, "America/Los_Angeles").startswith(
+    assert agent_job_text.when(instant, "America/Los_Angeles").startswith(
         "This run started on Sunday, 1 November 2026 (2026-11-01) at 15:30,"
     )
 
@@ -245,13 +245,13 @@ def test_the_browser_gets_ai_jobs_only_never_raw_tool_jobs(store, monkeypatch):
 
 
 def test_summaries_are_one_plain_line():
-    assert agent_jobs.summarize("# Rent is due tomorrow\nPay it in the bank app.") == (
+    assert agent_job_text.summarize("# Rent is due tomorrow\nPay it in the bank app.") == (
         "Rent is due tomorrow",
         "Pay it in the bank app.",
     )
-    assert agent_jobs.summarize("NOTHING") is None
-    assert len(agent_jobs.summarize("x" * 500)[0]) == agent_jobs.MAX_TITLE
-    assert agent_jobs.summarize("Rent\x1b]0;owned\x07 due\nPay\x9b it") == (
+    assert agent_job_text.summarize("NOTHING") is None
+    assert len(agent_job_text.summarize("x" * 500)[0]) == agent_job_text.MAX_TITLE
+    assert agent_job_text.summarize("Rent\x1b]0;owned\x07 due\nPay\x9b it") == (
         "Rent]0;owned due",
         "Pay it",
     ), "control codes never reach the Inbox"
