@@ -5,10 +5,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from pi.api import browser_contract
-from pi.content import artifact_models
 from pi.context import universal_search as search
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import artifact_requests
 
 
 def test_real_source_adapters(tmp_path):
@@ -29,9 +29,9 @@ def test_real_source_adapters(tmp_path):
         )
         artifact = artifacts.create(
             store,
-            artifact_models.Create(
+            artifact_requests.Create(
                 title="Needle artifact",
-                content=artifact_models.Text(kind="markdown", text="Needle retained text"),
+                content=artifact_requests.Text(kind="markdown", text="Needle retained text"),
             ),
         )
         agent = agents.create(
