@@ -91,7 +91,7 @@ every model in one place (Settings, Models). Line numbers are as of this page's 
 | --- | --- | --- |
 | A turn invokes a tool | `pi/turns/loop.py:431` -> `pi/actions/toolgate.py:356` | `PI_TOOLGATE_TIMEOUT_S`, 120 s (`pi/api/startup.py:159`) |
 | An `ollama_generate` tool asks Pi for text | `toolgate/api/dispatch.py:183` -> `toolgate/executors/pi_inference.py:44` | 180 s (`pi_inference.py:20`) |
-| Pi answers with the `tool-text` role | `pi/api/routes/inference.py:28` -> `pi/models/service_inference.py:288` | role wait x tries (`service_inference.py:315`); 300 s per try until the owner sets one (`pi/models/roles.py:50`) |
+| Pi answers with the `tool-text` role | `pi/api/routes/inference.py:28` -> `pi/models/service_inference.py:288` | role wait x tries (`service_inference.py:315`); 300 s per try until the owner sets one (`pi/models/role_config.py:51`) |
 
 Only when `TOOLGATE_PI_URL` and `TOOLGATE_PI_SERVICE_KEY` are set; every Conker layout sets them.
 The turn waits in its request thread while ToolGate waits on Pi.
