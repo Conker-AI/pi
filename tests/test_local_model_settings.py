@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 
 from pi.api import server as api
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.models import inference_control, local_settings, providers
-from pi.owner import settings as owner_settings
 
 FINAL = {"model": "qwen3:4b", "message": {"content": "{}"}, "done": True}
 SERVICE_KEY = "memorygate-key-synthetic"

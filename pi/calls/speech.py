@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
-from pi.owner import settings as owner_settings
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_SECONDS = 120

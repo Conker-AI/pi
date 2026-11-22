@@ -276,7 +276,7 @@ def test_the_owner_starts_and_reads_a_team_run_with_the_cap_on_and_is_refused_wi
     from test_team_execution import setup as team_setup
 
     from pi.api.browser_contract import password_write, session_only_write
-    from pi.owner import preferences as prefs
+    from pi.core import owner_preferences as prefs
 
     store, client, headers = owner
     monkeypatch.setattr(

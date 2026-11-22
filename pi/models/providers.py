@@ -22,10 +22,10 @@ from typing import Protocol
 import httpx
 
 from pi.core.images import ImageInput
+from pi.core.loopback_http import verification
 from pi.core.untrusted_text import strip_invisible
 from pi.models import citations as message_citations
 from pi.models import effort, inference_control, live_stream, local_settings
-from pi.models.loopback_http import verification
 
 
 @dataclass(frozen=True)

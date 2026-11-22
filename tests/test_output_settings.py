@@ -4,7 +4,7 @@ import pytest
 
 from pi.conversation import output_settings
 from pi.conversation.store import Store
-from pi.owner import settings as owner_settings
+from pi.core import owner_settings as owner_settings
 from pi.turns import prompt_prefix
 
 LEVEL_SETTING = output_settings.LEVEL_SETTING

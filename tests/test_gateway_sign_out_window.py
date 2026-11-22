@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.store import AuthError, AuthStore
-from pi.owner import preferences as prefs
+from pi.core import owner_preferences as prefs
 
 ORIGIN = "https://localhost:8050"
 PASSWORD = "sign out window testing phrase"

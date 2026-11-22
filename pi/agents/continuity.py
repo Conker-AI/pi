@@ -9,8 +9,8 @@ from pydantic import Field
 from pi.agents import profiles as agents
 from pi.conversation import settings as session_settings
 from pi.conversation import visibility
+from pi.core import owner_preferences as owner_preferences
 from pi.core.models import Strict
-from pi.owner import preferences as owner_preferences
 from pi.schedule import jobs
 
 SCHEMA = """

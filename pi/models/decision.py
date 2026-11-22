@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from pi.core.loopback_http import verification
 from pi.models import inference_control
-from pi.models.loopback_http import verification
 from pi.models.providers import Completion, ProviderUnavailable
 
 if TYPE_CHECKING:

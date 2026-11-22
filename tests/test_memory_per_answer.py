@@ -8,10 +8,10 @@ import pytest
 from test_memory import Provider, client
 
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.memory import service
 from pi.memory.service import BUDGET_RECEIPT, DUPLICATE_RECEIPT, Memory
 from pi.models.routing import Router
-from pi.owner import settings as owner_settings
 from pi.turns.loop import Loop
 
 

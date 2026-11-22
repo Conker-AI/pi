@@ -11,9 +11,9 @@ from contextlib import closing
 import pytest
 
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.memory import import_formats, imports
 from pi.memory.import_formats import FormatRefused
-from pi.owner import settings as owner_settings
 
 START = 1_700_000_000
 

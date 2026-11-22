@@ -10,9 +10,9 @@ from pi.agents import profiles as agents
 from pi.agents import teams
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.memory import service
 from pi.memory import store as memory_store
-from pi.owner import settings as owner_settings
 
 RECALL = {"max_items": 8, "distinct": True}
 EVERY_CHAT = {"scope": "all", "session_id": None, "memory_ids": [], **RECALL}

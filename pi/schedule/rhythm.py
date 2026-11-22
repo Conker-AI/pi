@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from pi.owner import settings
+from pi.core import owner_settings as settings
 from pi.schedule import agent_jobs
 from pi.schedule.job_models import AgentJobCreate, Timing
 

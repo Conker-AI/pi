@@ -19,7 +19,7 @@ from pi.conversation import chat_preferences, naming
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.core import errors
-from pi.owner import settings as owner_settings
+from pi.core import owner_settings as owner_settings
 from pi.schedule import tasks
 from pi.turns import queue as q
 

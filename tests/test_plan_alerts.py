@@ -12,9 +12,10 @@ from fastapi.testclient import TestClient
 from pi.agents import inbox
 from pi.api import server
 from pi.conversation.store import Store
+from pi.core import owner_preferences as preferences
+from pi.core import owner_settings as owner_settings
 from pi.models.chatgpt import ChatGPTProvider
-from pi.owner import plan_alerts, preferences
-from pi.owner import settings as owner_settings
+from pi.owner import plan_alerts
 
 NOW = datetime(2026, 10, 21, 12, tzinfo=UTC).timestamp()
 FRIDAY = "2026-10-23T09:00:00Z"

@@ -10,9 +10,9 @@ import httpx
 
 from pi.conversation import hidden_records
 from pi.conversation import settings as session_settings
+from pi.core import owner_settings as owner_settings
 from pi.memory import delivery as memory_delivery
 from pi.memory import store as memory_store
-from pi.owner import settings as owner_settings
 
 log = logging.getLogger("pi.memory.service")
 

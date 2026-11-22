@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from pi.api import server as api
 from pi.conversation.store import Store
-from pi.owner import preferences as prefs
+from pi.core import owner_preferences as prefs
 
 
 def settings(**changes):

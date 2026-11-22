@@ -48,7 +48,7 @@ Memory ranking only reorders authorized candidates; it preserves originals and s
 
 ## Local model settings
 
-Three of the owner's settings (`pi.owner.settings`, read by `pi/models/local_settings.py`) shape
+Three of the owner's settings (`pi.core.owner_settings`, read by `pi/models/local_settings.py`) shape
 every request Pi sends Ollama: chats, helper roles and the services' `/inference` calls alike.
 Hosted providers never read them. Each is read on every request, so a change applies to the next
 one. A value of the wrong type counts as unset; an unset one sends nothing, so Ollama's own setting

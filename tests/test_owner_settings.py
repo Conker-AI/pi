@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, session_only_write
 from pi.conversation.store import Store
-from pi.owner import settings
+from pi.core import owner_settings as settings
 
 OWNER = "owner-settings-owner-key-" + "o" * 32
 

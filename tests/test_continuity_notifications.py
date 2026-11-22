@@ -6,7 +6,7 @@ import pytest
 from pi.agents import continuity as c
 from pi.agents import profiles as agents
 from pi.conversation.store import Store
-from pi.owner import preferences as owner_preferences
+from pi.core import owner_preferences as owner_preferences
 from tests.test_continuity import event
 
 DAY = datetime(2026, 9, 21, 10, tzinfo=UTC)

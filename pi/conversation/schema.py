@@ -47,6 +47,8 @@ from pi.conversation import observation as session_observation
 from pi.conversation import retries as response_retries
 from pi.conversation import settings as session_settings
 from pi.conversation import versions as response_versions
+from pi.core import owner_preferences as owner_preferences
+from pi.core import owner_settings as owner_settings
 from pi.host import actions as system_actions
 from pi.host import filesystem_reads
 from pi.host import inventory as system_inventory
@@ -59,8 +61,6 @@ from pi.models import evaluations as model_evaluations
 from pi.models import roles as model_roles
 from pi.models import service_inference, spending_cap
 from pi.owner import notices, plan_alerts, self_check
-from pi.owner import preferences as owner_preferences
-from pi.owner import settings as owner_settings
 from pi.owner import updates as conker_updates
 from pi.schedule import (
     agent_hooks,

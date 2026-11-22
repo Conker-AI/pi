@@ -13,10 +13,10 @@ from test_service_inference import Router as FakeRouter
 from pi.api import browser_contract
 from pi.api import server as api
 from pi.conversation.store import Store
+from pi.core import owner_preferences as prefs
 from pi.models import spending_cap
 from pi.models.openrouter import ModelUnusable, PaidModelRefused
 from pi.models.providers import Completion, Message, ProviderUnavailable
-from pi.owner import preferences as prefs
 
 NOON = datetime(2026, 11, 12, 10, 0, tzinfo=UTC)  # 12:00 in the default Asia/Jerusalem
 

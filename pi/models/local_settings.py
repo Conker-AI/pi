@@ -1,6 +1,6 @@
 """The owner's local model settings, as fields of each request Pi sends Ollama.
 
-Three settings in the owner's settings document (`pi.owner.settings`, ids from Conker's settings
+Three settings in the owner's settings document (`pi.core.owner_settings`, ids from Conker's settings
 registry) shape every Ollama request: chats, helper roles and the services' `/inference` calls
 alike. Hosted providers never read them. They are preferences: a value of the wrong type counts as
 unset, one out of range is kept to the range, and an unset one sends nothing, so Ollama's own
@@ -21,7 +21,7 @@ import math
 import os
 import sqlite3
 
-from pi.owner import settings as owner_settings
+from pi.core import owner_settings as owner_settings
 
 KEEP_LOADED = "models.local.keep_loaded"
 CONTEXT = "models.local.context"

@@ -37,7 +37,7 @@ before it existed read the default.
 `newChatAccess` (`default`, `ask`, `ai` or `full`; preferences saved before it existed read
 `default`) is the access switch a chat the owner starts begins with. `full` lets Conker act
 without asking, so it lives here, where saving through the gateway needs the password, and not
-in the owner settings document. `pi.owner.preferences.new_chat_access` reads it inside the
+in the owner settings document. `pi.core.owner_preferences.new_chat_access` reads it inside the
 transaction that creates the chat; chats that exist, AI job chats and forks keep their own
 switch. [Plan usage alerts](plan-alerts.md) take a level from 50 to 100
 percent; preferences saved before that field existed read its default. Validation failures return 422. Stale revisions return
@@ -45,7 +45,7 @@ percent; preferences saved before that field existed read its default. Validatio
 reconcile before saving. SQLite serializes concurrent updates and retains the
 configuration across restart. Saving never dispatches a turn or changes grants.
 
-`pi.owner.preferences` provides pure `quiet_now`, `local_day`, and
+`pi.core.owner_preferences` provides pure `quiet_now`, `local_day`, and
 `admission_reasons` policy functions. Quiet windows include the start and exclude
 the end, support overnight windows, and follow local wall time across DST skips
 and repeats. An aware timestamp is required. Urgent exceptions bypass quiet hours
