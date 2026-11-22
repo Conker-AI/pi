@@ -2,7 +2,6 @@
 
 import logging
 import threading
-import time
 from contextlib import closing
 
 import pytest
@@ -10,6 +9,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from test_spending_cap import set_cap
 from test_team_execution import Recorder, setup, start
+from waiting import wait_event, wait_until
 
 from pi.agents import team_background, team_execution, team_models
 from pi.api.routes import team_execution as team_execution_api
@@ -35,7 +35,7 @@ class Gate:
 
     def __call__(self):
         self.entered.set()
-        assert self.go.wait(20)
+        wait_event(self.go, "the test to release the role's model call")
         if self.fail:
             raise RuntimeError(self.fail)
 
@@ -69,16 +69,6 @@ def post_step(client, run, **changes):
     )
 
 
-def wait_for(check, what):
-    deadline = time.time() + 20
-    while time.time() < deadline:
-        value = check()
-        if value:
-            return value
-        time.sleep(0.05)
-    raise AssertionError(f"Timed out waiting for {what}.")
-
-
 def state(store, run):
     return team_execution.get(store, run["id"])["state"]
 
@@ -95,14 +85,14 @@ def test_the_step_answers_at_once_while_the_role_is_still_working(store):
     client = client_for(store, provider)
     reply = post_step(client, run)
     assert reply.status_code == 202 and reply.json()["state"] == "running"
-    assert gate.entered.wait(20)
+    wait_event(gate.entered, "the role's model call to start")
     polled = client.get(f"/team-runs/{run['id']}", headers=HEADERS).json()
     assert polled["state"] == "running" and len(provider.calls) == 1
     gate.go.set()
-    wait_for(lambda: state(store, run) == "ready", "the run to be ready")
+    wait_until(lambda: state(store, run) == "ready", "the run to be ready")
     finished = client.get(f"/team-runs/{run['id']}", headers=HEADERS).json()
     assert [item["state"] for item in finished["steps"]] == ["complete"]
-    wait_for(slots_free, "the slot to be free")
+    wait_until(slots_free, "the slot to be free")
 
 
 def test_a_cap_that_is_off_refuses_before_any_thread_starts(store):
@@ -110,11 +100,12 @@ def test_a_cap_that_is_off_refuses_before_any_thread_starts(store):
     record, _ = setup(store)
     run = start(store, record, store.create_session())
     set_cap(store, enabled=False)
-    before = threading.active_count()
+    before = set(threading.enumerate())  # the web stack's own worker threads come and go
     reply = post_step(client_for(store, provider), run)
     assert reply.status_code == 409
     assert reply.json()["detail"]["code"] == "spending_cap_off"
-    assert threading.active_count() == before and slots_free() and not provider.calls
+    started = [t.name for t in set(threading.enumerate()) - before if t.name == "pi-team-step"]
+    assert not started and slots_free() and not provider.calls
     assert team_execution.get(store, run["id"])["steps"] == []
 
 
@@ -125,7 +116,7 @@ def test_a_replay_starts_no_second_turn(store):
     run = start(store, record, store.create_session())
     client = client_for(store, provider)
     assert post_step(client, run).status_code == 202
-    assert gate.entered.wait(20)
+    wait_event(gate.entered, "the role's model call to start")
     again = post_step(client, run)
     assert again.status_code == 202 and again.json()["state"] == "running"
     inspected = client.post(
@@ -135,8 +126,8 @@ def test_a_replay_starts_no_second_turn(store):
     )
     assert inspected.status_code == 200 and inspected.json()["state"] == "running"
     gate.go.set()
-    wait_for(lambda: state(store, run) == "ready", "the run to be ready")
-    wait_for(slots_free, "the slot to be free")
+    wait_until(lambda: state(store, run) == "ready", "the run to be ready")
+    wait_until(slots_free, "the slot to be free")
     assert len(provider.calls) == 1
 
 
@@ -149,8 +140,8 @@ def test_a_failing_role_blocks_the_run_and_logs_no_words(store, caplog):
     with caplog.at_level(logging.ERROR):
         assert post_step(client, run).status_code == 202
         gate.go.set()
-        wait_for(lambda: state(store, run) in ("blocked", "held"), "the run to stop")
-        wait_for(slots_free, "the slot to be free")
+        wait_until(lambda: state(store, run) in ("blocked", "held"), "the run to stop")
+        wait_until(slots_free, "the slot to be free")
     assert state(store, run) == "blocked"
     assert "private words" not in caplog.text
 
@@ -161,11 +152,11 @@ def test_a_restart_while_a_step_runs_leaves_the_run_interrupted(store):
     run = start(store, record, store.create_session())
     client = client_for(store, Recorder(callback=gate))
     assert post_step(client, run).status_code == 202
-    assert gate.entered.wait(20)
+    wait_event(gate.entered, "the role's model call to start")
     team_execution.recover_interrupted(store)
     assert state(store, run) == "interrupted"
     gate.go.set()
-    wait_for(slots_free, "the slot to be free")
+    wait_until(slots_free, "the slot to be free")
     assert state(store, run) == "interrupted"
 
 
@@ -189,12 +180,12 @@ def test_too_many_steps_at_once_are_refused_not_queued(store, monkeypatch):
     )
     client = client_for(store, Recorder(callback=gate))
     assert post_step(client, first).status_code == 202
-    assert gate.entered.wait(20)
+    wait_event(gate.entered, "the role's model call to start")
     refused = post_step(client, second, request_id="second_run_step_request")
     assert refused.status_code == 409 and refused.json()["detail"]["code"] == "team_busy"
     assert team_execution.get(store, second["id"])["steps"] == []
     gate.go.set()
-    wait_for(slots_free, "the slot to be free")
+    wait_until(slots_free, "the slot to be free")
 
 
 def test_a_thread_that_cannot_start_blocks_the_run_and_frees_the_slot(store, monkeypatch):
@@ -221,7 +212,7 @@ def test_a_replay_is_answered_even_while_every_slot_is_taken(store, monkeypatch)
     run = start(store, record, store.create_session())
     client = client_for(store, Recorder(callback=gate))
     assert post_step(client, run).status_code == 202
-    assert gate.entered.wait(20)
+    wait_event(gate.entered, "the role's model call to start")
     taken = [team_background._slots.acquire(blocking=False) for _ in range(5)]
     try:
         again = post_step(client, run)
@@ -234,4 +225,4 @@ def test_a_replay_is_answered_even_while_every_slot_is_taken(store, monkeypatch)
             if got:
                 team_background._slots.release()
         gate.go.set()
-    wait_for(slots_free, "the slot to be free")
+    wait_until(slots_free, "the slot to be free")

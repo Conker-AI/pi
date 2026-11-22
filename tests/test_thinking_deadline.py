@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from test_background_thinking import setup
+from waiting import WAIT, join_thread, wait_event
 
 from pi.conversation.store import Store
 from pi.models import inference_control
@@ -73,12 +74,13 @@ def test_absolute_deadline_disconnects_stalled_and_continuous_http(continuous):
         worker.start()
         # Arm only after real I/O (including several continuously arriving
         # chunks), so setup and scheduler latency cannot consume the deadline.
-        assert started.wait(5)
+        wait_event(started, "the peer to send its first chunks")
         with pytest.raises(inference_control.InferenceCancelled), token.deadline(0.2):
-            assert finished.wait(3), "Per-read timeout must not replace the absolute deadline"
-        assert disconnected.wait(2)
-        worker.join(2)
-        assert not worker.is_alive()
+            wait_event(
+                finished, "the absolute deadline to stop the call (not the 20 s read timeout)", 15
+            )
+        wait_event(disconnected, "the peer to see the disconnect")
+        join_thread(worker, "the inference worker")
         assert failures and token.reason == "deadline"
         assert token._deadline is None and token._callbacks == set()
         if continuous:
@@ -88,10 +90,10 @@ def test_absolute_deadline_disconnects_stalled_and_continuous_http(continuous):
     finally:
         token.cancel()
         stop_server.set()
-        worker.join(3)
+        worker.join(WAIT)
         server.shutdown()
         server.server_close()
-        serving.join(3)
+        serving.join(WAIT)
 
 
 class LateAdapter:
@@ -110,7 +112,7 @@ class LateAdapter:
         self.tokens.append(token)
         with token.register(self.closed.set):
             self.started.set()
-            assert token.stopped.wait(5)
+            wait_event(token.stopped, "the token to be stopped")
             # Deliberately ignore cancellation, as an old/custom adapter might.
             if self.outcome == "error":
                 raise ProviderUnavailable("late provider error")
@@ -137,8 +139,7 @@ def join_workers(loop):
     with loop.thinking.lock:
         workers = list(loop.thinking.threads)
     for worker in workers:
-        worker.join(5)
-        assert not worker.is_alive()
+        join_thread(worker, "a thinking worker")
 
 
 @pytest.mark.parametrize("outcome", ["result", "error"])
@@ -174,7 +175,7 @@ def test_thinking_expiry_fences_late_result_and_never_falls_back(tmp_path, outco
         session = store.create_session()
         result = loop.run_turn(session, "Requested analysis", think=True)
         assert result["message"]["content"] == "Talking reply"
-        assert provider.started.wait(5)
+        wait_event(provider.started, "the adapter to start")
         assert len(timers) == 1 and timers[0].seconds == 0.1
         timers[0].expire()
         join_workers(loop)
@@ -224,7 +225,7 @@ def test_queue_wait_does_not_consume_frozen_thinking_deadline(tmp_path, monkeypa
         try:
             session = store.create_session()
             loop.run_turn(session, "Queued explicit analysis", think=True)
-            assert waiting.wait(5), "The worker must reach capacity admission"
+            wait_event(waiting, "the worker to reach capacity admission")
             # Change live settings while queued: the snapshot remains 100ms.
             configure_timeout(store, milliseconds=2000)
             assert deadlines == [] and not provider.started.is_set()

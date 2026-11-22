@@ -7,7 +7,6 @@ queue write; restoring a queued chat is refused until the deletion has run.
 
 import subprocess
 import threading
-import time
 from contextlib import closing
 
 import pytest
@@ -15,6 +14,7 @@ from test_forget_queue import http as http
 from test_forget_queue import owner
 from test_forgetting import SECRET
 from test_forgetting import conversation as conversation
+from waiting import wait_event, wait_until
 
 from pi.conversation import archive, forget_queue
 from pi.conversation.store import Store
@@ -132,8 +132,5 @@ def test_a_restart_that_fails_can_be_asked_for_again(monkeypatch):
 
     monkeypatch.setattr(forget_queue, "hold", hold)
     forget_queue.restart_soon(":memory:", delay=0, poll=0.01)
-    assert tried.wait(5)
-    deadline = time.monotonic() + 5
-    while lock.locked() and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert not lock.locked()
+    wait_event(tried, "the first restart attempt")
+    wait_until(lambda: not lock.locked(), "the restart lock to be released")

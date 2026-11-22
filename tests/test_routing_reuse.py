@@ -11,6 +11,7 @@ import pytest
 from test_decision_provider import setup
 from test_model_roles import Adapter
 from test_tool_turns import CALL, FakeGate
+from waiting import join_thread, wait_event
 
 from pi.context import research_usage
 from pi.conversation.store import Store
@@ -289,7 +290,7 @@ def test_memo_is_single_entry_private_to_attempt_store_turn_and_thread():
             )
         )
         worker.start()
-        worker.join(2)
+        join_thread(worker, "the copied-context thread")
         assert thread_values == [None]
         assert "Synthetic request" not in repr(memo.value)
         # Only the most recent successful signature is retained.
@@ -451,7 +452,7 @@ def test_explicit_thinking_has_no_foreground_memo_or_usage_reuse(tmp_path):
         loop.router.providers["two"] = Thinker()
         try:
             result = loop.run_turn(sid, "Same", think=True)
-            assert started.wait(2)
+            wait_event(started, "the background call to start")
             assert observed_memos == [None]
             assert len(requests) == 1
         finally:
@@ -459,8 +460,7 @@ def test_explicit_thinking_has_no_foreground_memo_or_usage_reuse(tmp_path):
             with loop.thinking.lock:
                 threads = list(loop.thinking.threads)
             for thread in threads:
-                thread.join(5)
-                assert not thread.is_alive()
+                join_thread(thread, "a thinking worker")
         assert background_thinking.list_for_session(store, sid)[0]["status"] == "completed"
         usage = research_usage.receipt(store, result["turn_id"])
         assert usage["foreground"]["attempt_count"] == 3
