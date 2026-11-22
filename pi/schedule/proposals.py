@@ -26,12 +26,12 @@ import re
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
 from pi.conversation import visibility
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
-from pi.core.models import Strict
+from pi.core.schedule_bodies import Decision
 from pi.models.providers import Message
 from pi.schedule import loop_candidates, proactive_budget
 
@@ -122,10 +122,6 @@ Reply with only JSON: {{"proposals": [{{"title": "short name", \
 "noticed": "one sentence: the pattern you saw", "suggestion": "one sentence: what to \
 take over", "ifApproved": "one sentence: what would be prepared or asked next", \
 "evidence": ["e1", "e2"]}}]}}"""
-
-
-class Decision(Strict):
-    decision: Literal["accept", "decline", "never"]
 
 
 class ProposalError(ServiceError):

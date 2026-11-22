@@ -132,11 +132,6 @@ JobId = Annotated[str, StringConstraints(pattern=r"^job_[a-f0-9]{32}$")]
 RunId = Annotated[str, StringConstraints(pattern=r"^scheduled_[a-f0-9]{32}$")]
 
 
-class StateChange(Strict):
-    expected_revision: int = Field(ge=1)
-    enabled: bool
-
-
 class Adopt(Strict):
     """The owner takes a job Conker made as his own, at the revision he looked at."""
 

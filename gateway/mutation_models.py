@@ -9,14 +9,12 @@ from pydantic import Field, JsonValue, TypeAdapter, model_validator
 
 from pi.agents import characters, team_models
 from pi.agents import profiles as agents
-from pi.calls import call_models
-from pi.content import artifact_models
 from pi.context import projects
 from pi.conversation import settings as session_settings
+from pi.core import artifact_requests, call_models, schedule_bodies
 from pi.core.models import Strict
 from pi.host import filesystem_reads, inventory_models
 from pi.memory import edits as memory_edits
-from pi.schedule import tasks
 
 
 class AgentCreate(Strict):
@@ -239,21 +237,21 @@ class ProposalDecision(Strict):
     decision: Literal["accept", "decline", "never"]
 
 
-class TaskCreate(tasks.CreateTask):
+class TaskCreate(schedule_bodies.CreateTask):
     operation: Literal["create"]
 
 
-class TaskUpdate(tasks.UpdateTask):
+class TaskUpdate(schedule_bodies.UpdateTask):
     operation: Literal["update"]
     id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
 
 
-class TaskTransition(tasks.TransitionTask):
+class TaskTransition(schedule_bodies.TransitionTask):
     operation: Literal["transition"]
     id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
 
 
-class TaskArchive(tasks.ArchiveTask):
+class TaskArchive(schedule_bodies.ArchiveTask):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^tsk_[0-9a-f]{32}$")
 
@@ -267,25 +265,25 @@ TaskMutation = Annotated[
 TASK_MUTATION = TypeAdapter(TaskMutation)
 
 
-class ArtifactCreate(artifact_models.Create):
+class ArtifactCreate(artifact_requests.Create):
     operation: Literal["create"]
 
 
-class ArtifactFromMessage(artifact_models.FromMessage):
+class ArtifactFromMessage(artifact_requests.FromMessage):
     operation: Literal["from_message"]
 
 
-class ArtifactAppend(artifact_models.Append):
+class ArtifactAppend(artifact_requests.Append):
     operation: Literal["append"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 
 
-class ArtifactRestore(artifact_models.Restore):
+class ArtifactRestore(artifact_requests.Restore):
     operation: Literal["restore"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 
 
-class ArtifactArchive(artifact_models.Archive):
+class ArtifactArchive(artifact_requests.Archive):
     operation: Literal["archive"]
     id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
 

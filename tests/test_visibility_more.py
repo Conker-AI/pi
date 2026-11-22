@@ -6,13 +6,14 @@ from contextlib import closing
 import pytest
 
 from pi.agents import inbox
-from pi.calls import call_models, call_records, call_turns
+from pi.calls import call_records, call_turns
 from pi.calls import runtime as calls
 from pi.content import artifacts
 from pi.context import controls as context_controls
 from pi.conversation import archive
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import call_models
 from pi.models.providers import Completion, Message
 from pi.models.routing import Router
 from pi.turns import access

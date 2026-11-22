@@ -16,8 +16,9 @@ from pi.api import startup
 from pi.conversation.store import Store
 from pi.core import owner_preferences as prefs
 from pi.core import owner_settings as settings
+from pi.core.schedule_bodies import StateChange
 from pi.schedule import agent_jobs, job_notes, jobs, rhythm
-from pi.schedule.job_models import AgentJobCreate, StateChange, Timing
+from pi.schedule.job_models import AgentJobCreate, Timing
 from pi.turns import access
 
 # 12:00 in Jerusalem, outside the default quiet hours.

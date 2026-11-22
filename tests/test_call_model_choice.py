@@ -3,9 +3,10 @@ updates that do not name it, and an interruption stops the configured fallback."
 
 from test_calls import Provider, Speech, send, start, store  # noqa: F401
 
-from pi.calls import call_models, call_turns
+from pi.calls import call_turns
 from pi.calls import runtime as c
 from pi.conversation import settings as session_settings
+from pi.core import call_models
 from pi.models.providers import ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns.loop import Loop

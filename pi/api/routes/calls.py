@@ -5,8 +5,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 
-from pi.calls import call_models, call_records, call_turns
+from pi.calls import call_records, call_turns
 from pi.calls import runtime as calls
+from pi.core import call_models
 
 CallPath = Annotated[str, Path(pattern=r"^call_[a-f0-9]{32}$")]
 ConversationPath = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{1,200}$")]

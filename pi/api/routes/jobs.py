@@ -5,6 +5,7 @@ from typing import Annotated, Any, cast
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
+from pi.core import schedule_bodies
 from pi.core.models import Strict
 from pi.schedule import agent_hooks, agent_jobs, job_models, job_notes, jobs
 
@@ -71,7 +72,7 @@ def router(store, authorize, executor=None):
         return jobs.browser_job(call(jobs.update, identity, body))
 
     @routes.post("/{identity}/state", response_model=job_models.JobView)
-    def state(identity: JobPath, body: job_models.StateChange):
+    def state(identity: JobPath, body: schedule_bodies.StateChange):
         return jobs.browser_job(call(jobs.set_enabled, identity, body))
 
     @routes.post("/{identity}/adopt", response_model=job_models.JobView)

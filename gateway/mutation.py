@@ -66,8 +66,8 @@ from pi.agents import characters, team_models
 from pi.agents import profiles as agents
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.context import projects
+from pi.core import schedule_bodies
 from pi.memory import forget as memory_forget
-from pi.schedule import job_models, proposals
 
 from .api import Config
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed
@@ -162,7 +162,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         except ValidationError:
             raise MutationError("Job apply request has an unsupported shape.") from None
         if isinstance(value, JobState):
-            body = job_models.StateChange(
+            body = schedule_bodies.StateChange(
                 expected_revision=value.expected_revision, enabled=value.enabled
             ).model_dump()
             return Mutation("POST", f"/jobs/{value.id}/state", body)
@@ -214,7 +214,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             value = ProposalDecision.model_validate(payload)
         except ValidationError:
             raise MutationError("Proposal apply request has an unsupported shape.") from None
-        body = proposals.Decision(decision=value.decision).model_dump()
+        body = schedule_bodies.Decision(decision=value.decision).model_dump()
         return Mutation("POST", f"/proposals/{value.id}/decision", body, authority="runtime")
     if resource == "tasks":
         try:

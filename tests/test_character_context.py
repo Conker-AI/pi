@@ -9,10 +9,11 @@ from test_characters import profile, save
 
 from pi.agents import character_context
 from pi.api.routes import session_settings as session_settings_api
-from pi.calls import call_models, call_turns
+from pi.calls import call_turns
 from pi.calls import runtime as calls
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import call_models
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.turns.loop import Loop

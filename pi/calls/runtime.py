@@ -7,9 +7,9 @@ import time
 import uuid
 
 from pi.agents import profiles as agents
-from pi.calls.call_models import Channels, Revision, Start, Update
 from pi.calls.call_records import CallError, _digest, _event, _live, _row, _view
 from pi.conversation import settings as session_settings
+from pi.core.call_models import Channels, Revision, Start, Update
 from pi.core.context_policy import Policy
 
 SCHEMA = """

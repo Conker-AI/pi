@@ -6,10 +6,10 @@ import json
 import time
 from typing import cast
 
-from pi.calls.call_models import Send
 from pi.calls.call_records import CallError, _digest, _live, _row, _view, get
 from pi.calls.speech import owner_speed
 from pi.conversation import settings as session_settings
+from pi.core.call_models import Send
 from pi.core.provider_types import Message, ProviderUnavailable
 
 

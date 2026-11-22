@@ -5601,7 +5601,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__call_models__Start"
+                "$ref": "#/components/schemas/pi__core__call_models__Start"
               }
             }
           }
@@ -5934,7 +5934,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__call_models__Start"
+                "$ref": "#/components/schemas/pi__core__call_models__Start"
               }
             }
           }
@@ -6088,7 +6088,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__call_models__Update"
+                "$ref": "#/components/schemas/pi__core__call_models__Update"
               }
             }
           }
@@ -6566,7 +6566,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__calls__call_models__Update"
+                "$ref": "#/components/schemas/pi__core__call_models__Update"
               }
             }
           }
@@ -11428,7 +11428,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__content__artifact_models__Restore"
+                "$ref": "#/components/schemas/pi__core__artifact_requests__Restore"
               }
             }
           }
@@ -11510,7 +11510,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__content__artifact_models__Archive"
+                "$ref": "#/components/schemas/pi__core__artifact_requests__Archive"
               }
             }
           }
@@ -27201,7 +27201,7 @@
             "title": "Modelid"
           },
           "privacy": {
-            "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
+            "$ref": "#/components/schemas/pi__core__call_models__Privacy"
           },
           "events": {
             "items": {
@@ -41377,143 +41377,6 @@
         "title": "Retry",
         "description": "Draft it again: from a new description, which starts over; with the owner's answer to the\ndrafter's question, which goes on with the same draft; or as it was, answers kept."
       },
-      "pi__calls__call_models__Privacy": {
-        "properties": {
-          "memory": {
-            "type": "boolean",
-            "title": "Memory",
-            "default": false
-          },
-          "harness": {
-            "type": "boolean",
-            "title": "Harness",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "Privacy"
-      },
-      "pi__calls__call_models__Start": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{16,128}$",
-            "title": "Request Id"
-          },
-          "conversationId": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Conversationid"
-          },
-          "privacy": {
-            "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id",
-          "conversationId"
-        ],
-        "title": "Start"
-      },
-      "pi__calls__call_models__Update": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Revision"
-          },
-          "channels": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChannelUpdate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "focus",
-                  "character"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
-          "paused": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Paused"
-          },
-          "privacy": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/pi__calls__call_models__Privacy"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "modelId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Modelid"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision"
-        ],
-        "title": "Update"
-      },
-      "pi__content__artifact_models__Archive": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "maximum": 9007199254740991.0,
-            "minimum": 1.0,
-            "title": "Expected Revision"
-          },
-          "archived": {
-            "type": "boolean",
-            "title": "Archived"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "archived"
-        ],
-        "title": "Archive"
-      },
       "pi__content__artifact_models__Privacy": {
         "properties": {
           "memoryDisabled": {
@@ -41537,29 +41400,6 @@
           "harnessDisabled"
         ],
         "title": "Privacy"
-      },
-      "pi__content__artifact_models__Restore": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "maximum": 9007199254740991.0,
-            "minimum": 1.0,
-            "title": "Expected Revision"
-          },
-          "version": {
-            "type": "integer",
-            "maximum": 9007199254740991.0,
-            "minimum": 1.0,
-            "title": "Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "version"
-        ],
-        "title": "Restore"
       },
       "pi__context__controls__Update": {
         "properties": {
@@ -41995,6 +41835,166 @@
           "expected_revision"
         ],
         "title": "Selection"
+      },
+      "pi__core__artifact_requests__Archive": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "archived"
+        ],
+        "title": "Archive"
+      },
+      "pi__core__artifact_requests__Restore": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "version": {
+            "type": "integer",
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "version"
+        ],
+        "title": "Restore"
+      },
+      "pi__core__call_models__Privacy": {
+        "properties": {
+          "memory": {
+            "type": "boolean",
+            "title": "Memory",
+            "default": false
+          },
+          "harness": {
+            "type": "boolean",
+            "title": "Harness",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Privacy"
+      },
+      "pi__core__call_models__Start": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,128}$",
+            "title": "Request Id"
+          },
+          "conversationId": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Conversationid"
+          },
+          "privacy": {
+            "$ref": "#/components/schemas/pi__core__call_models__Privacy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "conversationId"
+        ],
+        "title": "Start"
+      },
+      "pi__core__call_models__Update": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "focus",
+                  "character"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused"
+          },
+          "privacy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/pi__core__call_models__Privacy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "Update"
       },
       "pi__core__context_policy__Budget": {
         "properties": {
