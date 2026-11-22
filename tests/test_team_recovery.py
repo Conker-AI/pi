@@ -5,7 +5,7 @@ from test_team_execution import Recorder, execute, setup, start, store  # noqa: 
 
 from pi.agents import profiles as agents
 from pi.agents import team_execution as teams
-from pi.agents import team_models
+from pi.agents import team_models, team_run_store
 
 
 def test_an_interrupted_run_can_be_cancelled_but_not_completed(store):
@@ -38,7 +38,7 @@ def test_an_interrupted_run_can_be_cancelled_but_not_completed(store):
 
 
 def test_too_long_input_is_refused_before_the_step_is_saved(store, monkeypatch):
-    monkeypatch.setattr(teams, "MAX_INPUT_CHARS", 10)
+    monkeypatch.setattr(team_run_store, "MAX_INPUT_CHARS", 10)
     sid = store.create_session()
     record, _ = setup(store)
     run = start(store, record, sid)
