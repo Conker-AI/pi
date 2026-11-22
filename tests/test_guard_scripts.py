@@ -1,4 +1,4 @@
-"""The CI guards: file sizes stay under 600 lines and cross-package imports stay listed.
+"""The CI guards: file sizes stay under 550 lines and cross-package imports stay listed.
 
 Nothing else exercises scripts/check_file_sizes.py or scripts/check_package_boundaries.py,
 so an edit there could quietly loosen what CI enforces. Each case builds a throwaway tree
@@ -43,17 +43,17 @@ def boundaries(tmp_path, edges):
 
 
 def test_file_at_the_limit_passes(tmp_path):
-    tracked(tmp_path, {"big.py": "x\n" * 600})
+    tracked(tmp_path, {"big.py": "x\n" * 550})
     result = run_script(tmp_path, FILE_SIZES)
     assert result.returncode == 0
-    assert result.stdout == "file sizes ok (limit 600, 0 allowlisted files)\n"
+    assert result.stdout == "file sizes ok (limit 550, 0 allowlisted files)\n"
 
 
 def test_file_over_the_limit_fails(tmp_path):
-    tracked(tmp_path, {"big.py": "x\n" * 601})
+    tracked(tmp_path, {"big.py": "x\n" * 551})
     result = run_script(tmp_path, FILE_SIZES)
     assert result.returncode == 1
-    assert result.stdout == "big.py: 601 lines, limit 600. Split it by concern.\n"
+    assert result.stdout == "big.py: 551 lines, limit 550. Split it by concern.\n"
 
 
 def test_allowlisted_file_at_its_ceiling_passes(tmp_path):
@@ -61,7 +61,7 @@ def test_allowlisted_file_at_its_ceiling_passes(tmp_path):
     file_allowlist(tmp_path, ["big.py 610"])
     result = run_script(tmp_path, FILE_SIZES)
     assert result.returncode == 0
-    assert result.stdout == "file sizes ok (limit 600, 1 allowlisted files)\n"
+    assert result.stdout == "file sizes ok (limit 550, 1 allowlisted files)\n"
 
 
 def test_allowlisted_file_over_its_ceiling_fails(tmp_path):
