@@ -36,22 +36,18 @@ owner types there is his own.
 from __future__ import annotations
 
 import json
-import re
 import time
-import uuid
 from datetime import UTC, datetime
 from typing import Literal, cast
-from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions
-from pi.core import notices
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
+from pi.schedule.agent_job_text import QUIET, _note, summarize, when
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 
-QUIET = "NOTHING"
 PREAMBLE = (
     "This is a scheduled run of one of the owner's cron jobs, not a message typed by the owner. "
     "Carry out the job's instructions below, using your tools and memory. Read freely; anything "
@@ -60,26 +56,6 @@ PREAMBLE = (
     "Otherwise start with one short line saying what needs them, then the details and what you "
     "can do next."
 )
-# English names, whatever the server's locale.
-DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-MONTHS = (
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-)
-MAX_TITLE = 160
-MAX_DETAIL = 400
-# A note is the model's text shown to the owner: no terminal or other control codes.
-CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 NOTE_ID = r"^note_[a-f0-9]{32}$"
 MAX_ENABLED = 20
 CONKER_PER_DAY = 3
@@ -173,16 +149,6 @@ def _new_session(store, db, definition) -> str:
     flags = {key: True for key, on in (definition.get("privacy") or {}).items() if on}
     return store._create_session(
         db, title=definition["name"], agent_id=definition["agentId"], privacy=flags or None
-    )
-
-
-def when(instant: float, zone: str) -> str:
-    """The run's date, weekday and time in the job's time zone, so "today", "this week" or "the
-    first week of the month" in its instructions mean something. Pi's words, never the owner's."""
-    local = datetime.fromtimestamp(instant, ZoneInfo(zone))
-    return (
-        f"This run started on {DAYS[local.weekday()]}, {local.day} {MONTHS[local.month - 1]} "
-        f"{local.year} ({local:%Y-%m-%d}) at {local:%H:%M}, {zone} time (the job's time zone)."
     )
 
 
@@ -347,32 +313,6 @@ def _open_session(store, job_id, definition) -> str:
         )
         db.commit()
     return replacement
-
-
-def summarize(text: str) -> tuple[str, str] | None:
-    """The first line says what needs the owner; NOTHING (or an empty reply) stays quiet."""
-    lines = [line.strip() for line in CONTROL.sub("", text).strip().splitlines() if line.strip()]
-    if not lines or lines[0].strip(" .*_#`").upper() == QUIET:
-        return None
-    title = re.sub(r"^[#>*\-\s]+|[*_`]+", "", lines[0]).strip()[:MAX_TITLE]
-    detail = " ".join(re.sub(r"[*_`#>]+", "", line) for line in lines[1:])[:MAX_DETAIL]
-    return title or "Your AI job has something for you", detail
-
-
-def _note(store, run_id, job_id, session_id, message_id, title, detail, now):
-    with store._connect() as db:
-        # One note per run: a replayed run adds nothing.
-        notices.insert(
-            db,
-            identity="note_" + uuid.uuid4().hex,
-            kind=notices.AGENT_JOB,
-            subject=run_id,
-            title=title,
-            detail=detail,
-            session_id=session_id,
-            facts={"jobId": job_id, "messageId": message_id},
-            created_at=now,
-        )
 
 
 class AgentJobs:
