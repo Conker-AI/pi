@@ -10,7 +10,7 @@ from pi.conversation import recall_notices, visibility
 from pi.conversation import settings as session_settings
 from pi.core import owner_preferences as owner_preferences
 from pi.owner import plan_alerts, self_check, updates
-from pi.schedule import agent_jobs, job_hidden, jobs, proposals
+from pi.schedule import job_hidden, job_notes, jobs, proposals
 
 # A parked turn's detail once Pi ended it because its approval expired (turns/decision_sweep.py).
 APPROVAL_EXPIRED = "The approval expired before you answered. Nothing was done."
@@ -397,7 +397,7 @@ def inbox(store, *, now=None):
     needs_you.extend(updates.needs_you(store))
     needs_you.extend(change_requests.needs_you(store))
     needs_you.extend(asks.needs_you(store))
-    needs_you.extend(agent_jobs.needs_you(store))
+    needs_you.extend(job_notes.needs_you(store))
     needs_you.extend(recall_notices.needs_you(store))
 
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))

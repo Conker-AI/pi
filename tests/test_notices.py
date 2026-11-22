@@ -7,7 +7,7 @@ import pytest
 
 from pi.conversation.store import Store
 from pi.owner import notices, plan_alerts
-from pi.schedule import agent_jobs
+from pi.schedule import job_notes
 
 OLD = """
 CREATE TABLE plan_alerts (
@@ -72,7 +72,7 @@ def test_0006_moves_both_tables_keeps_ids_and_shapes(tmp_path):
             }
         ]
         assert [r["title"] for r in plan_alerts.resets(store, 0)] == ["Claude weekly limit reset"]
-        assert agent_jobs.notes(store) == [
+        assert job_notes.notes(store) == [
             {
                 "id": NOTE,
                 "jobId": "job_1",
@@ -84,10 +84,10 @@ def test_0006_moves_both_tables_keeps_ids_and_shapes(tmp_path):
             }
         ]
         # A dismissed note stays dismissed; the old ids still dismiss.
-        assert agent_jobs.dismiss(store, GONE)["changed"] is False
+        assert job_notes.dismiss(store, GONE)["changed"] is False
         assert plan_alerts.dismiss(store, OPEN) == {"id": OPEN, "dismissed": True}
-        assert agent_jobs.dismiss(store, NOTE)["changed"] is True
-        assert plan_alerts.needs_you(store) == [] and agent_jobs.notes(store) == []
+        assert job_notes.dismiss(store, NOTE)["changed"] is True
+        assert plan_alerts.needs_you(store) == [] and job_notes.notes(store) == []
     # A second start recreates neither old table.
     with closing(Store(path)) as store, store._connect() as db:
         assert not {"plan_alerts", "agent_job_notes"} & tables(db)
@@ -131,7 +131,7 @@ def test_forgetting_a_chat_takes_its_notes_and_leaves_plan_alerts(tmp_path):
     path = tmp_path / "pi.db"
     session = older_pi(path)
     with closing(Store(path)) as store, store._connect() as db:
-        agent_jobs.redact(db, [session])
+        job_notes.redact(db, [session])
         db.commit()
         kinds = [r[0] for r in db.execute("SELECT kind FROM notices ORDER BY kind")]
     assert kinds == ["plan", "plan"]

@@ -16,7 +16,7 @@ from pi.api import startup
 from pi.conversation.store import Store
 from pi.core import owner_preferences as prefs
 from pi.core import owner_settings as settings
-from pi.schedule import agent_jobs, jobs, rhythm
+from pi.schedule import agent_jobs, job_notes, jobs, rhythm
 from pi.schedule.job_models import AgentJobCreate, StateChange, Timing
 from pi.turns import access
 
@@ -109,7 +109,7 @@ def test_a_nothing_run_files_nothing_and_is_never_the_owners_words(store):
     run = jobs.run_now(store, job["id"], "morning-check-in-run-0001", now=NOON)
     receipt = agent_jobs.AgentJobs(store, loop).run(run["id"], now=NOON)
     assert receipt["status"] == "completed" and receipt["noted"] is False
-    assert agent_jobs.notes(store) == []
+    assert job_notes.notes(store) == []
     assert access.owner_text(store, receipt["turnId"]) == ""
 
 

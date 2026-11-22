@@ -12,7 +12,7 @@ from pi.agents import inbox
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, password_write, session_only_write
 from pi.conversation.store import Store
-from pi.schedule import agent_jobs, job_models, jobs
+from pi.schedule import agent_jobs, job_models, job_notes, jobs
 from pi.turns.failures import TurnFailed
 
 OWNER = "agent-jobs-owner-control-key-" + "o" * 32
@@ -110,14 +110,14 @@ def test_a_finding_becomes_one_inbox_note(store):
     [(used_session, sent, kwargs)] = loop.calls
     assert used_session == session and kwargs == {"request_id": run["id"]}
     assert sent.startswith(agent_jobs.PREAMBLE) and sent.endswith(ai_job().instructions)
-    [note] = agent_jobs.notes(store)
+    [note] = job_notes.notes(store)
     assert note["title"] == "Physics exam on Thursday."
     assert note["detail"] == "I can make notes and practice questions."
     assert note["sessionId"] == session
     kinds = [item["kind"] for item in inbox.inbox(store)["needsYou"]]
     assert kinds.count("agent-job") == 1
-    assert agent_jobs.dismiss(store, note["id"])["dismissed"] is True
-    assert agent_jobs.notes(store) == []
+    assert job_notes.dismiss(store, note["id"])["dismissed"] is True
+    assert job_notes.notes(store) == []
 
 
 def test_a_run_is_told_its_date_and_time_in_the_jobs_zone(store):
@@ -152,7 +152,7 @@ def test_nothing_stays_quiet(store, text):
     loop = Loop(reply(text, agent_jobs.session_for(store, job["id"])))
     outcome = agent_jobs.AgentJobs(store, loop).run(run["id"])
     assert outcome["status"] == "completed" and outcome["noted"] is False
-    assert agent_jobs.notes(store) == []
+    assert job_notes.notes(store) == []
 
 
 def test_a_set_tool_waits_in_the_chat_and_a_failure_is_honest(store):
@@ -163,7 +163,7 @@ def test_a_set_tool_waits_in_the_chat_and_a_failure_is_honest(store):
     assert agent_jobs.AgentJobs(store, Loop(parked)).run(run["id"])["waitingForApproval"] is True
     failed = agent_jobs.AgentJobs(store, Loop(error=TurnFailed("model down"))).run(run["id"])
     assert failed["status"] == "failed" and "model down" not in failed["reason"]
-    assert agent_jobs.notes(store) == []
+    assert job_notes.notes(store) == []
 
 
 def test_other_targets_go_to_toolgate_unchanged(store):
@@ -275,7 +275,7 @@ def test_forgetting_the_chat_clears_its_notes_and_starts_fresh(store):
     session = agent_jobs.session_for(store, job["id"])
     run = claimed_run(store, job)
     agent_jobs.AgentJobs(store, Loop(reply("Bill due Friday.", session))).run(run["id"])
-    assert agent_jobs.notes(store)
+    assert job_notes.notes(store)
     with store._connect() as db:
-        agent_jobs.redact(db, [session])
-    assert agent_jobs.notes(store) == [] and agent_jobs.session_for(store, job["id"]) is None
+        job_notes.redact(db, [session])
+    assert job_notes.notes(store) == [] and agent_jobs.session_for(store, job["id"]) is None
