@@ -12,10 +12,10 @@ from typing import Any, Literal, cast
 
 from pydantic import Field
 
-from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
+from pi.core import setup_choices
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
-from pi.setup import choices as setup_choices
+from pi.core.toolgate_types import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.setup import receipts as setup_receipts
 
 REQUEST_ID = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{0,127}")

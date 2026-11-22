@@ -21,24 +21,10 @@ from typing import Protocol
 
 import httpx
 
-from pi.core.images import ImageInput
 from pi.core.loopback_http import verification
-from pi.core.untrusted_text import strip_invisible
+from pi.core.provider_types import Message, ProviderUnavailable
 from pi.models import citations as message_citations
 from pi.models import effort, inference_control, live_stream, local_settings
-
-
-@dataclass(frozen=True)
-class Message:
-    role: str
-    content: str
-    images: tuple[ImageInput, ...] = ()
-
-    def __post_init__(self):
-        # Every model input is a Message, so hidden text (tags, selectors, bidi) stops here
-        # whatever it came from: chat, imports, files, memory, webhooks, projects, tools.
-        if isinstance(self.content, str):
-            object.__setattr__(self, "content", strip_invisible(self.content))
 
 
 def require_images(provider, messages):
@@ -151,14 +137,6 @@ def shown_text(completion) -> str:
     raw = completion.raw if isinstance(completion.raw, dict) else {}
     cut = raw.get("finish_reason") in _CUT or raw.get("done_reason") in _CUT
     return completion.text + CUT_NOTE if cut and completion.text else completion.text
-
-
-class ProviderUnavailable(RuntimeError):
-    """The provider could not answer. The caller degrades; it never invents."""
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(reason)
-        self.reason = reason
 
 
 class NotBilled(ProviderUnavailable):

@@ -1,7 +1,8 @@
 """What a ToolGate call can return or raise: tools, approvals, results, refusals.
 
-Pure data and exception types; `pi.actions.toolgate` re-exports every name, so callers keep
-importing them from there.
+Pure data and exception types, kept in core so a package that only reads ToolGate's answers
+(host, setup) need not import the client. `pi.actions.toolgate` re-exports every name, so the
+client's callers keep importing them from there.
 """
 
 from __future__ import annotations

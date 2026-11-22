@@ -5,6 +5,7 @@ import pytest
 from pi.context import controls as c
 from pi.conversation import forgetting
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.turns.failures import TurnFailed
@@ -29,7 +30,7 @@ def policy(selectors=None, text="Be critical", window=10000):
     return c.Policy(
         sessionInstructions=text,
         messagePolicies=selectors or {},
-        budget=c.Budget(contextWindowTokens=window, outputReserveTokens=10, otherInputTokens=0),
+        budget=Budget(contextWindowTokens=window, outputReserveTokens=10, otherInputTokens=0),
     )
 
 

@@ -7,6 +7,7 @@ from test_loop import Recorder, loop_with
 
 from pi.context import compaction, controls, summaries
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from tests.test_response_versions import alternative
 
 
@@ -19,7 +20,7 @@ def with_policy(store, session):
             policy=controls.Policy(
                 sessionInstructions="",
                 messagePolicies={},
-                budget=controls.Budget(
+                budget=Budget(
                     contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                 ),
             ),
@@ -88,7 +89,7 @@ def test_compaction_refusals_write_nothing(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -125,7 +126,7 @@ def test_compaction_refusals_write_nothing(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -169,7 +170,7 @@ def test_compaction_refusals_write_nothing(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={msg1["id"]: "keep-exact"},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -198,7 +199,7 @@ def test_compaction_refusals_write_nothing(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={msg1["id"]: "retrieve"},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -230,7 +231,7 @@ def test_compaction_refusals_write_nothing(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),

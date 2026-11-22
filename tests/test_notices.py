@@ -6,7 +6,8 @@ from contextlib import closing
 import pytest
 
 from pi.conversation.store import Store
-from pi.owner import notices, plan_alerts
+from pi.core import notices
+from pi.owner import plan_alerts
 from pi.schedule import job_notes
 
 OLD = """

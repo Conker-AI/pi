@@ -8,6 +8,7 @@ import pytest
 from pi.api import server
 from pi.context import compaction, controls, summaries
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 
 
 def test_compact_covers_two_messages_and_folds_them(tmp_path):
@@ -26,7 +27,7 @@ def test_compact_covers_two_messages_and_folds_them(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -74,7 +75,7 @@ def test_select_history_excludes_folded_messages(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -122,7 +123,7 @@ def test_pinning_folded_message_brings_it_back(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -150,7 +151,7 @@ def test_pinning_folded_message_brings_it_back(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={msg1["id"]: "keep-exact"},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -184,7 +185,7 @@ def test_restoring_summary_unfolds_messages(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -232,7 +233,7 @@ def test_closed_chat_refuses_compaction(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -271,7 +272,7 @@ def test_busy_chat_refuses_compaction(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -314,7 +315,7 @@ def test_excluded_message_stays_excluded(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={msg1["id"]: "exclude"},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -387,7 +388,7 @@ def test_summary_draft_skips_folded_messages(tmp_path):
                 policy=controls.Policy(
                     sessionInstructions="Test",
                     messagePolicies={},
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
@@ -497,9 +498,7 @@ def test_second_compaction_keeps_earlier_coverage(tmp_path):
         session = store.create_session(summary="Original summary")
         first = store.append_message(session, "user", "Hello")
         second = store.append_message(session, "assistant", "Hi there!")
-        budget = controls.Budget(
-            contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
-        )
+        budget = Budget(contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0)
         controls.save(
             store,
             session,

@@ -3,9 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from pi.agents import profiles as agents
+from pi.core import setup_choices
 from pi.core.models import described
 from pi.models.roles import ConfigurationDocument
-from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import models as setup_models
 from pi.setup import protection as setup_protection

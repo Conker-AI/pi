@@ -18,9 +18,9 @@ import uuid
 from typing import Literal
 
 from pi.conversation import visibility
+from pi.core import notices
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
-from pi.owner import notices
 
 NOTICE_ID = r"^mrn_[0-9a-f]{32}$"
 CHANGES = ("corrected", "forgotten")

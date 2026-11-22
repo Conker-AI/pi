@@ -15,11 +15,12 @@ from pi.api.routes import sessions as sessions_api
 from pi.context import controls as context_controls
 from pi.conversation import settings, submissions
 from pi.conversation.store import Store
+from pi.core import setup_choices
+from pi.core.context_policy import Budget
 from pi.memory import store as memory_store
 from pi.memory.service import Memory, MemoryClient
 from pi.models.providers import Completion
 from pi.models.routing import Router
-from pi.setup import choices as setup_choices
 from pi.turns.failures import TurnFailed
 from pi.turns.loop import Loop
 
@@ -444,9 +445,7 @@ def test_reviewed_fork_inherits_private_settings(tmp_path):
         policy = context_controls.Policy(
             sessionInstructions="Retain this instruction",
             messagePolicies={},
-            budget=context_controls.Budget(
-                contextWindowTokens=1000, outputReserveTokens=100, otherInputTokens=0
-            ),
+            budget=Budget(contextWindowTokens=1000, outputReserveTokens=100, otherInputTokens=0),
         )
         context_controls.save(
             store, sid, context_controls.Update(expected_revision=0, policy=policy)

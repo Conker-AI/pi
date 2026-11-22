@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import cast
 
+from pi.core import setup_choices
 from pi.models import roles as model_roles
-from pi.setup import choices as setup_choices
 from pi.setup import model_probes as setup_model_probes
 from pi.setup import models as setup_models
 from pi.setup.status_models import _evidence, _step

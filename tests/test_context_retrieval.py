@@ -12,6 +12,7 @@ from pi.context import retrieval as r
 from pi.conversation import forgetting, submissions
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.models import roles as model_roles
 from pi.models.providers import Completion
 from pi.models.routing import Router
@@ -85,7 +86,7 @@ def policy(store, sid, modes, window=10000):
     value = c.Policy(
         sessionInstructions="Owner instruction",
         messagePolicies=modes,
-        budget=c.Budget(contextWindowTokens=window, outputReserveTokens=10, otherInputTokens=0),
+        budget=Budget(contextWindowTokens=window, outputReserveTokens=10, otherInputTokens=0),
     )
     c.save(store, sid, c.Update(expected_revision=c.load(store, sid)["revision"], policy=value))
 
@@ -315,7 +316,7 @@ def test_offline_forgetting_purges_frozen_context_instructions(tmp_path):
         value = c.Policy(
             sessionInstructions=secret,
             messagePolicies={candidate["id"]: "retrieve"},
-            budget=c.Budget(contextWindowTokens=1000, outputReserveTokens=10, otherInputTokens=0),
+            budget=Budget(contextWindowTokens=1000, outputReserveTokens=10, otherInputTokens=0),
         )
         c.save(store, sid, c.Update(expected_revision=0, policy=value))
         loop(store, Provider([candidate["id"]])).run_turn(

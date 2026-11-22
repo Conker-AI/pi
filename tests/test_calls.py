@@ -12,6 +12,7 @@ from pi.context import controls as context_controls
 from pi.conversation import forgetting
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.models.providers import Completion
 from pi.models.routing import Router
 from pi.turns.loop import Loop
@@ -256,9 +257,7 @@ def test_source_privacy_and_policy_pins_are_inherited_separately(store):
     policy = context_controls.Policy(
         sessionInstructions="Inherited instruction",
         messagePolicies={included["id"]: "keep-exact", excluded["id"]: "exclude"},
-        budget=context_controls.Budget(
-            contextWindowTokens=20000, outputReserveTokens=1000, otherInputTokens=0
-        ),
+        budget=Budget(contextWindowTokens=20000, outputReserveTokens=1000, otherInputTokens=0),
     )
     context_controls.save(
         store, source, context_controls.Update(expected_revision=0, policy=policy)

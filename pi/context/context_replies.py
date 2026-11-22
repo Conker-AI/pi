@@ -5,7 +5,7 @@ They name what pi.context.controls and summaries already send; the routes descri
 `pi.core.models.described` and do not re-validate the reply.
 """
 
-from pi.context.controls import PolicyName
+from pi.core.context_policy import PolicyName
 from pi.core.models import Strict
 
 

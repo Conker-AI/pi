@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from pi.models.private_transport import PrivateTransport
+from pi.core.private_transport import PrivateTransport
 
 
 @pytest.mark.parametrize(

@@ -10,9 +10,9 @@ import pytest
 
 from pi.actions.toolgate import ApprovalRequired, Tool, ToolRefused, ToolResult
 from pi.conversation.store import Store
+from pi.core import setup_choices
 from pi.models.providers import Completion, ProviderUnavailable
 from pi.models.routing import Router
-from pi.setup import choices as setup_choices
 from pi.turns.failures import ActedWithoutReply, TurnFailed
 from pi.turns.loop import Loop
 

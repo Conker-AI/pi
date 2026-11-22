@@ -21,8 +21,8 @@ from pi.api import server as api
 from pi.conversation import drafts, forgetting, submissions
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import setup_choices
 from pi.schedule import tasks
-from pi.setup import choices as setup_choices
 from pi.turns.failures import TurnFailed
 
 
