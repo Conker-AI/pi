@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-LIMIT = 600
+LIMIT = 550
 SUFFIXES = (".py", ".ts", ".tsx", ".js", ".mjs")
 ALLOWLIST = Path("file-size-allowlist.txt")
 

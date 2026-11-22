@@ -1,2 +1,14 @@
-# Files that were over the 600-line limit when scripts/check_file_sizes.py arrived.
+# Files that were over the 550-line limit when scripts/check_file_sizes.py arrived.
 # Each may only shrink; delete its line once it is under the limit. Never add a line.
+pi/api/server.py 556
+pi/memory/service.py 554
+pi/turns/loop.py 594
+pi/turns/native_tools.py 561
+tests/test_artifacts.py 567
+tests/test_gateway_api.py 581
+tests/test_gateway_setup_control.py 568
+tests/test_memory_edits.py 576
+tests/test_model_profiles.py 589
+tests/test_service_inference.py 583
+tests/test_team_execution.py 559
+tests/test_tool_drafts.py 557
