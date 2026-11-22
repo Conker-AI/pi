@@ -2,10 +2,8 @@
 
 import time
 
-from pydantic import Field
-
 from pi.context import controls
-from pi.core.models import Strict
+from pi.core.context_bodies import Restore
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_summary_versions (
@@ -33,16 +31,6 @@ BEGIN
  FROM context_summary_versions WHERE session_id=NEW.id;
 END;
 """
-
-
-class Edit(Strict):
-    expected_revision: int = Field(ge=0)
-    summary: str = Field(max_length=16000)
-
-
-class Restore(Strict):
-    expected_revision: int = Field(ge=0)
-    revision: int = Field(ge=0)
 
 
 def _current(db, identity):

@@ -65,8 +65,7 @@ from gateway.mutation_models import (
 from pi.agents import characters, team_models
 from pi.agents import profiles as agents
 from pi.api.browser_contract import owner_allowed, runtime_allowed
-from pi.context import projects
-from pi.core import schedule_bodies
+from pi.core import project_bodies, schedule_bodies
 from pi.memory import forget as memory_forget
 
 from .api import Config
@@ -124,16 +123,16 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         if isinstance(value, ProjectCreate):
             return Mutation("POST", "/projects", value.fields.model_dump())
         if isinstance(value, ProjectUpdate):
-            body = projects.Update(
+            body = project_bodies.Update(
                 expected_revision=value.expected_revision, fields=value.fields
             ).model_dump()
             return Mutation("POST", f"/projects/{value.id}/update", body)
         if isinstance(value, ProjectArchive):
-            body = projects.Archive(
+            body = project_bodies.Archive(
                 expected_revision=value.expected_revision, archived=value.archived
             ).model_dump()
             return Mutation("POST", f"/projects/{value.id}/archive", body)
-        body = projects.Link(
+        body = project_bodies.Link(
             expected_revision=value.expected_revision, reference=value.reference
         ).model_dump()
         return Mutation("POST", f"/projects/{value.id}/{value.operation}", body)
