@@ -4,8 +4,8 @@ import pytest
 
 from pi.agents import profiles as agents
 from pi.agents import team_models
-from pi.calls import call_models
 from pi.conversation import settings, submissions
+from pi.core import call_models
 from pi.models.routing import Router
 from pi.turns.loop import Loop
 from tests.test_reviewed_fork_privacy import (

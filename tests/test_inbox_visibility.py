@@ -8,6 +8,7 @@ import pytest
 from pi.agents import inbox
 from pi.conversation import archive
 from pi.conversation.store import Store
+from pi.core import schedule_bodies
 from pi.schedule import agent_jobs, job_models, jobs
 
 HOUR = 3600
@@ -94,7 +95,9 @@ def test_a_turned_off_job_is_not_upcoming(store):
     off = job(store, "zq off", now, created_by="owner")
 
     def turn(enabled):
-        change = job_models.StateChange(expected_revision=revision(store, off), enabled=enabled)
+        change = schedule_bodies.StateChange(
+            expected_revision=revision(store, off), enabled=enabled
+        )
         jobs.set_enabled(store, off, change, now=now)
 
     turn(False)

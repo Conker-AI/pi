@@ -10,12 +10,12 @@ from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from pi.core.errors import ServiceError
+from pi.core.schedule_bodies import StateChange
 from pi.schedule.job_hidden import ADOPTED, PAUSED, REFUSAL, paused  # noqa: F401 (ADOPTED)
 from pi.schedule.job_models import (
     BudgetBinding,
     Definition,
     JobPrivacy,
-    StateChange,
     Update,
 )
 

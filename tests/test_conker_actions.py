@@ -14,8 +14,9 @@ from pi.agents import change_requests, keep, tool_drafts
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
 from pi.core import owner_preferences as prefs
+from pi.core.schedule_bodies import StateChange
 from pi.schedule import agent_jobs, jobs, proactive_budget
-from pi.schedule.job_models import AgentJobCreate, StateChange, Timing
+from pi.schedule.job_models import AgentJobCreate, Timing
 from pi.turns import access, native_tools
 
 # 12:00 and 23:30 in the owner's default zone (Asia/Jerusalem, quiet hours 22:00-07:00).

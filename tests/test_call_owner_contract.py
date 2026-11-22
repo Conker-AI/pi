@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.api.routes.calls import router
-from pi.calls import call_models
 from pi.calls import runtime as calls
 from pi.conversation.store import Store
+from pi.core import call_models
 from pi.core.errors import install
 from pi.models.providers import Completion
 from pi.models.routing import Router

@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from pi.core.errors import ServiceError
+from pi.core.office_mime import MIME  # noqa: F401  (artifacts.py reads it through here)
 
 TIMEOUT = 40
 WORKERS = threading.BoundedSemaphore(2)
@@ -25,12 +26,6 @@ WORKERS = threading.BoundedSemaphore(2)
 # keeps its own constant.
 MAX_INPUT = 2 * 1024 * 1024
 MAX_OUTPUT = 16 * 1024 * 1024
-MIME = {
-    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "pdf": "application/pdf",
-}
 MAGIC = {"pdf": b"%PDF-", "docx": b"PK\x03\x04", "xlsx": b"PK\x03\x04", "pptx": b"PK\x03\x04"}
 SUPPORTED = {
     "markdown": ("docx", "pdf", "pptx", "xlsx"),

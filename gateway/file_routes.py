@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, Request
 
 from pi.api.browser_contract import owner_allowed, owner_download_allowed, session_only_write
-from pi.content.office_exports import MIME
+from pi.core.office_mime import MIME
 from pi.memory.import_formats import MAX_BYTES as MAX_IMPORT_BYTES
 
 from . import relay

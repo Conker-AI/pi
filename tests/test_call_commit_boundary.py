@@ -5,10 +5,10 @@ from contextlib import closing
 import pytest
 
 from pi.agents import profiles as agents
-from pi.calls import call_models
 from pi.calls import runtime as calls
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import call_models
 
 
 def test_generic_settings_cannot_bypass_call_privacy(tmp_path):

@@ -9,9 +9,10 @@ from test_calls import runtime, send, start
 from test_characters import profile, save
 from test_speech import wav
 
-from pi.calls import call_models, speech
 from pi.calls import runtime as calls
+from pi.calls import speech
 from pi.conversation.store import Store
+from pi.core import call_models
 
 
 @pytest.fixture

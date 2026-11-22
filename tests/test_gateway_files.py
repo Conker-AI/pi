@@ -11,7 +11,7 @@ from gateway import file_routes
 from gateway import store as auth_module
 from gateway.api import Config, create_app
 from gateway.store import AuthStore
-from pi.content.office_exports import MIME
+from pi.core.office_mime import MIME
 
 ORIGIN = "https://localhost:8050"
 PASSWORD = "synthetic file relay owner phrase"

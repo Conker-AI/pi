@@ -47,15 +47,12 @@ conversation -> setup
 conversation -> turns
 gateway -> agents
 gateway -> api
-gateway -> calls
-gateway -> content
 gateway -> context
 gateway -> conversation
 gateway -> core
 gateway -> host
 gateway -> memory
 gateway -> owner
-gateway -> schedule
 gateway -> setup
 host -> core
 memory -> conversation
