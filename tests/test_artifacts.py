@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, owner_download_allowed, runtime_allowed
 from pi.api.routes.artifacts import router
+from pi.content import artifact_exports
 from pi.content import artifacts as a
 from pi.conversation.store import Store
 
@@ -151,13 +152,13 @@ def test_source_privacy_is_live_and_never_caller_supplied(store):
     copied = a.create(store, request, privacy)
     assert copied["privateOrigin"] is True
     identity = copied["id"]
-    assert a.export(store, identity, resolve=privacy)["text"] == "private source"
+    assert artifact_exports.export(store, identity, resolve=privacy)["text"] == "private source"
     hidden = a.get(store, identity)
     assert hidden["availability"] == "privacy-unknown"
     assert hidden["title"] == "Unavailable artifact" and hidden["versions"] == []
     assert hidden["privacy"] is None and hidden["privateOrigin"] is None
     with pytest.raises(a.ArtifactError):
-        a.export(store, identity)
+        artifact_exports.export(store, identity)
     with pytest.raises(ValidationError):
         a.FromMessage.model_validate({**request.model_dump(), "privacy": {"memoryDisabled": False}})
     with store._connect() as db:
@@ -187,7 +188,7 @@ def test_archive_source_and_purge_all_derived_versions(store):
     with store._connect() as db:
         db.execute("UPDATE sessions SET status='closed' WHERE id=?", (request.sessionId,))
     assert a.get(store, identity, privacy)["availability"] == "source-archived"
-    assert a.export(store, identity, resolve=privacy)["text"] == "derived private"
+    assert artifact_exports.export(store, identity, resolve=privacy)["text"] == "derived private"
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         a.redact(db, [request.sessionId])
@@ -201,7 +202,7 @@ def test_archive_source_and_purge_all_derived_versions(store):
         assert tuple(row) == ("Unavailable artifact", None)
     assert a.get(store, identity, privacy)["versions"] == []
     with pytest.raises(a.ArtifactError):
-        a.export(store, identity, resolve=privacy)
+        artifact_exports.export(store, identity, resolve=privacy)
 
 
 def test_csv_formula_safety_and_inert_exports(store):
@@ -211,11 +212,11 @@ def test_csv_formula_safety_and_inert_exports(store):
         "rows": [[" \x01=evil"], ["\ttext"], ['safe,"text']],
     }
     created = owner(store, data)
-    exported = a.export(store, created["id"])
+    exported = artifact_exports.export(store, created["id"])
     assert exported["text"].startswith('"\'=header"\r\n"\' \x01=evil"')
     assert exported["filename"] == "artifact-CON-v1.csv"
     html = owner(store, {"kind": "html", "text": "<script>evil()</script>"})
-    exported = a.export(store, html["id"])
+    exported = artifact_exports.export(store, html["id"])
     assert exported["mime"] == "text/plain;charset=utf-8"
     assert exported["filename"].endswith(".html.txt")
     assert exported["execution"] == "not-wired"
@@ -355,7 +356,7 @@ def test_actual_forgetting_purges_artifact_bytes_and_reopen(tmp_path):
         assert hidden["versions"] == []
         assert a.get(reopened, kept["id"])["versions"] == kept["versions"]
         with pytest.raises(a.ArtifactError):
-            a.export(reopened, copied["id"], resolve=session_settings.source_privacy)
+            artifact_exports.export(reopened, copied["id"], resolve=session_settings.source_privacy)
         with reopened._connect() as db:
             assert (
                 db.execute(

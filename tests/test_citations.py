@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 from pydantic import ValidationError
 
+from pi.content import artifact_exports
 from pi.content import artifacts as a
 from pi.conversation import citations as c
 from pi.conversation.store import Store
@@ -118,12 +119,12 @@ def test_artifact_carries_edits_drops_and_restores_evidence(store):
         privacy,
     )
     assert "citations" not in code["versions"][-1]
-    exported = a.export(store, identity, version=4, resolve=privacy)
+    exported = artifact_exports.export(store, identity, version=4, resolve=privacy)
     assert "not independently verified" in exported["text"]
     assert "Evidence \\u0060\\u0060\\u0060 stays inert" in exported["text"]
     assert a.get(store, identity)["versions"] == []
     with pytest.raises(a.ArtifactError):
-        a.export(store, identity)
+        artifact_exports.export(store, identity)
 
 
 def test_source_evidence_change_blocks_stale_artifact_and_redaction(store):
@@ -139,7 +140,7 @@ def test_source_evidence_change_blocks_stale_artifact_and_redaction(store):
         assert db.execute("SELECT body FROM message_citations").fetchone()[0] is None
     assert a.get(store, identity, privacy)["availability"] == "source-changed"
     with pytest.raises(a.ArtifactError):
-        a.export(store, identity, resolve=privacy)
+        artifact_exports.export(store, identity, resolve=privacy)
 
 
 def test_store_citation_validation_rolls_back_reply_and_completion(store):
