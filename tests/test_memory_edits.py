@@ -8,6 +8,8 @@ from threading import Event
 import httpx
 import pytest
 from pydantic import ValidationError
+from test_memory_forget_recall import recorded, retry_copy, unavailable
+from waiting import WAIT, wait_event
 
 from pi.context import controls as context_controls
 from pi.conversation.store import Store
@@ -359,13 +361,13 @@ def test_one_admitted_edit_and_no_concurrent_duplicate_dispatch(setup):
 
     def blocked(*args):
         entered.set()
-        assert release.wait(5)
+        wait_event(release, "the test to release the held call")
         return original(*args)
 
     client.apply = blocked
     with ThreadPoolExecutor(1) as pool:
         future = pool.submit(edits.apply, store, client, BODY)
-        assert entered.wait(5)
+        wait_event(entered, "the held call to start")
         try:
             assert memory_store.recall_held(store)
             with pytest.raises(edits.EditError) as error:
@@ -373,13 +375,11 @@ def test_one_admitted_edit_and_no_concurrent_duplicate_dispatch(setup):
             assert error.value.detail["code"] == "in_progress"
         finally:
             release.set()
-        assert future.result(5)["status"] == "applied"
+        assert future.result(WAIT)["status"] == "applied"
     assert remote.applied == 1
 
 
 def test_recall_prefix_briefing_and_retry_copies_are_invalidated_source_kept(setup):
-    from test_memory_forget_recall import recorded, retry_copy, unavailable
-
     store, client, _remote = setup
     sid, tid = recorded(store, {"memories": [{"id": "mem-1", "text": "old fact"}]})
     copied = retry_copy(store, sid, tid)
@@ -553,13 +553,13 @@ def test_delayed_original_snapshot_cannot_overlap_new_approval_after_status404(s
     def held(identity):
         snapshot = original(identity)
         entered.set()
-        assert release.wait(5)
+        wait_event(release, "the test to release the held call")
         return snapshot
 
     client.memory = held
     with ThreadPoolExecutor(1) as pool:
         future = pool.submit(edits.apply, store, client, BODY)
-        assert entered.wait(5)
+        wait_event(entered, "the held call to start")
         try:
             with pytest.raises(edits.EditError) as unknown:
                 edits.status(store, client, BODY.request_id)
@@ -570,7 +570,7 @@ def test_delayed_original_snapshot_cannot_overlap_new_approval_after_status404(s
             assert pending.value.detail["code"] == "in_progress"
         finally:
             release.set()
-        assert future.result(5)["status"] == "applied"
+        assert future.result(WAIT)["status"] == "applied"
     with pytest.raises(edits.EditError) as stale:
         edits.apply(store, client, new)
     assert stale.value.detail["code"] == "revision_conflict" and remote.applied == 1

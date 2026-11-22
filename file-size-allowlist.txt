@@ -5,10 +5,7 @@ pi/memory/service.py 554
 pi/turns/loop.py 594
 pi/turns/native_tools.py 561
 tests/test_artifacts.py 567
-tests/test_gateway_api.py 581
 tests/test_gateway_setup_control.py 568
 tests/test_memory_edits.py 576
-tests/test_model_profiles.py 589
-tests/test_service_inference.py 583
 tests/test_team_execution.py 559
 tests/test_tool_drafts.py 557

@@ -123,7 +123,7 @@ def test_a_call_cut_off_by_a_restart_is_failed_not_pending(store):
 
 
 def test_startup_fails_calls_left_pending(monkeypatch, tmp_path):
-    from tests.test_service_inference import start
+    from tests.test_service_inference_startup import start
 
     # Create a store with a pending call
     with closing(Store(tmp_path / "startup.db")) as startup_store:

@@ -3,6 +3,7 @@ from contextlib import closing
 from threading import Event
 
 from test_jobs import definition
+from waiting import WAIT, wait_event
 
 from pi.conversation.store import Store
 from pi.schedule import jobs
@@ -50,15 +51,15 @@ def test_close_waits_for_inflight_dispatch_and_stops_next(tmp_path):
 
         def invoke(target, **kwargs):
             entered.set()
-            assert release.wait(3)
+            wait_event(release, "the test to release the dispatch")
             return {"status": "completed"}
 
         worker = JobWorker(store, invoke, interval=60)
         worker.start()
-        assert entered.wait(3)
+        wait_event(entered, "the dispatch to start")
         with ThreadPoolExecutor(1) as pool:
             closing_worker = pool.submit(worker.close)
             assert not closing_worker.done()
             release.set()
-            closing_worker.result(timeout=3)
+            closing_worker.result(timeout=WAIT)
         assert not worker._thread.is_alive()

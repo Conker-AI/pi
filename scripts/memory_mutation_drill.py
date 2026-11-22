@@ -47,6 +47,7 @@ CASES = [
 ]
 SOURCE = "pi"
 TEST = "tests/test_memory.py"
+SUPPORT = ("tests/waiting.py",)  # imported by the test, so it travels with it
 IMPORT = "."
 
 
@@ -59,7 +60,8 @@ def main():
             ROOT / SOURCE, target / SOURCE, ignore=shutil.ignore_patterns("__pycache__")
         )
         (target / TEST).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / TEST, target / TEST)
+        for copied in (TEST, *SUPPORT):
+            shutil.copyfile(ROOT / copied, target / copied)
         if filename:
             file = target / filename
             source = file.read_text(encoding="utf-8")
