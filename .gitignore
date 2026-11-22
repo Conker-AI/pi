@@ -9,3 +9,7 @@ data/
 **/tls.crt
 .coverage
 .coverage.*
+
+# Local test scratch
+.test-runs/
+.test-deps/
