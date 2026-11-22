@@ -29,7 +29,7 @@ from typing import Any
 
 import httpx
 
-from pi.models.loopback_http import verification
+from pi.core.loopback_http import verification
 
 _WORKFLOW = re.compile(r"^workflow:([a-z0-9][a-z0-9.-]{1,79}):([1-9][0-9]{0,9}):([a-f0-9]{64})$")
 # The owner's button templates for a tool's Inbox card (ToolGate `ask_cards`), a fixed list.

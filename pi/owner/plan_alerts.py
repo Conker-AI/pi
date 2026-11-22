@@ -21,9 +21,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pi.core import owner_preferences as preferences
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
-from pi.owner import notices, preferences
-from pi.owner import settings as owner_settings
+from pi.owner import notices
 
 log = logging.getLogger(__name__)
 

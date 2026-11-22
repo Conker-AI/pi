@@ -5,8 +5,8 @@ import pytest
 from pi.conversation import output_settings
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.models import roles as model_roles
-from pi.owner import settings as owner_settings
 from pi.turns import prompt_prefix
 
 

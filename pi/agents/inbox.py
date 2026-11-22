@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 from pi.agents import asks, change_requests, continuity
 from pi.conversation import recall_notices, visibility
 from pi.conversation import settings as session_settings
+from pi.core import owner_preferences as owner_preferences
 from pi.owner import plan_alerts, self_check, updates
-from pi.owner import preferences as owner_preferences
 from pi.schedule import agent_jobs, job_hidden, jobs, proposals
 
 # A parked turn's detail once Pi ended it because its approval expired (turns/decision_sweep.py).

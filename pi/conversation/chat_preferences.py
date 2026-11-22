@@ -1,7 +1,7 @@
 """The owner's chat settings Pi reads: new-chat privacy, chat names, suggestions, the queue and
 uploads.
 
-Each value comes from the owner's settings document (`pi.owner.settings`), which holds
+Each value comes from the owner's settings document (`pi.core.owner_settings`), which holds
 preferences, never authority. Every reader here checks its value again and uses the setting's
 default when the value is missing, of the wrong type or out of range. None of them lets Conker do
 more: the new-chat defaults can only make a chat more private, and the others only limit.
@@ -12,7 +12,7 @@ queueing a message) reads the document in the same snapshot as the rest of its w
 
 from __future__ import annotations
 
-from pi.owner import settings as owner_settings
+from pi.core import owner_settings as owner_settings
 
 INCOGNITO = "chats.default_incognito"
 HELPERS = "privacy.helpers"

@@ -29,10 +29,10 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pi.conversation import visibility
+from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models.providers import Message
-from pi.owner import preferences as prefs
 from pi.schedule import loop_candidates, proactive_budget
 
 MAX_EVIDENCE_MESSAGES = 200

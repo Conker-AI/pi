@@ -19,5 +19,5 @@ Conker may do lives in ToolGate and in documents that keep asking for the passwo
 preferences moved from the recovery key to the owner credential so the Settings screen can show
 them; saving them still asks for the password at the gateway.
 
-A feature that reads a value here (`pi.owner.settings.value`) checks it again itself: this store
+A feature that reads a value here (`pi.core.owner_settings.value`) checks it again itself: this store
 knows each value's shape, not its meaning.

@@ -12,8 +12,8 @@ from pi.agents import profiles as agents
 from pi.conversation import owner_profile, submissions
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
-from pi.owner import preferences as owner_preferences
-from pi.owner import settings as owner_settings
+from pi.core import owner_preferences as owner_preferences
+from pi.core import owner_settings as owner_settings
 from pi.turns import access
 
 INSTRUCTIONS = "Owner settings for every chat."

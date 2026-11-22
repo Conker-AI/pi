@@ -19,11 +19,11 @@ from typing import Literal
 
 from pydantic import Field
 
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models import effort as model_effort
 from pi.models.providers import Message
-from pi.owner import settings as owner_settings
 
 AUTO = {"format": "auto", "length": "auto", "language": "auto"}
 # The stored shape with the level key, as load reports it for a chat with nothing set.

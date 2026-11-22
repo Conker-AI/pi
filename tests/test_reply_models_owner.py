@@ -9,8 +9,9 @@ from fastapi.testclient import TestClient
 
 from pi.api import server as api
 from pi.conversation.store import Store
+from pi.core import owner_preferences as preferences
+from pi.core import owner_settings as settings
 from pi.models import roles as model_roles
-from pi.owner import preferences, settings
 
 ADMIN = "reply-models-admin-key"
 ROUTES = {

@@ -44,10 +44,10 @@ from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions, visibility
+from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
 from pi.owner import notices
-from pi.owner import preferences as prefs
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 

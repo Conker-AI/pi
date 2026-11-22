@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 from pydantic import Field
 
+from pi.core import owner_preferences as prefs
 from pi.core.models import Strict
-from pi.owner import preferences as prefs
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS proactive_reservations (

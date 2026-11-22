@@ -12,7 +12,7 @@ from test_web_research import SEARCH, SearchGate
 from pi.actions.tools import ToolCall
 from pi.context import research
 from pi.conversation.store import Store
-from pi.owner import settings as owner_settings
+from pi.core import owner_settings as owner_settings
 
 
 @pytest.fixture

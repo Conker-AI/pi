@@ -24,7 +24,7 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only
 from pi.conversation import drafts
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
-from pi.owner import preferences as prefs
+from pi.core import owner_preferences as prefs
 from pi.schedule import agent_jobs, job_models
 from pi.turns import access
 

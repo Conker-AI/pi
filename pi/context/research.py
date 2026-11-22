@@ -5,8 +5,8 @@ import json
 import math
 import re
 
+from pi.core import owner_settings as owner_settings
 from pi.models.providers import Message
-from pi.owner import settings as owner_settings
 from pi.schedule import tasks
 
 WEB_TOOL = "research.web"

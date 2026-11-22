@@ -37,8 +37,8 @@ from pi.conversation.access import MaintenanceRequired, acquire
 from pi.conversation.message_view import MESSAGE_LOOKUP, _message_with_attachments
 from pi.conversation.schema import FORGETTING_SCHEMA, SCHEMA
 from pi.core import migrations
+from pi.core import owner_preferences as owner_preferences
 from pi.core.version import VERSION
-from pi.owner import preferences as owner_preferences
 from pi.turns import action_identities as actions
 from pi.turns import control as turn_control
 from pi.turns import restart as turn_restart

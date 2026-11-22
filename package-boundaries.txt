@@ -1,7 +1,7 @@
 # Cross-package imports in Pi, checked by scripts/check_package_boundaries.py.
 # These existed when the packages arrived (2026-10-15). Delete an edge once it is gone;
 # add one only on purpose, with the reason in the commit.
-actions -> models
+actions -> core
 agents -> conversation
 agents -> core
 agents -> models
@@ -26,7 +26,6 @@ calls -> context
 calls -> conversation
 calls -> core
 calls -> models
-calls -> owner
 content -> conversation
 content -> core
 context -> agents
@@ -34,7 +33,6 @@ context -> content
 context -> conversation
 context -> core
 context -> models
-context -> owner
 context -> schedule
 conversation -> actions
 conversation -> agents
@@ -66,7 +64,6 @@ host -> actions
 host -> core
 memory -> conversation
 memory -> core
-memory -> owner
 models -> core
 models -> owner
 owner -> core

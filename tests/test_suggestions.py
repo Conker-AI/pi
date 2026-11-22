@@ -13,8 +13,8 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation import settings as session_settings
 from pi.conversation import suggestions
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.models import roles as model_roles
-from pi.owner import settings as owner_settings
 
 ADMIN = "synthetic-admin"
 OWNER = "suggestions_test_owner_key"

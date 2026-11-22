@@ -24,9 +24,9 @@ from typing import Literal
 from pydantic import Field
 
 from pi.conversation import visibility
+from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
-from pi.owner import preferences as prefs
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS open_loops (

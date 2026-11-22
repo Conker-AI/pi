@@ -16,10 +16,10 @@ from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.models import inference_control, spending_cap
 from pi.models import roles as model_roles
 from pi.models.providers import Completion, ProviderUnavailable
-from pi.owner import settings as owner_settings
 
 ADMIN = "synthetic-admin"
 OWNER = "prompt_enhance_test_owner_key"

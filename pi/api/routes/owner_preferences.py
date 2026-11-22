@@ -1,7 +1,7 @@
 """Owner preference and settings routes with revision-checked saves.
 
 Preferences (quiet hours, proactivity, daily budgets, plan alerts, idle timeout) and the owner's
-settings document (`pi.owner.settings`) are the owner's own: the Settings screen reads and saves
+settings document (`pi.core.owner_settings`) are the owner's own: the Settings screen reads and saves
 them with the owner credential, and preference saves ask for his password at the gateway.
 """
 
@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from pi.core import owner_preferences as owner_preferences
+from pi.core import owner_settings as owner_settings
 from pi.core.models import described
-from pi.owner import preferences as owner_preferences
-from pi.owner import settings as owner_settings
 
 
 def _conflict(exc):

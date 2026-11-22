@@ -9,8 +9,8 @@ from test_speech import client, wav
 
 from pi.calls import speech
 from pi.conversation.store import Store
+from pi.core import owner_settings as owner_settings
 from pi.models.routing import Router
-from pi.owner import settings as owner_settings
 from pi.turns.loop import Loop
 
 

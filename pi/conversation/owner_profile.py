@@ -1,6 +1,6 @@
 """The owner's words in every chat: standing instructions, simpler wording and a short profile.
 
-They come from the owner's settings document (pi.owner.settings). A turn reads them once, when its
+They come from the owner's settings document (pi.core.owner_settings). A turn reads them once, when its
 execution snapshot is taken, and keeps them there: a replay or a retry sees the same words, and a
 change reaches the next turn only. The document holds preferences, never authority, so every value
 is checked again here (type, choice, length); anything else reads as not set. A value back at its
@@ -16,9 +16,9 @@ import json
 import re
 import unicodedata
 
+from pi.core import owner_preferences as owner_preferences
+from pi.core import owner_settings as owner_settings
 from pi.models.providers import Message
-from pi.owner import preferences as owner_preferences
-from pi.owner import settings as owner_settings
 
 # Hard caps, in characters. Per value they follow the registry's own limits; a value saved
 # around the Settings screen is cut, never refused, so a chat still starts.
