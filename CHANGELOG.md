@@ -6,6 +6,11 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+## 0.29.1
+
+- **Internal refactors, no behaviour change.** Shared types and helpers, owner settings and preferences and the loopback helper moved into `pi.core` (package edges 84 -> 76); roles, memory store, submissions, the ToolGate client and agent jobs were split into smaller modules as pure moves (every file is under 600 lines again). (#293, #294, #295, #296)
+- **CI:** gitleaks secret scan and Trivy image scan on every change; AGENTS.md for any AI model working in the repo. (#291, #292)
+
 ## 0.29.0
 
 - Host reads: `POST /api/host/read` accepts `update.check` (arguments `{}`, session only, no password): the host starts a check for a newer Conker release in the background and answers at once with its state, so the dashboard can check on entering the app. (#289)
