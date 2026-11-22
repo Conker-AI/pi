@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from pi.api import browser_contract
 from pi.content import artifact_models
-from pi.context import search_ranking, search_settings
+from pi.context import search_ranking
 from pi.context import universal_search as search
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -244,10 +244,10 @@ def test_semantic_fallback_is_labeled_literal_and_source_failure_is_reported(tmp
             }
 
     with closing(Store(tmp_path / "search.db")) as store:
-        cfg = search_settings.Settings(sources=["memory"], semantic=True)
+        cfg = search.Settings(sources=["memory"], semantic=True)
         search.save_settings(
             store,
-            search_settings.SaveSettings(expected_revision=0, configuration=cfg),
+            search.SaveSettings(expected_revision=0, configuration=cfg),
             semantic_available=True,
             ranking_available=False,
         )

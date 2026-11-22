@@ -38123,7 +38123,7 @@
             "title": "Expected Revision"
           },
           "configuration": {
-            "$ref": "#/components/schemas/pi__context__search_settings__Settings"
+            "$ref": "#/components/schemas/pi__context__universal_search__Settings"
           }
         },
         "additionalProperties": false,
@@ -41678,36 +41678,6 @@
         ],
         "title": "Update"
       },
-      "pi__context__search_settings__Settings": {
-        "properties": {
-          "sources": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 9,
-            "title": "Sources"
-          },
-          "exactText": {
-            "type": "boolean",
-            "title": "Exacttext",
-            "default": true
-          },
-          "semantic": {
-            "type": "boolean",
-            "title": "Semantic",
-            "default": false
-          },
-          "reranking": {
-            "type": "boolean",
-            "title": "Reranking",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "Settings"
-      },
       "pi__context__summaries__Edit": {
         "properties": {
           "expected_revision": {
@@ -41762,6 +41732,36 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Request"
+      },
+      "pi__context__universal_search__Settings": {
+        "properties": {
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Sources"
+          },
+          "exactText": {
+            "type": "boolean",
+            "title": "Exacttext",
+            "default": true
+          },
+          "semantic": {
+            "type": "boolean",
+            "title": "Semantic",
+            "default": false
+          },
+          "reranking": {
+            "type": "boolean",
+            "title": "Reranking",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Settings"
       },
       "pi__conversation__archive__Archive": {
         "properties": {

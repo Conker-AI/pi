@@ -6,7 +6,6 @@ from contextlib import closing, contextmanager
 import pytest
 from test_universal_search import client_for
 
-from pi.context import search_settings
 from pi.context import universal_search as search
 from pi.conversation import forgetting
 from pi.conversation import settings as session_settings
@@ -265,8 +264,8 @@ def test_existing_route_pagination_and_exact_message_search_are_unchanged(store)
     message = store.append_message("ses_0000", "user", "needle in an older retained message")
     search.save_settings(
         store,
-        search_settings.SaveSettings(
-            expected_revision=0, configuration=search_settings.Settings(sources=["conversations"])
+        search.SaveSettings(
+            expected_revision=0, configuration=search.Settings(sources=["conversations"])
         ),
         semantic_available=False,
         ranking_available=False,
