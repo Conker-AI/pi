@@ -8,6 +8,7 @@ from contextlib import closing
 import pytest
 from fastapi.testclient import TestClient
 from test_model_roles import Adapter, config
+from waiting import join_thread, wait_event, wait_until
 
 from pi.conversation import fact_checks
 from pi.conversation import settings as session_settings
@@ -455,7 +456,7 @@ def test_a_concurrent_retry_waits_for_the_first_call_and_replays_it(tmp_path):
     def hold_the_first_call():
         if not entered.is_set():
             entered.set()
-            release.wait(5)
+            wait_event(release, "the test to release the first call")
 
     with closing(Store(tmp_path / "pi.db")) as store:
         setup_models(store)
@@ -470,13 +471,16 @@ def test_a_concurrent_retry_waits_for_the_first_call_and_replays_it(tmp_path):
 
         first = threading.Thread(target=call)
         first.start()
-        assert entered.wait(5)
+        wait_event(entered, "the first call to start")
         second = threading.Thread(target=call)
         second.start()
-        second.join(0.5)
+        wait_until(
+            lambda: any(held[1] >= 2 for held in list(once._held.values())),
+            "the second call to wait on the first",
+        )
         release.set()
-        first.join(5)
-        second.join(5)
+        join_thread(first, "the first call")
+        join_thread(second, "the second call")
         assert len(adapters["one"].messages) == 1
         assert sorted(result["replayed"] for result in results) == [False, True]
         assert not once._held

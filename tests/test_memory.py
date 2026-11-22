@@ -7,6 +7,7 @@ from uuid import NAMESPACE_URL, uuid5
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from waiting import WAIT, wait_event
 
 from pi.api import server as api
 from pi.conversation import forgetting
@@ -239,7 +240,7 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
 
     def receive(request):
         entered.set()
-        assert release.wait(5)
+        wait_event(release, "the test to release the upload")
         return httpx.Response(
             200,
             json={
@@ -257,7 +258,7 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
 
     memory = Memory(store, client(receive))
     memory.start()
-    assert entered.wait(3)
+    wait_event(entered, "the upload to start")
 
     def shutdown():
         memory.close()
@@ -270,7 +271,7 @@ def test_shutdown_waits_for_inflight_upload_before_releasing_forgetting_lease(tm
                 stopped.result(timeout=0.1)
         finally:
             release.set()
-        stopped.result(timeout=3)
+        stopped.result(timeout=WAIT)
 
 
 @pytest.mark.parametrize(

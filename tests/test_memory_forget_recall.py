@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from test_memory_forget import BODY, client, forgotten
+from waiting import WAIT, wait_event
 
 from pi.api import browser_contract
 from pi.context import controls as context_controls
@@ -255,19 +256,19 @@ def test_concurrent_duplicate_never_overlaps_remote_dispatch(store):
     def wait(request):
         calls.append(request)
         entered.set()
-        assert release.wait(5)
+        wait_event(release, "the test to release the remote call")
         return forgotten(request)
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(memory_forget.forget, store, client(wait), BODY)
-        assert entered.wait(5)
+        wait_event(entered, "the remote call to start")
         try:
             with pytest.raises(memory_forget.ForgetError) as failure:
                 memory_forget.forget(store, client(wait), BODY)
             assert failure.value.detail["code"] == "forget_in_progress"
         finally:
             release.set()
-        assert future.result()["status"] == "forgotten"
+        assert future.result(WAIT)["status"] == "forgotten"
     assert len(calls) == 1
 
 

@@ -100,6 +100,7 @@ def test_a_cap_that_is_off_refuses_before_any_thread_starts(store):
     record, _ = setup(store)
     run = start(store, record, store.create_session())
     set_cap(store, enabled=False)
+    wait_until(slots_free, "earlier steps in this worker to give their slots back")
     before = set(threading.enumerate())  # the web stack's own worker threads come and go
     reply = post_step(client_for(store, provider), run)
     assert reply.status_code == 409
