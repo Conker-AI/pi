@@ -291,7 +291,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__projects__Update"
+                "$ref": "#/components/schemas/pi__core__project_bodies__Update"
               }
             }
           }
@@ -373,7 +373,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__projects__Archive"
+                "$ref": "#/components/schemas/pi__core__project_bodies__Archive"
               }
             }
           }
@@ -1246,7 +1246,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__controls__Update"
+                "$ref": "#/components/schemas/pi__core__context_bodies__Update"
               }
             }
           }
@@ -1631,7 +1631,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__summaries__Edit"
+                "$ref": "#/components/schemas/pi__core__context_bodies__Edit"
               }
             }
           }
@@ -1712,7 +1712,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__summaries__Restore"
+                "$ref": "#/components/schemas/pi__core__context_bodies__Restore"
               }
             }
           }
@@ -9637,7 +9637,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__decisions__State"
+                "$ref": "#/components/schemas/pi__core__context_bodies__State"
               }
             }
           }
@@ -12345,7 +12345,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__context__summary_draft__Request"
+                "$ref": "#/components/schemas/pi__core__context_bodies__Request"
               }
             }
           }
@@ -41401,80 +41401,6 @@
         ],
         "title": "Privacy"
       },
-      "pi__context__controls__Update": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Revision"
-          },
-          "policy": {
-            "$ref": "#/components/schemas/Policy-Input"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "policy"
-        ],
-        "title": "Update"
-      },
-      "pi__context__decisions__State": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Revision"
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "active",
-              "open",
-              "resolved",
-              "withdrawn"
-            ],
-            "title": "State"
-          },
-          "by": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "ai"
-            ],
-            "title": "By",
-            "default": "owner"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "state"
-        ],
-        "title": "State"
-      },
-      "pi__context__projects__Archive": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Revision"
-          },
-          "archived": {
-            "type": "boolean",
-            "title": "Archived"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "archived"
-        ],
-        "title": "Archive"
-      },
       "pi__context__projects__Privacy": {
         "properties": {
           "memoryDisabled": {
@@ -41498,80 +41424,6 @@
           "harnessDisabled"
         ],
         "title": "Privacy"
-      },
-      "pi__context__projects__Update": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Expected Revision"
-          },
-          "fields": {
-            "$ref": "#/components/schemas/Fields"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "fields"
-        ],
-        "title": "Update"
-      },
-      "pi__context__summaries__Edit": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Revision"
-          },
-          "summary": {
-            "type": "string",
-            "maxLength": 16000,
-            "title": "Summary"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "summary"
-        ],
-        "title": "Edit"
-      },
-      "pi__context__summaries__Restore": {
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Revision"
-          },
-          "revision": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Revision"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_revision",
-          "revision"
-        ],
-        "title": "Restore"
-      },
-      "pi__context__summary_draft__Request": {
-        "properties": {
-          "focus": {
-            "type": "string",
-            "maxLength": 500,
-            "title": "Focus",
-            "default": ""
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "Request"
       },
       "pi__context__universal_search__Settings": {
         "properties": {
@@ -41996,6 +41848,115 @@
         ],
         "title": "Update"
       },
+      "pi__core__context_bodies__Edit": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 16000,
+            "title": "Summary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "summary"
+        ],
+        "title": "Edit"
+      },
+      "pi__core__context_bodies__Request": {
+        "properties": {
+          "focus": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Focus",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Request"
+      },
+      "pi__core__context_bodies__Restore": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "revision"
+        ],
+        "title": "Restore"
+      },
+      "pi__core__context_bodies__State": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "open",
+              "resolved",
+              "withdrawn"
+            ],
+            "title": "State"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "ai"
+            ],
+            "title": "By",
+            "default": "owner"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "state"
+        ],
+        "title": "State"
+      },
+      "pi__core__context_bodies__Update": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Policy-Input"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "policy"
+        ],
+        "title": "Update"
+      },
       "pi__core__context_policy__Budget": {
         "properties": {
           "contextWindowTokens": {
@@ -42042,6 +42003,45 @@
         "required": [
           "expected_revision",
           "values"
+        ],
+        "title": "Update"
+      },
+      "pi__core__project_bodies__Archive": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "archived"
+        ],
+        "title": "Archive"
+      },
+      "pi__core__project_bodies__Update": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "fields"
         ],
         "title": "Update"
       },

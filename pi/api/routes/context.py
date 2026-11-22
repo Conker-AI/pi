@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from pi.context import controls, retrieval, summaries
 from pi.context.context_replies import ChatContextPolicyDocument, ChatSummaryDocument
+from pi.core import context_bodies
 from pi.core.models import described
 
 
@@ -42,7 +43,7 @@ def router(store, authorize):
         return invoke(summaries.load, session_id)
 
     @routes.post("/{session_id}/summary", responses=summary_reply)
-    def edit_summary(session_id: str, body: summaries.Edit):
+    def edit_summary(session_id: str, body: context_bodies.Edit):
         return invoke(summaries.save, session_id, body)
 
     @routes.post("/{session_id}/summary/restore")

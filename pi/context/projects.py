@@ -12,48 +12,13 @@ import time
 import uuid
 from typing import Annotated, Literal, cast
 
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import Field, StringConstraints
 
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
+from pi.core.project_bodies import Archive, Fields, Link, Reference, Revision, SessionId, Update
 
 ProjectId = Annotated[str, StringConstraints(pattern=r"^project_[0-9a-f]{32}$")]
-SessionId = Annotated[str, StringConstraints(pattern=r"^ses_[0-9a-f]{16}$")]
-TaskId = Annotated[str, StringConstraints(pattern=r"^tsk_[0-9a-f]{32}$")]
-FileId = Annotated[str, StringConstraints(pattern=r"^attachment_[0-9a-f]{32}$")]
-
-
-class Fields(Strict):
-    name: str = Field(min_length=1, max_length=120)
-    description: str = Field(max_length=2000)
-    instructions: str = Field(max_length=16000)
-
-    @field_validator("name", "description")
-    @classmethod
-    def strip(cls, value, info):
-        value = value.strip()
-        if info.field_name == "name" and not value:
-            raise ValueError("Provide a project name.")
-        return value
-
-
-class Conversation(Strict):
-    kind: Literal["conversation"]
-    sessionId: SessionId
-
-
-class Task(Strict):
-    kind: Literal["task"]
-    taskId: TaskId
-
-
-class File(Strict):
-    kind: Literal["file"]
-    sessionId: SessionId
-    fileId: FileId
-
-
-Reference = Annotated[Conversation | Task | File, Field(discriminator="kind")]
 
 
 class Privacy(Strict):
@@ -104,22 +69,6 @@ class ProjectCollection(Strict):
     schemaVersion: Literal[1] = 1
     results: list[ProjectView] = Field(max_length=200)
     nextCursor: ProjectId | None = None
-
-
-class Revision(Strict):
-    expected_revision: int = Field(ge=1)
-
-
-class Update(Revision):
-    fields: Fields
-
-
-class Archive(Revision):
-    archived: bool
-
-
-class Link(Revision):
-    reference: Reference
 
 
 SCHEMA = """

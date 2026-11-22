@@ -5,28 +5,10 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Literal
 
-from pydantic import Field
-
+from pi.core.context_bodies import Add, State
 from pi.core.errors import ServiceError
-from pi.core.models import Strict
 from pi.models.providers import Message
-
-
-class Add(Strict):
-    expected_revision: int = Field(ge=0)
-    kind: Literal["decision", "thread"]
-    text: str = Field(min_length=1, max_length=500)
-    author: Literal["owner", "ai"] = "owner"
-    cites: list[str] = Field(default_factory=list, max_length=10)
-    replaces: str | None = Field(default=None, min_length=1, max_length=64)
-
-
-class State(Strict):
-    expected_revision: int = Field(ge=0)
-    state: Literal["active", "open", "resolved", "withdrawn"]
-    by: Literal["owner", "ai"] = "owner"
 
 
 class DecisionError(ServiceError):

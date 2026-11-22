@@ -9,9 +9,8 @@ from pydantic import Field, JsonValue, TypeAdapter, model_validator
 
 from pi.agents import characters, team_models
 from pi.agents import profiles as agents
-from pi.context import projects
 from pi.conversation import settings as session_settings
-from pi.core import artifact_requests, call_models, schedule_bodies
+from pi.core import artifact_requests, call_models, project_bodies, schedule_bodies
 from pi.core.models import Strict
 from pi.host import filesystem_reads, inventory_models
 from pi.memory import edits as memory_edits
@@ -46,14 +45,14 @@ AGENT_MUTATION = TypeAdapter(AgentMutation)
 
 class ProjectCreate(Strict):
     operation: Literal["create"]
-    fields: projects.Fields
+    fields: project_bodies.Fields
 
 
 class ProjectUpdate(Strict):
     operation: Literal["update"]
     id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
-    fields: projects.Fields
+    fields: project_bodies.Fields
 
 
 class ProjectArchive(Strict):
@@ -67,7 +66,7 @@ class ProjectLink(Strict):
     operation: Literal["link", "unlink"]
     id: str = Field(pattern=r"^project_[0-9a-f]{32}$")
     expected_revision: int = Field(ge=1)
-    reference: projects.Reference
+    reference: project_bodies.Reference
 
 
 ProjectMutation = Annotated[

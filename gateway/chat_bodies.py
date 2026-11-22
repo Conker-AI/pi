@@ -16,7 +16,6 @@ from urllib.parse import parse_qsl
 from pydantic import ValidationError
 
 from pi.api.browser_contract import CHAT_READS, CHAT_WRITES
-from pi.context import compaction, controls, decisions, summaries, summary_draft
 from pi.conversation import (
     archive,
     fact_checks,
@@ -27,6 +26,7 @@ from pi.conversation import (
     retries,
     versions,
 )
+from pi.core import context_bodies
 
 from .store import AuthError
 
@@ -45,14 +45,14 @@ BODIES = dict(
             versions.Selection,
             judgements.Judge,
             judgements.Vote,
-            controls.Update,
-            controls.ReviewedFork,
-            summaries.Edit,
-            summaries.Restore,
-            summary_draft.Request,
-            compaction.Compact,
-            decisions.Add,
-            decisions.State,
+            context_bodies.Update,
+            context_bodies.ReviewedFork,
+            context_bodies.Edit,
+            context_bodies.Restore,
+            context_bodies.Request,
+            context_bodies.Compact,
+            context_bodies.Add,
+            context_bodies.State,
         ),
         strict=True,
     )

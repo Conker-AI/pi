@@ -47,7 +47,6 @@ conversation -> setup
 conversation -> turns
 gateway -> agents
 gateway -> api
-gateway -> context
 gateway -> conversation
 gateway -> core
 gateway -> host

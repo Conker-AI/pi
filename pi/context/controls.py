@@ -8,25 +8,10 @@ import math
 import time
 import uuid
 
-from pydantic import Field
-
 from pi.conversation import visibility
+from pi.core.context_bodies import ReviewedFork, Update
 from pi.core.context_policy import Policy
 from pi.core.errors import ServiceError
-from pi.core.models import Strict
-
-
-class Update(Strict):
-    expected_revision: int = Field(ge=0)
-    policy: Policy
-
-
-class ReviewedFork(Strict):
-    expected_revision: int = Field(ge=1)
-    expected_last_message_id: str | None = Field(default=None, max_length=200)
-    summary: str = Field(max_length=16000)
-    request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS context_inherited_messages (

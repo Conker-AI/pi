@@ -6,6 +6,7 @@ from pi.context import controls as context_controls
 from pi.context import summaries
 from pi.conversation import forgetting, submissions
 from pi.conversation.store import Store
+from pi.core import context_bodies
 
 
 def test_edit_restore_preserves_parent_and_messages(tmp_path):
@@ -14,7 +15,7 @@ def test_edit_restore_preserves_parent_and_messages(tmp_path):
         message = store.append_message(parent, "user", "Original text")
         child = store.create_session(parent_id=parent, summary="Original summary")
         value = summaries.save(
-            store, child, summaries.Edit(expected_revision=0, summary="Corrected")
+            store, child, context_bodies.Edit(expected_revision=0, summary="Corrected")
         )
         assert value["revision"] == 1
         assert value["source_session_id"] == parent
@@ -23,7 +24,7 @@ def test_edit_restore_preserves_parent_and_messages(tmp_path):
         assert len(restored["versions"]) == 3
         assert store.get_message(message["id"])["content"] == "Original text"
         with pytest.raises(context_controls.ContextError, match="changed"):
-            summaries.save(store, child, summaries.Edit(expected_revision=1, summary="Stale"))
+            summaries.save(store, child, context_bodies.Edit(expected_revision=1, summary="Stale"))
 
 
 def test_pending_submission_blocks_summary_changes(tmp_path):
@@ -31,14 +32,14 @@ def test_pending_submission_blocks_summary_changes(tmp_path):
         sid = store.create_session(summary="Current")
         submissions.reserve(store, "summary_pending_request", sid, "Question", {})
         with pytest.raises(context_controls.ContextError, match="Finish current work"):
-            summaries.save(store, sid, summaries.Edit(expected_revision=0, summary="Changed"))
+            summaries.save(store, sid, context_bodies.Edit(expected_revision=0, summary="Changed"))
         assert summaries.load(store, sid)["summary"] == "Current"
 
 
 def test_automatic_fork_summary_is_versioned_after_owner_edit(tmp_path):
     with closing(Store(tmp_path / "summary.db")) as store:
         sid = store.create_session(summary="Initial")
-        summaries.save(store, sid, summaries.Edit(expected_revision=0, summary="Reviewed"))
+        summaries.save(store, sid, context_bodies.Edit(expected_revision=0, summary="Reviewed"))
         store.close_session(sid, "forked", summary="Automatically summarized")
         value = summaries.load(store, sid)
         assert value["revision"] == 2
@@ -49,7 +50,9 @@ def test_automatic_fork_summary_is_versioned_after_owner_edit(tmp_path):
             "Initial",
         ]
         with pytest.raises(context_controls.ContextError, match="changed"):
-            summaries.save(store, sid, summaries.Edit(expected_revision=1, summary="Stale edit"))
+            summaries.save(
+                store, sid, context_bodies.Edit(expected_revision=1, summary="Stale edit")
+            )
 
 
 def test_forgotten_parent_scrubs_child_summary_history(tmp_path):
@@ -59,7 +62,7 @@ def test_forgotten_parent_scrubs_child_summary_history(tmp_path):
         parent = store.create_session()
         child = store.create_session(parent_id=parent, summary=secret)
         summaries.save(
-            store, child, summaries.Edit(expected_revision=0, summary=secret + " edited")
+            store, child, context_bodies.Edit(expected_revision=0, summary=secret + " edited")
         )
     forgetting.forget(path, parent, forgetting.preview(path, parent)["confirmation"])
     with closing(Store(path)) as store, pytest.raises(context_controls.ContextError):

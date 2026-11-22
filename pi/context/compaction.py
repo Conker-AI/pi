@@ -2,10 +2,8 @@
 
 import time
 
-from pydantic import Field
-
 from pi.context import controls, summaries
-from pi.core.models import Strict
+from pi.core.context_bodies import Compact
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS summary_coverage (
@@ -13,14 +11,6 @@ CREATE TABLE IF NOT EXISTS summary_coverage (
  message_id TEXT NOT NULL REFERENCES messages(id), PRIMARY KEY(session_id,revision,message_id)
 );
 """
-
-
-class Compact(Strict):
-    expected_policy_revision: int = Field(ge=1)
-    expected_summary_revision: int = Field(ge=0)
-    summary: str = Field(min_length=1, max_length=16000)
-    # Distinct message ids of this chat (or inherited by it).
-    covers: list[str] = Field(min_length=1, max_length=10000)
 
 
 def compact(store, sid, body):
