@@ -83,5 +83,5 @@ prompt and no answer text is kept. Records older than 30 days are dropped.
 last 24 hours. A cost total is `null` unless every call in it reported one.
 
 ```sh
-python -m pytest tests/test_service_inference.py tests/test_model_roles.py -q
+python -m pytest tests/test_service_inference.py tests/test_service_inference_startup.py tests/test_model_roles.py -q
 ```
