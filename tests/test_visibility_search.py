@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from pi.agents import profiles as agents
 from pi.content import artifact_models, artifacts
+from pi.context import search_settings
 from pi.context import universal_search as search
 from pi.conversation import archive
 from pi.conversation import search as conversation_search
@@ -249,10 +250,10 @@ def test_meaning_search_leaves_out_memories_of_a_hidden_chat(store):
         def retrieve(self, query):
             return {"retrieval": {"mode": "semantic"}, "memories": memories}
 
-    cfg = search.Settings(sources=["memory"], semantic=True)
+    cfg = search_settings.Settings(sources=["memory"], semantic=True)
     search.save_settings(
         store,
-        search.SaveSettings(expected_revision=0, configuration=cfg),
+        search_settings.SaveSettings(expected_revision=0, configuration=cfg),
         semantic_available=True,
         ranking_available=False,
     )

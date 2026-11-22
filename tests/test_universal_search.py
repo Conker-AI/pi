@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from pi.api import browser_contract
 from pi.content import artifact_models
+from pi.context import search_ranking, search_settings
 from pi.context import universal_search as search
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -243,10 +244,10 @@ def test_semantic_fallback_is_labeled_literal_and_source_failure_is_reported(tmp
             }
 
     with closing(Store(tmp_path / "search.db")) as store:
-        cfg = search.Settings(sources=["memory"], semantic=True)
+        cfg = search_settings.Settings(sources=["memory"], semantic=True)
         search.save_settings(
             store,
-            search.SaveSettings(expected_revision=0, configuration=cfg),
+            search_settings.SaveSettings(expected_revision=0, configuration=cfg),
             semantic_available=True,
             ranking_available=False,
         )
@@ -270,7 +271,7 @@ def test_ranking_is_bounded_validated_and_keeps_literals_on_failure(tmp_path, mo
         search.record("tools", str(i), "Needle", f"needle {i}", "/tools", "needle", "text")
         for i in range(12)
     ]
-    monkeypatch.setattr(search, "ranking_configuration", lambda store: {"enabled": True})
+    monkeypatch.setattr(search_ranking, "ranking_configuration", lambda store: {"enabled": True})
 
     def dispatch(cfg, role, messages, providers):
         import json
@@ -287,7 +288,7 @@ def test_ranking_is_bounded_validated_and_keeps_literals_on_failure(tmp_path, mo
             ),
         }
 
-    monkeypatch.setattr(search.model_roles, "dispatch", dispatch)
+    monkeypatch.setattr(search_ranking.model_roles, "dispatch", dispatch)
     with closing(Store(tmp_path / "search.db")) as store:
         ranked, receipt = search.rerank(store, {}, "needle", records)
         assert ranked[:8] == list(reversed(records[:8])) and ranked[8:] == records[8:]
@@ -296,5 +297,5 @@ def test_ranking_is_bounded_validated_and_keeps_literals_on_failure(tmp_path, mo
         def fail(*args):
             raise ProviderUnavailable("private error")
 
-        monkeypatch.setattr(search.model_roles, "dispatch", fail)
+        monkeypatch.setattr(search_ranking.model_roles, "dispatch", fail)
         assert search.rerank(store, {}, "needle", records) == (records, {"status": "fallback"})

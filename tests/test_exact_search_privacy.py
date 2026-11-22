@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_universal_search import client_for
 
-from pi.context import universal_search
+from pi.context import search_settings, universal_search
 from pi.conversation import search as conversation_search
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
@@ -315,8 +315,8 @@ def test_direct_and_global_routes_preserve_schemas_auth_and_coverage(store):
     )
     universal_search.save_settings(
         store,
-        universal_search.SaveSettings(
-            expected_revision=0, configuration=universal_search.Settings(sources=["conversations"])
+        search_settings.SaveSettings(
+            expected_revision=0, configuration=search_settings.Settings(sources=["conversations"])
         ),
         semantic_available=False,
         ranking_available=False,

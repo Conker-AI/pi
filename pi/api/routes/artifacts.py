@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
-from pi.content import artifact_models, artifacts, office_exports
+from pi.content import artifact_exports, artifact_models, artifacts, office_exports
 
 ArtifactPath = Annotated[str, Path(pattern=r"^artifact_[0-9a-f]{32}$")]
 
@@ -68,7 +68,7 @@ def router(store, authorize, resolve=None):
 
     @routes.get("/{identity}/export", response_model=artifact_models.NativeExport)
     def export(identity: ArtifactPath, version: int | None = Query(default=None, ge=1, le=100)):
-        return run(artifacts.export, identity, version)
+        return run(artifact_exports.export, identity, version)
 
     @routes.get("/{identity}/download")
     def download(
@@ -76,7 +76,7 @@ def router(store, authorize, resolve=None):
         version: int | None = Query(default=None, ge=1, le=100),
         format: Literal["native", "docx", "pdf", "pptx", "xlsx"] = "native",
     ):
-        result = run(artifacts.export, identity, version, format=format)
+        result = run(artifact_exports.export, identity, version, format=format)
         if format == "native":
             return attachment(result["text"].encode("utf-8"), result["mime"], result["filename"])
         return attachment(result["content"], result["mime"], result["filename"], result["readable"])
