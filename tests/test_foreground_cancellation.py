@@ -38,7 +38,7 @@ def test_stop_interrupts_silent_ollama_and_retains_exact_input(tmp_path, stop_by
             self.wfile.write(b'{"message":{"thinking":"private"},"done":false}\n')
             self.wfile.flush()
             started.set()
-            self.connection.settimeout(5)
+            self.connection.settimeout(25)
             try:
                 if self.connection.recv(1) == b"":
                     disconnected.set()

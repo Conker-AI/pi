@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from test_jobs import definition
+from waiting import wait_event
 
 from pi.agents import continuity
 from pi.api.routes.jobs import router
@@ -69,13 +70,13 @@ def test_dispatch_claim_wins_before_cancel_and_unknown_is_not_cancelled(tmp_path
 
         def invoke(*args, **kwargs):
             entered.set()
-            assert release.wait(5)
+            wait_event(release, "the test to release the dispatch")
             return {"status": "outcome_unknown"}
 
         with ThreadPoolExecutor(1) as pool:
             future = pool.submit(jobs.dispatch_claim, store, run, invoke)
             try:
-                assert entered.wait(5)
+                wait_event(entered, "the dispatch to start")
                 with pytest.raises(jobs.JobError, match="reconcile"):
                     jobs.cancel_run(store, run["id"])
             finally:

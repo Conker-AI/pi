@@ -86,7 +86,22 @@ jobs:
         # The coverage floor is the coverage measured when it arrived, rounded down, so it
         # only stops coverage from falling (.coveragerc names what is measured).
         # pytest-xdist, one worker per CPU: each test uses its own temporary stores.
-        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=92
+        run: python -m pytest tests/ --ignore=tests/test_module_contract.py -q -n auto --cov --cov-report=term --cov-fail-under=92 --junitxml=junit.xml
+
+      - name: Test report (reruns, skips, slowest)
+        # No test is retried here. This lists any test that ran more than once, every skip and the
+        # slowest tests in the job summary, and keeps the JUnit file (scripts/flake_report.py).
+        if: always()
+        run: python scripts/flake_report.py junit.xml
+
+      - name: Keep the JUnit file
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-tests
+          path: junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
   drills:
     # Each drill breaks guarded lines and expects the tests to notice. Run after the tests

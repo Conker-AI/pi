@@ -9,6 +9,7 @@ import httpx
 import pytest
 from test_decision_provider import setup
 from test_model_roles import Adapter
+from waiting import WAIT, join_thread, wait_event
 
 from pi.models import inference_control
 from pi.models import roles as model_roles
@@ -49,7 +50,7 @@ def stalled_server(headers):
                 self.wfile.flush()
             # Normal classifier inference waits before any response headers.
             started.set()
-            self.connection.settimeout(5)
+            self.connection.settimeout(25)
             try:
                 if self.connection.recv(1) == b"":
                     disconnected.set()
@@ -68,7 +69,7 @@ def stalled_server(headers):
     finally:
         server.shutdown()
         server.server_close()
-        serving.join(2)
+        serving.join(WAIT)
 
 
 @pytest.mark.parametrize("headers", [False, True], ids=["before-headers", "partial-body"])
@@ -100,10 +101,12 @@ def test_stop_closes_owned_classifier_connection_without_answer_or_fallback(head
         worker = threading.Thread(target=work, daemon=True)
         try:
             worker.start()
-            assert started.wait(3)
+            wait_event(started, "the classifier request to arrive")
             token.cancel("owner")
-            assert finished.wait(2), "Stop must not await the configured15-second routing timeout"
-            assert disconnected.wait(2)
+            wait_event(
+                finished, "Stop to end the call (it must not await the 15 s routing timeout)", 10
+            )
+            wait_event(disconnected, "the classifier connection to close", 10)
             assert len(failures) == 1
             assert isinstance(failures[0], inference_control.InferenceCancelled)
             assert first.calls == second.calls == []
@@ -111,8 +114,7 @@ def test_stop_closes_owned_classifier_connection_without_answer_or_fallback(head
             assert token._callbacks == set()
         finally:
             token.cancel()
-            worker.join(3)
-        assert not worker.is_alive()
+            join_thread(worker, "the routing worker")
 
 
 def test_pre_cancelled_parent_token_prevents_classifier_request():

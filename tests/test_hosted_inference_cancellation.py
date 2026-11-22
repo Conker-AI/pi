@@ -92,7 +92,7 @@ def stalled_server():
             self.wfile.write(b": waiting\n\n")
             self.wfile.flush()
             started.set()
-            self.connection.settimeout(5)
+            self.connection.settimeout(25)
             try:
                 if self.connection.recv(1) == b"":
                     disconnected.set()
