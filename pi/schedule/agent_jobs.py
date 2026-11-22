@@ -44,10 +44,10 @@ from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
 from pi.conversation import submissions
+from pi.core import notices
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
-from pi.owner import notices
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS agent_job_sessions (
  session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id)
 );
 """
-# A run's note to the owner is a notice of kind `agent-job` (pi.owner.notices): subject = the run,
+# A run's note to the owner is a notice of kind `agent-job` (pi.core.notices): subject = the run,
 # facts = {jobId, messageId}, session_id = the job's chat. Until migration 0006 notes had their
 # own table, agent_job_notes, whose ids they keep.
 

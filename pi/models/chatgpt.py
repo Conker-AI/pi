@@ -172,7 +172,7 @@ class ChatGPTProvider:
 def configured(environment, timeout):
     url = environment.get("PI_SUBSCRIPTION_URL", "")
     if url:
-        from pi.models.private_transport import PrivateTransport
+        from pi.core.private_transport import PrivateTransport
 
         return {
             "chatgpt": ChatGPTProvider(

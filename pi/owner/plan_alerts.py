@@ -4,7 +4,7 @@ Readings come from the subscription runtimes as percentages of each plan window,
 tokens. Pi keeps the latest reading per window and at most one alert per window period. Reading
 and polling call no model, send nothing and spend nothing.
 
-Alerts are notices of kind `plan` (pi.owner.notices; until migration 0006 they had a table of
+Alerts are notices of kind `plan` (pi.core.notices; until migration 0006 they had a table of
 their own, `plan_alerts`, whose ids they keep). Their facts: provider, window, label, threshold
 (the owner's level when it was raised), usedPercent (the highest reading in the period) and
 resetsAt (when the runtime said the window resets).
@@ -21,10 +21,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pi.core import notices
 from pi.core import owner_preferences as preferences
 from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
-from pi.owner import notices
 
 log = logging.getLogger(__name__)
 

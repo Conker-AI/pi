@@ -11,6 +11,7 @@ from pi.content import attachments, image_input
 from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.models.direct import AnthropicProvider, OpenAIProvider
 from pi.models.openrouter import OpenRouterProvider
 from pi.models.providers import (
@@ -150,7 +151,7 @@ def test_image_turn_and_original_context_replay_preserve_image(tmp_path):
                 policy=context_controls.Policy(
                     sessionInstructions="",
                     messagePolicies={source: "exclude"},
-                    budget=context_controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=20000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),

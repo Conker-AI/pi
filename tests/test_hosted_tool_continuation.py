@@ -9,10 +9,11 @@ import pytest
 
 from pi.actions.toolgate import ApprovalRequired, Tool, ToolResult
 from pi.conversation.store import Store
+from pi.core.images import ImageInput
 from pi.models.direct import AnthropicProvider, OpenAIProvider
 from pi.models.evidence import INSTRUCTIONS, project_tool_evidence
 from pi.models.openrouter import ModelInfo, OpenRouterProvider, PaidModelRefused
-from pi.models.providers import ImageInput, Message, ProviderUnavailable
+from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns.failures import ActedWithoutReply
 from pi.turns.loop import Loop

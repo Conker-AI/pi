@@ -11,6 +11,7 @@ import pytest
 from pi.api import startup
 from pi.conversation import output_settings, upgrades
 from pi.conversation.store import Store
+from pi.core.images import ImageInput
 from pi.models import inference_control, secrets
 from pi.models import roles as model_roles
 from pi.models.direct import (
@@ -22,7 +23,7 @@ from pi.models.direct import (
     XAIProvider,
     configured,
 )
-from pi.models.providers import ImageInput, Message, ProviderUnavailable
+from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import Router
 from pi.turns.loop import Loop
 

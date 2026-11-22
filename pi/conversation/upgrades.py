@@ -17,7 +17,7 @@ from __future__ import annotations
 from pi.agents import change_requests, keep
 from pi.content import attachments
 from pi.core.migrations import Migration
-from pi.owner import notices
+from pi.owner import notice_merge
 from pi.setup import model_probes
 
 
@@ -60,6 +60,6 @@ MIGRATIONS = (
     Migration("0004-change-request-agent-team", change_requests.widen_kinds, rebuild=True),
     Migration("0005-keep-result-agent-team", keep.widen_kinds, rebuild=True),
     # Plan alerts and AI job notes into one notices table (ids kept); the two old tables go.
-    Migration("0006-notices", notices.merge_old_tables),
+    Migration("0006-notices", notice_merge.merge_old_tables),
     Migration("0007-change-request-promise", change_requests.widen_promise, rebuild=True),
 )

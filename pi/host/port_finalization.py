@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 from pydantic import Field
 
-from pi.actions.toolgate import ToolResult
 from pi.core.models import Strict
+from pi.core.toolgate_types import ToolResult
 from pi.host import actions
 from pi.host.port_reviews import exchange
 

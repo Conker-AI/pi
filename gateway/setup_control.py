@@ -12,7 +12,7 @@ import httpx
 from pydantic import ValidationError
 
 from pi.api.browser_contract import owner_allowed
-from pi.setup.choices import Choice, ChoiceInput
+from pi.core.setup_choices import Choice, ChoiceInput
 from pi.setup.model_probes import ProbeInput, ProbeReceipt
 from pi.setup.models import Options, Selection
 from pi.setup.protection import Policy, PolicyInput

@@ -37,7 +37,7 @@ from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
 
 if TYPE_CHECKING:
-    from pi.models.private_transport import PrivateTransport
+    from pi.core.private_transport import PrivateTransport
 
 COOKIE = "__Host-conker"
 
@@ -67,7 +67,7 @@ class Config:
 
     def validate(self) -> None:
         if self.provider_control_url:
-            from pi.models.private_transport import PrivateTransport
+            from pi.core.private_transport import PrivateTransport
 
             PrivateTransport(self.provider_control_url, self.provider_control_key).close()
             if self.provider_control_socket:
@@ -204,7 +204,7 @@ def create_app(
         app.state.config = settings
         app.state.provider_transport = provider_transport
         if settings.provider_control_url:
-            from pi.models.private_transport import PrivateTransport
+            from pi.core.private_transport import PrivateTransport
 
             app.state.provider_transport = PrivateTransport(
                 settings.provider_control_url, settings.provider_control_key

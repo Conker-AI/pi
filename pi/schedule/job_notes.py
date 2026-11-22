@@ -7,7 +7,7 @@ import re
 import time
 
 from pi.conversation import visibility
-from pi.owner import notices
+from pi.core import notices
 from pi.schedule.agent_jobs import NOTE_ID, AgentJobError
 
 

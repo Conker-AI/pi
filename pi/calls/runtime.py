@@ -9,8 +9,8 @@ import uuid
 from pi.agents import profiles as agents
 from pi.calls.call_models import Channels, Revision, Start, Update
 from pi.calls.call_records import CallError, _digest, _event, _live, _row, _view
-from pi.context import controls as context_controls
 from pi.conversation import settings as session_settings
+from pi.core.context_policy import Policy
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -120,7 +120,7 @@ def start(store, body: Start):
             "SELECT policy FROM context_policies WHERE session_id=?", (body.conversationId,)
         ).fetchone()
         if policy:
-            context_controls.Policy.model_validate_json(policy[0])
+            Policy.model_validate_json(policy[0])
             db.execute("INSERT INTO context_policies VALUES(?,1,?)", (child, policy[0]))
         inherited = [
             r[0]

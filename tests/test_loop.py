@@ -123,6 +123,7 @@ def test_cancelled_input_is_history_not_an_outstanding_request(store):
 
 def test_excluded_cancelled_input_does_not_leak_into_context_notice(store):
     from pi.context import controls as context_controls
+    from pi.core.context_policy import Budget
 
     provider = Recorder()
     loop = loop_with(store, provider)
@@ -140,7 +141,7 @@ def test_excluded_cancelled_input_does_not_leak_into_context_notice(store):
             policy=context_controls.Policy(
                 sessionInstructions="",
                 messagePolicies={original["id"]: "exclude"},
-                budget=context_controls.Budget(
+                budget=Budget(
                     contextWindowTokens=10000,
                     outputReserveTokens=100,
                     otherInputTokens=0,

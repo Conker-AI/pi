@@ -4,10 +4,10 @@ import re
 
 import httpx
 
+from pi.core.private_transport import PrivateTransport
 from pi.models import inference_control
 from pi.models.chatgpt import ChatGPTProvider
 from pi.models.evidence import project_tool_evidence
-from pi.models.private_transport import PrivateTransport
 from pi.models.providers import Completion, ProviderUnavailable, require_images
 
 # What the subscription runtime accepts as a model id (it passes the alias or id to the CLI).

@@ -8,9 +8,9 @@ from typing import Literal
 
 from pydantic import Field
 
-from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
+from pi.core.toolgate_types import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 
 TOOL = "system.container-control"
 SERVICE_TOOL = "system.process-control"

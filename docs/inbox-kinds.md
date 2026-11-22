@@ -43,7 +43,7 @@ approval; that row is never merged with the others.
 
 ## Duplicates, smallest merge first
 
-1. **Plan alerts and AI job notes.** DONE 2026-11-13: one `notices` table (`pi/owner/notices.py`:
+1. **Plan alerts and AI job notes.** DONE 2026-11-13: one `notices` table (`pi/core/notices.py`:
    kind, subject, title, detail, session_id, facts, created_at, reset_at, dismissed_at), filled by
    migration 0006 from `plan_alerts` and `agent_job_notes` with their ids kept, which then go.
    One partial unique index, (kind, subject) while `reset_at` is NULL, keeps both rules: one

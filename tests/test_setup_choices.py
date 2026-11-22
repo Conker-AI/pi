@@ -9,7 +9,7 @@ from test_setup_status import OWNER, Adapter, Memory, Router
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation.store import Store
-from pi.setup import choices as setup_choices
+from pi.core import setup_choices
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 

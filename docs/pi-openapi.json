@@ -36067,7 +36067,7 @@
             "title": "Messagepolicies"
           },
           "budget": {
-            "$ref": "#/components/schemas/pi__context__controls__Budget"
+            "$ref": "#/components/schemas/pi__core__context_policy__Budget"
           }
         },
         "additionalProperties": false,
@@ -41561,34 +41561,6 @@
         ],
         "title": "Restore"
       },
-      "pi__context__controls__Budget": {
-        "properties": {
-          "contextWindowTokens": {
-            "type": "integer",
-            "maximum": 10000000.0,
-            "minimum": 2.0,
-            "title": "Contextwindowtokens"
-          },
-          "outputReserveTokens": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Outputreservetokens"
-          },
-          "otherInputTokens": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Otherinputtokens"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "contextWindowTokens",
-          "outputReserveTokens",
-          "otherInputTokens"
-        ],
-        "title": "Budget"
-      },
       "pi__context__controls__Update": {
         "properties": {
           "expected_revision": {
@@ -42023,6 +41995,34 @@
           "expected_revision"
         ],
         "title": "Selection"
+      },
+      "pi__core__context_policy__Budget": {
+        "properties": {
+          "contextWindowTokens": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 2.0,
+            "title": "Contextwindowtokens"
+          },
+          "outputReserveTokens": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Outputreservetokens"
+          },
+          "otherInputTokens": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Otherinputtokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "contextWindowTokens",
+          "outputReserveTokens",
+          "otherInputTokens"
+        ],
+        "title": "Budget"
       },
       "pi__core__owner_settings__Update": {
         "properties": {

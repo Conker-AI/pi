@@ -13,8 +13,8 @@ plan alert's subject is `provider:window`, so one per window period. A note's su
 so one per run. `facts` holds the kind's own fields as JSON. The kind is checked here, not by a
 CHECK, so a new kind needs no table rebuild.
 
-Migration 0006 (`merge_old_tables`) moved the rows of the two tables these kinds had before,
-`plan_alerts` and `agent_job_notes`, keeping their ids, and dropped those tables.
+Migration 0006 (`pi.owner.notice_merge.merge_old_tables`) moved the rows of the two tables these
+kinds had before, `plan_alerts` and `agent_job_notes`, keeping their ids, and dropped those tables.
 """
 
 from __future__ import annotations
@@ -108,74 +108,3 @@ def redact(db: sqlite3.Connection, session_ids: list[str]) -> None:
     db.executemany("DELETE FROM notices WHERE session_id=?", [(value,) for value in session_ids])
     if _exists(db, "forgotten_sessions"):
         db.execute(_FORGOTTEN)
-
-
-def merge_old_tables(db: sqlite3.Connection) -> None:
-    """Migration 0006: move plan_alerts and agent_job_notes rows here, ids kept, then drop them.
-
-    Runs inside the ledger's transaction, so it uses execute only (executescript would commit).
-    A database where neither old table exists is left as it is.
-    """
-    if _exists(db, "plan_alerts"):
-        _merge_plan_alerts(db)
-        db.execute("DROP TABLE plan_alerts")
-    if _exists(db, "agent_job_notes"):
-        _merge_agent_job_notes(db)
-        db.execute("DROP TABLE agent_job_notes")
-
-
-_MOVE = (
-    "INSERT OR IGNORE INTO notices(id,kind,subject,title,detail,session_id,facts,created_at,"
-    "reset_at,dismissed_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
-)
-
-
-def _merge_plan_alerts(db: sqlite3.Connection) -> None:
-    from pi.owner import plan_alerts
-
-    for row in db.execute("SELECT * FROM plan_alerts").fetchall():
-        fields = {
-            "provider": row["provider"],
-            "window": row["window_id"],
-            "label": row["label"],
-            "threshold": row["threshold"],
-            "usedPercent": row["used_percent"],
-            "resetsAt": row["resets_at"],
-        }
-        db.execute(
-            _MOVE,
-            (
-                row["id"],
-                PLAN,
-                plan_alerts.subject(row["provider"], row["window_id"]),
-                plan_alerts.title(fields, reset=False),
-                "",
-                None,
-                _dump(fields),
-                row["raised_at"],
-                row["reset_at"],
-                row["dismissed_at"],
-            ),
-        )
-
-
-def _merge_agent_job_notes(db: sqlite3.Connection) -> None:
-    for row in db.execute("SELECT * FROM agent_job_notes").fetchall():
-        dismissed = None
-        if row["state"] == "dismissed":
-            dismissed = row["dismissed_at"] or row["created_at"]
-        db.execute(
-            _MOVE,
-            (
-                row["id"],
-                AGENT_JOB,
-                row["run_id"],
-                row["title"],
-                row["detail"],
-                row["session_id"],
-                _dump({"jobId": row["job_id"], "messageId": row["message_id"]}),
-                row["created_at"],
-                None,
-                dismissed,
-            ),
-        )

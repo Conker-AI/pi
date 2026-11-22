@@ -10,7 +10,7 @@ from pi.actions.toolgate import ApprovalRequired, ToolPending, ToolResult
 from pi.api import server as api
 from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.conversation.store import Store
-from pi.setup import choices as setup_choices
+from pi.core import setup_choices
 from pi.setup import receipts as setup_receipts
 from pi.setup import rehearsal as setup_rehearsal
 from pi.setup import status_receipts

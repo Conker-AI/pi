@@ -9,6 +9,7 @@ from pi.agents import profiles as agents
 from pi.context import controls as context
 from pi.conversation import settings, submissions
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.memory import store as memory_store
 from pi.memory.service import Memory
 from pi.models.providers import Message
@@ -77,7 +78,7 @@ def reviewed(store, sid, pins=(), request="reviewed_fork_privacy_001"):
             policy=context.Policy(
                 sessionInstructions="Keep exact context",
                 messagePolicies={pin["id"]: "keep-exact" for pin in pins},
-                budget=context.Budget(
+                budget=Budget(
                     contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                 ),
             ),

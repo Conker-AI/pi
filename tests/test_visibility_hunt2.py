@@ -19,6 +19,7 @@ from pi.context import controls as context
 from pi.conversation import archive
 from pi.conversation import history as session_history
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.memory import edits
 from pi.memory import forget as memory_forget
 from pi.memory.corrections import Client
@@ -62,7 +63,7 @@ def pinned_fork(store):
             policy=context.Policy(
                 sessionInstructions="Keep exact context",
                 messagePolicies={pin["id"]: "keep-exact"},
-                budget=context.Budget(
+                budget=Budget(
                     contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                 ),
             ),
@@ -93,7 +94,7 @@ def test_a_pin_on_a_message_that_is_simply_gone_is_still_refused():
     policy = context.Policy(
         sessionInstructions="",
         messagePolicies={"msg_missing": "keep-exact"},
-        budget=context.Budget(contextWindowTokens=10000, outputReserveTokens=1, otherInputTokens=0),
+        budget=Budget(contextWindowTokens=10000, outputReserveTokens=1, otherInputTokens=0),
     ).model_dump()
     with pytest.raises(context.ContextError):
         context.select_history(policy, [], hidden_ids={"msg_other"})

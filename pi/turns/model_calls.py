@@ -72,7 +72,7 @@ class ModelCalls:
         """ToolGate is set up and the owner did not leave tools out at setup."""
         if self.toolgate is None:
             return False
-        from pi.setup import choices as setup_choices
+        from pi.core import setup_choices
 
         return setup_choices.current(self.store, "capabilities").choice != "skip"
 
@@ -97,7 +97,7 @@ class ModelCalls:
         """
         if self.toolgate is None:
             return []
-        from pi.setup import choices as setup_choices
+        from pi.core import setup_choices
 
         if setup_choices.current(self.store, "capabilities").choice == "skip":
             return []

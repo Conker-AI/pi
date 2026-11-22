@@ -28,7 +28,7 @@ class PrivateTransport(httpx.BaseTransport):
             raise ValueError("Unsupported private provider destination.")
         query = b""
         if request.url.query:
-            from pi.owner.native_codex_query import canonical_query
+            from pi.core.native_codex_query import canonical_query
 
             if (
                 request.method != "GET"

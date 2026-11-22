@@ -9,6 +9,7 @@ from pi.api import server
 from pi.context import controls, summary_draft
 from pi.conversation import settings as session_settings
 from pi.conversation.store import Store
+from pi.core.context_policy import Budget
 from pi.models import roles as model_roles
 from tests.test_model_roles import Adapter, config
 
@@ -81,7 +82,7 @@ def test_excluded_and_pinned_messages_not_sent(tmp_path):
                         allow_summary_msg["id"]: "allow-summary",
                         retrieve_msg["id"]: "retrieve",
                     },
-                    budget=controls.Budget(
+                    budget=Budget(
                         contextWindowTokens=10000, outputReserveTokens=100, otherInputTokens=0
                     ),
                 ),
