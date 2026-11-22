@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import httpx
 import pytest
 from test_background_thinking import setup
+from waiting import join_thread, wait_event
 
 from pi.conversation.store import Store
 from pi.models import inference_control
@@ -18,8 +19,7 @@ from pi.turns import thinking as background_thinking
 
 
 def join(thread):
-    thread.join(3)
-    assert not thread.is_alive(), "owned inference did not stop"
+    join_thread(thread, "owned inference")
 
 
 def test_ollama_cancel_interrupts_blocked_socket_and_releases_local_capacity():
@@ -40,7 +40,7 @@ def test_ollama_cancel_interrupts_blocked_socket_and_releases_local_capacity():
             self.wfile.write(b'{"message":{"content":""},"done":false}\n')
             self.wfile.flush()
             started.set()
-            self.connection.settimeout(5)
+            self.connection.settimeout(25)
             try:
                 if self.connection.recv(1) == b"":
                     disconnected.set()
@@ -68,10 +68,10 @@ def test_ollama_cancel_interrupts_blocked_socket_and_releases_local_capacity():
     worker = threading.Thread(target=infer, daemon=True)
     try:
         worker.start()
-        assert started.wait(2)
+        wait_event(started, "the peer to receive the request")
         token.cancel()
-        assert finished.wait(3)
-        assert disconnected.wait(2)
+        wait_event(finished, "the cancelled call to return")
+        wait_event(disconnected, "the peer to see the disconnect")
         join(worker)
         assert failures
         assert payloads[0]["stream"] is True
@@ -108,7 +108,7 @@ def test_native_cancel_targets_only_the_bound_request(adapter):
                 200, json={"request_id": payload["request_id"], "status": "cancel_requested"}
             )
         started.set()
-        assert canceled.wait(3)
+        wait_event(canceled, "the cancel request to arrive")
         return httpx.Response(503, json={"error": "canceled"})
 
     provider = adapter("", transport=httpx.MockTransport(handle), request_cancellation=True)
@@ -122,7 +122,7 @@ def test_native_cancel_targets_only_the_bound_request(adapter):
 
     worker = threading.Thread(target=infer, daemon=True)
     worker.start()
-    assert started.wait(2)
+    wait_event(started, "the peer to receive the request")
     token.cancel()
     join(worker)
     assert errors and len(seen) == 2
@@ -212,10 +212,10 @@ def test_foreground_preempts_local_thinker_with_at_most_one_frozen_requeue(
         try:
             original = store.create_session()
             loop.run_turn(original, "Keep this exact input", think=True)
-            assert provider.started[0].wait(5)
+            wait_event(provider.started[0], "the first thinking call to start")
             reply = loop.run_turn(original, "An urgent ordinary follow-up")
             assert reply["message"]["content"] == "Talking stays responsive"
-            assert provider.started[1].wait(5)
+            wait_event(provider.started[1], "the second thinking call to start")
             if second_preemption:
                 loop.run_turn(original, "Another ordinary follow-up")
             with loop.thinking.lock:

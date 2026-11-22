@@ -15,6 +15,7 @@ from test_model_roles import config
 from test_research_usage import priced
 from test_tool_turns import CALL, FakeGate, build
 from test_turn_steering import SteerOnce
+from waiting import wait_event
 
 from pi.api import server as api
 from pi.context import research_usage
@@ -186,7 +187,7 @@ def test_live_background_completion_cannot_overwrite_talking_totals(tmp_path):
         provider.complete_bounded = metered
         sid = store.create_session()
         tid = loop.run_turn(sid, "Talk and analyze", think=True)["turn_id"]
-        assert provider.started.wait(2)
+        wait_event(provider.started, "the thinking call to start")
         during = research_usage.receipt(store, tid)
         assert during["foreground"]["totals"]["input_tokens"] == 3
         assert during["thinking"]["pending_count"] == 1
