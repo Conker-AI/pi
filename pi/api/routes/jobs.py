@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import Field
 
 from pi.core.models import Strict
-from pi.schedule import agent_hooks, agent_jobs, job_models, jobs
+from pi.schedule import agent_hooks, agent_jobs, job_models, job_notes, jobs
 
 JobPath = Annotated[str, Path(pattern=r"^job_[a-f0-9]{32}$")]
 RunPath = Annotated[str, Path(pattern=r"^scheduled_[a-f0-9]{32}$")]
@@ -41,12 +41,12 @@ def router(store, authorize, executor=None):
     @routes.get("/agent/notes", response_model=job_models.AgentJobNoteCollection)
     def agent_job_notes():
         """What AI jobs found for the owner, newest first, until dismissed."""
-        return job_models.AgentJobNoteCollection(results=cast(Any, call(agent_jobs.notes)))
+        return job_models.AgentJobNoteCollection(results=cast(Any, call(job_notes.notes)))
 
     @routes.post("/agent/notes/{identity}/dismiss")
     def dismiss_agent_job_note(identity: Annotated[str, Path(pattern=agent_jobs.NOTE_ID)]):
         """Hide a note; the job's chat keeps the full reply."""
-        return call(agent_jobs.dismiss, identity)
+        return call(job_notes.dismiss, identity)
 
     @routes.post("/{identity}/hook", response_model=job_models.HookIssued)
     def issue_hook(identity: JobPath):

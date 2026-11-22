@@ -207,7 +207,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         # Transactional DDL keeps the exception invisible to every other connection.
         # The runtime lease prevents a provider response from arriving after deletion.
         from pi.context import controls as context_controls
-        from pi.schedule import agent_hooks, agent_jobs, proposals
+        from pi.schedule import agent_hooks, job_notes, proposals
 
         # Before anything changes a turn: the approvals its parked turns wait on, to withdraw.
         withdrawals.queue(db, plan["session_ids"], now=when)
@@ -218,7 +218,7 @@ def _redact(db: sqlite3.Connection, plan: dict) -> dict:
         context_controls.redact(db, plan["session_ids"])
         # Hooks first: their payloads are found through the job's chat, which agent_jobs drops.
         agent_hooks.redact(db, plan["session_ids"])
-        agent_jobs.redact(db, plan["session_ids"])
+        job_notes.redact(db, plan["session_ids"])
         skills.redact(db, plan["session_ids"])
         retired_workflows.redact(db, plan["session_ids"])
         change_requests.redact(db, plan["session_ids"])
