@@ -309,6 +309,7 @@ def test_memory_no_harness_never_calls_ranker(monkeypatch):
     monkeypatch.setattr(session_settings, "memory_allowed", lambda value: True)
     monkeypatch.setattr(memory_store, "pending_deletions", lambda store: False)
     monkeypatch.setattr(memory_store, "recall_held", lambda *args: 0)
+    monkeypatch.setattr(memory_store, "generation", lambda store: 0)
     saved = []
     monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args))
     monkeypatch.setattr(memory.owner_settings, "value", lambda store, key, default: default)
@@ -324,7 +325,7 @@ def test_memory_no_harness_never_calls_ranker(monkeypatch):
         ranker=SimpleNamespace(rank_memories=prohibited),
     )
     worker.prepare("turn", "private")
-    assert saved[-1][-1] is package
+    assert saved[-1][3] is package
 
 
 def test_typed_memory_ranking_route():
