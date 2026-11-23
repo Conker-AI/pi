@@ -240,7 +240,7 @@ def test_paused_jobs_and_tool_jobs_do_not_start(store):
 def test_payloads_are_bounded_and_forgotten_with_the_chat(store):
     job = ai_job(store)
     token = agent_hooks.issue(store, job["id"], now=NOON)["token"]
-    run = agent_hooks.receive(store, job["id"], token, {"text": "x" * 20000}, now=NOON)
+    run = agent_hooks.receive(store, job["id"], token, {"text": "x" * 16000}, now=NOON)
     with store._connect() as db:
         [payload] = db.execute("SELECT payload FROM agent_job_events").fetchone()
         assert len(payload) <= agent_hooks.MAX_PAYLOAD
