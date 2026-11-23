@@ -5,9 +5,10 @@ import time
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, RootModel, field_validator
+from pydantic import Field, RootModel
 
 from pi.core.errors import ServiceError
+from pi.core.filesystem_bodies import Read, _component, _relative
 from pi.core.models import Strict
 from pi.core.toolgate_types import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 
@@ -19,20 +20,6 @@ CREATE TABLE IF NOT EXISTS filesystem_reads (
  approval TEXT, error_code TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 """
-
-
-class Read(Strict):
-    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
-    root_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    path: str = ""
-    limit: int = Field(default=200, ge=1, le=200)
-
-    @field_validator("path")
-    @classmethod
-    def relative_path(cls, value):
-        if not _relative(value):
-            raise ValueError("Use a safe relative directory path.")
-        return value
 
 
 class FileRoot(Strict):
@@ -147,25 +134,6 @@ def _view(row):
 def _configured(gate):
     if gate is None:
         raise FileReadError("unconfigured", "ToolGate listing access is not configured.", 503)
-
-
-def _component(value):
-    return (
-        isinstance(value, str)
-        and 0 < len(value) <= 255
-        and value not in (".", "..")
-        and not any(
-            c in "/\\" or ord(c) < 32 or ord(c) == 127 or 0xD800 <= ord(c) <= 0xDFFF for c in value
-        )
-    )
-
-
-def _relative(value):
-    return (
-        isinstance(value, str)
-        and len(value) <= 4096
-        and (value == "" or all(_component(c) for c in value.split("/")))
-    )
 
 
 def _projection(value, root_id, path, limit):
