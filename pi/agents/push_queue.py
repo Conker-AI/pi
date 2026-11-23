@@ -69,10 +69,12 @@ def _pushed_today(db, preferences, now: datetime) -> int:
 def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
     body = Claim.model_validate(body.model_dump())
     now = now or datetime.now(UTC)
-    waiting = inbox.needs_you_items(store, inbox.local_day_start(store, now.timestamp()))
     claimed, held = [], set()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
+        # Read the Inbox while holding the write lock: a forget, trash or answer cannot commit
+        # between this read and the claim (the reads see committed rows; WAL lets them run).
+        waiting = inbox.needs_you_items(store, inbox.local_day_start(store, now.timestamp()))
         # Unreadable preferences raise: nothing is claimed, so nothing is sent (fail closed).
         row = db.execute("SELECT preferences FROM owner_preferences WHERE singleton=1").fetchone()
         preferences = prefs.OwnerPreferences.model_validate_json(row["preferences"])

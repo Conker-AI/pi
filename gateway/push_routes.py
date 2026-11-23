@@ -45,9 +45,16 @@ def router(app, session, admit_write):
         )
 
     def state(device: str | None = None) -> dict:
-        devices = push.Devices(app.state.auth).ids()
-        value = {"devices": [item["id"] for item in devices], "limit": push.MAX_DEVICES}
+        # Newest first, each with when it was turned on and its browser's short name, so the
+        # owner can tell a device that is not theirs and remove it.
+        value = {"devices": push.Devices(app.state.auth).ids(), "limit": push.MAX_DEVICES}
         return value if device is None else {"device": device, **value}
+
+    def key():
+        try:
+            return push.server_key(Path(app.state.config.database).parent)
+        except push.PushUnavailable:
+            raise unavailable() from None
 
     @routes.get("/api/push")
     def read(request: Request):
@@ -55,16 +62,13 @@ def router(app, session, admit_write):
         session(request)
         if request.scope["query_string"]:
             raise AuthError("Notifications do not accept query parameters.", 422)
-        try:
-            key = push.server_key(Path(app.state.config.database).parent)
-        except push.PushUnavailable:
-            raise unavailable() from None
-        return JSONResponse({"publicKey": push.public_key(key), **state()})
+        return JSONResponse({"publicKey": push.public_key(key()), **state()})
 
     @routes.post("/api/push/subscriptions")
     async def subscribe(request: Request):
-        """Turn notifications on for the device this subscription names."""
-        session(request)
+        """Turn notifications on for the device this subscription names, for this sign-in: signing
+        this browser out turns it off. The other devices are told one more is on."""
+        signed_in = session(request)
         body = await json_body(request, max_bytes=4096)
         admit_write(request, body, password=False)
         try:
@@ -75,7 +79,18 @@ def router(app, session, admit_write):
                 422,
                 code="push_subscription_invalid",
             ) from None
-        return JSONResponse(state(push.Devices(app.state.auth).add(endpoint, point, secret)))
+        label = push.device_label(request.headers.get("user-agent", ""))
+        device, new = push.Devices(app.state.auth).add(
+            endpoint,
+            point,
+            secret,
+            session=signed_in["id"],
+            key=push.public_key_id(key()),
+            label=label,
+        )
+        if new:
+            app.state.push.announce(device, label)
+        return JSONResponse(state(device))
 
     @routes.post("/api/push/subscriptions/{device}/delete")
     async def unsubscribe(device: str, request: Request):

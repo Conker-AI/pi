@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 
 import httpx
 import pytest
@@ -259,9 +260,11 @@ def test_a_device_is_turned_on_listed_and_turned_off(world):
     _, p256dh, secret = device()
     on = subscribe(client, headers, FCM, p256dh, secret).json()
     identity = hashlib.sha256(FCM.encode()).hexdigest()[:32]
-    assert on == {"device": identity, "devices": [identity], "limit": push.MAX_DEVICES}
-    assert subscribe(client, headers, FCM, p256dh, secret).json()["devices"] == [identity]
-    assert client.get("/api/push").json()["devices"] == [identity]
+    assert on["device"] == identity and on["limit"] == push.MAX_DEVICES
+    assert [item["id"] for item in on["devices"]] == [identity]
+    again = subscribe(client, headers, FCM, p256dh, secret).json()["devices"]
+    assert again == on["devices"]  # the same browser again keeps its first time
+    assert client.get("/api/push").json()["devices"] == on["devices"]
     off = client.post(f"/api/push/subscriptions/{identity}/delete", headers=headers, json={})
     assert off.json() == {"removed": True, "devices": [], "limit": push.MAX_DEVICES}
     again = client.post(f"/api/push/subscriptions/{identity}/delete", headers=headers, json={})
@@ -289,7 +292,7 @@ def test_sign_out_everywhere_and_a_new_password_turn_every_device_off(world):
     app.state.auth.revoke()
     assert push.Devices(app.state.auth).ids() == []
     subscribe_direct = push.Devices(app.state.auth)
-    subscribe_direct.add(FCM, p256dh, secret)
+    subscribe_direct.add(FCM, p256dh, secret, session="s", key="k", label="Chrome")
     app.state.auth.set_password("another synthetic owner phrase")
     assert subscribe_direct.ids() == []
 
@@ -300,6 +303,7 @@ def test_a_round_sends_fixed_words_to_every_device_and_drops_a_gone_one(world):
     subscribe(client, headers, FCM, one[1], one[2])
     subscribe(client, headers, MOZILLA, two[1], two[2])
     state.status[MOZILLA] = 410
+    app.state.push.notices.clear()  # the "one more device" notice has its own test
     # Pi sends no words; even if it did, they would not reach the lock screen.
     state.claim = {
         "items": [{"kind": "approval", "urgent": True, "tag": "0123456789abcdef", "title": SECRET}]
@@ -320,9 +324,8 @@ def test_a_round_sends_fixed_words_to_every_device_and_drops_a_gone_one(world):
         "url": "/inbox",
         "tag": "conker-0123456789abcdef",
     }
-    assert client.get("/api/push").json()["devices"] == [
-        hashlib.sha256(FCM.encode()).hexdigest()[:32]
-    ]
+    listed = client.get("/api/push").json()["devices"]
+    assert [item["id"] for item in listed] == [hashlib.sha256(FCM.encode()).hexdigest()[:32]]
     # The gone device is not tried again.
     state.pushes.clear()
     app.state.push.tick()
@@ -360,13 +363,15 @@ def test_an_unreadable_claim_sends_nothing(world, answer):
 
 
 def test_a_stored_endpoint_outside_the_push_services_is_never_posted(world):
-    _, _, state, app, _ = world
+    _, _, state, app, folder = world
     _, p256dh, secret = device()
-    # A well-formed host on 443, so only the push-service allowlist refuses it.
+    current = push.public_key_id(push.server_key(folder))
+    # A well-formed host on 443 and the current key, so only the push-service allowlist refuses it.
+    endpoint = "https://169.254.169.254/latest/meta-data"
     with app.state.auth.transaction() as db:
         db.execute(
-            "INSERT INTO push_subscriptions VALUES(?,?,?,?,?)",
-            ("b" * 32, "https://169.254.169.254/latest/meta-data", p256dh, secret, 1.0),
+            "INSERT INTO push_subscriptions VALUES(?,?,?,?,?,?,?,?)",
+            ("b" * 32, endpoint, p256dh, secret, 1.0, "s", current, "Chrome"),
         )
     state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "c" * 16}]}
     assert app.state.push.tick()["sent"] == 0 and state.pushes == []
@@ -407,3 +412,95 @@ def test_sign_out_everywhere_during_a_claim_sends_nothing(world):
     # no longer the owner's, so none of them is woken.
     state.during_claim = app.state.auth.revoke
     assert app.state.push.tick()["sent"] == 0 and state.pushes == []
+
+
+ANDROID = (
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36"
+)
+WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+
+
+def test_devices_are_listed_newest_first_with_a_short_browser_name(world):
+    client, headers, _, app, _ = world
+    one, two = device(), device()
+    subscribe(client, {**headers, "User-Agent": ANDROID}, FCM, one[1], one[2])
+    subscribe(client, {**headers, "User-Agent": WINDOWS}, MOZILLA, two[1], two[2])
+    listed = client.get("/api/push").json()["devices"]
+    ids = [hashlib.sha256(url.encode()).hexdigest()[:32] for url in (MOZILLA, FCM)]
+    assert [item["id"] for item in listed] == ids
+    assert [item["label"] for item in listed] == ["Firefox on Windows", "Chrome on Android"]
+    assert listed[0]["created"] >= listed[1]["created"] > 0
+    with app.state.auth.transaction() as db:
+        assert "Mozilla/5.0" not in json.dumps(
+            [dict(row) for row in db.execute("SELECT * FROM push_subscriptions")]
+        )
+
+
+def test_signing_out_the_browser_that_turned_a_device_on_turns_it_off(world):
+    client, headers, _, app, _ = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    app.state.auth.revoke("another-browser-session-id")
+    assert len(push.Devices(app.state.auth).ids()) == 1
+    assert client.post("/auth/logout", headers=headers).status_code == 200
+    assert push.Devices(app.state.auth).ids() == []
+
+
+def test_a_sign_in_that_idles_out_keeps_its_device_on(world):
+    client, headers, _, app, _ = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    later = time.time() + 2 * 86400
+    app.state.auth.clock = lambda: later
+    assert app.state.auth.sessions() == []  # the sign-in has expired
+    assert len(push.Devices(app.state.auth).ids()) == 1  # notifications are for a closed tab
+
+
+def test_the_limit_says_to_remove_a_device_in_settings(world):
+    client, headers, _, _, _ = world
+    for number in range(push.MAX_DEVICES):
+        _, p256dh, secret = device()
+        subscribe(client, headers, f"{FCM}-{number}", p256dh, secret)
+    _, p256dh, secret = device()
+    refused = subscribe(client, headers, f"{FCM}-more", p256dh, secret).json()["detail"]
+    assert "Remove one" in refused["message"] and "Settings" in refused["message"]
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_device_the_push_service_refuses_is_removed(world, status):
+    client, headers, state, app, _ = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    state.status[FCM] = status
+    state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "e" * 16}]}
+    assert app.state.push.tick()["removed"] == 1
+    assert push.Devices(app.state.auth).ids() == []
+
+
+def test_a_new_server_key_drops_the_devices_turned_on_with_the_old_one(world):
+    client, headers, state, app, folder = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    (folder / push.KEY_FILE).unlink()
+    app.state.push.start()  # a restart: the key the device was turned on with is gone
+    assert push.Devices(app.state.auth).ids() == []
+    subscribe(client, headers, FCM, p256dh, secret)
+    (folder / push.KEY_FILE).unlink()
+    client.get("/api/push")  # a new key while running
+    state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "e" * 16}]}
+    assert app.state.push.tick()["sent"] == 0 and state.pushes == []
+    assert push.Devices(app.state.auth).ids() == []
+
+
+def test_the_other_devices_hear_when_one_more_is_turned_on(world):
+    client, headers, state, app, _ = world
+    one, two = device(), device()
+    subscribe(client, {**headers, "User-Agent": ANDROID}, FCM, one[1], one[2])
+    assert app.state.push.tick()["sent"] == 0  # the first device has no one to tell
+    subscribe(client, {**headers, "User-Agent": WINDOWS}, MOZILLA, two[1], two[2])
+    subscribe(client, {**headers, "User-Agent": WINDOWS}, MOZILLA, two[1], two[2])  # again: no news
+    app.state.push.tick()
+    assert [str(wire.url) for wire in state.pushes] == [FCM]
+    told = decrypt(state.pushes[0].content, one[0], one[1], one[2])
+    assert told["title"] == "A new device will get Conker notifications: Firefox on Windows"
+    assert told["url"] == "/settings?group=notifications" and len(told["title"]) <= 80

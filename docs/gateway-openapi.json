@@ -687,7 +687,7 @@
     "/api/push/subscriptions": {
       "post": {
         "summary": "Subscribe",
-        "description": "Turn notifications on for the device this subscription names.",
+        "description": "Turn notifications on for the device this subscription names, for this sign-in: signing\nthis browser out turns it off. The other devices are told one more is on.",
         "operationId": "subscribe_api_push_subscriptions_post",
         "responses": {
           "200": {

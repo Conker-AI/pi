@@ -113,7 +113,8 @@ class AuthStore:
                 CREATE INDEX IF NOT EXISTS failures_at ON password_failures(at);
                 CREATE TABLE IF NOT EXISTS push_subscriptions (
                     id TEXT PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL,
-                    auth TEXT NOT NULL, created REAL NOT NULL);
+                    auth TEXT NOT NULL, created REAL NOT NULL, session_id TEXT NOT NULL,
+                    key_id TEXT NOT NULL, label TEXT NOT NULL);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
             if "verified_at" not in columns:
@@ -503,6 +504,7 @@ class AuthStore:
                 db.execute("DELETE FROM push_subscriptions")
             else:
                 db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
+                db.execute("DELETE FROM push_subscriptions WHERE session_id=?", (session_id,))
             db.execute(
                 "DELETE FROM verification_proofs WHERE session_id NOT IN (SELECT id FROM sessions)"
             )

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import sqlite3
 import threading
 import time
 from contextlib import closing
@@ -144,19 +145,46 @@ def test_items_waiting_from_before_the_first_device_are_not_replayed(store):
     assert len(claim(store, after=0)["items"]) == 1
 
 
+def forget(db, session):
+    db.execute(
+        "INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, "
+        "message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
+        ("receipt_x", session, time.time(), "test", 0, 0),
+    )
+    db.execute(
+        "INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)",
+        (session, "receipt_x"),
+    )
+
+
 def test_a_forgotten_chat_never_wakes_a_device(store):
     session = approval(store)
     with store._connect() as db:
-        db.execute(
-            "INSERT INTO forgetting_receipts (id, root_session_id, forgotten_at, confirmation, "
-            "message_count, turn_count) VALUES (?, ?, ?, ?, ?, ?)",
-            ("receipt_x", session, time.time(), "test", 0, 0),
-        )
-        db.execute(
-            "INSERT INTO forgotten_sessions (session_id, receipt_id) VALUES (?, ?)",
-            (session, "receipt_x"),
-        )
+        forget(db, session)
     assert claim(store)["items"] == []
+
+
+def test_a_chat_forgotten_while_the_inbox_is_read_is_never_claimed(store, monkeypatch):
+    session = approval(store)
+    read, landed = push_queue.inbox.needs_you_items, []
+
+    def read_then_forget(*args):
+        items = read(*args)
+        # A forget that tries to land right after the Inbox was read, before the claim is written.
+        with closing(sqlite3.connect(store.path, isolation_level=None, timeout=0.2)) as db:
+            try:
+                db.execute("BEGIN IMMEDIATE")
+                forget(db, session)
+                db.execute("COMMIT")
+                landed.append(True)
+            except sqlite3.OperationalError:  # it waits for the claim's write transaction
+                pass
+        return items
+
+    monkeypatch.setattr(push_queue.inbox, "needs_you_items", read_then_forget)
+    claimed = claim(store)["items"]
+    assert not (landed and claimed)  # never a claim for a chat already forgotten
+    assert landed or claimed
 
 
 def test_unreadable_preferences_claim_nothing(store):
@@ -184,6 +212,8 @@ OWNER, GATEWAY = "owner-control-test-key-0123456789", "gateway-runtime-test-key-
 def test_only_the_owner_control_key_claims(tmp_path, monkeypatch):
     with closing(Store(tmp_path / "pi.db")) as value:
         approval(value)
+        # The route claims at the wall-clock time: no quiet hours, so the hour of the run is moot.
+        change(value, quiet={"enabled": False})
         state = api.app.state
         monkeypatch.setattr(state, "store", value, raising=False)
         monkeypatch.setattr(state, "admin_key", "admin-test-key", raising=False)

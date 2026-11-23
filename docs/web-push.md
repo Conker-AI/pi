@@ -50,14 +50,30 @@ software, not the owner's server).
   at most 10. Only the push services of Chrome, Edge, Firefox and Safari are accepted as endpoints
   (`fcm.googleapis.com`, `android.googleapis.com`, `*.push.services.mozilla.com`,
   `*.push.apple.com`, `*.notify.windows.com`; HTTPS on 443), so the gateway never posts to an
-  address inside the server's network. A device the push service reports gone (404, 410) is
-  removed. Signing out everywhere and a new password turn every device off.
+  address inside the server's network. A device the push service refuses or reports gone (401,
+  403, 404, 410) is removed.
+- A device belongs to the sign-in that turned it on: signing that browser out (or signing it out
+  from the list of browsers) turns it off; signing out everywhere and a new password turn every
+  device off. A sign-in that only idles out keeps its device, since notifications are for a closed
+  tab. Settings lists the devices newest first, with when each was turned on and a short name
+  from fixed words ("Chrome on Android"; the User-Agent itself is never kept), each with Remove.
+- When one more device is turned on, the devices already on get "A new device will get Conker
+  notifications: <name>", which opens Settings, Notifications, so a device that is not the
+  owner's is noticed and removed.
+
+### A new server key
+
+A subscription works only with the key it was made with. If `push-vapid.pem` is lost or replaced,
+the gateway drops every device turned on with the old key (at start and before each round; each
+device keeps the key's id), the push services would refuse them anyway, and the next
+`GET /api/push` makes a new key. The owner turns notifications on again on each device. To
+rotate on purpose: stop the gateway, delete `push-vapid.pem`, start it.
 
 ## Routes
 
 | Route | Needs | Does |
 | --- | --- | --- |
-| `GET /api/push` | session | `{publicKey, devices: [id], limit}`; makes the key on first use |
+| `GET /api/push` | session | `{publicKey, devices: [{id, created, label}], limit}`, newest first; makes the key on first use |
 | `POST /api/push/subscriptions` `{endpoint, keys: {p256dh, auth}}` | session, CSRF | turns this device on; `{device, devices, limit}` |
 | `POST /api/push/subscriptions/{id}/delete` `{}` | session, CSRF | turns one device off; `{removed, devices, limit}` |
 | Pi `POST /push/claim` `{after, limit?}` | owner-control key; the gateway's own call | `{items: [{kind, urgent, tag}], held, delivery}` |

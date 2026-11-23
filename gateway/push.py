@@ -8,10 +8,13 @@ those items and sends each one once.
 - The server key (VAPID, RFC 8292) is made on first use and kept next to the TLS key and the
   password verifier (`push-vapid.pem`, 0600). Its private half never leaves this file: not to the
   browser, not to a log, not to an error. The public half goes to the signed-in owner only.
-- A device is a browser's push subscription. Only the push services of the browsers the owner can use
-  are accepted as endpoints, so the gateway never posts to an address inside the server's network.
-  A device the push service says is gone (404, 410) is removed; sign-out everywhere and a new
-  password remove every device (`store.py`).
+- A device is a browser's push subscription. Only the push services of the browsers the owner
+  can use are accepted as endpoints, so the gateway never posts to an address inside the server's
+  network. A device the push service refuses or calls gone (401, 403, 404, 410) is removed, and
+  so is one turned on with a server key that is no longer the key. Signing out the browser that
+  turned it on removes it; sign-out everywhere and a new password remove every device
+  (`store.py`). A sign-in that only idles out keeps its device: notifications are for a closed
+  tab. When one more device is turned on, the others are told, so a stranger's is noticed.
 - A message carries a fixed short title chosen by the item's kind and the Inbox link. Never a
   chat's title, a message, a name or a number from Conker's records: the lock screen is public.
   It is encrypted to the device (RFC 8291, aes128gcm) with `cryptography`, which Pi already pins.
@@ -72,6 +75,28 @@ TITLES = {
 DNS_NAME = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+")
 GENERIC = "Conker needs you"
 INBOX = "/inbox"
+SETTINGS = "/settings?group=notifications"
+GONE = (401, 403, 404, 410)  # the push service no longer takes messages for this device
+# A device's short name, from fixed words only: the User-Agent itself is never kept.
+BROWSERS = (
+    ("Edg", "Edge"),
+    ("OPR/", "Opera"),
+    ("SamsungBrowser/", "Samsung Internet"),
+    ("Firefox/", "Firefox"),
+    ("FxiOS/", "Firefox"),
+    ("CriOS/", "Chrome"),
+    ("Chrome/", "Chrome"),
+    ("Safari/", "Safari"),
+)
+SYSTEMS = (
+    ("iPhone", "iPhone"),
+    ("iPad", "iPad"),
+    ("Android", "Android"),
+    ("Windows", "Windows"),
+    ("CrOS", "ChromeOS"),
+    ("Macintosh", "Mac"),
+    ("Linux", "Linux"),
+)
 _KEY_LOCK = threading.Lock()
 
 
@@ -198,11 +223,31 @@ def authorization(key: ec.EllipticCurvePrivateKey, endpoint: str, now: float) ->
     return f"vapid t={head}.{body}.{signature}, k={public_key(key)}"
 
 
+def public_key_id(key: ec.EllipticCurvePrivateKey) -> str:
+    """Which server key a device was turned on with; its subscription works with that key only."""
+    return hashlib.sha256(public_key(key).encode()).hexdigest()[:16]
+
+
+def device_label(agent: str) -> str:
+    """A browser's short name from fixed words, such as "Chrome on Android"."""
+    browser = next((name for mark, name in BROWSERS if mark in agent), "A browser")
+    system = next((name for mark, name in SYSTEMS if mark in agent), "")
+    return f"{browser} on {system}" if system else browser
+
+
+def _payload(title: str, url: str, tag: str) -> bytes:
+    value = {"title": title, "url": url, "tag": "conker-" + tag}
+    return json.dumps(value, separators=(",", ":")).encode()
+
+
 def message(item: dict) -> bytes:
     """What the lock screen may show: a fixed title for the kind, and where a tap goes."""
-    title = TITLES.get(item["kind"], GENERIC)
-    value = {"title": title, "url": INBOX, "tag": "conker-" + item["tag"]}
-    return json.dumps(value, separators=(",", ":")).encode()
+    return _payload(TITLES.get(item["kind"], GENERIC), INBOX, item["tag"])
+
+
+def notice(device: str, label: str) -> bytes:
+    """Tells the other devices that one more gets notifications now, and where to remove it."""
+    return _payload(f"A new device will get Conker notifications: {label}", SETTINGS, device[:16])
 
 
 class Devices:
@@ -212,11 +257,17 @@ class Devices:
         self.auth = auth
 
     def ids(self) -> list[dict]:
+        """Newest first: each device's id, when it was turned on and its browser's short name."""
         with self.auth.transaction(write=False) as db:
-            rows = db.execute("SELECT id,created FROM push_subscriptions ORDER BY created")
-            return [{"id": row["id"], "created": row["created"]} for row in rows]
+            rows = db.execute(
+                "SELECT id,created,label FROM push_subscriptions ORDER BY created DESC, id"
+            )
+            return [dict(row) for row in rows]
 
-    def add(self, endpoint: str, p256dh: str, secret: str) -> str:
+    def add(
+        self, endpoint: str, p256dh: str, secret: str, *, session: str, key: str, label: str
+    ) -> tuple[str, bool]:
+        """Turn a device on for this sign-in and server key; also says whether it is new."""
         identity = hashlib.sha256(endpoint.encode()).hexdigest()[:32]
         with self.auth.transaction() as db:
             known = db.execute(
@@ -225,22 +276,29 @@ class Devices:
             count = db.execute("SELECT count(*) FROM push_subscriptions").fetchone()[0]
             if not known and count >= MAX_DEVICES:
                 raise AuthError(
-                    f"Notifications are on for {MAX_DEVICES} devices already. Sign out everywhere"
-                    " (Settings, Account) to turn them off on all of them, then turn this one on.",
+                    f"Notifications are on for {MAX_DEVICES} devices already. Remove one in"
+                    " Settings, Notifications, then turn this one on.",
                     409,
                     code="push_device_limit",
                 )
             # The same browser again keeps the time it was first turned on.
             db.execute(
-                "INSERT INTO push_subscriptions VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE "
-                "SET p256dh=excluded.p256dh, auth=excluded.auth",
-                (identity, endpoint, p256dh, secret, self.auth.clock()),
+                "INSERT INTO push_subscriptions(id,endpoint,p256dh,auth,created,session_id,key_id,"
+                "label) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                "p256dh=excluded.p256dh, auth=excluded.auth, session_id=excluded.session_id, "
+                "key_id=excluded.key_id, label=excluded.label",
+                (identity, endpoint, p256dh, secret, self.auth.clock(), session, key, label),
             )
-        return identity
+        return identity, not known
 
     def remove(self, identity: str) -> bool:
         with self.auth.transaction() as db:
             return db.execute("DELETE FROM push_subscriptions WHERE id=?", (identity,)).rowcount > 0
+
+    def keep_key(self, current: str) -> None:
+        """Drop the devices turned on with another server key: their push service refuses it."""
+        with self.auth.transaction() as db:
+            db.execute("DELETE FROM push_subscriptions WHERE key_id<>?", (current,))
 
     def every(self) -> list[dict]:
         with self.auth.transaction(write=False) as db:
@@ -275,11 +333,22 @@ class Sender:
         self.app, self.client, self.every = app, client, every
         self.stop = threading.Event()
         self.thread = None
+        self.lock = threading.Lock()
+        self.notices: list[tuple[str, str]] = []  # (new device, its short name), until sent
 
     def start(self) -> None:
+        # A device turned on with a key that is gone or replaced can never be reached again.
+        folder = Path(self.app.state.config.database).parent
+        with contextlib.suppress(PushUnavailable):  # unreadable: every round fails closed
+            current = (folder / KEY_FILE).exists() and public_key_id(server_key(folder))
+            Devices(self.app.state.auth).keep_key(current or "")
         if self.every:
             self.thread = threading.Thread(target=self._run, name="web-push", daemon=True)
             self.thread.start()
+
+    def announce(self, device: str, label: str) -> None:
+        with self.lock:
+            self.notices.append((device, label))
 
     def close(self) -> None:
         self.stop.set()
@@ -295,10 +364,19 @@ class Sender:
 
     def tick(self) -> dict:
         config, devices = self.app.state.config, Devices(self.app.state.auth)
-        targets = devices.every()
-        if not targets or not config.pi_owner_key:
-            return {"claimed": 0, "sent": 0, "removed": 0}
+        result = {"claimed": 0, "sent": 0, "removed": 0}
+        with self.lock:
+            notices, self.notices = self.notices, []
+        if not devices.every():
+            return result
         key = server_key(Path(config.database).parent)
+        devices.keep_key(public_key_id(key))
+        targets = devices.every()
+        for device, label in notices:
+            others = [target for target in targets if target["id"] != device]
+            self._round(key, devices, others, notice(device, label), False, result)
+        if not targets or not config.pi_owner_key:
+            return result
         try:
             response = self.app.state.client.post(
                 config.pi_url.rstrip("/") + "/push/claim",
@@ -307,40 +385,44 @@ class Sender:
                 timeout=10,
             )
         except httpx.HTTPError:
-            return {"claimed": 0, "sent": 0, "removed": 0}
+            return result
         # Read again: a device turned off, or sign-out everywhere, during the claim is not woken.
         on = {target["id"] for target in devices.every()}
         targets = [target for target in targets if target["id"] in on]
-        items, sent, removed, failed = _claimed(response), 0, 0, 0
+        items = _claimed(response)
+        result["claimed"] = len(items)
         for item in items:
-            for target in targets:
-                if target.get("gone"):
-                    continue
-                status = self._send(key, target, item)
-                if status in (404, 410):
-                    devices.remove(target["id"])
-                    target["gone"] = True
-                    removed += 1
-                elif status is not None and 200 <= status < 300:
-                    sent += 1
-                else:
-                    failed += 1
-        if failed:
-            LOG.warning("Web push: %d of %d sends were not accepted.", failed, failed + sent)
-        return {"claimed": len(items), "sent": sent, "removed": removed}
+            self._round(key, devices, targets, message(item), item["urgent"], result)
+        return result
 
-    def _send(self, key, target: dict, item: dict) -> int | None:
+    def _round(self, key, devices: Devices, targets, body: bytes, urgent: bool, result) -> None:
+        failed = 0
+        for target in targets:
+            if target.get("gone"):
+                continue
+            status = self._send(key, target, body, urgent)
+            if status in GONE:
+                devices.remove(target["id"])
+                target["gone"] = True
+                result["removed"] += 1
+            elif status is not None and 200 <= status < 300:
+                result["sent"] += 1
+            else:
+                failed += 1
+        if failed:
+            LOG.warning("Web push: %d sends were not accepted.", failed)
+
+    def _send(self, key, target: dict, body: bytes, urgent: bool) -> int | None:
         if not endpoint_allowed(target["endpoint"]):
             return None
         try:
             point, auth = device_keys(target["p256dh"], target["auth"])
-            body = encrypt(message(item), point, auth)
             response = self.client.post(
                 target["endpoint"],
-                content=body,
+                content=encrypt(body, point, auth),
                 headers={
                     "TTL": str(TTL_SECONDS),
-                    "Urgency": "high" if item["urgent"] else "normal",
+                    "Urgency": "high" if urgent else "normal",
                     "Content-Encoding": "aes128gcm",
                     "Content-Type": "application/octet-stream",
                     "Authorization": authorization(key, target["endpoint"], time.time()),
