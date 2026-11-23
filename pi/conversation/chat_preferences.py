@@ -18,6 +18,7 @@ INCOGNITO = "chats.default_incognito"
 HELPERS = "privacy.helpers"
 NAMES_AUTO = "chats.names.auto"
 NAMES_STYLE = "chats.names.style"
+SUGGESTIONS = "chats.suggestions"
 SUGGESTIONS_COUNT = "chats.suggestions_count"
 QUEUE = "chats.queue"
 QUEUE_MAX = "chats.queue_max"
@@ -62,6 +63,11 @@ def name_style(db) -> str:
     """Name style: short, descriptive or emoji; short for anything else."""
     value = _value(db, NAMES_STYLE)
     return value if value in NAME_STYLES else "short"
+
+
+def suggestions_on(db) -> bool:
+    """Suggest your next message: on unless the owner turned it off."""
+    return _value(db, SUGGESTIONS) is not False
 
 
 def suggestions_count(db) -> int:
