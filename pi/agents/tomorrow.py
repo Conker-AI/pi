@@ -73,7 +73,7 @@ def _held(db, job_id: str) -> bool:
     return (
         db.execute(
             "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-            f"AND (status NOT IN ('completed','failed','cancelled') OR ({jobs.WAITING_TURN}))",
+            f"AND (status NOT IN ({jobs.FINISHED}) OR ({jobs.WAITING_TURN}))",
             (job_id,),
         ).fetchone()
         is not None
