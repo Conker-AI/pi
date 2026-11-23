@@ -154,17 +154,28 @@ def load(store):
     }
 
 
-def save(store, request: UpdatePreferences):
+class CapNeedsPassword(Exception):
+    """A save that would change `spendingCap` from a caller that did not ask for the password."""
+
+
+def save(store, request: UpdatePreferences, *, keep_cap: bool = False):
+    """Save at the expected revision. `keep_cap`: refuse a change to the daily spending cap,
+    judged against the stored cap inside this transaction (the recovery key's saves)."""
     # Revalidate even constructed models: storage must not admit bypassed fields.
     request = UpdatePreferences.model_validate(request.model_dump())
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        revision = db.execute(
-            "SELECT revision FROM owner_preferences WHERE singleton=1"
-        ).fetchone()[0]
+        row = db.execute(
+            "SELECT revision,preferences FROM owner_preferences WHERE singleton=1"
+        ).fetchone()
+        revision = row[0]
         if revision != request.expected_revision:
             raise RevisionConflict(revision)
         payload = request.preferences.model_dump()
+        if keep_cap:
+            stored = json.loads(row[1]).get("spendingCap", DEFAULT_SPENDING_CAP)
+            if payload["spendingCap"] != stored:
+                raise CapNeedsPassword("Changing the daily spending cap needs your password.")
         db.execute(
             "UPDATE owner_preferences SET revision=?,preferences=? WHERE singleton=1",
             (revision + 1, json.dumps(payload)),
