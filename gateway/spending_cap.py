@@ -60,8 +60,12 @@ def read_request(stream: BinaryIO) -> tuple[str, dict]:
     return value["password"], changes
 
 
-def _call(client: httpx.Client, config, method: str, body: dict | None = None) -> dict:
-    after = NOTHING_SAVED if body is None else MAYBE_SAVED
+def call_preferences(
+    client: httpx.Client, config, method: str, body: dict | None = None, maybe: str = MAYBE_SAVED
+) -> dict:
+    """Pi's owner preferences with the owner credential (also `owner-preferences`). `maybe` is what
+    a save whose answer was lost tells the owner to check."""
+    after = NOTHING_SAVED if body is None else maybe
     try:
         response = client.request(
             method,
@@ -92,10 +96,10 @@ def _call(client: httpx.Client, config, method: str, body: dict | None = None) -
 
 def save_cap(config, client: httpx.Client, changes: dict) -> dict:
     """Read the preferences, change only the cap, save at that revision."""
-    current = _call(client, config, "GET")
+    current = call_preferences(client, config, "GET")
     preferences = dict(current["preferences"])
     preferences["spendingCap"] = {**preferences["spendingCap"], **changes}
-    saved = _call(
+    saved = call_preferences(
         client,
         config,
         "POST",

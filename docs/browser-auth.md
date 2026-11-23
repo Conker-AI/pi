@@ -77,8 +77,8 @@ or 60 minutes, or 0 for the host's limit). `GATEWAY_IDLE_TIMEOUT_SECONDS` is the
 ceiling (integer 60–86400 seconds; default 1800): no choice can make the window longer. The
 gateway learns the choice from every preferences document it relays to the browser (a read or
 a password-verified save) and keeps the last one in its database, so a restart or Pi being down
-never loosens it; until it has seen one, the ceiling applies. A save always wins; a read older
-than the one kept may only shorten the window. A new choice applies at once to every signed-in
+never loosens it; until it has seen one, the ceiling applies. A save from Settings always wins;
+a read, or a host `owner-preferences` save, older than the one kept may only shorten the window. A new choice applies at once to every signed-in
 browser. The window measures time without the owner's input; the server cannot observe human presence,
 so it trusts only the explicit activity route. Polling, reads and writes never extend it (L-03). The
 frontend may additionally lock earlier on local inactivity using logout. Login
@@ -247,6 +247,15 @@ On the host, `python -m gateway setup --db PATH` sets the initial password;
 echo and explain what the password protects. There is no network setup or reset
 endpoint, recovery email, or claim-by-first-visitor behavior. `revoke-all` can be
 used without changing the password. In companion these are `./conker auth ...`.
+
+The host CLI asks for the password for the same things the browser does, and the gateway checks
+it (`AuthStore.host_password`: its own budget of five wrong per five minutes, so browsers and the
+host cannot use up each other's tries). It arrives on stdin with the change, never in argv or
+the environment: `spending-cap` (the daily cap), `owner-preferences` (a preferences save Pi
+refused on the recovery key: the sign-out time, a new chat's access, the daily budgets;
+[owner-preferences.md](owner-preferences.md)) and `apply approvals` (a yes at level 3, or at a
+level that cannot be read, exactly as the Inbox route above; without it the command decides
+nothing and exits 3).
 
 ## Optional same-origin dashboard assets
 

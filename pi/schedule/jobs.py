@@ -205,10 +205,15 @@ WAITING_TURN = (
 )
 
 
+# A run that is over. `skipped`: an AI job's run the owner's limits held back before any model
+# was asked (agent_jobs.admit); it did nothing, so it is never a failure.
+FINISHED = "'completed','failed','cancelled','skipped'"
+
+
 def _claim(db, row, now, request_id=None):
     if db.execute(
         "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-        f"AND (status NOT IN ('completed','failed','cancelled') OR ({WAITING_TURN}))",
+        f"AND (status NOT IN ({FINISHED}) OR ({WAITING_TURN}))",
         (row["id"],),
     ).fetchone():
         return None
@@ -303,7 +308,7 @@ def run_now(store, identity, request_id, now=None, with_run=None):
 
 
 def finish(store, identity, status, receipt):
-    if status not in ("completed", "failed", "awaiting_approval", "outcome_unknown"):
+    if status not in ("completed", "failed", "skipped", "awaiting_approval", "outcome_unknown"):
         raise ValueError("Unsupported run outcome.")
     encoded = json.dumps(receipt, allow_nan=False)
     if len(encoded) > 100000:
@@ -397,7 +402,9 @@ def dispatch_claim(store, run, invoke, *, resume=False):
             definition["target"], action_id=saved["id"], agent_id=definition["agentId"], **approval
         )
         status = outcome.get("status")
-        if status not in ("completed", "failed", "awaiting_approval"):
+        # Only an AI job's own executor can say a run was skipped; a tool's receipt cannot.
+        skipped = status == "skipped" and definition["target"].get("kind") == "agent"
+        if status not in ("completed", "failed", "awaiting_approval") and not skipped:
             status = "outcome_unknown"
         if len(json.dumps(outcome, allow_nan=False)) > 100000:
             raise ValueError("Receipt exceeds limit.")

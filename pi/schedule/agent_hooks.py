@@ -107,7 +107,7 @@ def receive(store, job_id, token, body, now=None) -> dict:
     with store._connect() as db:
         db.execute(
             "DELETE FROM agent_job_events WHERE created_at<? OR run_id IN (SELECT id FROM "
-            "scheduled_runs WHERE status IN ('completed','failed','cancelled'))",
+            f"scheduled_runs WHERE status IN ({jobs.FINISHED}))",
             (now - STALE_EVENT_SECONDS,),
         )
         row = db.execute(

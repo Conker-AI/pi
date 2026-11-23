@@ -33,7 +33,7 @@ from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.schedule_bodies import Decision
 from pi.models.providers import Message
-from pi.schedule import loop_candidates, proactive_budget
+from pi.schedule import loop_candidates, proactive_budget, proposal_topics
 
 MAX_EVIDENCE_MESSAGES = 200
 MAX_EVIDENCE_CHARACTERS = 24_000
@@ -114,8 +114,8 @@ Rules:
 - Only propose something several messages support. Cite them by their aliases (e1, e2...).
 - Say concretely what would happen if the owner approves. Never promise an action \
 already happened, and do not ask for credentials.
-- Skip anything in the "already declined" list, and anything that is a ritual they \
-may value rather than waste.
+- Skip anything in the "already declined" list, anything about a topic in "topics to \
+skip", and anything that is a ritual they may value rather than waste.
 - Proposing nothing is a good answer when nothing stands out.
 
 Reply with only JSON: {{"proposals": [{{"title": "short name", \
@@ -286,6 +286,7 @@ def run_pass(
         since = _watermark(db)
         evidence = _evidence(db, since, now.timestamp())
         blocked, declined_titles = _suppressed(db, now.timestamp())
+        topics = proposal_topics.read(db)
     if len(evidence) < MIN_EVIDENCE_MESSAGES:
         return _finish(
             store, pass_id, "skipped", "not_enough_new_messages", evidence_count=len(evidence)
@@ -317,6 +318,7 @@ def run_pass(
         for alias, item in zip(aliases, evidence, strict=True)
     )
     declined = "\n".join(f"- {title}" for title in declined_titles) or "(none)"
+    declined += proposal_topics.listing(topics)
     messages = [
         Message(
             "system",
@@ -332,6 +334,7 @@ def run_pass(
     try:
         completion = complete(messages)
         found = _parse(completion.text, aliases, limit, set(blocked))
+        found = [item for item in found if not proposal_topics.names_one(item, topics)]
         by_alias = {
             a: {"id": i["id"], "session_id": i["session_id"]}
             for a, i in zip(aliases, evidence, strict=True)

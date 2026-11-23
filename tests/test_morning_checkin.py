@@ -129,7 +129,7 @@ def test_it_waits_while_proactivity_is_off(store):
     loop, _ = build(store, ["Something for you"], FakeGate())
     run = jobs.run_now(store, job["id"], "morning-check-in-run-0002", now=NOON)
     receipt = agent_jobs.AgentJobs(store, loop).run(run["id"], now=NOON)
-    assert receipt["code"] == "HELD_BACK" and "proactive work off" in receipt["reason"]
+    assert receipt["code"] == "PROACTIVITY_OFF" and "proactive work off" in receipt["reason"]
     assert jobs.get_job(store, job["id"])["definition"]["enabled"] is True
 
 
@@ -162,7 +162,7 @@ def test_a_run_with_something_posts_one_inbox_note(store):
 
 def test_a_run_in_quiet_hours_does_nothing(store):
     receipt, turns = check_in_run(store, "Something for you", "morning-check-in-run-0005", LATE)
-    assert receipt["code"] == "HELD_BACK" and "quiet hours" in receipt["reason"]
+    assert receipt["code"] == "QUIET_HOURS" and "quiet hours" in receipt["reason"]
     assert turns == 0 and job_notes.notes(store) == []
 
 
@@ -180,7 +180,7 @@ def test_a_run_over_the_daily_budget_does_nothing(store):
             now=instant,
         )
     receipt, turns = check_in_run(store, "Something for you", "morning-check-in-run-0006")
-    assert receipt["code"] == "HELD_BACK" and "daily limit" in receipt["reason"]
+    assert receipt["code"] == "OVER_BUDGET" and "daily limit" in receipt["reason"]
     assert turns == 0 and job_notes.notes(store) == []
 
 

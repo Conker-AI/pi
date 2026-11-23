@@ -8,7 +8,8 @@ built in: a weekly life review, a deadline watch or a follow-up with friends are
 
 Repeating (interval) jobs skip the owner's quiet hours; a job set for a time of day runs then.
 When the reply has something for the owner, an Inbox note names it in one line and links to the
-chat. A reply of exactly NOTHING records the run and stays quiet.
+chat. A reply of exactly NOTHING records the run and stays quiet. The owner may instead want a note
+after every run or none (`proactivity.jobs.results`, `agent_job_text.result_note`).
 
 A job Conker made on its own (`createdBy: "conker"`, only when the owner's access settings let
 conker.schedule run without asking) is held tighter, since the owner never read its instructions:
@@ -45,7 +46,7 @@ from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
-from pi.schedule.agent_job_text import QUIET, _note, summarize, when
+from pi.schedule.agent_job_text import QUIET, _note, result_note, when
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 
 PREAMBLE = (
@@ -63,11 +64,13 @@ CONKER_PER_DAY = 3
 # since Conker did not choose to make them.
 BUILT_IN = ("job_beca06ba345a8b3170a4d8e2473fe00f",)
 # Why a run of a job Conker made was held back (the owner's proactive budget refused it).
+# Why the owner's own limits held a run back before any model was asked: the run's outcome code
+# and the words its receipt keeps. Such a run did nothing and is recorded as skipped, never failed.
 HELD = {
-    "quiet_hours": "it is the owner's quiet hours.",
-    "proactivity_off": "the owner turned proactive work off.",
-    "urgent_only": "the owner allows only urgent proactive work.",
-    "daily_budget_suggestions": "the owner's daily limit for Conker's own work is used up.",
+    "quiet_hours": ("QUIET_HOURS", "it is the owner's quiet hours."),
+    "proactivity_off": ("PROACTIVITY_OFF", "the owner turned proactive work off."),
+    "urgent_only": ("URGENT_ONLY", "the owner allows only urgent proactive work."),
+    "daily_budget": ("OVER_BUDGET", "the owner's daily limit for Conker's own work is used up."),
 }
 
 SCHEMA = """
@@ -197,10 +200,11 @@ def run_of(db, turn_id) -> dict | None:
     return json.loads(row[0]) if row else None
 
 
-def admit(store, run_id, definition, now=None) -> str | None:
+def admit(store, run_id, definition, now=None) -> tuple[str, str] | None:
     """Reserve one suggestion from the owner's daily proactive budget for a run of a job Conker
-    made on its own, the way proposals reserve, before any model is asked. Plain words when it
-    is held back; None when it may run. The owner's own jobs run on his schedule, as he set it."""
+    made on its own, the way proposals reserve, before any model is asked. The outcome code and
+    plain words when it is held back (`HELD`, or HELD_BACK for anything else); None when it may
+    run. The owner's own jobs run on his schedule, as he set it."""
     if definition.get("createdBy") != "conker":
         return None
     with store._connect() as db:
@@ -221,7 +225,9 @@ def admit(store, run_id, definition, now=None) -> str | None:
             now=instant,
         )
     except proactive_budget.Denied as exc:
-        return HELD.get(exc.reasons[0], "the owner's limits held it back.")
+        reason = exc.reasons[0]
+        key = "daily_budget" if reason.startswith("daily_budget_") else reason
+        return HELD.get(key, ("HELD_BACK", "the owner's limits held it back."))
     return None
 
 
@@ -353,7 +359,10 @@ class AgentJobs:
             return {"status": "failed", "code": "SOURCE_HIDDEN", "reason": job_hidden.REFUSAL}
         held = admit(self.store, run_id, definition, now)
         if held:
-            return {"status": "failed", "code": "HELD_BACK", "reason": "Held back: " + held}
+            code, words = held
+            # Only a refusal that is not one of the owner's limits (a race) is a failure.
+            status = "failed" if code == "HELD_BACK" else "skipped"
+            return {"status": status, "code": code, "reason": "Held back: " + words}
         session_id = _open_session(self.store, row["job_id"], definition)
         reason = ""
         if agent_hooks.started_by_hook(row["request_id"]):
@@ -399,7 +408,7 @@ class AgentJobs:
             return {"status": "completed", **receipt, "waitingForApproval": True}
         message = result.get("message") or {}
         content = message.get("content")
-        found = summarize(content if isinstance(content, str) else "")
+        found = result_note(self.store, content if isinstance(content, str) else "")
         if found:
             _note(
                 self.store,

@@ -22,6 +22,16 @@ The preference document matches the frontend configuration fields:
 }
 ```
 
+Saving through the gateway asks for the password (ADR-0010). The sign-out time
+(`idleTimeoutMinutes`), the access a new chat starts with (`newChatAccess`), the daily budgets
+(`dailyBudget`) and the spending cap (`spendingCap`) change only with it
+(`pi.core.owner_preferences.PASSWORD_FIELDS`): a save on the recovery key (the host CLI) that
+would change one of them, judged against the stored values inside the save's transaction, gets
+403 `password_required` and saves nothing. The other preferences still save on that key. The
+host CLI then asks for the password and sends the same save to the gateway's
+`python -m gateway owner-preferences` (`{password, expected_revision, preferences}` on stdin),
+which checks it and saves with the owner credential.
+
 Fields are strict: unknown fields and coercions are rejected. Quiet-hour times use
 24-hour HH:mm and an available IANA zone; enabled start and end must differ.
 Urgency accepts `meaningful`, `urgent_only`, or `off`. Integer daily ceilings are

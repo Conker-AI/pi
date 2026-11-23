@@ -37915,7 +37915,8 @@
               "failed",
               "awaiting_approval",
               "outcome_unknown",
-              "cancelled"
+              "cancelled",
+              "skipped"
             ],
             "title": "Status"
           },
@@ -38084,7 +38085,8 @@
               "failed",
               "awaiting_approval",
               "outcome_unknown",
-              "cancelled"
+              "cancelled",
+              "skipped"
             ],
             "title": "Status"
           },

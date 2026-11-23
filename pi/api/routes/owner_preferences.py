@@ -4,9 +4,11 @@ Preferences (quiet hours, proactivity, daily budgets, plan alerts, idle timeout)
 settings document (`pi.core.owner_settings`) are the owner's own: the Settings screen reads and saves
 them with the owner credential, and preference saves ask for his password at the gateway.
 
-The daily spending cap (`spendingCap`) changes only with that password (R-M6). The owner credential
-is the gateway, which asked for it (the browser's password proof, or the `spending-cap` host
-command); a save on the recovery key (the host CLI's relay) that would change the cap is refused.
+The sign-out time, the access a new chat starts with, the daily budgets and the daily spending cap
+(`owner_preferences.PASSWORD_FIELDS`; ADR-0010, R-M6) change only with that password. The owner
+credential is the gateway, which asked for it (the browser's password proof, or the
+`owner-preferences` and `spending-cap` host commands); a save on the recovery key (the host CLI's
+relay) that would change one is refused, 403 `password_required`, and saves nothing.
 """
 
 from __future__ import annotations
@@ -57,19 +59,20 @@ def router(app_state, require_owner):
         "/owner/preferences", dependencies=[Depends(require_owner)], responses=preferences_reply
     )
     def save_owner_preferences(body: owner_preferences.UpdatePreferences, request: Request):
-        # Anything but the owner credential (the recovery key) keeps the cap as stored.
-        keep_cap = getattr(request.state, "owner_credential", False) is not True
+        # Anything but the owner credential (the recovery key) keeps PASSWORD_FIELDS as stored.
+        keep = getattr(request.state, "owner_credential", False) is not True
         try:
-            return owner_preferences.save(app_state().store, body, keep_cap=keep_cap)
+            return owner_preferences.save(app_state().store, body, keep_password_fields=keep)
         except owner_preferences.RevisionConflict as exc:
             raise _conflict(exc) from exc
-        except owner_preferences.CapNeedsPassword as exc:
+        except owner_preferences.NeedsPassword as exc:
             raise HTTPException(
                 403,
                 {
                     "code": "password_required",
-                    "message": "Change the daily spending cap in Settings or with "
-                    "conker spending cap; both ask for your password.",
+                    "message": "The sign-out time, new chat access, daily budgets and spending cap "
+                    "change only with your password: in Settings, or with conker config set or "
+                    "conker spending cap, which ask for it.",
                 },
             ) from exc
 
