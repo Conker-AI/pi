@@ -112,7 +112,7 @@ def test_creation_at_lineage_limit_refuses_atomically_even_with_inherited_raw_se
     if kind == "message":
         boundary = store.append_message(parent, "user", "Exact branch boundary")
     if kind.startswith("team"):
-        from test_team_execution import setup, start
+        from tests.team_execution_helpers import setup, start
 
         team, _ = setup(store)
         if kind == "team_step":

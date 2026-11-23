@@ -8,7 +8,6 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from test_spending_cap import set_cap
-from test_team_execution import Recorder, setup, start
 from waiting import wait_event, wait_until
 
 from pi.agents import team_background, team_execution, team_models
@@ -17,6 +16,7 @@ from pi.conversation.store import Store
 from pi.core import errors
 from pi.models.routing import Router
 from pi.turns.loop import Loop
+from tests.team_execution_helpers import Recorder, setup, start
 
 HEADERS = {"X-Owner-Key": "owner"}
 

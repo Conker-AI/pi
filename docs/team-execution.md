@@ -86,6 +86,6 @@ remains configuration history, not a transcript mirror.
 Validation uses real Loop instances and injected recorder providers only:
 
 ```sh
-python -m pytest tests/test_team_execution.py tests/test_collaboration.py tests/test_loop.py -q
-python -m ruff check pi/agents/team_execution.py pi/api/routes/team_execution.py tests/test_team_execution.py
+python -m pytest tests/test_team_execution.py tests/test_team_execution_roles.py tests/test_collaboration.py tests/test_loop.py -q
+python -m ruff check pi/agents/team_execution.py pi/api/routes/team_execution.py tests/test_team_execution.py tests/team_execution_helpers.py tests/test_team_execution_roles.py
 ```

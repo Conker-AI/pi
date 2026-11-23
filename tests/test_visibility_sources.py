@@ -7,10 +7,6 @@ import pytest
 from test_loop import Recorder as LoopRecorder
 from test_loop import loop_with
 from test_project_context import setup as project_setup
-from test_team_execution import Recorder as TeamRecorder
-from test_team_execution import execute as team_execute
-from test_team_execution import setup as team_setup
-from test_team_execution import start as team_start
 
 from pi.agents import profiles as agents
 from pi.context import controls as context_controls
@@ -18,6 +14,10 @@ from pi.context import project_sources, projects
 from pi.conversation import archive, forks, submissions
 from pi.conversation.store import Store
 from pi.schedule import tasks
+from tests.team_execution_helpers import Recorder as TeamRecorder
+from tests.team_execution_helpers import execute as team_execute
+from tests.team_execution_helpers import setup as team_setup
+from tests.team_execution_helpers import start as team_start
 
 REFUSED = (agents.AgentError, context_controls.ContextError)
 

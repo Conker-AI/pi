@@ -184,15 +184,14 @@ def test_a_teammates_summary_of_a_web_page_reaches_the_next_role_as_outside_cont
     store, reads_web
 ):
     """2026-11-07 attack report, fix 1: a handoff keeps the outside mark of what it came from."""
-    from test_team_execution import Recorder, setup
-    from test_team_execution import start as start_run
-
     from pi.actions.toolgate import Tool, ToolResult
     from pi.agents import team_execution as teams
     from pi.agents import team_models
     from pi.models.providers import Completion
     from pi.models.routing import Router
     from pi.turns.loop import Loop as TurnLoop
+    from tests.team_execution_helpers import Recorder, setup
+    from tests.team_execution_helpers import start as start_run
 
     class Web:
         def tools(self):

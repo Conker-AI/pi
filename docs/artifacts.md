@@ -108,7 +108,7 @@ deployment, external fetch, or execution is included.
 
 ## Evidence
 
-`python -m pytest tests/test_artifacts.py tests/test_artifact_downloads.py
+`python -m pytest tests/test_artifacts.py tests/test_artifacts_api.py tests/test_artifact_downloads.py
 tests/test_citations.py tests/test_forgetting.py -q` exercises temporary databases only:
 restart persistence, database immutable history, competing revision writes,
 restore/archive, strict schemas and size bounds, source privacy/provenance changes,

@@ -272,11 +272,10 @@ def test_exact_browser_routes_and_bounded_pagination(owner):
 def test_the_owner_starts_and_reads_a_team_run_with_the_cap_on_and_is_refused_with_it_off(
     owner, monkeypatch
 ):
-    from test_team_execution import Recorder
-    from test_team_execution import setup as team_setup
-
     from pi.api.browser_contract import password_write, session_only_write
     from pi.core import owner_preferences as prefs
+    from tests.team_execution_helpers import Recorder
+    from tests.team_execution_helpers import setup as team_setup
 
     store, client, headers = owner
     monkeypatch.setattr(
