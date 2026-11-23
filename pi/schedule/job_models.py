@@ -244,6 +244,7 @@ RunStatus = Literal[
     "awaiting_approval",
     "outcome_unknown",
     "cancelled",
+    "skipped",
 ]
 
 

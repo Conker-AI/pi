@@ -66,6 +66,7 @@ STATES = {
     "acted_no_reply",
     "outcome_unknown",
     "interrupted",
+    "skipped",
 }
 
 
@@ -125,7 +126,9 @@ def _item(db, entry):
         "status": entry["to_status"],
         "occurredAt": entry["occurred_at"],
         "provenance": entry["provenance"],
-        "needsAttention": entry["to_status"] not in ("complete", "completed", "cancelled"),
+        # A skipped run is a job the owner's own limits held back: nothing for him to do.
+        "needsAttention": entry["to_status"]
+        not in ("complete", "completed", "cancelled", "skipped"),
         "urgency": urgency(entry["to_status"]),
     }
     if entry["scheduled_run_id"]:

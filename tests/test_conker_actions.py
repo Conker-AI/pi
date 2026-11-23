@@ -241,8 +241,8 @@ def test_runs_of_a_job_conker_made_spend_his_proactive_budget(store):
     job, _ = kept_job(store, loop)
     receipt, _, provider = run_job(store, job, ["NOTHING"], now=NIGHT)
     assert receipt == {
-        "status": "failed",
-        "code": "HELD_BACK",
+        "status": "skipped",
+        "code": "QUIET_HOURS",
         "reason": "Held back: it is the owner's quiet hours.",
     }
     assert provider.sent == []  # no model was asked
@@ -258,7 +258,7 @@ def test_runs_of_a_job_conker_made_spend_his_proactive_budget(store):
         now=datetime.fromtimestamp(NOON, UTC),
     )
     receipt, _, provider = run_job(store, job, ["NOTHING"])
-    assert receipt["code"] == "HELD_BACK" and "daily limit" in receipt["reason"]
+    assert receipt["code"] == "OVER_BUDGET" and "daily limit" in receipt["reason"]
     assert provider.sent == []
 
 
