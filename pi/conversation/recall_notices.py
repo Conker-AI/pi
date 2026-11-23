@@ -5,7 +5,9 @@ memory (`pi.memory.uses`). The notice holds ids only: the memory id, whether it 
 forgotten, the revision the old answers saw and the request id that is its key. It holds no
 memory words and no chat id. How many answers and chats it reaches is counted when the Inbox is
 read, from `memory_uses` rows in chats that are not forgotten and not in the Trash, so a chat
-that leaves takes itself out of the count, and a notice that reaches nothing is not shown.
+that leaves takes itself out of the count, and a notice that reaches nothing is not shown. No
+answer is counted by two notices: a second change of the same memory tells only what the ones
+before it did not. An answer saved after a memory's last change is counted by none.
 
 Design: context/design/memory-recall-notice.md in the Conker workspace.
 """
@@ -25,7 +27,7 @@ from pi.core.models import Strict
 NOTICE_ID = r"^mrn_[0-9a-f]{32}$"
 CHANGES = ("corrected", "forgotten")
 MAX_CHATS = 20
-MAX_OPEN = 100  # notices read per Inbox call, newest first
+MAX_OPEN = 100  # notices shown per Inbox call, newest first
 STORED_TITLE = "Memory changed"  # the card's words are built when read, from visible chats
 _VISIBLE = f"s.status<>'forgotten' AND NOT {visibility.hidden_sql('u.session_id')}"
 
@@ -67,40 +69,55 @@ def _identity(request_id: str) -> str:
     return "mrn_" + uuid.uuid5(uuid.NAMESPACE_URL, f"pi-memory-recall:{request_id}").hex
 
 
-# Uses an earlier notice of the same memory did not already cover: a revision above the one that
-# notice named (up to this one), or, for a use with no revision, one recorded after that notice.
-_NEW_USE = (
-    "u.memory_id=? AND u.recorded_at<=? AND ((u.revision IS NOT NULL AND u.revision>? "
-    "AND u.revision<=?) OR (u.revision IS NULL AND u.recorded_at>?))"
+def _chain(candidate: bool = False) -> str:
+    """A WITH clause naming `chain`: every memory-recall notice (with `candidate`, also the one
+    about to be filed: :id, :at, :memory, :revision) beside what the notices filed before it for
+    the same memory (by time, dismissed or not) already counted: `low`, the highest revision one
+    of them named, and `low_at`, the latest time one was filed (-1 and 0 when there is none). A
+    notice whose facts are not valid (`valid` false) is never shown, so it bounds nothing."""
+    filing = (
+        " UNION ALL SELECT :id, :at, NULL, "
+        "json_object('memoryId', :memory, 'revision', :revision), 1"
+        if candidate
+        else ""
+    )
+    return (
+        "WITH recall AS (SELECT *, json_extract(facts,'$.memoryId') AS memory_id, "
+        "json_extract(facts,'$.revision') AS revision, "
+        "json_type(facts,'$.memoryId')='text' AND json_type(facts,'$.revision')='integer' AS valid "
+        "FROM (SELECT id, created_at, dismissed_at, facts, 0 AS candidate FROM notices "
+        f"WHERE kind=:kind{filing})), "
+        "chain AS (SELECT *, coalesce(MAX(CASE WHEN valid THEN revision END) OVER earlier, -1) "
+        "AS low, coalesce(MAX(CASE WHEN valid THEN created_at END) OVER earlier, 0) AS low_at "
+        "FROM recall WINDOW earlier AS (PARTITION BY memory_id ORDER BY created_at, id "
+        "ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING))"
+    )
+
+
+# The uses notice `c` counts: of its memory as it was (its revision or older; a use with no
+# revision by time alone), recorded by the time it was filed, and not counted by an earlier
+# notice: recorded after the latest one, or of a revision above any they named. Split on
+# `low_at` into two arms so each reads one index range: uses recorded since the last notice, and
+# older uses of a newer revision (only after a clock step). No use is counted by two notices.
+# While clocks and revisions move forward together, a use is counted by the first notice filed
+# after it was recorded; a use saved after a memory's last change (or its forget) by none.
+_ARMS = (
+    (
+        "u.recorded_at>c.low_at AND u.recorded_at<=c.created_at "
+        "AND (u.revision IS NULL OR u.revision<=c.revision)"
+    ),
+    "u.revision>c.low AND u.revision<=c.revision AND u.recorded_at<=c.low_at",
 )
 
 
-def _floor(db, memory_id: str, before: float) -> tuple[int, float]:
-    """The revision and time of the newest earlier notice for this memory (dismissed or not)."""
-    row = db.execute(
-        "SELECT json_extract(facts,'$.revision') AS revision, created_at FROM notices "
-        "WHERE kind=? AND json_extract(facts,'$.memoryId')=? AND created_at<? "
-        "ORDER BY created_at DESC LIMIT 1",
-        (notices.MEMORY_RECALL, memory_id, before),
-    ).fetchone()
-    if row is None or type(row["revision"]) is not int:
-        return -1, 0.0
-    return row["revision"], row["created_at"]
-
-
-def _args(db, memory_id: str, revision: int, until: float) -> tuple:
-    low, low_at = _floor(db, memory_id, until)
-    return memory_id, until, low, revision, low_at
-
-
-def _reach(db, memory_id: str, revision: int, until: float):
-    """New uses of the memory as it was (up to `revision`, before `until`) in visible chats."""
-    return db.execute(
-        "SELECT COUNT(*), COUNT(DISTINCT u.session_id) FROM memory_uses u "
-        "JOIN sessions s ON s.id=u.session_id "
-        f"WHERE {_NEW_USE} AND {_VISIBLE}",
-        _args(db, memory_id, revision, until),
-    ).fetchone()
+def _counted(where: str) -> str:
+    """The uses counted by the chain notices `c` that match `where`, one row per use."""
+    return " UNION ALL ".join(
+        "SELECT c.id AS notice, c.created_at AS filed, c.memory_id, c.facts, u.session_id, "
+        f"u.recorded_at FROM chain c JOIN memory_uses u ON u.memory_id=c.memory_id AND {arm} "
+        f"WHERE {where}"
+        for arm in _ARMS
+    )
 
 
 def file(
@@ -120,14 +137,22 @@ def file(
     # Existence only: a chat in the Trash when the change finishes still counts, so its notice
     # appears once the chat is restored. A forgotten chat's rows are already deleted, and who may
     # be seen is decided again every time the Inbox is read.
+    identity = _identity(request_id)
     if not db.execute(
-        f"SELECT 1 FROM memory_uses u WHERE {_NEW_USE} LIMIT 1",
-        _args(db, memory_id, revision, at),
+        f"{_chain(candidate=True)}, counted AS ({_counted('c.candidate')}) "
+        "SELECT 1 FROM counted LIMIT 1",
+        {
+            "kind": notices.MEMORY_RECALL,
+            "id": identity,
+            "at": at,
+            "memory": memory_id,
+            "revision": revision,
+        },
     ).fetchone():
         return False
     return notices.insert(
         db,
-        identity=_identity(request_id),
+        identity=identity,
         kind=notices.MEMORY_RECALL,
         subject=request_id,
         title=STORED_TITLE,
@@ -147,55 +172,60 @@ def _title(change: str, answers: int, chats: int) -> str:
 
 def needs_you(store) -> list[dict]:
     """Open notices that still reach a visible answer, for the Inbox (newest first).
-    Notices that reach nothing are skipped before the limit counts, so they cannot hide a live one."""
+
+    Two queries in one read transaction however many notices are open: the reach is counted in
+    SQL before the limit, so notices that reach nothing (only chats in the Trash or forgotten)
+    never hide a live one, and each notice reads only the uses it may count (index ranges)."""
+    reached = f"FROM counted u JOIN sessions s ON s.id=u.session_id WHERE {_VISIBLE}"
     with store._connect() as db:
+        db.execute("BEGIN")  # both reads see one snapshot
         rows = db.execute(
-            "SELECT * FROM notices WHERE kind=? AND dismissed_at IS NULL ORDER BY created_at DESC",
-            (notices.MEMORY_RECALL,),
+            f"{_chain()}, counted AS ({_counted('c.dismissed_at IS NULL AND c.valid')}) "
+            "SELECT notice AS id, filed AS created_at, memory_id, "
+            "json_extract(facts,'$.change') AS change, COUNT(*) AS answers, "
+            f"COUNT(DISTINCT u.session_id) AS chats {reached} "
+            "GROUP BY notice ORDER BY filed DESC, notice DESC LIMIT :limit",
+            {"kind": notices.MEMORY_RECALL, "limit": MAX_OPEN},
         ).fetchall()
-        items = []
-        for row in rows:
-            if len(items) >= MAX_OPEN:
-                break
-            facts = notices.facts(row)
-            memory_id, revision = facts.get("memoryId"), facts.get("revision")
-            if not isinstance(memory_id, str) or type(revision) is not int:
-                continue
-            answers, chats = _reach(db, memory_id, revision, row["created_at"])
-            if not answers:
-                continue
-            recorded = facts.get("change")
-            change = recorded if isinstance(recorded, str) and recorded in CHANGES else "changed"
-            chat_rows = [
-                (found[0], found[1] or "")
-                for found in db.execute(
-                    "SELECT u.session_id, s.title FROM memory_uses u "
-                    "JOIN sessions s ON s.id=u.session_id "
-                    f"WHERE {_NEW_USE} AND {_VISIBLE} "
-                    "GROUP BY u.session_id ORDER BY MAX(u.recorded_at) DESC LIMIT ?",
-                    (*_args(db, memory_id, revision, row["created_at"]), MAX_CHATS),
-                )
-            ]
-            items.append(
+        shown: dict[str, list[dict]] = {row["id"]: [] for row in rows}
+        if shown:
+            marks = ",".join(f":n{index}" for index in range(len(shown)))
+            for found in db.execute(
+                f"{_chain()}, counted AS ({_counted(f'c.id IN ({marks})')}), "
+                "per AS (SELECT notice, u.session_id, s.title, MAX(u.recorded_at) AS last "
+                f"{reached} GROUP BY notice, u.session_id) "
+                "SELECT notice, session_id, title FROM (SELECT *, ROW_NUMBER() OVER ("
+                "PARTITION BY notice ORDER BY last DESC, session_id DESC) AS place FROM per) "
+                "WHERE place<=:chats ORDER BY notice, place",
                 {
-                    "kind": "memory-recall",
-                    "id": row["id"],
-                    "title": _title(change, answers, chats),
-                    "since": row["created_at"],
-                    "memoryId": memory_id,
-                    "change": change,
-                    "answers": answers,
-                    "chats": chats,
-                    "sessionIds": [identity for identity, _ in chat_rows],
-                    "sessions": [{"id": identity, "title": name} for identity, name in chat_rows],
-                    "source": {
-                        "kind": "memory-recall",
-                        "noticeId": row["id"],
-                        "memoryId": memory_id,
-                    },
-                }
-            )
-    return items
+                    "kind": notices.MEMORY_RECALL,
+                    "chats": MAX_CHATS,
+                    **{f"n{index}": identity for index, identity in enumerate(shown)},
+                },
+            ):
+                shown[found["notice"]].append(
+                    {"id": found["session_id"], "title": found["title"] or ""}
+                )
+        db.commit()
+    return [_item(row, shown[row["id"]]) for row in rows]
+
+
+def _item(row, chats: list[dict]) -> dict:
+    recorded = row["change"]
+    change = recorded if isinstance(recorded, str) and recorded in CHANGES else "changed"
+    return {
+        "kind": "memory-recall",
+        "id": row["id"],
+        "title": _title(change, row["answers"], row["chats"]),
+        "since": row["created_at"],
+        "memoryId": row["memory_id"],
+        "change": change,
+        "answers": row["answers"],
+        "chats": row["chats"],
+        "sessionIds": [chat["id"] for chat in chats],
+        "sessions": chats,
+        "source": {"kind": "memory-recall", "noticeId": row["id"], "memoryId": row["memory_id"]},
+    }
 
 
 def listing(store) -> dict:

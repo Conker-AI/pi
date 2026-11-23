@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from contextlib import closing
+from contextlib import closing, contextmanager
 
 import httpx
 import pytest
@@ -340,3 +340,160 @@ def test_dead_notices_never_hide_an_older_one_that_reaches_a_visible_chat(setup)
             )
     archive.trash(store, archive.Trash(sessions=[dead], trashed=True))
     assert [i["memoryId"] for i in recall_notices.needs_you(store)] == ["mem-live"]
+
+
+def history(store, session, *, uses, earlier, open_notices=3, new=2):
+    """`uses` old uses of mem-1 at revision 1, counted by `earlier` dismissed notices, then
+    `open_notices` open notices that each count `new` uses of their own revision."""
+    start = time.time() - 10_000
+    old = [(f"old-{i}", 1, start + i * 1e-3) for i in range(uses)]
+    fresh = [
+        (f"new-{k}-{i}", k + 2, start + 1_000 + k * 10 + i)
+        for k in range(open_notices)
+        for i in range(new)
+    ]
+    with store._connect() as db:
+        db.execute("PRAGMA foreign_keys=OFF")  # use rows of turns this test does not need
+        db.executemany(
+            "INSERT INTO memory_uses VALUES (?,?,'mem-1',?,'context',?)",
+            [(turn, session, revision, at) for turn, revision, at in old + fresh],
+        )
+        filed = [(1, start + 500 + k, start) for k in range(earlier)]
+        filed += [(k + 2, start + 1_000 + k * 10 + new, None) for k in range(open_notices)]
+        for index, (revision, at, dismissed) in enumerate(filed):
+            db.execute(
+                "INSERT INTO notices(id,kind,subject,title,facts,created_at,dismissed_at) "
+                "VALUES (?,'memory-recall',?,'x',?,?,?)",
+                (
+                    f"mrn_{index:032x}",
+                    f"history_{index}",
+                    json.dumps({"memoryId": "mem-1", "revision": revision}),
+                    at,
+                    dismissed,
+                ),
+            )
+
+
+def read_cost(store, monkeypatch):
+    """needs_you, the SQL statements it ran and its SQLite VM steps (in hundreds)."""
+    seen: list[str] = []
+    steps = [0]
+
+    def step() -> int:
+        steps[0] += 1
+        return 0
+
+    original = store._connect
+
+    @contextmanager
+    def traced():
+        with original() as db:
+            db.set_trace_callback(seen.append)
+            db.set_progress_handler(step, 100)
+            yield db
+
+    with monkeypatch.context() as patch:
+        patch.setattr(store, "_connect", traced)
+        found = recall_notices.needs_you(store)
+    return found, len(seen), steps[0]
+
+
+def test_an_inbox_read_reads_only_the_uses_its_open_notices_may_count(tmp_path, monkeypatch):
+    costs = []
+    for uses, earlier in ((50, 5), (5_000, 5)):
+        with closing(Store(tmp_path / f"pi-{uses}.db")) as store:
+            history(store, store.create_session(), uses=uses, earlier=earlier)
+            found, statements, steps = read_cost(store, monkeypatch)
+            assert [i["answers"] for i in found] == [2, 2, 2]
+            costs.append((statements, steps))
+    (few_statements, few_steps), (many_statements, many_steps) = costs
+    # 100 times the history already told: the same statements, and no more rows read.
+    assert many_statements == few_statements
+    assert many_steps <= few_steps + 2, costs
+
+
+def test_a_clock_step_back_never_counts_a_use_twice(setup):
+    store, _, _ = setup
+    session, base = store.create_session(), time.time()
+    for revision, at in ((3, 10), (4, 20), (5, 250)):
+        use(store, session, revision=revision)
+        with store._connect() as db:
+            db.execute(
+                "UPDATE memory_uses SET recorded_at=? WHERE revision=?", (base + at, revision)
+            )
+    # Filed in this order; the clock stepped back between the first two.
+    with store._connect() as db:
+        for name, revision, at in (("first", 3, 200), ("second", 4, 100), ("third", 5, 300)):
+            assert recall_notices.file(
+                db,
+                request_id=f"clock_{name}_request_01",
+                memory_id="mem-1",
+                change="corrected",
+                revision=revision,
+                now=base + at,
+            )
+    assert sorted(i["answers"] for i in items(store)) == [1, 2]  # three uses, each told once
+
+
+def test_an_answer_saved_after_its_change_is_told_once_by_the_next_change(setup):
+    store, client, remote = setup
+    use(store, store.create_session(), revision=3)
+    correct(store, client)
+    [first] = items(store)
+    # A turn that read revision 3 before the correction saved its recall after it finished.
+    late = store.create_session()
+    use(store, late, revision=3)
+    assert items(store) == [first]  # a filed notice keeps the answers it was filed for
+    recall_notices.dismiss(store, first["id"])
+    remote.revision = 4
+    correct(store, client, request="correction_request_0002", revision=4)
+    [second] = items(store)
+    assert (second["answers"], second["chats"], second["sessionIds"]) == (1, 1, [late])
+    remote.revision = 5
+    correct(store, client, request="correction_request_0003", revision=5)
+    assert items(store) == [second] and len(stored(store)) == 2  # told once, not again
+
+
+def test_a_notice_with_bad_facts_is_never_shown_and_bounds_nothing(setup):
+    store, client, _ = setup
+    use(store, store.create_session())
+    correct(store, client)
+    recall_notices.dismiss(store, items(store)[0]["id"])
+    late = store.create_session()
+    use(store, late)  # saved after the correction
+    with store._connect() as db:
+        bad = [{"memoryId": "mem-1", "revision": "4"}, {"memoryId": {"id": 1}, "revision": 4}, {}]
+        for index, facts in enumerate([*bad, {"memoryId": "mem-1", "revision": 4}]):
+            db.execute(
+                "INSERT INTO notices(id,kind,subject,title,facts,created_at) VALUES (?,?,?,?,?,?)",
+                (
+                    f"mrn_{index:032x}",
+                    "memory-recall",
+                    f"bad_{index}",
+                    "x",
+                    json.dumps(facts),
+                    time.time() + 1 + index,
+                ),
+            )
+    # Only the valid one shows, with the late answer: not the dismissed one again, and not
+    # lost behind the bad ones filed after it was saved.
+    [item] = items(store)
+    assert (item["id"], item["answers"], item["sessionIds"]) == (f"mrn_{3:032x}", 1, [late])
+
+
+def test_a_use_of_a_newer_revision_is_not_lost_when_its_time_is_older(setup):
+    store, _, _ = setup
+    session = store.create_session()
+    use(store, session, revision=3)
+    with store._connect() as db:
+        recall_notices.file(
+            db, request_id="clock_request_000001", memory_id="mem-1", change="corrected", revision=3
+        )
+        [(filed,)] = db.execute("SELECT created_at FROM notices").fetchall()
+    use(store, session, revision=4)
+    with store._connect() as db:  # the clock stepped back before this use was saved
+        db.execute("UPDATE memory_uses SET recorded_at=? WHERE revision=4", (filed - 5,))
+        recall_notices.file(
+            db, request_id="clock_request_000002", memory_id="mem-1", change="corrected", revision=4
+        )
+    assert [i["answers"] for i in items(store)] == [1, 1]

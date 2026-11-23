@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS memory_uses (
 );
 CREATE INDEX IF NOT EXISTS memory_uses_memory ON memory_uses(memory_id, recorded_at);
 CREATE INDEX IF NOT EXISTS memory_uses_session ON memory_uses(session_id);
+CREATE INDEX IF NOT EXISTS memory_uses_revision ON memory_uses(memory_id, revision, recorded_at);
 """
 SOURCES = ("context", "recall")
 MAX_ID = 200  # a longer id is not one of MemoryGate's
