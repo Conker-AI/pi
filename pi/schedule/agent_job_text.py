@@ -1,6 +1,8 @@
 """The words around an AI job's run: the date line, the quiet reply and the Inbox note.
 
 Split out of `pi.schedule.agent_jobs` as pure moves; nothing here decides whether a job runs.
+Whether a finished run leaves a note follows the owner's `proactivity.jobs.results`: only when the
+reply has something for him (the default, and for any value not in the registry), always, or never.
 """
 
 from __future__ import annotations
@@ -11,8 +13,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pi.core import notices
+from pi.core import owner_settings as owner_settings
 
 QUIET = "NOTHING"
+RESULTS = "proactivity.jobs.results"
+QUIET_TITLE = "Your AI job ran; nothing needs you"
 # English names, whatever the server's locale.
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 MONTHS = (
@@ -53,6 +58,17 @@ def summarize(text: str) -> tuple[str, str] | None:
     title = re.sub(r"^[#>*\-\s]+|[*_`]+", "", lines[0]).strip()[:MAX_TITLE]
     detail = " ".join(re.sub(r"[*_`#>]+", "", line) for line in lines[1:])[:MAX_DETAIL]
     return title or "Your AI job has something for you", detail
+
+
+def result_note(store, text: str) -> tuple[str, str] | None:
+    """The note a finished run leaves, as (title, detail), or None for no note."""
+    choice = owner_settings.value(store, RESULTS, "needs_you")
+    if choice == "never":
+        return None
+    found = summarize(text)
+    if found is None and choice == "always":
+        return QUIET_TITLE, ""
+    return found
 
 
 def _note(store, run_id, job_id, session_id, message_id, title, detail, now):

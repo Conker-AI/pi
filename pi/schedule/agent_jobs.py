@@ -8,7 +8,8 @@ built in: a weekly life review, a deadline watch or a follow-up with friends are
 
 Repeating (interval) jobs skip the owner's quiet hours; a job set for a time of day runs then.
 When the reply has something for the owner, an Inbox note names it in one line and links to the
-chat. A reply of exactly NOTHING records the run and stays quiet.
+chat. A reply of exactly NOTHING records the run and stays quiet. The owner may instead want a note
+after every run or none (`proactivity.jobs.results`, `agent_job_text.result_note`).
 
 A job Conker made on its own (`createdBy: "conker"`, only when the owner's access settings let
 conker.schedule run without asking) is held tighter, since the owner never read its instructions:
@@ -45,7 +46,7 @@ from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
 from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
-from pi.schedule.agent_job_text import QUIET, _note, summarize, when
+from pi.schedule.agent_job_text import QUIET, _note, result_note, when
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 
 PREAMBLE = (
@@ -407,7 +408,7 @@ class AgentJobs:
             return {"status": "completed", **receipt, "waitingForApproval": True}
         message = result.get("message") or {}
         content = message.get("content")
-        found = summarize(content if isinstance(content, str) else "")
+        found = result_note(self.store, content if isinstance(content, str) else "")
         if found:
             _note(
                 self.store,
