@@ -490,17 +490,34 @@ def _status(part, retrieval, configured):
     }
 
 
+def _shown(store, turn_id, reading=None):
+    """A turn's saved recall as the owner may see it now: without the records of another chat in
+    the Trash or forgotten (pi.conversation.hidden_records, the rule recall itself uses)."""
+    from pi.conversation import hidden_records
+
+    saved = context(store, turn_id)
+    if not isinstance(saved["package"], dict):
+        return saved
+    with store._connect() as db:
+        turn = db.execute("SELECT session_id FROM turns WHERE id=?", (turn_id,)).fetchone()
+    own = turn[0] if turn else None
+    shown = hidden_records.filter_package(store, saved["package"], (), own, reading)
+    return saved if shown is saved["package"] else {**saved, "package": shown}
+
+
 def status(store, session_id=None, turn_id=None, *, configured=False):
     return _status(
-        delivery(store, session_id), context(store, turn_id) if turn_id else None, configured
+        delivery(store, session_id), _shown(store, turn_id) if turn_id else None, configured
     )
 
 
 def statuses(store, session_id, turn_ids, *, configured=False):
-    part = delivery(store, session_id)
+    from pi.conversation import hidden_records
+
+    part, reading = delivery(store, session_id), hidden_records.Reading()
     return {
         "session": _status(part, None, configured),
-        "turns": {tid: _status(part, context(store, tid), configured) for tid in turn_ids},
+        "turns": {tid: _status(part, _shown(store, tid, reading), configured) for tid in turn_ids},
     }
 
 
