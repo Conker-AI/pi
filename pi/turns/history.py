@@ -94,7 +94,11 @@ class History:
         )
         messages.extend(
             research.instructions(
-                execution, bool(research_used), remaining, research.cite_limit(self.store)
+                execution,
+                bool(research_used),
+                remaining,
+                research.cite_limit(self.store),
+                research.trusted_sites(self.store),
             )
             if execution.get("researchMode") in ("web", "deep")
             else []

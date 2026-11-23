@@ -25,6 +25,9 @@ RECENT = "research.recent"
 PAGE_LIMIT = "context.web_page_limit"
 # Sources per answer: told to the model in each research turn's instructions; 5 when unset.
 SOURCES, MAX_SOURCES, DEFAULT_SOURCES = "research.sources", 20, 5
+# Trusted sites: plain host names the research turn is told to prefer; anything else is dropped.
+TRUSTED, MAX_TRUSTED = "research.trusted_sites", 50
+HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 RECENT_DAYS = {"any": None, "year": 365, "month": 30}
 
 
@@ -67,8 +70,29 @@ def cite_limit(store) -> int:
     return _owner_number(store, SOURCES, 1, MAX_SOURCES) or DEFAULT_SOURCES
 
 
-def instructions(execution, search_started=False, remaining=None, sources=DEFAULT_SOURCES):
+def trusted_sites(store) -> list[str]:
+    """The owner's trusted sites as host names ("https://" and a trailing "/" are dropped); an
+    item that is not a plain host name is left out, so nothing else reaches the instructions."""
+    value = owner_settings.value(store, TRUSTED)
+    if not isinstance(value, list):
+        return []
+    sites = []
+    for item in value[:MAX_TRUSTED]:
+        if not isinstance(item, str):
+            continue
+        host = item.strip().lower().removeprefix("https://").removeprefix("http://").rstrip("/")
+        if HOST.fullmatch(host) and len(host) <= 253 and host not in sites:
+            sites.append(host)
+    return sites
+
+
+def instructions(
+    execution, search_started=False, remaining=None, sources=DEFAULT_SOURCES, trusted=()
+):
     cite = f"Cite at most {sources} sources. "
+    if trusted:
+        sites = ", ".join(trusted)
+        cite += f"Prefer results from these sites when they answer the question: {sites}. "
     if execution.get("researchMode") == "deep":
         return [
             Message(

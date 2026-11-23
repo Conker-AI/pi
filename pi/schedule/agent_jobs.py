@@ -233,10 +233,15 @@ def admit(store, run_id, definition, now=None) -> tuple[str, str] | None:
             now=instant,
         )
     except proactive_budget.Denied as exc:
-        reason = exc.reasons[0]
-        key = "daily_budget" if reason.startswith("daily_budget_") else reason
-        return HELD.get(key, ("HELD_BACK", "the owner's limits held it back."))
+        return held_for(exc.reasons)
     return None
+
+
+def held_for(reasons: list[str]) -> tuple[str, str]:
+    """The outcome code and words for the proactive budget's first reason to refuse."""
+    reason = reasons[0]
+    key = "daily_budget" if reason.startswith("daily_budget_") else reason
+    return HELD.get(key, ("HELD_BACK", "the owner's limits held it back."))
 
 
 def _started_by(request_id: str | None) -> str:

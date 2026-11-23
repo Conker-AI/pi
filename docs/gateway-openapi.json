@@ -2386,6 +2386,43 @@
         }
       }
     },
+    "/api/owner/mcp/tools/{identity}/class": {
+      "post": {
+        "summary": "Mcp Class",
+        "operationId": "mcp_class_api_owner_mcp_tools__identity__class_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/hooks/{job_id}": {
       "post": {
         "summary": "Hook",

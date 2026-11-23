@@ -210,12 +210,28 @@ WAITING_TURN = (
 FINISHED = "'completed','failed','cancelled','skipped'"
 
 
+def busy(db, job_id) -> bool:
+    """True while the job's last run is not over or its turn waits for the owner: no new run."""
+    query = f"SELECT 1 FROM scheduled_runs WHERE job_id=? AND (status NOT IN ({FINISHED}) OR ({WAITING_TURN}))"
+    return db.execute(query, (job_id,)).fetchone() is not None
+
+
+def clock_hold(definition, *, quiet_hours: bool, hidden: bool) -> str | None:
+    """Why the clock does not start this job at its slot (also for `pi.agents.tomorrow_runs`):
+    OFF, NO_CLOCK (a watch or webhook starts it), QUIET_HOURS (repeating AI jobs skip them; one
+    set for a time of day runs then) or SOURCE_HIDDEN (job_hidden); None when it does."""
+    agent = definition.target.kind == "agent"
+    if not definition.enabled:
+        return "OFF"
+    if definition.watch is not None or (agent and not definition.target.clock):
+        return "NO_CLOCK"
+    if quiet_hours and agent and definition.timing.kind == "interval":
+        return "QUIET_HOURS"
+    return "SOURCE_HIDDEN" if hidden else None
+
+
 def _claim(db, row, now, request_id=None):
-    if db.execute(
-        "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-        f"AND (status NOT IN ({FINISHED}) OR ({WAITING_TURN}))",
-        (row["id"],),
-    ).fetchone():
+    if busy(db, row["id"]):
         return None
     run = "scheduled_" + uuid.uuid4().hex
     scheduled = now if request_id else row["next_at"]
@@ -257,17 +273,8 @@ def claim_due(store, now=None, limit=20):
         ).fetchall()
         for row in rows:
             definition = Definition.model_validate_json(row["definition"])
-            # Repeating AI jobs skip quiet hours; one set for a time of day runs then.
-            repeating = definition.target.kind == "agent" and definition.timing.kind == "interval"
-            # A watched job starts from its tool and a clockless one from its webhook, never the clock.
-            clockless = definition.target.kind == "agent" and not definition.target.clock
-            if (
-                definition.enabled
-                and definition.watch is None
-                and not clockless
-                and not (repeating and quiet_hours)
-                and not paused(db, row["id"])
-            ):
+            hidden = paused(db, row["id"])
+            if clock_hold(definition, quiet_hours=quiet_hours, hidden=hidden) is None:
                 run = _claim(db, row, now)
                 if run:
                     claimed.append(run)

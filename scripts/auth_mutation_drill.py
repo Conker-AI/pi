@@ -415,6 +415,33 @@ CASES += [
     ),
 ]
 
+# An imported MCP tool's read class: Observe (no Inbox card) needs the password.
+MCP_CLASS = "tests/test_gateway_mcp_class.py::"
+CASES += [
+    (
+        "mcp-observe-without-password",
+        "gateway/mcp_class.py",
+        'password=body["read_class"] != ACT_OUTWARD',
+        "password=False",
+        MCP_CLASS + "test_observe_without_the_password_is_428_and_never_reaches_toolgate",
+    ),
+    (
+        "mcp-class-any-value",
+        "gateway/mcp_class.py",
+        'and body["read_class"] in (OBSERVE, ACT_OUTWARD)',
+        "and True",
+        MCP_CLASS + "test_anything_but_the_two_classes_is_refused_before_toolgate[body1]",
+    ),
+    (
+        "mcp-class-echoes-toolgate-text",
+        "gateway/mcp_class.py",
+        "return plain(response) if response.status_code in (409, 422) else response",
+        "return response",
+        MCP_CLASS
+        + "test_toolgate_refusals_come_back_with_a_plain_message[422-detail0-act_outward_name]",
+    ),
+]
+
 # Web push (scripts/auth_mutation_push.py).
 CASES += PUSH_CASES
 
@@ -449,6 +476,7 @@ def main() -> int:
             "test_gateway_cli_approval_password.py",
             "test_gateway_push.py",
             "test_push_queue.py",
+            "test_gateway_mcp_class.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:
