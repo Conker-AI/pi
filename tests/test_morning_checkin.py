@@ -156,7 +156,7 @@ def test_a_run_with_something_posts_one_inbox_note(store):
     reply = "Your passport renewal is due Friday.\nBook the appointment today."
     receipt, _ = check_in_run(store, reply, "morning-check-in-run-0004")
     assert receipt["noted"] is True
-    [note] = job_notes.notes(store)
+    [note] = job_notes.notes(store, now=NOON)
     assert note["title"] == "Your passport renewal is due Friday."
 
 
