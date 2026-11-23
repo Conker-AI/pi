@@ -71,6 +71,24 @@ def status(store, *, now=None):
         }
 
 
+def refusal(store, proposed, *, now, also=()) -> list[str]:
+    """Why `reserve` would refuse `proposed` at `now`, reserving nothing; empty when it would not.
+
+    For the forecast (`pi.agents.tomorrow`): `also` are the instants of reservations of one
+    suggestion each that have not happened yet but would come first."""
+    with store._connect() as db:
+        db.execute("BEGIN")
+        row = db.execute("SELECT * FROM owner_preferences WHERE singleton=1").fetchone()
+        preferences = prefs.OwnerPreferences.model_validate_json(row["preferences"])
+        day, used = _usage(db, preferences, now)
+    used["suggestions"] += sum(
+        1 for at in also if prefs.local_day(preferences, datetime.fromtimestamp(at, UTC)) == day
+    )
+    return prefs.admission_reasons(
+        preferences, now, urgent=False, usage_day=day, used=prefs.Usage(**used), proposed=proposed
+    )
+
+
 def reserve(store, body, *, now=None):
     body = Request.model_validate(body.model_dump())
     now = now or datetime.now(UTC)

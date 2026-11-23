@@ -292,6 +292,8 @@ async def lifespan(app: FastAPI):
             log.exception("Could not make the built-in Morning check-in; Pi runs without it.")
         scheduler = JobWorker(store, app.state.job_executor)
         scheduler.start()
+    # What the forecast (GET /insights/tomorrow) needs to know runs.
+    app.state.scheduler = scheduler
     queue_worker = None
     if os.environ.get("PI_QUEUE_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
         queue_worker = QueueWorker(store, app.state.loop)
@@ -307,6 +309,7 @@ async def lifespan(app: FastAPI):
             offer_loops=loop_offers.offer,
         )
         proposal_worker.start()
+    app.state.proposal_worker = proposal_worker
     plan_worker = None
 
     def plan_readers():
@@ -356,6 +359,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.forget_followups = None
+        app.state.scheduler = app.state.proposal_worker = None
         decisions.close()
         if self_checker:
             self_checker.close()

@@ -40205,6 +40205,17 @@
             },
             "type": "array",
             "title": "Approvals"
+          },
+          "timeZone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/TomorrowRun"
+            },
+            "type": "array",
+            "title": "Runs"
           }
         },
         "additionalProperties": false,
@@ -40216,7 +40227,9 @@
           "hours",
           "jobs",
           "runsPlanned",
-          "approvals"
+          "approvals",
+          "timeZone",
+          "runs"
         ],
         "title": "Tomorrow"
       },
@@ -40316,6 +40329,83 @@
           "held"
         ],
         "title": "TomorrowJob"
+      },
+      "TomorrowRun": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "clock",
+              "watch",
+              "proposals"
+            ],
+            "title": "Kind"
+          },
+          "jobId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jobid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "everyMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Everyminutes"
+          },
+          "wouldRun": {
+            "type": "boolean",
+            "title": "Wouldrun"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "at",
+          "kind",
+          "jobId",
+          "name",
+          "everyMinutes",
+          "wouldRun",
+          "reason"
+        ],
+        "title": "TomorrowRun"
       },
       "ToolGatePolicySummary": {
         "properties": {
