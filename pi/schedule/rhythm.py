@@ -62,6 +62,8 @@ def seed(store, now=None) -> dict | None:
         agentId="companion",
         timing=DAILY_AT_EIGHT,
         timeZone=agent_jobs.owner_time_zone(store),
+        # On from the first start: a fresh Conker has a daily rhythm without the owner making one.
+        enabled=True,
     )
     try:
         return agent_jobs.create(

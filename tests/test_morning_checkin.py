@@ -17,12 +17,14 @@ from pi.conversation.store import Store
 from pi.core import owner_preferences as prefs
 from pi.core import owner_settings as settings
 from pi.core.schedule_bodies import StateChange
-from pi.schedule import agent_jobs, job_notes, jobs, rhythm
+from pi.schedule import agent_jobs, job_notes, jobs, proactive_budget, rhythm
 from pi.schedule.job_models import AgentJobCreate, Timing
 from pi.turns import access
 
 # 12:00 in Jerusalem, outside the default quiet hours.
 NOON = datetime(2026, 10, 29, 10, 0, tzinfo=UTC).timestamp()
+# 23:00 in Jerusalem, inside the default quiet hours (22:00-07:00).
+LATE = datetime(2026, 10, 29, 21, 0, tzinfo=UTC).timestamp()
 OWNER = "morning-check-in-owner-key-" + "o" * 32
 
 
@@ -131,6 +133,57 @@ def test_it_waits_while_proactivity_is_off(store):
     assert jobs.get_job(store, job["id"])["definition"]["enabled"] is True
 
 
+def check_in_run(store, reply, run_id, now=NOON):
+    """One run of the seeded check-in whose model replies `reply`; the receipt and the turn count."""
+    rhythm.seed(store, now=NOON)
+    job = jobs.get_job(store, rhythm.MORNING_CHECK_IN)
+    loop, _ = build(store, [reply], FakeGate())
+    turns = []
+    real = loop.run_turn
+    loop.run_turn = lambda *args, **kwargs: turns.append(1) or real(*args, **kwargs)
+    run = jobs.run_now(store, job["id"], run_id, now=now)
+    return agent_jobs.AgentJobs(store, loop).run(run["id"], now=now), len(turns)
+
+
+@pytest.mark.parametrize("reply", ["", "  \n ", "NOTHING.", "**NOTHING**"])
+def test_a_run_with_nothing_to_say_posts_nothing(store, reply):
+    receipt, _ = check_in_run(store, reply, "morning-check-in-run-0003")
+    assert receipt["status"] == "completed" and receipt["noted"] is False
+    assert job_notes.notes(store) == []
+
+
+def test_a_run_with_something_posts_one_inbox_note(store):
+    reply = "Your passport renewal is due Friday.\nBook the appointment today."
+    receipt, _ = check_in_run(store, reply, "morning-check-in-run-0004")
+    assert receipt["noted"] is True
+    [note] = job_notes.notes(store)
+    assert note["title"] == "Your passport renewal is due Friday."
+
+
+def test_a_run_in_quiet_hours_does_nothing(store):
+    receipt, turns = check_in_run(store, "Something for you", "morning-check-in-run-0005", LATE)
+    assert receipt["code"] == "HELD_BACK" and "quiet hours" in receipt["reason"]
+    assert turns == 0 and job_notes.notes(store) == []
+
+
+def test_a_run_over_the_daily_budget_does_nothing(store):
+    rhythm.seed(store, now=NOON)
+    instant = datetime.fromtimestamp(NOON, UTC)
+    for index in range(prefs.DEFAULT["dailyBudget"]["suggestions"]):
+        proactive_budget.reserve(
+            store,
+            proactive_budget.Request(
+                request_id=f"other-proactive-work-{index:04d}",
+                expected_revision=proactive_budget.status(store, now=instant)["preferenceRevision"],
+                proposed=prefs.Usage(suggestions=1, researchMinutes=0, costCents=0),
+            ),
+            now=instant,
+        )
+    receipt, turns = check_in_run(store, "Something for you", "morning-check-in-run-0006")
+    assert receipt["code"] == "HELD_BACK" and "daily limit" in receipt["reason"]
+    assert turns == 0 and job_notes.notes(store) == []
+
+
 def test_the_jobs_route_lists_it_like_any_job(store, monkeypatch):
     rhythm.seed(store, now=NOON)
     monkeypatch.setattr(api.app.state, "store", store, raising=False)
@@ -187,3 +240,12 @@ def test_pi_seeds_it_at_start_only_where_jobs_run(monkeypatch, tmp_path, schedul
     assert len(start(monkeypatch, tmp_path, scheduler=scheduler)) == expected
     # A second start makes nothing new.
     assert len(start(monkeypatch, tmp_path, scheduler=scheduler)) == expected
+
+
+def test_a_restart_keeps_the_owners_choice(monkeypatch, tmp_path):
+    [job] = start(monkeypatch, tmp_path, scheduler=True)
+    assert job["definition"]["enabled"] is True  # A fresh install has it on.
+    with closing(Store(tmp_path / "startup.db")) as store:
+        jobs.set_enabled(store, job["id"], StateChange(expected_revision=1, enabled=False))
+    [again] = start(monkeypatch, tmp_path, scheduler=True)
+    assert again["id"] == job["id"] and again["definition"]["enabled"] is False
