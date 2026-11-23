@@ -360,6 +360,45 @@ class AuthStore:
             )
         return owner["generation"], attempt_id
 
+    def host_password(self, password: str) -> None:
+        """The owner's password typed at the host for one change that asks for it.
+
+        For host commands that cannot take a browser proof (`spending-cap`). Host attempts have
+        their own budget, five wrong ones per five minutes, so browsers cannot use it up; a right
+        one frees its attempt. Anyone controlling the host can still reset the password: this
+        makes the sanctioned command ask the owner, it is not a wall against the host itself.
+        """
+        attempt_id = secrets.token_urlsafe(24)
+        with self.transaction() as db:
+            self._prune(db)
+            since = self.clock() - 300
+            if (
+                db.execute(
+                    "SELECT count(*) FROM login_attempts WHERE budget='host' AND at>?", (since,)
+                ).fetchone()[0]
+                >= 5
+            ):
+                raise AuthError("Too many password attempts. Wait fifteen minutes and retry.", 429)
+            db.execute(
+                "INSERT INTO login_attempts(at,source,attempt_id,budget) VALUES(?,?,?,'host')",
+                (self.clock(), digest("host"), attempt_id),
+            )
+            owner = db.execute("SELECT * FROM owner WHERE id=1").fetchone()
+        if not owner:
+            raise AuthError("No password set. Run conker auth setup on the host.", 409)
+        if len(password) > 1024 or not hmac.compare_digest(
+            password_hash(password, bytes.fromhex(owner["salt"])), owner["verifier"]
+        ):
+            raise AuthError(
+                "Password not accepted. Retry or use conker auth reset-password on the host."
+            )
+        with self.transaction() as db:
+            # A reset during scrypt must not let the old password through.
+            current = db.execute("SELECT generation FROM owner WHERE id=1").fetchone()
+            if not current or current[0] != owner["generation"]:
+                raise AuthError("The password changed during the check. Run the command again.")
+            db.execute("DELETE FROM login_attempts WHERE attempt_id=?", (attempt_id,))
+
     def login(self, token: str, password: str, source: str, device: str = "") -> dict:
         """Sign in. The result's `device` is the known-device token the browser keeps."""
         generation, attempt_id = self._check_password(

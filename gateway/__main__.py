@@ -116,6 +116,7 @@ def main() -> None:
             "set-setup-protection",
             "setup-rehearsal",
             "renew-certificate",
+            "spending-cap",
         ],
     )
     parser.add_argument("resource", nargs="?")
@@ -304,6 +305,11 @@ def main() -> None:
         config.validate()
         renew_certificate(Path(args.db).parent, cast(str, urlsplit(config.origin).hostname))
         print("Certificate renewed. Restart the gateway and trust the newly exported certificate.")
+    elif args.command == "spending-cap":
+        # The owner's password and the change on stdin (gateway/spending_cap.py).
+        from . import spending_cap
+
+        raise SystemExit(spending_cap.main(args.db))
     elif args.command == "certificate":
         print((Path(args.db).parent / "tls.crt").read_text(), end="")
     else:
