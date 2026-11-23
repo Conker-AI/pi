@@ -164,7 +164,9 @@ def test_the_server_key_is_made_once_private_and_only_its_public_half_is_served(
     assert b"PRIVATE KEY" in pem and push.public_key(push.server_key(folder)) == first["publicKey"]
     if os.name == "posix":
         assert path.stat().st_mode & 0o777 == 0o600
-    private = serialization.load_pem_private_key(pem, None).private_numbers().private_value
+    loaded = serialization.load_pem_private_key(pem, None)
+    assert isinstance(loaded, ec.EllipticCurvePrivateKey)
+    private = loaded.private_numbers().private_value
     assert push.b64(private.to_bytes(32, "big")) not in json.dumps(first)
     assert [name for name in os.listdir(folder) if name.startswith(".push-vapid-")] == []
 

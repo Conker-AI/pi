@@ -371,6 +371,20 @@ CASES = [
         "if False:\n                held.update(reasons)",
         PUSH_CLAIM + "test_quiet_hours_hold_an_item_without_using_it_up",
     ),
+    (
+        "push-host-any-characters",
+        "gateway/push.py",
+        "and DNS_NAME.fullmatch(host) is not None",
+        "and True",
+        PUSH + "test_a_push_host_is_plain_dns_letters_only",
+    ),
+    (
+        "push-devices-read-once",
+        "gateway/push.py",
+        'targets = [target for target in targets if target["id"] in on]',
+        "targets = targets",
+        PUSH + "test_sign_out_everywhere_during_a_claim_sends_nothing",
+    ),
 ]
 
 # The host CLI asks for the password for what the browser asks it for: security preferences
