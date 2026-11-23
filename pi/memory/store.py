@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS memory_contexts (
     package TEXT,
     recorded_at REAL NOT NULL
 );
+-- One number every clearing of saved recall advances (`invalidate_recall`: a memory forget or
+-- correction, a forgotten chat, an erased import). Read before a recall is retrieved and compared
+-- when it is saved, so a recall in flight across such a change never keeps what it removed.
+CREATE TABLE IF NOT EXISTS recall_generation (
+    id INTEGER PRIMARY KEY CHECK(id=1),
+    value INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO recall_generation VALUES (1, 0);
 CREATE TABLE IF NOT EXISTS memory_forget_operations (
     request_id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
@@ -220,8 +228,21 @@ def recall_held(store):
         return recall_held_in(db)
 
 
+def generation_in(db) -> int:
+    """The recall generation (see SCHEMA). Pi creates it at start, before any recall."""
+    return db.execute("SELECT value FROM recall_generation WHERE id=1").fetchone()[0]
+
+
+def generation(store) -> int:
+    with store._connect() as db:
+        return generation_in(db)
+
+
 def invalidate_recall(db):
     """Historical briefings lack IDs; invalidate derived recall, never conversation text."""
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='recall_generation'").fetchone():
+        # Absent only for offline forgetting before the Store first opens: no recall is in flight.
+        db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")
     changed = db.execute(
         "UPDATE memory_contexts SET package=NULL,status='redacted' WHERE package IS NOT NULL"
     ).rowcount
@@ -268,10 +289,14 @@ def redact_recall(db):
             db.execute(trigger[0])
 
 
-def save_context(store, turn_id, status, package=None):
+def save_context(store, turn_id, status, package=None, generation=None):
+    """`generation`: the recall generation read before retrieving `package`. A change that cleared
+    saved recall since then may have removed what it holds, so it is not kept."""
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if package is not None and recall_held_in(db):
+        if package is not None and (
+            recall_held_in(db) or (generation is not None and generation != generation_in(db))
+        ):
             status, package = "unavailable", None
         db.execute(
             "INSERT INTO memory_contexts VALUES (?,?,?,?)",
@@ -291,13 +316,23 @@ def save_context(store, turn_id, status, package=None):
 
 def context(store, turn_id):
     with store._connect() as db:
-        row = db.execute("SELECT * FROM memory_contexts WHERE turn_id=?", (turn_id,)).fetchone()
-        held = recall_held_in(db)
+        return _context_in(db, turn_id, recall_held_in(db))[0]
+
+
+def _context_in(db, turn_id, held):
+    """(A turn's saved recall, the turn's chat): one read. `held` is recall_held_in's answer."""
+    row = db.execute(
+        "SELECT c.turn_id,c.status,c.package,c.recorded_at,t.session_id FROM memory_contexts c "
+        "LEFT JOIN turns t ON t.id=c.turn_id WHERE c.turn_id=?",
+        (turn_id,),
+    ).fetchone()
     if not row:
-        return {"status": "not_recorded", "package": None}
+        return {"status": "not_recorded", "package": None}, None
+    saved = {key: row[key] for key in ("turn_id", "status", "package", "recorded_at")}
     if held and row["package"]:
-        return {**dict(row), "status": "unavailable", "package": None}
-    return {**dict(row), "package": json.loads(row["package"]) if row["package"] else None}
+        return {**saved, "status": "unavailable", "package": None}, row["session_id"]
+    package = json.loads(row["package"]) if row["package"] else None
+    return {**saved, "package": package}, row["session_id"]
 
 
 # MemoryGate's `source_type` of a memory holding the owner's own words: a statement he typed or
@@ -465,17 +500,35 @@ def _status(part, retrieval, configured):
     }
 
 
-def status(store, session_id=None, turn_id=None, *, configured=False):
-    return _status(
-        delivery(store, session_id), context(store, turn_id) if turn_id else None, configured
-    )
+def _shown(store, turn_ids, agents=()):
+    """Each turn's saved recall as the owner may see it now, on one connection and snapshot:
+    without the records of another chat in the Trash or forgotten (pi.conversation.hidden_records,
+    the rule recall itself uses). `agents` are the reading agents: they name the records of a
+    message sent before Pi recorded where it went."""
+    from pi.conversation import hidden_records
+
+    reading, shown = hidden_records.Reading(), {}
+    with store._connect() as db:
+        db.execute("BEGIN")
+        held = recall_held_in(db)
+        for turn_id in turn_ids:
+            saved, own = _context_in(db, turn_id, held)
+            package = saved["package"]
+            kept = hidden_records.filter_package(store, package, agents, own, reading, db)
+            shown[turn_id] = saved if kept is package else {**saved, "package": kept}
+    return shown
 
 
-def statuses(store, session_id, turn_ids, *, configured=False):
-    part = delivery(store, session_id)
+def status(store, session_id=None, turn_id=None, *, configured=False, agents=()):
+    retrieval = _shown(store, [turn_id], agents)[turn_id] if turn_id else None
+    return _status(delivery(store, session_id), retrieval, configured)
+
+
+def statuses(store, session_id, turn_ids, *, configured=False, agents=()):
+    part, shown = delivery(store, session_id), _shown(store, turn_ids, agents)
     return {
         "session": _status(part, None, configured),
-        "turns": {tid: _status(part, context(store, tid), configured) for tid in turn_ids},
+        "turns": {tid: _status(part, shown[tid], configured) for tid in turn_ids},
     }
 
 

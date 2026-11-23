@@ -365,7 +365,7 @@ class Memory:
         if not session_settings.memory_allowed(selected):
             memory_store.save_context(self.store, turn_id, "disabled")
             return
-        state, package = "not_configured", None
+        state, package, generation = "not_configured", None, memory_store.generation(self.store)
         client = self._client(selected)
         if memory_store.recall_held(self.store):
             state = "unavailable"
@@ -434,17 +434,17 @@ class Memory:
                 RecursionError,
             ):
                 state, package = "unavailable", None
-        memory_store.save_context(self.store, turn_id, state, package)
+        memory_store.save_context(self.store, turn_id, state, package, generation)
 
     def status(self, session_id=None, turn_id=None):
-        return memory_store.status(
-            self.store, session_id, turn_id, configured=self.client is not None
-        )
+        return memory_store.status(self.store, session_id, turn_id, **self._view())
 
     def statuses(self, session_id, turn_ids):
-        return memory_store.statuses(
-            self.store, session_id, turn_ids, configured=self.client is not None
-        )
+        return memory_store.statuses(self.store, session_id, turn_ids, **self._view())
+
+    def _view(self):  # Every reading agent: it names records of messages sent before pinning.
+        agents = [getattr(c, "agent_id", None) for c in (self.client, *self.read_clients.values())]
+        return {"configured": self.client is not None, "agents": tuple(filter(None, agents))}
 
     def health(self):
         if not self.client:

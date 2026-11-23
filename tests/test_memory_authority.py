@@ -61,6 +61,7 @@ def test_specialist_never_falls_back_to_companion_and_privacy_stops_reads(
     monkeypatch.setattr(session_settings, "execution", lambda *args: selected)
     monkeypatch.setattr(memory_store, "pending_deletions", lambda *args: False)
     monkeypatch.setattr(memory_store, "recall_held", lambda *args: 0)
+    monkeypatch.setattr(memory_store, "generation", lambda store: 0)
     monkeypatch.setattr(memory_store, "save_context", lambda *args: saved.append(args[2]))
     # This stand-in store holds no owner settings: the default number of memories.
     monkeypatch.setattr(service, "per_answer", lambda store: 8)

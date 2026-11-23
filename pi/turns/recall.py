@@ -117,6 +117,8 @@ def call(loop, args, *, session_id, turn_id, run=True) -> ToolResult:
     if isinstance(limit, bool) or not isinstance(limit, (int, float)):
         return _refused("invalid", f"limit must be a number from 1 to {MAX_ITEMS}.")
     limit = max(1, min(MAX_ITEMS, int(limit)))
+    # Read before searching: a change that cleared saved recall since then leaves nothing kept.
+    generation = memory_store.generation(loop.store)
     package, state = loop.memory.search(turn_id, query.strip()[:MAX_QUERY], limit)
     if package is None:
         return _refused(state, WHY.get(state, UNREADABLE))
@@ -125,7 +127,7 @@ def call(loop, args, *, session_id, turn_id, run=True) -> ToolResult:
     identity = "rcl_" + uuid.uuid4().hex
     with loop.store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if memory_store.recall_held_in(db):
+        if memory_store.recall_held_in(db) or memory_store.generation_in(db) != generation:
             db.rollback()
             return _refused("unavailable", UNREADABLE)
         outside = memory_store.others_wrote(db, package)

@@ -62,6 +62,8 @@ class History:
         acknowledgement_generation = None
         memory = self.memory
         readers = recall.reading_agents(memory, execution)
+        # Read before the saved recall: capture refuses it if recall was cleared since.
+        recall_generation = memory_store.generation(self.store)
         if turn_id:
             saved = memory.saved_context(turn_id, execution)
             if session_settings.memory_allowed(execution):
@@ -193,6 +195,7 @@ class History:
                 prefix_messages,
                 reply_to,
                 acknowledgement_generation=acknowledgement_generation,
+                recall_generation=recall_generation,
             )
             turn_steering.consume(
                 self.store,
