@@ -106,6 +106,9 @@ class AuthStore:
                 CREATE TABLE IF NOT EXISTS password_failures (
                     at REAL NOT NULL, origin TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS failures_at ON password_failures(at);
+                CREATE TABLE IF NOT EXISTS push_subscriptions (
+                    id TEXT PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL,
+                    auth TEXT NOT NULL, created REAL NOT NULL);
             """)
             columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
             if "verified_at" not in columns:
@@ -157,6 +160,8 @@ class AuthStore:
             db.execute("DELETE FROM verification_proofs")
             db.execute("DELETE FROM login_attempts")
             db.execute("DELETE FROM known_devices")
+            # A device someone else turned on with a stolen sign-in stops being woken too.
+            db.execute("DELETE FROM push_subscriptions")
 
     def _idle(self, db: sqlite3.Connection) -> int:
         """Seconds a sign-in stays unlocked: the owner's choice, never past the host's ceiling."""
@@ -437,9 +442,11 @@ class AuthStore:
     def revoke(self, session_id: str | None = None) -> None:
         with self.transaction() as db:
             if session_id is None:
-                # Signing out everywhere also forgets every browser that signed in before.
+                # Signing out everywhere also forgets every browser that signed in before, and
+                # turns notifications off on every device (gateway/push.py).
                 db.execute("DELETE FROM sessions")
                 db.execute("DELETE FROM known_devices")
+                db.execute("DELETE FROM push_subscriptions")
             else:
                 db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
             db.execute(

@@ -2356,6 +2356,77 @@
         }
       }
     },
+    "/push/claim": {
+      "post": {
+        "summary": "Claim Push",
+        "description": "Claim the Inbox items that may wake the owner's devices now; each is claimed once.",
+        "operationId": "claim_push_push_claim_post",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Claim"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/plans/usage": {
       "get": {
         "summary": "Usage",
@@ -30826,6 +30897,29 @@
           "label"
         ],
         "title": "Citation"
+      },
+      "Claim": {
+        "properties": {
+          "after": {
+            "type": "number",
+            "maximum": 10000000000.0,
+            "minimum": 0.0,
+            "title": "After"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "after"
+        ],
+        "title": "Claim"
       },
       "Code": {
         "properties": {

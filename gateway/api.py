@@ -26,6 +26,8 @@ from . import (
     hook_routes,
     host_routes,
     owner_routes,
+    push,
+    push_routes,
     service_routes,
     terminal_routes,
 )
@@ -196,6 +198,8 @@ def create_app(
     stream_transport: httpx.AsyncBaseTransport | None = None,
     terminal_factory=None,
     provider_transport: httpx.BaseTransport | None = None,
+    push_transport: httpx.BaseTransport | None = None,
+    push_seconds: float | None = push.EVERY_SECONDS,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -235,13 +239,23 @@ def create_app(
             )
         else:
             app.state.terminals = None
-        with httpx.Client(
-            transport=transport, timeout=660, follow_redirects=False, trust_env=False
-        ) as client:
+        with (
+            httpx.Client(
+                transport=transport, timeout=660, follow_redirects=False, trust_env=False
+            ) as client,
+            # The browsers' push services, on the internet: no proxy from the environment, no
+            # redirects, a short wait (gateway/push.py).
+            httpx.Client(
+                transport=push_transport, timeout=10, follow_redirects=False, trust_env=False
+            ) as push_client,
+        ):
             app.state.client = client
+            app.state.push = push.Sender(app, push_client, push_seconds)
+            app.state.push.start()
             try:
                 yield
             finally:
+                app.state.push.close()
                 if settings.provider_control_url:
                     cast("PrivateTransport", app.state.provider_transport).shutdown()
                 if app.state.terminals:
@@ -475,6 +489,7 @@ def create_app(
     # Registered in their original order: the Pi proxies and the dashboard end in catch-all paths.
     app.include_router(auth_routes.router(app, session, cookie, admit_write))
     app.include_router(host_routes.router(app, session, admit_write))
+    app.include_router(push_routes.router(app, session, admit_write))
     app.include_router(terminal_routes.router(app, session, admit_write))
     # Before the JSON control relay, whose catch-all path would take these file routes.
     app.include_router(file_routes.router(app, session, admit_write, stream_transport))

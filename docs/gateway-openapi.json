@@ -667,6 +667,78 @@
         }
       }
     },
+    "/api/push": {
+      "get": {
+        "summary": "Read",
+        "description": "The server's public key (made on first use) and the devices with notifications on.",
+        "operationId": "read_api_push_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions": {
+      "post": {
+        "summary": "Subscribe",
+        "description": "Turn notifications on for the device this subscription names.",
+        "operationId": "subscribe_api_push_subscriptions_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions/{device}/delete": {
+      "post": {
+        "summary": "Unsubscribe",
+        "description": "Turn notifications off for one device; turning off one that is already off is fine.",
+        "operationId": "unsubscribe_api_push_subscriptions__device__delete_post",
+        "parameters": [
+          {
+            "name": "device",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/terminal": {
       "post": {
         "summary": "Terminal Create",
