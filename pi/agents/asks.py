@@ -7,7 +7,8 @@ arrives later as his message in that chat and starts a new turn there (`pi.turns
 An option is text the AI wrote, perhaps after reading someone else's words, so an answer given by
 tapping one is marked: it never counts as his own typed request approving a matching action
 (`pi.turns.access`). Asking is always allowed, but at most `PER_CHAT` questions wait per chat and
-`OPEN_LIMIT` in all, so outside content cannot flood his Inbox.
+`OPEN_LIMIT` in all, so outside content cannot flood his Inbox. The owner may change both
+(`inbox.asks_per_chat`, `inbox.asks_total`); a value outside the registry's range keeps the default.
 
 A question from a hidden chat (forgotten or in the Trash, `pi.conversation.visibility`) is not
 listed, opened, answered or dismissed, and does not count toward `OPEN_LIMIT`; it comes back when
@@ -24,11 +25,15 @@ import uuid
 
 from pi.conversation import settings as session_settings
 from pi.conversation import visibility
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
 
 ASK_ID = r"^ask_[a-f0-9]{32}$"
 PER_CHAT = 3
 OPEN_LIMIT = 20
+# The owner's settings for both, with the ranges Conker's settings registry offers.
+PER_CHAT_SETTING, PER_CHAT_RANGE = "inbox.asks_per_chat", (1, 10)
+OPEN_SETTING, OPEN_RANGE = "inbox.asks_total", (5, 100)
 DEFAULT_OPTIONS = ["Yes", "No"]
 VISIBLE = "NOT " + visibility.hidden_sql("session_id")
 # The submission id `pi.turns.answers` sends an answer as: answer-<ask id>[-<attempt>].
@@ -90,6 +95,14 @@ def _view(db, row) -> dict:
     }
 
 
+def _limit(db, setting_id, bounds, default) -> int:
+    """The owner's whole number in bounds, or the default for anything else."""
+    value = owner_settings.value_in(db, setting_id)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value):
+        return default
+    return int(value) if bounds[0] <= value <= bounds[1] else default
+
+
 def file(store, session_id, turn_id, question, choices, now=None) -> dict:
     """Record one question. A ValueError is an answer for the model, not a failure."""
     question = " ".join(str(question or "").split())[:500]
@@ -100,17 +113,14 @@ def file(store, session_id, turn_id, question, choices, now=None) -> dict:
         waiting = db.execute(
             "SELECT COUNT(*) FROM owner_asks WHERE state='open' AND session_id=?", (session_id,)
         ).fetchone()[0]
-        if waiting >= PER_CHAT:
+        if waiting >= _limit(db, PER_CHAT_SETTING, PER_CHAT_RANGE, PER_CHAT):
             raise ValueError(
                 f"{waiting} questions from this chat already wait for the owner. Do not ask "
                 "another; wait for his answers."
             )
-        if (
-            db.execute(
-                f"SELECT COUNT(*) FROM owner_asks WHERE state='open' AND {VISIBLE}"
-            ).fetchone()[0]
-            >= OPEN_LIMIT
-        ):
+        if db.execute(
+            f"SELECT COUNT(*) FROM owner_asks WHERE state='open' AND {VISIBLE}"
+        ).fetchone()[0] >= _limit(db, OPEN_SETTING, OPEN_RANGE, OPEN_LIMIT):
             raise ValueError("The owner's Inbox already holds many questions. Do not ask now.")
         identity = "ask_" + uuid.uuid4().hex
         db.execute(
