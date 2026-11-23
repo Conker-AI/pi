@@ -9,7 +9,8 @@ built in: a weekly life review, a deadline watch or a follow-up with friends are
 Repeating (interval) jobs skip the owner's quiet hours; a job set for a time of day runs then.
 When the reply has something for the owner, an Inbox note names it in one line and links to the
 chat. A reply of exactly NOTHING records the run and stays quiet. The owner may instead want a note
-after every run or none (`proactivity.jobs.results`, `agent_job_text.result_note`).
+after every run or none (`proactivity.jobs.results`, `agent_job_text.result_note`). His allowed
+triggers, shortest interval and runs a day hold an automatic run back (`job_limits`).
 
 A job Conker made on its own (`createdBy: "conker"`, only when the owner's access settings let
 conker.schedule run without asking) is held tighter, since the owner never read its instructions:
@@ -45,7 +46,14 @@ from pi.conversation import submissions
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
-from pi.schedule import agent_hooks, agent_triggers, job_hidden, jobs, proactive_budget
+from pi.schedule import (
+    agent_hooks,
+    agent_triggers,
+    job_hidden,
+    job_limits,
+    jobs,
+    proactive_budget,
+)
 from pi.schedule.agent_job_text import QUIET, _note, result_note, when
 from pi.schedule.job_models import Adopt, AgentJobCreate, AgentTarget, Definition, JobPrivacy
 
@@ -231,6 +239,15 @@ def admit(store, run_id, definition, now=None) -> tuple[str, str] | None:
     return None
 
 
+def _started_by(request_id: str | None) -> str:
+    """What started a run, for the owner's job limits (`job_limits.held`)."""
+    if request_id is None:
+        return "time"
+    if agent_hooks.started_by_hook(request_id):
+        return "webhook"
+    return "watch" if agent_triggers.started_by_watch(request_id) else "owner"
+
+
 def turn_off(db, job_ids, reason="chat_forgotten") -> None:
     """Inside the caller's transaction (forgetting): switch these jobs off, say why, and withdraw
     their runs that have not started. Never deletes a job; it leaves every owner list with its
@@ -357,7 +374,9 @@ class AgentJobs:
         definition = Definition.model_validate_json(row["definition"]).model_dump()
         if _hidden_before_start(self.store, row["job_id"], run_id):
             return {"status": "failed", "code": "SOURCE_HIDDEN", "reason": job_hidden.REFUSAL}
-        held = admit(self.store, run_id, definition, now)
+        held = job_limits.held(
+            self.store, run_id, row["job_id"], _started_by(row["request_id"])
+        ) or admit(self.store, run_id, definition, now)
         if held:
             code, words = held
             # Only a refusal that is not one of the owner's limits (a race) is a failure.

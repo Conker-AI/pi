@@ -397,7 +397,7 @@ def inbox(store, *, now=None):
     needs_you.extend(updates.needs_you(store))
     needs_you.extend(change_requests.needs_you(store))
     needs_you.extend(asks.needs_you(store))
-    needs_you.extend(job_notes.needs_you(store))
+    needs_you.extend(job_notes.needs_you(store, now))
     needs_you.extend(recall_notices.needs_you(store))
 
     needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))

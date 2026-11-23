@@ -73,7 +73,7 @@ def test_0006_moves_both_tables_keeps_ids_and_shapes(tmp_path):
             }
         ]
         assert [r["title"] for r in plan_alerts.resets(store, 0)] == ["Claude weekly limit reset"]
-        assert job_notes.notes(store) == [
+        assert job_notes.notes(store, now=7) == [
             {
                 "id": NOTE,
                 "jobId": "job_1",

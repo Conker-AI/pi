@@ -1,6 +1,8 @@
 """AI job notes: the Inbox lines a job leaves, and their forgetting.
 
-Split out of `pi.schedule.agent_jobs`; a note is a `notices` row of kind `agent-job`.
+Split out of `pi.schedule.agent_jobs`; a note is a `notices` row of kind `agent-job`. A note older
+than the owner's `inbox.notes_days` is not listed; it is hidden, never deleted, and comes back if he
+raises the number.
 """
 
 import re
@@ -8,7 +10,11 @@ import time
 
 from pi.conversation import visibility
 from pi.core import notices
+from pi.core import owner_settings as owner_settings
+from pi.schedule import job_limits
 from pi.schedule.agent_jobs import NOTE_ID, AgentJobError
+
+NOTES_DAYS, NOTES_DAYS_RANGE, NOTES_DAYS_DEFAULT = "inbox.notes_days", (1, 90), 14
 
 
 def redact(db, session_ids: list[str]) -> None:
@@ -29,15 +35,20 @@ def redact(db, session_ids: list[str]) -> None:
             db.executemany(f"DELETE FROM {table} WHERE session_id=?", values)
 
 
-def notes(store, limit=50):
-    """Open notes, newest first; a note from a forgotten or trashed chat is not listed."""
+def notes(store, limit=50, now=None):
+    """Open notes, newest first; a note from a forgotten or trashed chat, or older than the
+    owner's days to keep notes, is not listed."""
+    now = time.time() if now is None else now
     with store._connect() as db:
+        days = job_limits.whole(
+            owner_settings.value_in(db, NOTES_DAYS), NOTES_DAYS_RANGE, NOTES_DAYS_DEFAULT
+        )
         rows = db.execute(
             "SELECT n.* FROM notices n JOIN sessions s ON s.id=n.session_id "
-            "WHERE n.kind=? AND n.dismissed_at IS NULL "
+            "WHERE n.kind=? AND n.dismissed_at IS NULL AND n.created_at>=? "
             f"AND NOT {visibility.hidden_sql('n.session_id')} "
             "ORDER BY n.created_at DESC LIMIT ?",
-            (notices.AGENT_JOB, limit),
+            (notices.AGENT_JOB, now - days * 86400, limit),
         ).fetchall()
     return [
         {
@@ -69,7 +80,7 @@ def dismiss(store, identity, now=None):
     return {"id": identity, "dismissed": True, "changed": bool(changed)}
 
 
-def needs_you(store):
+def needs_you(store, now=None):
     """Open notes for the Inbox: one line each, linking to the job's chat."""
     return [
         {
@@ -79,5 +90,5 @@ def needs_you(store):
             "since": note["createdAt"],
             "source": {"kind": "agent-job", "noteId": note["id"], "sessionId": note["sessionId"]},
         }
-        for note in notes(store)
+        for note in notes(store, now=now)
     ]

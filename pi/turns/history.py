@@ -94,7 +94,13 @@ class History:
             0,
             min(self.max_tool_steps, (research_plan or {}).get("search_limit", 4)) - research_used,
         )
-        messages.extend(research.instructions(execution, bool(research_used), remaining))
+        messages.extend(
+            research.instructions(
+                execution, bool(research_used), remaining, research.cite_limit(self.store)
+            )
+            if execution.get("researchMode") in ("web", "deep")
+            else []
+        )
         # A forked child carries its parent's summary as context, not its
         # parent's messages. The messages are still there, in the parent, and
         # still readable - they are simply not resent.

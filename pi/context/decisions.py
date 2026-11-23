@@ -1,4 +1,8 @@
-"""Decisions and open threads: context items for a chat."""
+"""Decisions and open threads: context items for a chat.
+
+The owner's `context.decisions` set to "owner" means only he adds decisions: the AI may still add
+open threads. Any other value (the default, "both") lets either add them.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,7 @@ import json
 import time
 import uuid
 
+from pi.core import owner_settings as owner_settings
 from pi.core.context_bodies import Add, State
 from pi.core.errors import ServiceError
 from pi.models.providers import Message
@@ -13,6 +18,9 @@ from pi.models.providers import Message
 
 class DecisionError(ServiceError):
     pass
+
+
+WHO_DECIDES = "context.decisions"
 
 
 SCHEMA = """
@@ -95,6 +103,13 @@ def add(store, session_id, body: Add) -> dict:
             raise DecisionError(
                 "revision_conflict", "Context items changed; reload before saving.", 409
             )
+
+        if (
+            body.author == "ai"
+            and body.kind == "decision"
+            and owner_settings.value_in(db, WHO_DECIDES) == "owner"
+        ):
+            raise DecisionError("owner_decides", "Only the owner adds decisions to this list.", 403)
 
         count = db.execute(
             "SELECT COUNT(*) FROM context_items WHERE session_id=?", (session_id,)

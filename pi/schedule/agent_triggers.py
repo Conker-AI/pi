@@ -7,7 +7,8 @@ keeps the fingerprint and when it last looked, never the answer itself.
 
 A tool that needs the owner's OK each time cannot be watched silently: the first such answer
 stops the watch with a plain reason instead of asking the owner every few minutes. Watches pause
-during quiet hours; a change that arrives at night starts the job at the first look after.
+during quiet hours; a change that arrives at night starts the job at the first look after. A
+watch never looks more often than the owner's shortest interval (`proactivity.jobs.min_interval`).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import hashlib
 import json
 import uuid
 
-from pi.schedule import jobs
+from pi.schedule import job_limits, jobs
 from pi.schedule.job_models import Definition
 
 WATCH_REQUEST = "watch_"
@@ -74,7 +75,8 @@ def _save(store, job_id, *, digest, checked_at, next_check, failure=None):
 def check(store, client, row, now: float, *, quiet=False) -> str:
     """Look once. Returns what happened: baseline, unchanged, started, busy, paused or a failure."""
     watch = row["definition"].watch
-    following = now + watch.everyMinutes * 60
+    # Never more often than the owner's shortest interval for jobs.
+    following = now + max(watch.everyMinutes, job_limits.min_minutes(store)) * 60
     if quiet:
         # A pause looks at nothing, so it keeps whatever the last real look recorded.
         _save(
