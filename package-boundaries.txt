@@ -49,7 +49,6 @@ gateway -> agents
 gateway -> api
 gateway -> conversation
 gateway -> core
-gateway -> host
 gateway -> memory
 gateway -> owner
 gateway -> setup

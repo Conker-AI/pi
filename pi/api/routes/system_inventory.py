@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 
+from pi.core import inventory_bodies
 from pi.host import inventory, inventory_models
 from pi.host import targets as system_targets
 
@@ -38,7 +39,7 @@ def router(store, gate, authorize):
         return inventory.configured_targets(store(), system_targets.read(gate()), "containers")
 
     @routes.post("", response_model=inventory_models.InventoryView)
-    def create(body: inventory_models.Read, request: Request, response: Response):
+    def create(body: inventory_bodies.Read, request: Request, response: Response):
         exact(request)
         no_store(response)
         return inventory.browser_view(store(), invoke(inventory.request, body))

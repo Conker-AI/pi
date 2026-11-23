@@ -4282,7 +4282,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__host__inventory_models__Read"
+                "$ref": "#/components/schemas/pi__core__inventory_bodies__Read"
               }
             }
           }
@@ -4560,7 +4560,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/pi__host__filesystem_reads__Read"
+                "$ref": "#/components/schemas/pi__core__filesystem_bodies__Read"
               }
             }
           }
@@ -41985,6 +41985,61 @@
         ],
         "title": "Budget"
       },
+      "pi__core__filesystem_bodies__Read": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,100}$",
+            "title": "Request Id"
+          },
+          "root_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "title": "Root Id"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "default": ""
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 200
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "root_id"
+        ],
+        "title": "Read"
+      },
+      "pi__core__inventory_bodies__Read": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16,100}$",
+            "title": "Request Id"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 100
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id"
+        ],
+        "title": "Read"
+      },
       "pi__core__owner_settings__Update": {
         "properties": {
           "expected_revision": {
@@ -42075,61 +42130,6 @@
           "action"
         ],
         "title": "Request"
-      },
-      "pi__host__filesystem_reads__Read": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{16,100}$",
-            "title": "Request Id"
-          },
-          "root_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,64}$",
-            "title": "Root Id"
-          },
-          "path": {
-            "type": "string",
-            "title": "Path",
-            "default": ""
-          },
-          "limit": {
-            "type": "integer",
-            "maximum": 200.0,
-            "minimum": 1.0,
-            "title": "Limit",
-            "default": 200
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id",
-          "root_id"
-        ],
-        "title": "Read"
-      },
-      "pi__host__inventory_models__Read": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{16,100}$",
-            "title": "Request Id"
-          },
-          "limit": {
-            "type": "integer",
-            "maximum": 200.0,
-            "minimum": 1.0,
-            "title": "Limit",
-            "default": 100
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id"
-        ],
-        "title": "Read"
       },
       "pi__host__port_finalization__Request": {
         "properties": {

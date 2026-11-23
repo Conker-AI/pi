@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime
 
 from pi.core.errors import ServiceError
+from pi.core.inventory_bodies import Read
 from pi.core.toolgate_types import ApprovalRequired, ToolPending, ToolRefused, ToolResult
 from pi.host.inventory_models import (
     ConfiguredTarget,
@@ -21,7 +22,6 @@ from pi.host.inventory_models import (
     PortView,
     ProcessSectionView,
     ProcessView,
-    Read,
     SourceScopeView,
 )
 

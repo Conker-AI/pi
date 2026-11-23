@@ -10,9 +10,15 @@ from pydantic import Field, JsonValue, TypeAdapter, model_validator
 from pi.agents import characters, team_models
 from pi.agents import profiles as agents
 from pi.conversation import settings as session_settings
-from pi.core import artifact_requests, call_models, project_bodies, schedule_bodies
+from pi.core import (
+    artifact_requests,
+    call_models,
+    filesystem_bodies,
+    inventory_bodies,
+    project_bodies,
+    schedule_bodies,
+)
 from pi.core.models import Strict
-from pi.host import filesystem_reads, inventory_models
 from pi.memory import edits as memory_edits
 
 
@@ -324,7 +330,7 @@ TurnMutation = Annotated[TurnResume | SubmissionCancel, Field(discriminator="ope
 TURN_MUTATION = TypeAdapter(TurnMutation)
 
 
-class FileListingRequest(filesystem_reads.Read):
+class FileListingRequest(filesystem_bodies.Read):
     operation: Literal["request"]
 
 
@@ -339,7 +345,7 @@ FileMutation = Annotated[FileListingRequest | FileListingResume, Field(discrimin
 FILE_MUTATION = TypeAdapter(FileMutation)
 
 
-class InventoryRequest(inventory_models.Read):
+class InventoryRequest(inventory_bodies.Read):
     operation: Literal["request"]
 
 

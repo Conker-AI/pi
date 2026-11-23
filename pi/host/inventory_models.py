@@ -7,12 +7,6 @@ from pydantic import Field, field_validator, model_validator
 
 from pi.core.models import Strict
 
-
-class Read(Strict):
-    request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{16,100}$")
-    limit: int = Field(default=100, ge=1, le=200)
-
-
 ErrorCode = Literal[
     "process_identity_unavailable",
     "process_changed_during_collection",
