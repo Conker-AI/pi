@@ -6,7 +6,12 @@ import json
 import math
 from typing import Any
 
+from pi.core import owner_settings as owner_settings
 from pi.models import roles as model_roles
+
+# The owner's "Your votes teach model profiles" (Conker's settings registry): only an exact false
+# leaves his thumbs out of every profile; the votes themselves stay recorded.
+VOTES = "research.votes"
 
 
 def _median(values: list[int]) -> int | None:
@@ -65,14 +70,18 @@ def profiles(store) -> dict[str, Any]:
             """,
             exclude_params,
         ).fetchall()
-        vote_rows = db.execute(
-            f"""
-            SELECT rv.vote, rv.message_id
-            FROM response_votes rv
-            WHERE 1=1 {exclude_clause.replace("t.session_id", "rv.session_id")}
-            """,
-            exclude_params,
-        ).fetchall()
+        vote_rows = (
+            db.execute(
+                f"""
+                SELECT rv.vote, rv.message_id
+                FROM response_votes rv
+                WHERE 1=1 {exclude_clause.replace("t.session_id", "rv.session_id")}
+                """,
+                exclude_params,
+            ).fetchall()
+            if owner_settings.value_in(db, VOTES) is not False
+            else []
+        )
 
         # Stored judgements list scores as [{"message_id", "score", "reason"}].
         score_entries: list[tuple[str, Any, bool]] = []

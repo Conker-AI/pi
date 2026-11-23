@@ -1,8 +1,8 @@
 """Next-message suggestions: Jev offers a few things the owner might ask next.
 
 The owner asks for them (the dashboard after an answer while Suggest your next message is on, or
-`conker chat suggest`); nothing runs by itself and nothing is saved, so there is nothing to
-forget. The source is the chat's last answer and the owner's message before it, with the same
+`conker chat suggest`); with that setting off (`chats.suggestions`) Pi refuses the ask too.
+Nothing runs by itself and nothing is saved, so there is nothing to forget. The source is the chat's last answer and the owner's message before it, with the same
 filters as chat names: no excluded, redacted or forgotten message reaches the helper, and a chat
 with helper models off is refused. The reply is untrusted text: an item with a control or
 direction-changing character is dropped, the rest are trimmed, capped and de-duplicated.
@@ -98,8 +98,13 @@ def suggest(store, providers, sid, body: Ask) -> dict:
     with store._connect() as db:
         privacy = session_settings.source_privacy(db, sid)
         count = body.count or chat_preferences.suggestions_count(db)
+        wanted = chat_preferences.suggestions_on(db)
     if privacy is None:
         raise SuggestionError("not_found", "Conversation not found.", 404)
+    if not wanted:
+        raise SuggestionError(
+            "suggestions_off", "Next-message suggestions are off in your chat settings.", 409
+        )
     if privacy["harnessDisabled"]:
         raise SuggestionError(
             "helpers_off", "Suggestions need helper models, which are off for this chat.", 409
