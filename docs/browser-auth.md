@@ -187,6 +187,8 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` |
 | `GET /api/owner/tools/{id}/runs?limit=1..50` | session | ToolGate `GET /v2/owner/tools/{id}/runs` (owner key) |
 | `POST /api/owner/tools/{id}/runs` `{"action_id": "owner_<32 hex>", "args", "approval_request_id"?}` | session | ToolGate `POST /v2/owner/tools/{id}/runs` (owner key and the chat's execution key) |
+| `POST /api/owner/mcp/tools/{id}/class` `{"read_class": "act_outward", "expected_version"}` | session | ToolGate `POST /v2/owner/mcp/tools/{id}/class` (owner key): the tool asks for every call again |
+| `POST /api/owner/mcp/tools/{id}/class` `{"read_class": "observe", "expected_version"}` | password | the same; Observe runs the tool without its Inbox card. ToolGate's 409/422 refusal comes back as `detail: {code, message}` with a known code (`act_outward_name`, `act_outward_hint`, `schema_changed`, `unsupported_schema`, `definition_conflict`, else `refused`) and the gateway's own words |
 
 **Files** go through one streaming relay (`gateway/relay.py`), the only routes that carry bytes
 rather than a JSON object. A download needs exactly one `format`. The relay asks Pi for no
