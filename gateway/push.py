@@ -1,14 +1,14 @@
 """Web push to the owner's own devices: the server key, the device list, encryption and sending.
 
 Pi has no outbound HTTP (ADR-0005), so the gateway sends: it already holds the owner's browser
-state in its private volume, and a push goes only to a device he turned on himself, never to
+state in its private volume, and a push goes only to a device the owner turned on, never to
 anyone else. What may be pushed is Pi's decision (`pi/agents/push_queue.py`); the gateway claims
 those items and sends each one once.
 
 - The server key (VAPID, RFC 8292) is made on first use and kept next to the TLS key and the
   password verifier (`push-vapid.pem`, 0600). Its private half never leaves this file: not to the
   browser, not to a log, not to an error. The public half goes to the signed-in owner only.
-- A device is a browser's push subscription. Only the push services of the browsers he can use
+- A device is a browser's push subscription. Only the push services of the browsers the owner can use
   are accepted as endpoints, so the gateway never posts to an address inside the server's network.
   A device the push service says is gone (404, 410) is removed; sign-out everywhere and a new
   password remove every device (`store.py`).
@@ -46,7 +46,7 @@ KEY_FILE = "push-vapid.pem"
 MAX_DEVICES = 10
 EVERY_SECONDS = 30.0
 TTL_SECONDS = 6 * 3600  # how long a push service keeps a message for a device that is offline
-# RFC 8292 asks for a contact; this names the software, not the owner or his server's address.
+# RFC 8292 asks for a contact; this names the software, not the owner or the owner's server address.
 SUBJECT = "https://github.com/Conker-AI/conker"
 # The push services of Chrome, Edge, Firefox and Safari (and the browsers built on them).
 PUSH_HOSTS = (
@@ -69,6 +69,7 @@ TITLES = {
     "agent-job": "An AI job left you a note",
     "memory-recall": "An answer used a memory you changed",
 }
+DNS_NAME = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+")
 GENERIC = "Conker needs you"
 INBOX = "/inbox"
 _KEY_LOCK = threading.Lock()
@@ -145,6 +146,8 @@ def endpoint_allowed(value: str) -> bool:
         and not parts.password
         and not parts.fragment
         and not any(character in value for character in "\x00\r\n\t ")
+        # A plain DNS name: httpx hands any other host characters to the resolver as written.
+        and DNS_NAME.fullmatch(host) is not None
         and any(host == name or host.endswith("." + name) for name in PUSH_HOSTS)
     )
 
@@ -305,6 +308,9 @@ class Sender:
             )
         except httpx.HTTPError:
             return {"claimed": 0, "sent": 0, "removed": 0}
+        # Read again: a device turned off, or sign-out everywhere, during the claim is not woken.
+        on = {target["id"] for target in devices.every()}
+        targets = [target for target in targets if target["id"] in on]
         items, sent, removed, failed = _claimed(response), 0, 0, 0
         for item in items:
             for target in targets:

@@ -8,9 +8,9 @@ the claimed items to the devices the owner turned on. The rules, in one place:
 - Only items that started waiting at or after `after` (when the first device was turned on), so
   turning it on does not replay the backlog.
 - The owner's proactivity and quiet hours (`owner_preferences.admission_reasons`): off sends
-  nothing, "urgent only" only urgent items, quiet hours hold all but urgent ones he let through.
-- At most his daily suggestion number of pushes a local day, counted here; they never use up the
-  reservations his jobs make (`proactive_budget`).
+  nothing, "urgent only" only urgent items, quiet hours hold all but urgent ones the owner let through.
+- At most the owner's daily suggestion number of pushes a local day, counted here; they never use up the
+  reservations the owner's jobs make (`proactive_budget`).
 - One push per item, ever: a claim is recorded before the gateway sends, in the same write
   transaction that checks it, so a retry or a second claim at once never sends it again. A claim
   the gateway could not send is lost, not repeated (the Inbox still shows the item).
@@ -40,7 +40,7 @@ ONE = prefs.Usage(suggestions=1, researchMinutes=0, costCents=0)
 
 
 class Claim(Strict):
-    # Unix seconds: when the first of his devices was turned on (the gateway knows it).
+    # Unix seconds: when the first of the owner's devices was turned on (the gateway knows it).
     after: float = Field(ge=0, le=10_000_000_000)
     limit: int = Field(default=5, ge=1, le=20)
 
@@ -54,7 +54,7 @@ def item_key(item: dict) -> str:
 
 
 def _pushed_today(db, preferences, now: datetime) -> int:
-    """Pushes claimed on the owner's current local day, in the zone he has now (a change of time
+    """Pushes claimed on the owner's current local day, in the owner's zone now (a change of time
     zone cannot reset a day already used)."""
     day = prefs.local_day(preferences, now)
     rows = db.execute(

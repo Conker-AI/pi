@@ -100,7 +100,7 @@ def test_quiet_hours_hold_an_item_without_using_it_up(store):
     assert len(claim(store, now=DAY)["items"]) == 1
 
 
-def test_urgent_items_pass_quiet_hours_only_when_he_allowed_it(store):
+def test_urgent_items_pass_quiet_hours_only_when_the_owner_allowed_it(store):
     uncertain(store)
     approval(store)
     assert claim(store, now=NIGHT)["items"] == []
@@ -127,7 +127,7 @@ def test_the_daily_suggestion_number_caps_pushes_per_local_day(store):
     held = claim(store)
     assert held["items"] == [] and held["held"] == ["daily_budget_suggestions"]
     assert len(claim(store, now=DAY + timedelta(days=1))["items"]) == 1
-    # Pushes never use up the reservations his jobs make.
+    # Pushes never use up the reservations the owner's jobs make.
     assert proactive_budget.status(store, now=DAY)["reserved"]["suggestions"] == 0
 
 

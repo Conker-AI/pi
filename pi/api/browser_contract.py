@@ -329,13 +329,13 @@ OWNER_ROUTES = {
         r"/imports/chats/imp_[0-9a-f]{32}/delete",
         # Deleting chats forever asks for the password (PASSWORD_WRITES).
         r"/forgetting/chats",
-        # Web push: the gateway claims what may wake his devices (GATEWAY_ONLY, never relayed).
+        # Web push: the gateway claims what may wake the owner's devices (GATEWAY_ONLY, never relayed).
         r"/push/claim",
     ),
 }
 
 # Owner-control routes only the gateway itself calls; its control relay refuses them for the
-# browser. A push claim marks an Inbox item as sent to his devices, so a page that could make one
+# browser. A push claim marks an Inbox item as sent to the owner's devices, so a page that could make one
 # would silence that item's notification.
 GATEWAY_ONLY = {"POST": (r"/push/claim",)}
 

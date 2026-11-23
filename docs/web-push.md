@@ -20,10 +20,10 @@ proactive work uses (`owner_preferences.admission_reasons`):
 
 - proactivity off sends nothing; "urgent only" sends only urgent items (an action whose result is
   unknown);
-- quiet hours hold everything except urgent items, and those only when he allowed urgent
+- quiet hours hold everything except urgent items, and those only when the owner allowed urgent
   exceptions;
-- at most his daily suggestion number of pushes a local day (4 by default), counted in
-  `push_deliveries`; pushes never use up the reservations his jobs make.
+- at most the owner's daily suggestion number of pushes a local day (4 by default), counted in
+  `push_deliveries`; pushes never use up the reservations the owner's jobs make.
 
 A held item is not used up; it may go later while it still waits. Items that started waiting
 before the first device was turned on are not replayed. Each item is claimed once, ever: the claim

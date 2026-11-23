@@ -60,10 +60,13 @@ class World:
         self.pi, self.pushes = [], []
         self.claim = {"items": []}
         self.answer = None
+        self.during_claim = None
         self.status = {FCM: 201, MOZILLA: 201}
 
     def pi_transport(self, wire):
         self.pi.append(wire)
+        if self.during_claim is not None:
+            self.during_claim()
         if self.answer is not None:
             return self.answer
         if wire.url.path == "/push/claim":
@@ -376,3 +379,28 @@ def test_public_key_is_base64url_p256_point(world):
     client, _, _, _, _ = world
     raw = base64.urlsafe_b64decode(client.get("/api/push").json()["publicKey"] + "=")
     assert len(raw) == 65 and raw[0] == 4
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        r"https://evil.example\.fcm.googleapis.com/x",
+        "https://evil.example;.push.apple.com/x",
+        "https://evil.example%2f.push.apple.com/x",
+        "https://evil_example.notify.windows.com/x",
+    ],
+)
+def test_a_push_host_is_plain_dns_letters_only(endpoint):
+    # httpx would send these hosts to the resolver as written; only a plain DNS name is a push host.
+    assert push.endpoint_allowed(endpoint) is False
+
+
+def test_sign_out_everywhere_during_a_claim_sends_nothing(world):
+    client, headers, state, app, _ = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    state.claim = {"items": [{"kind": "approval", "urgent": False, "tag": "d" * 16}]}
+    # The owner signs out everywhere while Pi answers the claim: the devices read before it are
+    # no longer the owner's, so none of them is woken.
+    state.during_claim = app.state.auth.revoke
+    assert app.state.push.tick()["sent"] == 0 and state.pushes == []

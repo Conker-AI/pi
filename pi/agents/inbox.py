@@ -381,7 +381,7 @@ def _impact_counts(store, day_start, week_start):
 def needs_you_items(store, day_start) -> list[dict]:
     """What waits for the owner now, urgent first, then oldest first; at most 50.
 
-    The Inbox shows these, and web push (`push_queue`) may wake his devices for them.
+    The Inbox shows these, and web push (`push_queue`) may wake the owner's devices for them.
     """
     items = []
     approval_turns = store.awaiting_approval()
@@ -401,7 +401,7 @@ def needs_you_items(store, day_start) -> list[dict]:
 
 
 def local_day_start(store, now: float) -> float:
-    """When the owner's local day began (his time zone; UTC before he saved preferences)."""
+    """When the owner's local day began (the owner's time zone; UTC before any preferences were saved)."""
     zone, _ = _owner_zone(store)
     return _local_midnight(datetime.fromtimestamp(now, zone).date(), zone)
 
