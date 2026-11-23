@@ -365,7 +365,7 @@ class Memory:
         if not session_settings.memory_allowed(selected):
             memory_store.save_context(self.store, turn_id, "disabled")
             return
-        state, package = "not_configured", None
+        state, package, generation = "not_configured", None, memory_store.generation(self.store)
         client = self._client(selected)
         if memory_store.recall_held(self.store):
             state = "unavailable"
@@ -434,7 +434,7 @@ class Memory:
                 RecursionError,
             ):
                 state, package = "unavailable", None
-        memory_store.save_context(self.store, turn_id, state, package)
+        memory_store.save_context(self.store, turn_id, state, package, generation)
 
     def status(self, session_id=None, turn_id=None):
         return memory_store.status(

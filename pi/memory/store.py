@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS memory_contexts (
     package TEXT,
     recorded_at REAL NOT NULL
 );
+-- One number every clearing of saved recall advances (`invalidate_recall`: a memory forget or
+-- correction, a forgotten chat, an erased import). Read before a recall is retrieved and compared
+-- when it is saved, so a recall in flight across such a change never keeps what it removed.
+CREATE TABLE IF NOT EXISTS recall_generation (
+    id INTEGER PRIMARY KEY CHECK(id=1),
+    value INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO recall_generation VALUES (1, 0);
 CREATE TABLE IF NOT EXISTS memory_forget_operations (
     request_id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
@@ -220,8 +228,21 @@ def recall_held(store):
         return recall_held_in(db)
 
 
+def generation_in(db) -> int:
+    """The recall generation (see SCHEMA). Pi creates it at start, before any recall."""
+    return db.execute("SELECT value FROM recall_generation WHERE id=1").fetchone()[0]
+
+
+def generation(store) -> int:
+    with store._connect() as db:
+        return generation_in(db)
+
+
 def invalidate_recall(db):
     """Historical briefings lack IDs; invalidate derived recall, never conversation text."""
+    if db.execute("SELECT 1 FROM sqlite_master WHERE name='recall_generation'").fetchone():
+        # Absent only for offline forgetting before the Store first opens: no recall is in flight.
+        db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")
     changed = db.execute(
         "UPDATE memory_contexts SET package=NULL,status='redacted' WHERE package IS NOT NULL"
     ).rowcount
@@ -268,10 +289,14 @@ def redact_recall(db):
             db.execute(trigger[0])
 
 
-def save_context(store, turn_id, status, package=None):
+def save_context(store, turn_id, status, package=None, generation=None):
+    """`generation`: the recall generation read before retrieving `package`. A change that cleared
+    saved recall since then may have removed what it holds, so it is not kept."""
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if package is not None and recall_held_in(db):
+        if package is not None and (
+            recall_held_in(db) or (generation is not None and generation != generation_in(db))
+        ):
             status, package = "unavailable", None
         db.execute(
             "INSERT INTO memory_contexts VALUES (?,?,?,?)",

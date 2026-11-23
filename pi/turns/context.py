@@ -38,7 +38,18 @@ CREATE TABLE IF NOT EXISTS turn_context_inputs (
 )
 
 
-def capture(store, turn_id, sources, prefix, reply_to=None, *, acknowledgement_generation=None):
+def capture(
+    store,
+    turn_id,
+    sources,
+    prefix,
+    reply_to=None,
+    *,
+    acknowledgement_generation=None,
+    recall_generation=None,
+):
+    """Keep the answer's input. `recall_generation` was read before the recall in `prefix`: one
+    cleared since (an erased import goes on during turns) is never kept or sent to the model."""
     source_ids = [row["id"] for row in sources]
     encoded_prefix = json.dumps(
         [{"role": m.role, "content": m.content} for m in prefix], ensure_ascii=False
@@ -55,6 +66,15 @@ def capture(store, turn_id, sources, prefix, reply_to=None, *, acknowledgement_g
             raise context_controls.ContextError(
                 "memory_forgetting",
                 "Recalled context is unavailable while a memory change is pending.",
+            )
+        if (
+            any(m.role == "system" and m.content.startswith(RECALL_HEADER) for m in prefix)
+            and recall_generation is not None
+            and recall_generation != memory_store.generation_in(db)
+        ):
+            raise context_controls.ContextError(
+                "context_unavailable",
+                "Recalled memory changed while preparing context. Send it again.",
             )
         # Normal outbox progress cannot invalidate a preparation-time note. A
         # forget journal change can: recheck its generation under the writer lock.

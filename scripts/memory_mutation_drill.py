@@ -43,6 +43,18 @@ CASES = [
         'if False:\n            state = "unavailable"',
     ),
     ("hidden-memory-gap", "pi/memory/store.py", '"notices": notices,', '"notices": [],'),
+    (
+        "recall-saved-across-a-clearing",
+        "pi/memory/store.py",
+        "recall_held_in(db) or (generation is not None and generation != generation_in(db))",
+        "recall_held_in(db)",
+    ),
+    (
+        "clearing-keeps-the-generation",
+        "pi/memory/store.py",
+        'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',
+        "pass",
+    ),
     ("shutdown-releases-inflight-upload", "pi/memory/service.py", "self.thread.join()", "pass"),
 ]
 SOURCE = "pi"

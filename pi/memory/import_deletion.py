@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from pi.memory import store as memory_store
 from pi.memory.imports import LABELS, ImportRefused
 
 MEMORY_NOTE = (
@@ -167,15 +168,29 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
                     ),
                 )
             continue
-        if not found:
-            _mark_missing(store, evidence_id, "not found")
-        else:
-            with store._connect() as db:
-                db.execute(
-                    "DELETE FROM import_evidence_erasures WHERE evidence_id=?", (evidence_id,)
-                )
+        _settled(store, evidence_id, found)
         done += 1
     return Erased(done, problem=problem)
+
+
+def _settled(store, evidence_id: str, found: bool) -> None:
+    """MemoryGate holds nothing of this event now: erased by this call or, when it is not found, by
+    an earlier one whose answer was lost. What it alone supported may be in Pi's saved recall, so
+    that is cleared as a memory forget clears it (`invalidate_recall`, which also stops a recall in
+    flight from being saved). Recall is not paused while erasures wait: MemoryGate holds the words
+    until then."""
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        if found:
+            db.execute("DELETE FROM import_evidence_erasures WHERE evidence_id=?", (evidence_id,))
+        else:
+            db.execute(
+                "UPDATE import_evidence_erasures SET state='missing', error='not found' "
+                "WHERE evidence_id=?",
+                (evidence_id,),
+            )
+        memory_store.invalidate_recall(db)
+        db.commit()
 
 
 def _mark_missing(store, evidence_id: str, reason: str) -> None:

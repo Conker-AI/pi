@@ -316,3 +316,24 @@ def test_saved_settings_do_not_hide_retrieval_degradation(tmp_path, retrieval, e
     finally:
         memory.close()
         store.close()
+
+
+def test_recall_retrieved_before_saved_recall_was_cleared_is_not_saved(tmp_path):
+    # A forget, correction, forgotten chat or erased import clears saved recall
+    # (invalidate_recall); a package retrieved before that may hold what it removed.
+    store = Store(tmp_path / "pi.db")
+    turn = store.start_turn(store.create_session())
+    before = memory_store.generation(store)
+    with store._connect() as db:
+        memory_store.invalidate_recall(db)
+    recalled = {"memories": [{"id": "mem-1", "text": "removed words"}], "retrieval": {}}
+    memory_store.save_context(store, turn, "ok", recalled, before)
+    assert memory_store.context(store, turn) == {
+        **memory_store.context(store, turn),
+        "status": "unavailable",
+        "package": None,
+    }
+    current = store.start_turn(store.create_session())
+    memory_store.save_context(store, current, "ok", recalled, memory_store.generation(store))
+    assert memory_store.context(store, current)["package"] == recalled
+    store.close()
