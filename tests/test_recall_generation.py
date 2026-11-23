@@ -179,3 +179,89 @@ def test_forget_and_correction_advance_the_generation_like_an_erasure(setup):
     assert memory_edits.apply(store, corrections, CORRECTION)["status"] == "applied"
     with store._connect() as db:
         assert memory_store.generation_in(db) == start + 5
+
+
+def queued(store, *evidence_ids):
+    with store._connect() as db:
+        db.executemany(
+            "INSERT INTO import_evidence_erasures(evidence_id, chat_id, source_key) "
+            "VALUES (?, 'imp_x', ?)",
+            [(evidence_id, SOURCE) for evidence_id in evidence_ids],
+        )
+
+
+def pending(store):
+    with store._connect() as db:
+        return [
+            row[0]
+            for row in db.execute(
+                "SELECT evidence_id FROM import_evidence_erasures WHERE state='pending' "
+                "ORDER BY evidence_id"
+            )
+        ]
+
+
+class Answers:
+    """The listener's answer per event: True erased, False not found, an int an HTTP refusal."""
+
+    source_key = SOURCE
+
+    def __init__(self, answers):
+        self.answers = answers
+
+    def erase(self, evidence_id):
+        answer = self.answers[evidence_id]
+        if isinstance(answer, int) and not isinstance(answer, bool):
+            request = httpx.Request("DELETE", "http://memorygate/x")
+            raise httpx.HTTPStatusError(
+                "refused", request=request, response=httpx.Response(answer, request=request)
+            )
+        return answer
+
+
+def test_a_batch_of_erasures_clears_saved_recall_once(setup):
+    store = setup[0]
+    queued(store, "ev-a", "ev-b", "ev-c")
+    start = memory_store.generation(store)
+    erased_now = import_deletion.erase_waiting(
+        store, Answers({"ev-a": True, "ev-b": False, "ev-c": True})
+    )
+    assert erased_now.done == 3 and pending(store) == []
+    assert memory_store.generation(store) == start + 1
+
+
+def test_a_batch_stopped_by_a_refusal_still_settles_and_clears_what_went(setup):
+    store = setup[0]
+    tid = store.start_turn(store.create_session())
+    memory_store.save_context(store, tid, "ok", package(ERASED))
+    queued(store, "ev-a", "ev-b", "ev-c")
+    start = memory_store.generation(store)
+    stopped = import_deletion.erase_waiting(
+        store, Answers({"ev-a": True, "ev-b": 401, "ev-c": True})
+    )
+    assert (stopped.done, stopped.paused) == (1, 401)
+    assert pending(store) == ["ev-b", "ev-c"]
+    assert memory_store.generation(store) == start + 1
+    assert SECRET not in saved_anywhere(store)
+
+
+def test_a_crash_before_the_batch_commits_clears_on_the_next_try(setup, monkeypatch):
+    store = setup[0]
+    tid = store.start_turn(store.create_session())
+    memory_store.save_context(store, tid, "ok", package(ERASED))
+    queued(store, "ev-a", "ev-b")
+
+    def crash(db):
+        raise RuntimeError("Pi stopped before the batch committed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(memory_store, "invalidate_recall", crash)
+        with pytest.raises(RuntimeError):
+            import_deletion.erase_waiting(store, Answers({"ev-a": True, "ev-b": True}))
+    # Nothing was recorded: the erasures still wait and nothing was half-cleared.
+    assert pending(store) == ["ev-a", "ev-b"]
+    assert memory_store.context(store, tid)["package"] == package(ERASED)
+    # MemoryGate erased them already; the next try finds them gone and clears then.
+    import_deletion.erase_waiting(store, Answers({"ev-a": False, "ev-b": False}))
+    assert pending(store) == []
+    assert SECRET not in saved_anywhere(store)

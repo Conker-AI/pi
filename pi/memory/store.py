@@ -316,13 +316,23 @@ def save_context(store, turn_id, status, package=None, generation=None):
 
 def context(store, turn_id):
     with store._connect() as db:
-        row = db.execute("SELECT * FROM memory_contexts WHERE turn_id=?", (turn_id,)).fetchone()
-        held = recall_held_in(db)
+        return _context_in(db, turn_id, recall_held_in(db))[0]
+
+
+def _context_in(db, turn_id, held):
+    """(A turn's saved recall, the turn's chat): one read. `held` is recall_held_in's answer."""
+    row = db.execute(
+        "SELECT c.turn_id,c.status,c.package,c.recorded_at,t.session_id FROM memory_contexts c "
+        "LEFT JOIN turns t ON t.id=c.turn_id WHERE c.turn_id=?",
+        (turn_id,),
+    ).fetchone()
     if not row:
-        return {"status": "not_recorded", "package": None}
+        return {"status": "not_recorded", "package": None}, None
+    saved = {key: row[key] for key in ("turn_id", "status", "package", "recorded_at")}
     if held and row["package"]:
-        return {**dict(row), "status": "unavailable", "package": None}
-    return {**dict(row), "package": json.loads(row["package"]) if row["package"] else None}
+        return {**saved, "status": "unavailable", "package": None}, row["session_id"]
+    package = json.loads(row["package"]) if row["package"] else None
+    return {**saved, "package": package}, row["session_id"]
 
 
 # MemoryGate's `source_type` of a memory holding the owner's own words: a statement he typed or
@@ -490,34 +500,35 @@ def _status(part, retrieval, configured):
     }
 
 
-def _shown(store, turn_id, reading=None):
-    """A turn's saved recall as the owner may see it now: without the records of another chat in
-    the Trash or forgotten (pi.conversation.hidden_records, the rule recall itself uses)."""
+def _shown(store, turn_ids, agents=()):
+    """Each turn's saved recall as the owner may see it now, on one connection and snapshot:
+    without the records of another chat in the Trash or forgotten (pi.conversation.hidden_records,
+    the rule recall itself uses). `agents` are the reading agents: they name the records of a
+    message sent before Pi recorded where it went."""
     from pi.conversation import hidden_records
 
-    saved = context(store, turn_id)
-    if not isinstance(saved["package"], dict):
-        return saved
+    reading, shown = hidden_records.Reading(), {}
     with store._connect() as db:
-        turn = db.execute("SELECT session_id FROM turns WHERE id=?", (turn_id,)).fetchone()
-    own = turn[0] if turn else None
-    shown = hidden_records.filter_package(store, saved["package"], (), own, reading)
-    return saved if shown is saved["package"] else {**saved, "package": shown}
+        db.execute("BEGIN")
+        held = recall_held_in(db)
+        for turn_id in turn_ids:
+            saved, own = _context_in(db, turn_id, held)
+            package = saved["package"]
+            kept = hidden_records.filter_package(store, package, agents, own, reading, db)
+            shown[turn_id] = saved if kept is package else {**saved, "package": kept}
+    return shown
 
 
-def status(store, session_id=None, turn_id=None, *, configured=False):
-    return _status(
-        delivery(store, session_id), _shown(store, turn_id) if turn_id else None, configured
-    )
+def status(store, session_id=None, turn_id=None, *, configured=False, agents=()):
+    retrieval = _shown(store, [turn_id], agents)[turn_id] if turn_id else None
+    return _status(delivery(store, session_id), retrieval, configured)
 
 
-def statuses(store, session_id, turn_ids, *, configured=False):
-    from pi.conversation import hidden_records
-
-    part, reading = delivery(store, session_id), hidden_records.Reading()
+def statuses(store, session_id, turn_ids, *, configured=False, agents=()):
+    part, shown = delivery(store, session_id), _shown(store, turn_ids, agents)
     return {
         "session": _status(part, None, configured),
-        "turns": {tid: _status(part, _shown(store, tid, reading), configured) for tid in turn_ids},
+        "turns": {tid: _status(part, shown[tid], configured) for tid in turn_ids},
     }
 
 

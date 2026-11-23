@@ -173,31 +173,34 @@ def _cited(item):
     ]
 
 
-def filter_cited(store, groups, agent_ids=(), own=None, reading=None) -> dict[str, list]:
+def filter_cited(store, groups, agent_ids=(), own=None, reading=None, db=None) -> dict[str, list]:
     """Each group's items (`groups` maps a recall package group name to its list) without the
     records of a hidden chat other than `own`: named by `hidden_records`, or citing that chat or
     one of its messages. Read on one snapshot; `reading` (a Reading) shares the named records
-    across the checks of one history build."""
+    across the checks of one history build. `db`: a caller's connection, already in the snapshot
+    it reads, used instead of opening one."""
+    if db is None:
+        with store._connect() as db:
+            db.execute("BEGIN")
+            return filter_cited(store, groups, agent_ids, own, reading, db)
     pairs = [pair for items in groups.values() for item in items for pair in _cited(item)]
     messages = sorted({m for _, m in pairs if m})
-    with store._connect() as db:
-        db.execute("BEGIN")
-        exempt = _exempt(db, own)
-        owner = {}
-        if messages:
-            marks = ",".join("?" * len(messages))
-            owner = dict(
-                db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages)
-            )
-        gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values())) - {exempt}
-        # Only memories and evidence can be named by id; with no such id there is nothing to find.
-        named = any(
-            isinstance(item, dict) and _text(item.get("id"))
-            for key, items in groups.items()
-            if key in RECORD_KINDS
-            for item in items
+    exempt = _exempt(db, own)
+    owner = {}
+    if messages:
+        marks = ",".join("?" * len(messages))
+        owner = dict(
+            db.execute(f"SELECT id,session_id FROM messages WHERE id IN ({marks})", messages)
         )
-        records = (reading or Reading()).records(db, agent_ids, exempt) if named else {}
+    gone = visibility.hidden(db, {s for s, _ in pairs if s} | set(owner.values())) - {exempt}
+    # Only memories and evidence can be named by id; with no such id there is nothing to find.
+    named = any(
+        isinstance(item, dict) and _text(item.get("id"))
+        for key, items in groups.items()
+        if key in RECORD_KINDS
+        for item in items
+    )
+    records = (reading or Reading()).records(db, agent_ids, exempt) if named else {}
 
     def hidden(key, item):
         identity = _text(item.get("id")) if isinstance(item, dict) else None
@@ -208,7 +211,7 @@ def filter_cited(store, groups, agent_ids=(), own=None, reading=None) -> dict[st
     return {key: [item for item in items if not hidden(key, item)] for key, items in groups.items()}
 
 
-def filter_package(store, package, agent_ids=(), own=None, reading=None):
+def filter_package(store, package, agent_ids=(), own=None, reading=None, db=None):
     """A recall package without the records of a hidden chat other than `own`; the same object
     when nothing is left out, so a caller can tell (`is`)."""
     if not isinstance(package, dict):
@@ -220,7 +223,7 @@ def filter_package(store, package, agent_ids=(), own=None, reading=None):
     }
     if not any(groups.values()):
         return package
-    shown = filter_cited(store, groups, agent_ids, own, reading)
+    shown = filter_cited(store, groups, agent_ids, own, reading, db)
     if all(len(shown[key]) == len(groups[key]) for key in groups):
         return package
     return {**package, **shown}

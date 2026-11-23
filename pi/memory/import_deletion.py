@@ -139,13 +139,22 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
             "AND source_key IS NOT NULL AND source_key<>?",
             (client.source_key,),
         ).fetchone()[0]
-    done = 0
     problem = (
         f"{elsewhere} words of deleted imported chats went to another import listener; set "
         "PI_MEMORYGATE_IMPORT_SOURCE back to it to erase them."
         if elsewhere
         else None
     )
+    settled: list[tuple[str, bool]] = []  # (evidence id, MemoryGate still had it)
+    try:
+        return _erase(store, client, clock, rows, settled, problem)
+    finally:
+        # After the calls, never between them: one clearing of saved recall per batch.
+        _settled(store, settled)
+
+
+def _erase(store, client, clock, rows, settled, problem) -> Erased:
+    """MemoryGate's calls for one batch; what it no longer holds goes into `settled`."""
     for evidence_id, attempts in rows:
         if not EVIDENCE_ID.fullmatch(evidence_id):
             _mark_missing(store, evidence_id, "not an evidence id")
@@ -155,7 +164,7 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
         except (httpx.HTTPError, ValueError, TypeError, RecursionError) as exc:
             code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             if code in (401, 403, 404, 429):
-                return Erased(done, paused=code)
+                return Erased(len(settled), paused=code)
             problem = "MemoryGate did not erase a deleted chat's words yet; this is retried."
             with store._connect() as db:
                 db.execute(
@@ -168,27 +177,30 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
                     ),
                 )
             continue
-        _settled(store, evidence_id, found)
-        done += 1
-    return Erased(done, problem=problem)
+        settled.append((evidence_id, found))
+    return Erased(len(settled), problem=problem)
 
 
-def _settled(store, evidence_id: str, found: bool) -> None:
-    """MemoryGate holds nothing of this event now: erased by this call or, when it is not found, by
-    an earlier one whose answer was lost. What it alone supported may be in Pi's saved recall, so
-    that is cleared as a memory forget clears it (`invalidate_recall`, which also stops a recall in
-    flight from being saved). Recall is not paused while erasures wait: MemoryGate holds the words
-    until then."""
+def _settled(store, settled: list[tuple[str, bool]]) -> None:
+    """Events MemoryGate holds nothing of now: erased by this batch or, when not found, by an
+    earlier call whose answer was lost. What they alone supported may be in Pi's saved recall, so
+    it is cleared once, as a memory forget clears it (`invalidate_recall`, which also stops a recall
+    in flight from being saved), in the transaction that records them: a crash before it commits
+    leaves them pending, and the next try finds them gone and clears then. Recall is not paused
+    while erasures wait: MemoryGate holds the words until then."""
+    if not settled:
+        return
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        if found:
-            db.execute("DELETE FROM import_evidence_erasures WHERE evidence_id=?", (evidence_id,))
-        else:
-            db.execute(
-                "UPDATE import_evidence_erasures SET state='missing', error='not found' "
-                "WHERE evidence_id=?",
-                (evidence_id,),
-            )
+        db.executemany(
+            "DELETE FROM import_evidence_erasures WHERE evidence_id=?",
+            [(evidence_id,) for evidence_id, found in settled if found],
+        )
+        db.executemany(
+            "UPDATE import_evidence_erasures SET state='missing', error='not found' "
+            "WHERE evidence_id=?",
+            [(evidence_id,) for evidence_id, found in settled if not found],
+        )
         memory_store.invalidate_recall(db)
         db.commit()
 

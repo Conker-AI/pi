@@ -12,6 +12,7 @@ from test_visibility_memory import AGENT, delivered, trash
 from pi.api import server as api
 from pi.conversation.store import Store
 from pi.memory import store as memory_store
+from pi.memory.hidden import _receipt_ids
 from pi.memory.service import Memory, MemoryClient
 from pi.models.routing import Router
 from pi.turns.loop import Loop
@@ -73,3 +74,46 @@ def test_a_trashed_chat_opened_by_its_own_id_still_shows_its_own_recall(http):
     store.finish_turn(tid, "complete")
     trash(store, [chat])
     assert TRASHED in opened(client, chat)
+
+
+def test_a_trashed_chat_sent_before_destinations_were_recorded_is_still_hidden(http):
+    # An old database: the message's MemoryGate namespace was never recorded and Pi has no other,
+    # so only the configured reading agent names the memory made from it.
+    store, client = http
+    chat, other = store.create_session(), store.create_session()
+    message = store.append_message(other, "user", TRASHED)["id"]
+    memory = _receipt_ids(AGENT, message)[2]
+    tid = store.start_turn(chat)
+    recalled = {"memories": [{"id": memory, "text": TRASHED}], "retrieval": {}}
+    memory_store.save_context(store, tid, "ok", recalled)
+    store.finish_turn(tid, "complete")
+    trash(store, [other])
+    assert TRASHED not in opened(client, chat)
+
+
+def test_opening_a_chat_reads_saved_recall_on_one_connection_however_many_turns(http):
+    store, _ = http
+    chat = store.create_session()
+    for index in range(30):
+        tid = store.start_turn(chat)
+        recalled = {"memories": [{"id": f"mem-{index}", "text": "a fact"}], "retrieval": {}}
+        memory_store.save_context(store, tid, "ok", recalled)
+        store.finish_turn(tid, "complete")
+    turns = [turn["id"] for turn in store.turns(chat)]
+    opened_connections = []
+    original = store._connect
+
+    def counting():
+        opened_connections.append(1)
+        return original()
+
+    store._connect = counting
+    try:
+        few = memory_store.statuses(store, chat, turns[:2], configured=True, agents=(AGENT,))
+        two = len(opened_connections)
+        opened_connections.clear()
+        many = memory_store.statuses(store, chat, turns, configured=True, agents=(AGENT,))
+    finally:
+        del store._connect
+    assert len(opened_connections) == two
+    assert len(many["turns"]) == 30 and few["turns"][turns[0]] == many["turns"][turns[0]]
