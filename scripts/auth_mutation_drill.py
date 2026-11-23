@@ -22,6 +22,8 @@ RECOVERY_CAP = "tests/test_spending_cap_password.py::"
 OWNER_CHAT = (
     "tests/test_owner_chat_routes.py::test_owner_key_reaches_the_route_and_nothing_else_does"
 )
+PUSH = "tests/test_gateway_push.py::"
+PUSH_CLAIM = "tests/test_push_queue.py::"
 CASES = [
     (
         "proof-replay-admitted",
@@ -327,6 +329,48 @@ CASES = [
         "if False:",
         CAP + "test_right_passwords_never_count_and_a_reset_during_the_check_stops_it",
     ),
+    (
+        "push-claim-relayed-for-the-browser",
+        "gateway/service_routes.py",
+        " or gateway_only(request.method, target):",
+        ":",
+        PUSH + "test_the_browser_cannot_make_a_claim_through_the_control_relay",
+    ),
+    (
+        "push-to-any-address",
+        "gateway/push.py",
+        'and any(host == name or host.endswith("." + name) for name in PUSH_HOSTS)',
+        "and True",
+        PUSH + "test_a_stored_endpoint_outside_the_push_services_is_never_posted",
+    ),
+    (
+        "push-gone-device-kept",
+        "gateway/push.py",
+        "if status in (404, 410):",
+        "if False:",
+        PUSH + "test_a_round_sends_fixed_words_to_every_device_and_drops_a_gone_one",
+    ),
+    (
+        "push-devices-survive-sign-out-everywhere",
+        "gateway/store.py",
+        'db.execute("DELETE FROM known_devices")\n                db.execute("DELETE FROM push_subscriptions")',
+        'db.execute("DELETE FROM known_devices")',
+        PUSH + "test_sign_out_everywhere_and_a_new_password_turn_every_device_off",
+    ),
+    (
+        "push-claimed-twice",
+        "pi/agents/push_queue.py",
+        '"SELECT 1 FROM push_deliveries WHERE item_key=?"',
+        '"SELECT 1 FROM push_deliveries WHERE item_key=? AND 0"',
+        PUSH_CLAIM + "test_an_item_is_claimed_once_and_the_claim_carries_no_words",
+    ),
+    (
+        "push-ignores-quiet-hours",
+        "pi/agents/push_queue.py",
+        "if reasons:\n                held.update(reasons)",
+        "if False:\n                held.update(reasons)",
+        PUSH_CLAIM + "test_quiet_hours_hold_an_item_without_using_it_up",
+    ),
 ]
 
 
@@ -355,6 +399,8 @@ def main() -> int:
             "test_gateway_mcp.py",
             "test_gateway_spending_cap.py",
             "test_spending_cap_password.py",
+            "test_gateway_push.py",
+            "test_push_queue.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:

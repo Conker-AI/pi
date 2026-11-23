@@ -180,6 +180,9 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `GET /api/host/ops`, `GET /api/host/ops/{id}` | session | the host helper's receipts |
 | `POST /api/host/read` `{"operation","arguments"}` | session | the helper's reads: `services.status`, `backup.list`, `update.check` (starts a release check, never blocks) |
 | `POST /api/host/ops` `{"id","operation","arguments"}` | session | the helper's actions: `backup.verify`, `services.restart`, `backup.run`; `update.run` also asks for the password |
+| `GET /api/push` | session | the server's public push key (made on first use) and the devices with notifications on ([web-push.md](web-push.md)) |
+| `POST /api/push/subscriptions` `{"endpoint", "keys"}` | session | turns notifications on for this browser; only browser push services are accepted |
+| `POST /api/push/subscriptions/{id}/delete` `{}` | session | turns notifications off for one device |
 | `GET /api/owner/tool-settings` | session | ToolGate `GET /v2/owner/settings` |
 | `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | session | ToolGate `PUT /v2/owner/settings` |
 | `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |
