@@ -85,8 +85,8 @@ def test_a_concurrent_cap_change_is_judged_against_the_stored_cap(store):
     stale = prefs.UpdatePreferences.model_validate(document(store))
     prefs.save(store, prefs.UpdatePreferences.model_validate(document(store, cents=900)))
     with pytest.raises(prefs.RevisionConflict):
-        prefs.save(store, stale, keep_cap=True)
+        prefs.save(store, stale, keep_password_fields=True)
     current = prefs.UpdatePreferences.model_validate(document(store, cents=500))
-    with pytest.raises(prefs.CapNeedsPassword):
-        prefs.save(store, current, keep_cap=True)
+    with pytest.raises(prefs.NeedsPassword):
+        prefs.save(store, current, keep_password_fields=True)
     assert prefs.load(store)["preferences"]["spendingCap"]["cents"] == 900

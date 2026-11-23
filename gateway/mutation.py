@@ -1,4 +1,11 @@
-"""Bounded host-CLI writes to fixed Pi owner-control operations."""
+"""Bounded host-CLI writes to fixed Pi owner-control operations.
+
+A decision on a ToolGate request (`approvals`) asks for exactly what the Inbox asks for
+(`approval_levels`): a yes at level 3, or at a level that cannot be read, needs the owner's
+password, which comes with the decision on stdin (`"password"`); without it nothing is decided and
+the command exits with `PASSWORD_REQUIRED_EXIT`, so the CLI can ask for it and send the same
+decision once more.
+"""
 
 from __future__ import annotations
 
@@ -68,7 +75,9 @@ from pi.api.browser_contract import owner_allowed, runtime_allowed
 from pi.core import project_bodies, schedule_bodies
 from pi.memory import forget as memory_forget
 
+from . import approval_levels
 from .api import Config
+from .store import AuthError, AuthStore
 from .toolgate_contract import owner_editor_allowed, owner_request_allowed
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
@@ -77,6 +86,14 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 class MutationError(ValueError):
     pass
+
+
+class PasswordRequired(MutationError):
+    """A yes the Inbox would ask the password for, sent without it: nothing was decided."""
+
+
+# What `python -m gateway apply approvals` exits with on PasswordRequired.
+PASSWORD_REQUIRED_EXIT = 3
 
 
 # After the write was sent, or once the service answered 2xx, it may already have been made.
@@ -341,12 +358,51 @@ def _resolve(resource: str, payload: dict) -> Mutation:
     raise MutationError("Unknown apply resource. Choose one of: " + ", ".join(resources()))
 
 
+def _decision_level(config: Config, client: httpx.Client, identity: str) -> int:
+    """The request's level as the Inbox reads it (owner_routes.decision_level): ToolGate fixed it
+    when the request was made; anything unreadable is serious, so a doubt asks for the password."""
+    try:
+        response = client.get(
+            config.toolgate_url.rstrip("/") + f"/v2/owner/requests/{identity}",
+            headers={"Accept": "application/json", "X-ToolGate-Owner-Key": config.owner_key},
+            timeout=10,
+        )
+        view = response.json() if response.status_code == 200 else None
+    except (httpx.HTTPError, OSError, ValueError):
+        return approval_levels.SERIOUS
+    return approval_levels.from_view(identity, response.status_code, view)
+
+
+def _admit_decision(
+    config: Config, client: httpx.Client, auth: AuthStore | None, decision: dict, password
+) -> None:
+    """The Inbox's rule (approval_levels.needs_password), before anything is decided. A no or a
+    dismissal runs nothing, so its level is not even read. A password sent is always checked."""
+    serious = decision["status"] == "approved" and approval_levels.needs_password(
+        decision["status"], _decision_level(config, client, decision["id"])
+    )
+    if password is None:
+        if serious:
+            raise PasswordRequired(
+                "This yes asks for your password, as the Inbox does. Nothing was decided."
+            )
+        return
+    if not isinstance(password, str) or not password or auth is None:
+        raise MutationError("The password could not be checked. Nothing was decided.")
+    try:
+        auth.host_password(password)
+    except AuthError as exc:
+        raise MutationError(f"{exc} Nothing was decided.") from None
+
+
 def apply_resource(
     config: Config,
     resource: str,
     stream: BinaryIO,
     client: httpx.Client,
+    auth: AuthStore | None = None,
 ) -> dict:
+    """One host-CLI write. `auth` checks the owner's password for a decision that needs it."""
     if resource not in MUTATIONS:
         raise MutationError("Unknown apply resource. Choose one of: " + ", ".join(resources()))
     request_limit = characters.MAX_REQUEST_BYTES if resource == "character" else MAX_REQUEST_BYTES
@@ -361,6 +417,8 @@ def apply_resource(
         raise MutationError("Apply request is invalid JSON.") from None
     if not isinstance(payload, dict):
         raise MutationError("Apply request must be a JSON object.")
+    # Only a decision may carry the owner's password; anywhere else it is an unsupported field.
+    password = payload.pop("password", None) if resource == "approvals" else None
     operation = _resolve(resource, payload)
     if operation.authority == "owner":
         if not config.pi_owner_key or not owner_allowed(operation.method, operation.path):
@@ -396,6 +454,8 @@ def apply_resource(
             "X-ToolGate-Owner-Key": config.owner_key,
             "X-ToolGate-Execution-Key": config.toolgate_execution_key,
         }
+    if resource == "approvals":
+        _admit_decision(config, client, auth, payload, password)
 
     try:
         with client.stream(

@@ -10,7 +10,9 @@ not wait for him to open the chat.
 After ToolGate records his decision on a request, the gateway calls `POST
 /approvals/{request_id}/decided` with `{status, note}` (owner credential). This happens from the
 browser's Inbox route and from `conker apply approvals`. Pi finds what waits on that request: a
-chat turn, an AI job's turn, or a tool cron job's run.
+chat turn, an AI job's turn, or a tool cron job's run. Both ask for the password for the same
+decisions: a yes at level 3 (delete, pay) or at a level ToolGate's view does not state
+(`gateway/approval_levels.py`); `conker apply approvals` sends it with the decision on stdin.
 
 A decision nobody tells Pi about (made with ToolGate's admin key, `POST
 /v2/requests/{id}/decision`, or while Pi was down) is picked up by Pi's decision sweep

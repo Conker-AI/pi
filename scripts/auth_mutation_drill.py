@@ -302,8 +302,8 @@ CASES = [
     (
         "recovery-key-changes-the-cap",
         "pi/api/routes/owner_preferences.py",
-        'keep_cap = getattr(request.state, "owner_credential", False) is not True',
-        "keep_cap = False",
+        'keep = getattr(request.state, "owner_credential", False) is not True',
+        "keep = False",
         RECOVERY_CAP + "test_the_recovery_key_cannot_change_the_spending_cap[change0]",
     ),
     (
@@ -326,6 +326,83 @@ CASES = [
         'if not current or current[0] != owner["generation"]:',
         "if False:",
         CAP + "test_right_passwords_never_count_and_a_reset_during_the_check_stops_it",
+    ),
+]
+
+# The host CLI asks for the password for what the browser asks it for: security preferences
+# (`conker config set`, `gateway/host_preferences.py`) and a serious yes (`conker apply approvals`).
+SECURITY = "tests/test_security_preferences_password.py::"
+HOST_PREFERENCES = "tests/test_gateway_host_preferences.py::"
+CLI_APPROVAL = "tests/test_gateway_cli_approval_password.py::"
+CASES += [
+    (
+        f"recovery-key-changes-{field}",
+        "pi/core/owner_preferences.py",
+        'PASSWORD_FIELDS = ("idleTimeoutMinutes", "newChatAccess", "dailyBudget", "spendingCap")',
+        f"PASSWORD_FIELDS = {kept}",
+        SECURITY + f"test_the_recovery_key_cannot_change_a_security_preference[{selected}]",
+    )
+    for field, kept, selected in (
+        (
+            "sign-out-time",
+            '("newChatAccess", "dailyBudget", "spendingCap")',
+            "idleTimeoutMinutes-60",
+        ),
+        (
+            "new-chat-access",
+            '("idleTimeoutMinutes", "dailyBudget", "spendingCap")',
+            "newChatAccess-full",
+        ),
+        (
+            "daily-budgets",
+            '("idleTimeoutMinutes", "newChatAccess", "spendingCap")',
+            "dailyBudget.costCents-100000",
+        ),
+    )
+] + [
+    (
+        "recovery-key-unstored-setting-judged-by-the-request",
+        "pi/core/owner_preferences.py",
+        "payload[key] != stored.get(key, DEFAULT[key])",
+        "payload[key] != stored.get(key, payload[key])",
+        SECURITY + "test_a_setting_stored_before_it_existed_reads_as_its_default",
+    ),
+    (
+        "host-preferences-password-unchecked",
+        "gateway/host_preferences.py",
+        "auth.host_password(password)",
+        "auth.configured()",
+        HOST_PREFERENCES + "test_anything_else_is_refused_and_saves_nothing[payload0]",
+    ),
+    (
+        "host-preferences-sign-out-time-not-enforced",
+        "gateway/host_preferences.py",
+        "auth.owner_window(",
+        "(lambda *_args, **_options: None)(",
+        HOST_PREFERENCES + "test_the_right_password_saves_with_the_owner_credential",
+    ),
+    (
+        "cli-serious-yes-without-password",
+        "gateway/mutation.py",
+        "        if serious:\n",
+        "        if False:\n",
+        CLI_APPROVAL
+        + "test_a_serious_or_unreadable_yes_is_not_decided_without_the_password[view0]",
+    ),
+    (
+        "cli-unreadable-level-trusted-as-normal",
+        "gateway/mutation.py",
+        "except (httpx.HTTPError, OSError, ValueError):\n        return approval_levels.SERIOUS",
+        "except (httpx.HTTPError, OSError, ValueError):\n        return approval_levels.NORMAL",
+        CLI_APPROVAL
+        + "test_a_serious_or_unreadable_yes_is_not_decided_without_the_password[view13]",
+    ),
+    (
+        "cli-approval-password-unchecked",
+        "gateway/mutation.py",
+        "auth.host_password(password)",
+        "auth.configured()",
+        CLI_APPROVAL + "test_a_password_sent_is_checked_even_when_the_level_needs_none",
     ),
 ]
 
@@ -355,6 +432,9 @@ def main() -> int:
             "test_gateway_mcp.py",
             "test_gateway_spending_cap.py",
             "test_spending_cap_password.py",
+            "test_security_preferences_password.py",
+            "test_gateway_host_preferences.py",
+            "test_gateway_cli_approval_password.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:

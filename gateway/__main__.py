@@ -117,6 +117,7 @@ def main() -> None:
             "setup-rehearsal",
             "renew-certificate",
             "spending-cap",
+            "owner-preferences",
         ],
     )
     parser.add_argument("resource", nargs="?")
@@ -178,7 +179,7 @@ def main() -> None:
 
         from .api import Config
         from .inspection import inspect_resource, resources
-        from .mutation import apply_resource
+        from .mutation import PASSWORD_REQUIRED_EXIT, PasswordRequired, apply_resource
         from .mutation import resources as mutation_resources
 
         if args.resource is None:
@@ -188,7 +189,13 @@ def main() -> None:
         config.validate()
         with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
             if args.command == "apply":
-                value = apply_resource(config, args.resource, sys.stdin.buffer, client)
+                # A decision may need the owner's password (gateway/mutation.py), checked here.
+                auth = AuthStore(args.db) if args.resource == "approvals" else None
+                try:
+                    value = apply_resource(config, args.resource, sys.stdin.buffer, client, auth)
+                except PasswordRequired as exc:
+                    print(f"Gateway did not complete: {exc}", file=sys.stderr)
+                    raise SystemExit(PASSWORD_REQUIRED_EXIT) from None
             else:
                 value = inspect_resource(config, args.resource, client)
         print(json.dumps(value, indent=2, sort_keys=True))
@@ -310,6 +317,11 @@ def main() -> None:
         from . import spending_cap
 
         raise SystemExit(spending_cap.main(args.db))
+    elif args.command == "owner-preferences":
+        # The owner's password and a preferences save on stdin (gateway/host_preferences.py).
+        from . import host_preferences
+
+        raise SystemExit(host_preferences.main(args.db))
     elif args.command == "certificate":
         print((Path(args.db).parent / "tls.crt").read_text(), end="")
     else:

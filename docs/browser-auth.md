@@ -245,6 +245,15 @@ echo and explain what the password protects. There is no network setup or reset
 endpoint, recovery email, or claim-by-first-visitor behavior. `revoke-all` can be
 used without changing the password. In companion these are `./conker auth ...`.
 
+The host CLI asks for the password for the same things the browser does, and the gateway checks
+it (`AuthStore.host_password`: its own budget of five wrong per five minutes, so browsers and the
+host cannot use up each other's tries). It arrives on stdin with the change, never in argv or
+the environment: `spending-cap` (the daily cap), `owner-preferences` (a preferences save Pi
+refused on the recovery key: the sign-out time, a new chat's access, the daily budgets;
+[owner-preferences.md](owner-preferences.md)) and `apply approvals` (a yes at level 3, or at a
+level that cannot be read, exactly as the Inbox route above; without it the command decides
+nothing and exits 3).
+
 ## Optional same-origin dashboard assets
 
 Set `GATEWAY_DASHBOARD_DIR` to an absolute directory containing a trusted,

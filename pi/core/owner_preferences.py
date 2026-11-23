@@ -8,6 +8,10 @@ before dispatch. The gateway enforces the idle timeout from the documents it rel
 Saving asks for the password at the gateway, so these preferences may also hold a setting
 that lets Conker do more: the access a chat the owner starts begins with (`new_chat_access`).
 It changes no chat that exists and grants nothing by itself.
+
+`PASSWORD_FIELDS` change only with that password (ADR-0010, the 2026-11-06 decision: sign-in time,
+access grants, budgets and paid-model policy). The gateway's owner credential asked for it; a save
+on the recovery key (the host CLI's relay) that would change one is refused (`NeedsPassword`).
 """
 
 from __future__ import annotations
@@ -154,13 +158,19 @@ def load(store):
     }
 
 
-class CapNeedsPassword(Exception):
-    """A save that would change `spendingCap` from a caller that did not ask for the password."""
+# The sign-out time, the access a new chat starts with, the daily budgets and the spending cap.
+PASSWORD_FIELDS = ("idleTimeoutMinutes", "newChatAccess", "dailyBudget", "spendingCap")
 
 
-def save(store, request: UpdatePreferences, *, keep_cap: bool = False):
-    """Save at the expected revision. `keep_cap`: refuse a change to the daily spending cap,
-    judged against the stored cap inside this transaction (the recovery key's saves)."""
+class NeedsPassword(Exception):
+    """A save that would change a `PASSWORD_FIELDS` setting from a caller that did not ask for the
+    password."""
+
+
+def save(store, request: UpdatePreferences, *, keep_password_fields: bool = False):
+    """Save at the expected revision. `keep_password_fields`: refuse a change to any of
+    `PASSWORD_FIELDS`, judged against the stored values inside this transaction (the recovery
+    key's saves). A setting stored before it existed is judged against the default it reads as."""
     # Revalidate even constructed models: storage must not admit bypassed fields.
     request = UpdatePreferences.model_validate(request.model_dump())
     with store._connect() as db:
@@ -172,10 +182,10 @@ def save(store, request: UpdatePreferences, *, keep_cap: bool = False):
         if revision != request.expected_revision:
             raise RevisionConflict(revision)
         payload = request.preferences.model_dump()
-        if keep_cap:
-            stored = json.loads(row[1]).get("spendingCap", DEFAULT_SPENDING_CAP)
-            if payload["spendingCap"] != stored:
-                raise CapNeedsPassword("Changing the daily spending cap needs your password.")
+        if keep_password_fields:
+            stored = json.loads(row[1])
+            if any(payload[key] != stored.get(key, DEFAULT[key]) for key in PASSWORD_FIELDS):
+                raise NeedsPassword("Changing this setting needs your password.")
         db.execute(
             "UPDATE owner_preferences SET revision=?,preferences=? WHERE singleton=1",
             (revision + 1, json.dumps(payload)),

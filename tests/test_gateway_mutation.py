@@ -150,6 +150,8 @@ def test_approval_apply_uses_only_fixed_toolgate_owner_decision_route():
 
     def upstream(request: httpx.Request):
         seen.append(request)
+        if request.method == "GET":  # its level, as the Inbox reads it: normal needs no password
+            return httpx.Response(200, json={"id": payload["id"], "approval_level": 1})
         return httpx.Response(200, json={"id": payload["id"], "status": "approved"})
 
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
@@ -158,7 +160,9 @@ def test_approval_apply_uses_only_fixed_toolgate_owner_decision_route():
         )
 
     assert result["status"] == "approved"
-    request = seen[0]
+    read, request = seen[:2]
+    assert read.url == httpx.URL("http://toolgate.test/v2/owner/requests/req_1234567890abcdef")
+    assert owner_request_allowed(read.method, read.url.path)
     assert request.url == httpx.URL(
         "http://toolgate.test/v2/owner/requests/req_1234567890abcdef/decision"
     )
