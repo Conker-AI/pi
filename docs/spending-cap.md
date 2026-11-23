@@ -19,7 +19,10 @@ ToolGate's own Gemini adapter is outside Pi and keeps ToolGate's spending budget
 ## The cap
 
 `spendingCap` in owner preferences (`POST /owner/preferences`, which asks for the password in
-the browser):
+the browser). Only the owner credential (the gateway) may change it: a save on the recovery key
+that would change the cap is refused (403 `password_required`), so the host CLI changes it with
+`python -m gateway spending-cap`, which reads the password and the change on stdin, checks the
+password (its own budget of five wrong ones per five minutes) and saves only the cap:
 
 | Field | Default | Meaning |
 |---|---|---|

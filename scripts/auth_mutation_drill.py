@@ -17,6 +17,8 @@ CHAT = "tests/test_gateway_chat_routes.py::"
 LEVEL = "tests/test_gateway_approval_levels.py::"
 CHAT_WRITE = CHAT + "test_owner_write_needs_only_session_csrf_and_an_exact_body"
 CHAT_READ = CHAT + "test_owner_reads_through_the_control_key"
+CAP = "tests/test_gateway_spending_cap.py::"
+RECOVERY_CAP = "tests/test_spending_cap_password.py::"
 OWNER_CHAT = (
     "tests/test_owner_chat_routes.py::test_owner_key_reaches_the_route_and_nothing_else_does"
 )
@@ -297,6 +299,34 @@ CASES = [
         "except (httpx.HTTPError, OSError, ValueError):\n            return approval_levels.NORMAL",
         LEVEL + "test_a_serious_or_unreadable_level_asks_for_the_password[view13]",
     ),
+    (
+        "recovery-key-changes-the-cap",
+        "pi/api/routes/owner_preferences.py",
+        'keep_cap = getattr(request.state, "owner_credential", False) is not True',
+        "keep_cap = False",
+        RECOVERY_CAP + "test_the_recovery_key_cannot_change_the_spending_cap[change0]",
+    ),
+    (
+        "host-cap-password-unchecked",
+        "gateway/spending_cap.py",
+        "auth.host_password(password)",
+        "auth.configured()",
+        CAP + "test_anything_else_is_refused_and_saves_nothing[payload0]",
+    ),
+    (
+        "host-password-attempts-unlimited",
+        "gateway/store.py",
+        "WHERE budget='host' AND at>?",
+        "WHERE budget='nobody' AND at>?",
+        CAP + "test_wrong_passwords_are_limited_and_a_right_one_then_waits",
+    ),
+    (
+        "host-password-reset-during-check-ignored",
+        "gateway/store.py",
+        'if not current or current[0] != owner["generation"]:',
+        "if False:",
+        CAP + "test_right_passwords_never_count_and_a_reset_during_the_check_stops_it",
+    ),
 ]
 
 
@@ -323,6 +353,8 @@ def main() -> int:
             "test_gateway_approval_levels.py",
             "test_gateway_inbox_answers.py",
             "test_gateway_mcp.py",
+            "test_gateway_spending_cap.py",
+            "test_spending_cap_password.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:

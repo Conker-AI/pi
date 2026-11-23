@@ -146,7 +146,7 @@ def require_owner(
         if owner_allowed(request.method, request.url.path) or owner_download_allowed(
             request.method, request.url.path
         ):
-            return
+            return setattr(request.state, "owner_credential", True)  # the gateway's key
         raise HTTPException(403, "Owner-control credential cannot perform this operation.")
     if x_pi_key and secrets.compare_digest(x_pi_key.encode(), app.state.admin_key.encode()):
         return
