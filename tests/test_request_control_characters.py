@@ -7,9 +7,9 @@ import pytest
 from pi.agents import change_requests, tool_drafts, workflow_drafts
 from pi.conversation.store import Store
 from pi.turns import native_tools
-from tests.test_tool_drafts import DOCUMENT, build
 from tests.test_tool_turns import FakeGate
 from tests.test_tool_turns import build as companion
+from tests.tool_drafts_helpers import DOCUMENT, build
 
 # An escape sequence that retitles the owner's terminal, and one that clears it.
 RETITLE, CLEAR = "\x1b]0;pwned\x07", "\x1b[2J"

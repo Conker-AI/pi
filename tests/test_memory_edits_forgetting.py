@@ -5,7 +5,7 @@ import pytest
 from pi.memory import edits
 from pi.memory import forget as memory_forget
 from pi.memory import store as memory_store
-from tests.test_memory_edits import (
+from tests.memory_edits_helpers import (
     BODY,
     setup,  # noqa: F401 - pytest fixture used by name
     unresolved,

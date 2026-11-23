@@ -1,11 +1,11 @@
 """Team runs after a restart, and a role input refused before anything is saved (hunt pi-2 F2, F3)."""
 
 import pytest
-from test_team_execution import Recorder, execute, setup, start, store  # noqa: F401
 
 from pi.agents import profiles as agents
 from pi.agents import team_execution as teams
 from pi.agents import team_models, team_run_store
+from tests.team_execution_helpers import Recorder, execute, setup, start, store  # noqa: F401
 
 
 def test_an_interrupted_run_can_be_cancelled_but_not_completed(store):

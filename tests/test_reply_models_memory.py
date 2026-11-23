@@ -14,7 +14,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from test_forgetting import conversation as conversation
-from test_memory_edits import KEY, Remote
 
 from pi.api import server as api
 from pi.api.routes.memory_explorer import router as explorer_router
@@ -24,6 +23,7 @@ from pi.conversation.store import Store
 from pi.memory import memory_replies as replies
 from pi.memory.corrections import Client
 from pi.memory.service import MemoryClient
+from tests.memory_edits_helpers import KEY, Remote
 
 OWNER = "synthetic-owner-key-" + "o" * 32
 REQUEST = "reply_models_request_01"

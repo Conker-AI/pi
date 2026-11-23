@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from test_memory_edits import BODY, setup  # noqa: F401 -- shared isolated fixture
 
 from gateway import mutation
 from gateway.api import Config, create_app
@@ -15,6 +14,7 @@ from gateway.store import AuthStore
 from pi.api import browser_contract
 from pi.api import server as api
 from pi.memory import edits
+from tests.memory_edits_helpers import BODY, setup  # noqa: F401 -- shared isolated fixture
 
 OWNER = "synthetic-owner-key-" + "o" * 32
 PREFIX = "/memory/corrections"

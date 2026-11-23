@@ -5,7 +5,6 @@ from contextlib import closing
 
 import pytest
 from test_spending_cap import set_cap
-from test_team_execution import execute, setup, start
 
 from pi.agents import team_execution as teams
 from pi.agents import team_models
@@ -14,6 +13,7 @@ from pi.conversation.store import Store
 from pi.models import spending_cap
 from pi.models.providers import Completion
 from pi.turns.failures import TurnFailed
+from tests.team_execution_helpers import execute, setup, start
 
 
 class Paid:

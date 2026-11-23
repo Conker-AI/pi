@@ -1,9 +1,9 @@
 """Reconciling a team run after the owner's approval (hunt 3: team-skills findings 1, 3, 4)."""
 
 import pytest
-from test_team_execution import Recorder, execute, setup, start, store  # noqa: F401
 
 from pi.agents import team_execution as teams
+from tests.team_execution_helpers import Recorder, execute, setup, start, store  # noqa: F401
 
 
 def _after_first_step(store):

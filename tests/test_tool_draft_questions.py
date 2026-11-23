@@ -7,7 +7,7 @@ import pytest
 from pi.agents import change_requests, tool_drafts
 from pi.conversation.store import Store
 from pi.turns import tool_drafting
-from tests.test_tool_drafts import READY, WANTED, build, shown
+from tests.tool_drafts_helpers import READY, WANTED, build, shown
 
 QUESTION = "Which search engine?"
 ASKED = json.dumps({"reply": QUESTION, "ready": False, "document": None})

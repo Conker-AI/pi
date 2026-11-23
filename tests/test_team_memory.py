@@ -9,7 +9,7 @@ from pi.conversation.store import Store
 from pi.memory.service import Memory
 from pi.models.routing import Router
 from pi.turns.loop import Loop
-from tests.test_team_execution import Recorder, setup, start
+from tests.team_execution_helpers import Recorder, setup, start
 
 
 @pytest.mark.parametrize("disabled", [False, True])
