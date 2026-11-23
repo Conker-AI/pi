@@ -362,10 +362,11 @@ def test_an_unreadable_claim_sends_nothing(world, answer):
 def test_a_stored_endpoint_outside_the_push_services_is_never_posted(world):
     _, _, state, app, _ = world
     _, p256dh, secret = device()
+    # A well-formed host on 443, so only the push-service allowlist refuses it.
     with app.state.auth.transaction() as db:
         db.execute(
             "INSERT INTO push_subscriptions VALUES(?,?,?,?,?)",
-            ("b" * 32, "https://pi/push/claim", p256dh, secret, 1.0),
+            ("b" * 32, "https://169.254.169.254/latest/meta-data", p256dh, secret, 1.0),
         )
     state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "c" * 16}]}
     assert app.state.push.tick()["sent"] == 0 and state.pushes == []
