@@ -77,8 +77,8 @@ or 60 minutes, or 0 for the host's limit). `GATEWAY_IDLE_TIMEOUT_SECONDS` is the
 ceiling (integer 60–86400 seconds; default 1800): no choice can make the window longer. The
 gateway learns the choice from every preferences document it relays to the browser (a read or
 a password-verified save) and keeps the last one in its database, so a restart or Pi being down
-never loosens it; until it has seen one, the ceiling applies. A save always wins; a read older
-than the one kept may only shorten the window. A new choice applies at once to every signed-in
+never loosens it; until it has seen one, the ceiling applies. A save from Settings always wins;
+a read, or a host `owner-preferences` save, older than the one kept may only shorten the window. A new choice applies at once to every signed-in
 browser. The window measures time without the owner's input; the server cannot observe human presence,
 so it trusts only the explicit activity route. Polling, reads and writes never extend it (L-03). The
 frontend may additionally lock earlier on local inactivity using logout. Login

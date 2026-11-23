@@ -10,6 +10,7 @@ import copy
 import hashlib
 import io
 import json
+import sqlite3
 from contextlib import closing
 
 import httpx
@@ -154,6 +155,44 @@ def test_a_malformed_request_is_refused_without_repeating_it(pi, store, auth, ra
         code, out, err = ask(auth, client, raw)
     assert code == 1 and out == "" and PASSWORD not in err and "Nothing was saved" in err
     assert prefs.load(store) == before
+
+
+def window(auth):
+    with auth.transaction() as db:
+        return db.execute("SELECT revision,minutes FROM owner_window").fetchone()[:]
+
+
+def test_a_late_host_save_never_loosens_a_newer_sign_out_time(pi, store, auth):
+    # Settings saved revision 4 (30 minutes) while this command's answer was on its way back.
+    assert auth.owner_window(4, 30, saved=True)
+    with through(pi) as client:
+        code, out, _ = ask(
+            auth, client, {"password": PASSWORD, **save(store, idleTimeoutMinutes=60)}
+        )
+        assert code == 0 and json.loads(out)["revision"] == 2
+        assert window(auth) == (4, 30)  # the older, longer choice is not kept
+        code, out, _ = ask(
+            auth, client, {"password": PASSWORD, **save(store, idleTimeoutMinutes=5)}
+        )
+        assert code == 0 and json.loads(out)["revision"] == 3
+    assert window(auth) == (3, 5)  # an older one may still shorten it
+
+
+def test_a_sign_out_time_that_cannot_be_recorded_says_it_may_be_saved(pi, store, auth, monkeypatch):
+    def locked(*_args, **_options):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(auth, "owner_window", locked)
+    with through(pi) as client:
+        code, out, err = ask(
+            auth, client, {"password": PASSWORD, **save(store, idleTimeoutMinutes=60)}
+        )
+    assert (code, out) == (1, "")
+    assert err.strip().splitlines() == [
+        "Gateway did not complete: The gateway could not record the sign-out time."
+        + host.MAYBE_SAVED
+    ]
+    assert prefs.load(store)["revision"] == 2  # Pi did save it: the hint is true
 
 
 def test_a_save_made_meanwhile_is_refused_never_overwritten(pi, store, auth):

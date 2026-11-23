@@ -382,6 +382,13 @@ CASES += [
         HOST_PREFERENCES + "test_the_right_password_saves_with_the_owner_credential",
     ),
     (
+        "host-late-save-loosens-the-sign-out-time",
+        "gateway/host_preferences.py",
+        "minutes, saved=False)",
+        "minutes, saved=True)",
+        HOST_PREFERENCES + "test_a_late_host_save_never_loosens_a_newer_sign_out_time",
+    ),
+    (
         "cli-serious-yes-without-password",
         "gateway/mutation.py",
         "        if serious:\n",

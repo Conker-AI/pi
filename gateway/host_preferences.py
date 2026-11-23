@@ -15,6 +15,7 @@ here repeats the password or the request in an error.
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from typing import BinaryIO, TextIO
 
@@ -70,11 +71,18 @@ def run(config, auth: AuthStore, client: httpx.Client, stdin: BinaryIO, out: Tex
         except AuthError as exc:
             raise NotSaved(str(exc) + NOTHING_SAVED) from None
         saved = call_preferences(client, config, "POST", body, MAYBE_SAVED)
+        try:
+            # Pi's answer, recorded after it came back: a newer save from Settings may already be
+            # kept, so, as for a read, an older revision may only shorten the window.
+            minutes = saved["preferences"].get("idleTimeoutMinutes")
+            auth.owner_window(saved["revision"], minutes, saved=False)
+        except (sqlite3.Error, OSError):
+            raise NotSaved(
+                "The gateway could not record the sign-out time." + MAYBE_SAVED
+            ) from None
     except NotSaved as exc:
         print(f"Gateway did not complete: {exc}", file=err)
         return 1
-    # As a save through the browser relay (service_routes.learn_sign_out_window): his latest choice.
-    auth.owner_window(saved["revision"], saved["preferences"].get("idleTimeoutMinutes"), saved=True)
     print(json.dumps(saved, sort_keys=True), file=out)
     return 0
 

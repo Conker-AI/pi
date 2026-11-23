@@ -171,9 +171,10 @@ class AuthStore:
     def owner_window(self, revision: int, minutes: int, *, saved: bool) -> bool:
         """Record the owner's sign-out window from a preferences document Pi returned.
 
-        `minutes` 0 means no window shorter than the host's. A save is his latest choice and always
-        wins. A read wins when its revision is not older than the one kept; an older read (one that
-        raced a save) may only shorten the window, so a late answer never loosens it. Returns
+        `minutes` 0 means no window shorter than the host's. A save relayed from Settings is his
+        latest choice and always wins. A read, or a host command's save recorded after Pi answered
+        (`saved=False`), wins when its revision is not older than the one kept; an older one (one
+        that raced a save) may only shorten the window, so a late answer never loosens it. Returns
         whether the value was kept.
         """
         if (
