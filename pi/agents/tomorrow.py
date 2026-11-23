@@ -10,9 +10,13 @@ Built only from what Pi already keeps, nothing is run or changed:
   itself shortly after (pi.turns.decision_sweep), so "it expired and nothing ran" is what tomorrow
   holds for them. Tool arguments and his words are never returned.
 
+- `runs`: each start on its own, one by one, with whether the runner would let it run and its code
+  when not (quiet hours, proactivity, the daily budget, the owner's job limits), by the runner's
+  own checks (`pi.agents.tomorrow_runs`); the proposal pass too when its worker runs. Times are
+  instants; `timeZone` is the owner's, to show them in.
+
 A job from a chat that is forgotten or in the Trash is not listed (it does not run) and neither is
-a parked turn of such a chat. Limit: repeating AI jobs skip quiet hours at run time; the forecast
-does not know them, so it may list a slot that is then skipped.
+a parked turn of such a chat. `jobs` counts the clock's slots; `runs` says which of them would run.
 """
 
 from __future__ import annotations
@@ -21,9 +25,10 @@ import json
 from datetime import datetime
 from typing import Literal
 
+from pi.agents.tomorrow_runs import TomorrowRun, planned
 from pi.conversation import visibility
 from pi.core.models import Strict
-from pi.schedule import jobs
+from pi.schedule import agent_jobs, jobs
 from pi.schedule.job_models import Definition
 
 HOUR = 3600.0
@@ -55,6 +60,8 @@ class Tomorrow(Strict):
     jobs: list[TomorrowJob]
     runsPlanned: int
     approvals: list[TomorrowApproval]
+    timeZone: str
+    runs: list[TomorrowRun]
 
 
 def _slots(definition: Definition, first: float, until: float, anchor: float) -> int:
@@ -67,17 +74,6 @@ def _slots(definition: Definition, first: float, until: float, anchor: float) ->
         except jobs.JobError:
             break
     return count
-
-
-def _held(db, job_id: str) -> bool:
-    return (
-        db.execute(
-            "SELECT 1 FROM scheduled_runs WHERE job_id=? "
-            f"AND (status NOT IN ({jobs.FINISHED}) OR ({jobs.WAITING_TURN}))",
-            (job_id,),
-        ).fetchone()
-        is not None
-    )
 
 
 def _job(db, row, now: float, until: float) -> dict | None:
@@ -99,7 +95,7 @@ def _job(db, row, now: float, until: float) -> dict | None:
         "createdBy": definition.createdBy,
         "nextAt": at,
         "runs": runs,
-        "held": _held(db, row["id"]),
+        "held": jobs.busy(db, row["id"]),
     }
 
 
@@ -131,8 +127,11 @@ def _approvals(db, until: float) -> list[dict]:
     return sorted(found, key=lambda item: item["expiresAt"])[:MAX_ITEMS]
 
 
-def tomorrow(store, now: float, hours: int) -> dict:
-    """Jobs the clock starts and approvals that run out between `now` and `hours` from now."""
+def tomorrow(store, now: float, hours: int, *, scheduler=True, proposal_worker=None) -> dict:
+    """Jobs the clock starts and approvals that run out between `now` and `hours` from now.
+
+    `scheduler`: whether the job worker runs (without it nothing starts on its own);
+    `proposal_worker`: the proposal pass's worker, None when it is off."""
     until = now + hours * HOUR
     with store._connect() as db:
         rows = db.execute(
@@ -149,4 +148,8 @@ def tomorrow(store, now: float, hours: int) -> dict:
         "jobs": listed[:MAX_ITEMS],
         "runsPlanned": sum(item["runs"] or 0 for item in listed),
         "approvals": approvals,
+        "timeZone": agent_jobs.owner_time_zone(store),
+        "runs": planned(
+            store, rows, now, until, scheduler=scheduler, proposal_worker=proposal_worker
+        ),
     }

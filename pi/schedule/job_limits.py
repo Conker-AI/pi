@@ -58,25 +58,39 @@ def held(store, run_id: str, job_id: str, started_by: str) -> tuple[str, str] | 
         return None
     with store._connect() as db:
         values = owner_settings.read(db)
-        if started_by not in allowed_triggers(values):
-            return "TRIGGER_OFF", "the owner does not let this kind of trigger start a job."
         row = db.execute("SELECT started_at FROM scheduled_runs WHERE id=?", (run_id,)).fetchone()
-        if row is None:
-            return None
-        started = row["started_at"]
-        others = "FROM scheduled_runs WHERE job_id=? AND id!=? AND status!='skipped'"
-        if started_by == "time":
-            gap = whole(values.get(MIN_INTERVAL), MIN_INTERVAL_RANGE, MIN_INTERVAL_DEFAULT)
-            if db.execute(
-                f"SELECT 1 {others} AND started_at>? AND started_at<=? LIMIT 1",
-                (job_id, run_id, started - gap * 60, started),
-            ).fetchone():
-                return "TOO_SOON", f"the job ran less than {gap} minutes ago."
-        most = whole(values.get(MAX_RUNS), MAX_RUNS_RANGE, MAX_RUNS_DEFAULT)
-        made = db.execute(
-            f"SELECT COUNT(*) {others} AND started_at>? AND started_at<=?",
-            (job_id, run_id, started - DAY, started),
-        ).fetchone()[0]
-    if made >= most:
+        started = None if row is None else row["started_at"]
+        earlier = []
+        if started is not None:
+            earlier = [
+                found["started_at"]
+                for found in db.execute(
+                    "SELECT started_at FROM scheduled_runs WHERE job_id=? AND id!=? "
+                    "AND status!='skipped' AND started_at>? AND started_at<=?",
+                    (job_id, run_id, started - DAY, started),
+                )
+            ]
+    return verdict(values, started_by, started, earlier)
+
+
+def verdict(
+    values: dict, started_by: str, started: float | None, earlier
+) -> tuple[str, str] | None:
+    """`held` from what it read: the owner's settings `values`, when the run starts and when the
+    job's other runs that were not skipped started (`earlier`). The forecast (`pi.agents.tomorrow`)
+    asks it about runs that have not happened yet. A run that is not found is held only by its
+    trigger."""
+    if started_by == "owner":
+        return None
+    if started_by not in allowed_triggers(values):
+        return "TRIGGER_OFF", "the owner does not let this kind of trigger start a job."
+    if started is None:
+        return None
+    if started_by == "time":
+        gap = whole(values.get(MIN_INTERVAL), MIN_INTERVAL_RANGE, MIN_INTERVAL_DEFAULT)
+        if any(started - gap * 60 < at <= started for at in earlier):
+            return "TOO_SOON", f"the job ran less than {gap} minutes ago."
+    most = whole(values.get(MAX_RUNS), MAX_RUNS_RANGE, MAX_RUNS_DEFAULT)
+    if sum(1 for at in earlier if started - DAY < at <= started) >= most:
         return "RUN_LIMIT", f"the job already ran {most} times in the last day."
     return None
