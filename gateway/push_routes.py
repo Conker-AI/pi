@@ -20,11 +20,13 @@ from .store import AuthError
 DEVICE = re.compile(r"[0-9a-f]{32}")
 
 
-def _subscription(body: dict) -> tuple[str, str, str]:
+def _subscription(body: dict) -> tuple[str, str, str, bool]:
     keys = body.get("keys")
     endpoint = body.get("endpoint")
+    renew = body.get("renew", False)
     if (
-        set(body) != {"endpoint", "keys"}
+        set(body) - {"renew"} != {"endpoint", "keys"}
+        or type(renew) is not bool
         or not isinstance(keys, dict)
         or set(keys) != {"p256dh", "auth"}
         or not isinstance(endpoint, str)
@@ -33,7 +35,7 @@ def _subscription(body: dict) -> tuple[str, str, str]:
     ):
         raise ValueError
     push.device_keys(keys["p256dh"], keys["auth"])
-    return endpoint, keys["p256dh"], keys["auth"]
+    return endpoint, keys["p256dh"], keys["auth"], renew
 
 
 def router(app, session, admit_write):
@@ -67,12 +69,14 @@ def router(app, session, admit_write):
     @routes.post("/api/push/subscriptions")
     async def subscribe(request: Request):
         """Turn notifications on for the device this subscription names, for this sign-in: signing
-        this browser out turns it off. The other devices are told one more is on."""
+        this browser out turns it off. The other devices are told one more is on. With
+        `"renew": true` (the browser after each sign-in) it only moves a device that is on to this
+        sign-in, and a device that is off answers 404."""
         signed_in = session(request)
         body = await json_body(request, max_bytes=4096)
         admit_write(request, body, password=False)
         try:
-            endpoint, point, secret = _subscription(body)
+            endpoint, point, secret, renew = _subscription(body)
         except (ValueError, TypeError):
             raise AuthError(
                 "This browser's notification details were not accepted. Turn it off and on again.",
@@ -87,6 +91,7 @@ def router(app, session, admit_write):
             session=signed_in["id"],
             key=push.public_key_id(key()),
             label=label,
+            renew=renew,
         )
         if new:
             app.state.push.announce(device, label)

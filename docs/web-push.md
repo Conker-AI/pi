@@ -50,16 +50,22 @@ software, not the owner's server).
   at most 10. Only the push services of Chrome, Edge, Firefox and Safari are accepted as endpoints
   (`fcm.googleapis.com`, `android.googleapis.com`, `*.push.services.mozilla.com`,
   `*.push.apple.com`, `*.notify.windows.com`; HTTPS on 443), so the gateway never posts to an
-  address inside the server's network. A device the push service refuses or reports gone (401,
-  403, 404, 410) is removed.
+  address inside the server's network. A device the push service reports gone (404, 410) is
+  removed; one it refuses (401, 403) is removed when that happens two rounds in a row (once can be
+  the push service's own bad moment; a round that reaches it starts the count over).
 - A device belongs to the sign-in that turned it on: signing that browser out (or signing it out
   from the list of browsers) turns it off; signing out everywhere and a new password turn every
   device off. A sign-in that only idles out keeps its device, since notifications are for a closed
-  tab. Settings lists the devices newest first, with when each was turned on and a short name
+  tab. Each sign-in gets a new id, so after every sign-in, and when Settings opens, the browser sends
+  its subscription again with `"renew": true`, which moves a device that is on to the new sign-in
+  (signing out there then turns it off) and never turns on one that was removed or signed out
+  (404). Settings lists the devices newest first, with when each was turned on and a short name
   from fixed words ("Chrome on Android"; the User-Agent itself is never kept), each with Remove.
 - When one more device is turned on, the devices already on get "A new device will get Conker
   notifications: <name>", which opens Settings, Notifications, so a device that is not the
-  owner's is noticed and removed.
+  owner's is noticed and removed. This notice goes out even in quiet hours and with proactivity
+  off, on purpose: it is about who can see Conker's notifications, not a suggestion. It waits in
+  the gateway's memory until the next round, so a restart before then loses it.
 
 ### A new server key
 
@@ -74,7 +80,7 @@ rotate on purpose: stop the gateway, delete `push-vapid.pem`, start it.
 | Route | Needs | Does |
 | --- | --- | --- |
 | `GET /api/push` | session | `{publicKey, devices: [{id, created, label}], limit}`, newest first; makes the key on first use |
-| `POST /api/push/subscriptions` `{endpoint, keys: {p256dh, auth}}` | session, CSRF | turns this device on; `{device, devices, limit}` |
+| `POST /api/push/subscriptions` `{endpoint, keys: {p256dh, auth}, renew?}` | session, CSRF | turns this device on for this sign-in; `{device, devices, limit}`. With `renew: true` only a device that is on moves to this sign-in; otherwise 404 |
 | `POST /api/push/subscriptions/{id}/delete` `{}` | session, CSRF | turns one device off; `{removed, devices, limit}` |
 | Pi `POST /push/claim` `{after, limit?}` | owner-control key; the gateway's own call | `{items: [{kind, urgent, tag}], held, delivery}` |
 

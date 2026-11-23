@@ -98,21 +98,21 @@ def world(tmp_path, monkeypatch):
         push_seconds=None,
     )
     with TestClient(app, base_url=ORIGIN) as client:
-        csrf = client.get("/auth/session").json()["csrf_token"]
-        login = client.post(
-            "/auth/login",
-            json={"password": PASSWORD},
-            headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
-        )
-        headers = {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
-        yield client, headers, state, app, tmp_path
+        yield client, sign_in(client), state, app, tmp_path
 
 
-def subscribe(client, headers, endpoint, p256dh, secret):
+def sign_in(client) -> dict:
+    """This browser signs in (each time a new sign-in with its own id); a write's headers."""
+    csrf = {"Origin": ORIGIN, "X-CSRF-Token": client.get("/auth/session").json()["csrf_token"]}
+    login = client.post("/auth/login", json={"password": PASSWORD}, headers=csrf)
+    return {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
+
+
+def subscribe(client, headers, endpoint, p256dh, secret, **extra):
     return client.post(
         "/api/push/subscriptions",
         headers=headers,
-        json={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": secret}},
+        json={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": secret}, **extra},
     )
 
 
@@ -370,7 +370,7 @@ def test_a_stored_endpoint_outside_the_push_services_is_never_posted(world):
     endpoint = "https://169.254.169.254/latest/meta-data"
     with app.state.auth.transaction() as db:
         db.execute(
-            "INSERT INTO push_subscriptions VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT INTO push_subscriptions VALUES(?,?,?,?,?,?,?,?,0)",
             ("b" * 32, endpoint, p256dh, secret, 1.0, "s", current, "Chrome"),
         )
     state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "c" * 16}]}
@@ -467,13 +467,22 @@ def test_the_limit_says_to_remove_a_device_in_settings(world):
 
 
 @pytest.mark.parametrize("status", [401, 403])
-def test_a_device_the_push_service_refuses_is_removed(world, status):
+def test_a_device_the_push_service_refuses_two_rounds_in_a_row_is_removed(world, status):
     client, headers, state, app, _ = world
     _, p256dh, secret = device()
     subscribe(client, headers, FCM, p256dh, secret)
     state.status[FCM] = status
-    state.claim = {"items": [{"kind": "ask", "urgent": False, "tag": "e" * 16}]}
-    assert app.state.push.tick()["removed"] == 1
+    items = [{"kind": "ask", "urgent": False, "tag": tag * 16} for tag in "abc"]
+    state.claim = {"items": items}
+    # One refusal can be the push service's own bad moment: the device stays, and a round with
+    # three items asks it once.
+    assert app.state.push.tick()["removed"] == 0 and len(state.pushes) == 1
+    assert len(push.Devices(app.state.auth).ids()) == 1
+    state.status[FCM] = 201  # it takes a message again: the count starts over
+    assert app.state.push.tick()["sent"] == 3
+    state.status[FCM] = status
+    assert app.state.push.tick()["removed"] == 0
+    assert app.state.push.tick()["removed"] == 1  # the second round in a row
     assert push.Devices(app.state.auth).ids() == []
 
 
@@ -504,3 +513,32 @@ def test_the_other_devices_hear_when_one_more_is_turned_on(world):
     told = decrypt(state.pushes[0].content, one[0], one[1], one[2])
     assert told["title"] == "A new device will get Conker notifications: Firefox on Windows"
     assert told["url"] == "/settings?group=notifications" and len(told["title"]) <= 80
+
+
+@pytest.mark.parametrize("renew", [False, True])
+def test_the_same_browser_sent_after_a_new_sign_in_moves_to_that_sign_in(world, renew):
+    client, headers, _, app, _ = world
+    _, p256dh, secret = device()
+    subscribe(client, headers, FCM, p256dh, secret)
+    told = list(app.state.push.notices)
+    later = time.time() + 3600  # the first sign-in idled out; the same browser signs in again
+    app.state.auth.clock = lambda: later
+    again = sign_in(client)
+    extra = {"renew": True} if renew else {}
+    assert subscribe(client, again, FCM, p256dh, secret, **extra).status_code == 200
+    assert app.state.push.notices == told  # the same device again is no news
+    assert client.post("/auth/logout", headers=again).status_code == 200
+    assert push.Devices(app.state.auth).ids() == []  # signing out here turns it off
+
+
+def test_a_renewal_never_turns_a_removed_device_back_on(world):
+    client, headers, _, app, _ = world
+    _, p256dh, secret = device()
+    on = subscribe(client, headers, FCM, p256dh, secret).json()["device"]
+    client.post(f"/api/push/subscriptions/{on}/delete", headers=headers, json={})
+    renewed = subscribe(client, headers, FCM, p256dh, secret, renew=True)
+    assert renewed.status_code == 404 and renewed.json()["detail"]["code"] == "push_device_off"
+    assert secret not in renewed.text and FCM not in renewed.text
+    assert push.Devices(app.state.auth).ids() == []
+    for value in ("yes", 1, None):
+        assert subscribe(client, headers, FCM, p256dh, secret, renew=value).status_code == 422

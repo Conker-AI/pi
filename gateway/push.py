@@ -76,7 +76,10 @@ DNS_NAME = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0
 GENERIC = "Conker needs you"
 INBOX = "/inbox"
 SETTINGS = "/settings?group=notifications"
-GONE = (401, 403, 404, 410)  # the push service no longer takes messages for this device
+GONE = (404, 410)  # the push service no longer takes messages for this device
+# It refuses this server for the device. Once can be the push service's own bad moment, so a device
+# goes after two rounds in a row (a device of an old key never reaches a round: `keep_key`).
+REFUSED = (401, 403)
 # A device's short name, from fixed words only: the User-Agent itself is never kept.
 BROWSERS = (
     ("Edg", "Edge"),
@@ -265,14 +268,29 @@ class Devices:
             return [dict(row) for row in rows]
 
     def add(
-        self, endpoint: str, p256dh: str, secret: str, *, session: str, key: str, label: str
+        self,
+        endpoint: str,
+        p256dh: str,
+        secret: str,
+        *,
+        session: str,
+        key: str,
+        label: str,
+        renew: bool = False,
     ) -> tuple[str, bool]:
-        """Turn a device on for this sign-in and server key; also says whether it is new."""
+        """Turn a device on for this sign-in and server key; also says whether it is new. `renew`
+        only moves a device that is on to this sign-in: it never turns one on again."""
         identity = hashlib.sha256(endpoint.encode()).hexdigest()[:32]
         with self.auth.transaction() as db:
             known = db.execute(
                 "SELECT 1 FROM push_subscriptions WHERE id=?", (identity,)
             ).fetchone()
+            if renew and not known:
+                raise AuthError(
+                    "Notifications are off for this device. Turn them on in Settings.",
+                    404,
+                    code="push_device_off",
+                )
             count = db.execute("SELECT count(*) FROM push_subscriptions").fetchone()[0]
             if not known and count >= MAX_DEVICES:
                 raise AuthError(
@@ -286,7 +304,7 @@ class Devices:
                 "INSERT INTO push_subscriptions(id,endpoint,p256dh,auth,created,session_id,key_id,"
                 "label) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
                 "p256dh=excluded.p256dh, auth=excluded.auth, session_id=excluded.session_id, "
-                "key_id=excluded.key_id, label=excluded.label",
+                "key_id=excluded.key_id, label=excluded.label, refused=0",
                 (identity, endpoint, p256dh, secret, self.auth.clock(), session, key, label),
             )
         return identity, not known
@@ -303,6 +321,22 @@ class Devices:
     def every(self) -> list[dict]:
         with self.auth.transaction(write=False) as db:
             return [dict(row) for row in db.execute("SELECT * FROM push_subscriptions")]
+
+    def counted(self, refused: set[str], accepted: set[str]) -> int:
+        """After a round: a device that took a message starts over; one the push service refused
+        (401/403) is removed when that is the second round in a row. Says how many were removed."""
+        removed = 0
+        with self.auth.transaction() as db:
+            for identity in accepted:
+                db.execute("UPDATE push_subscriptions SET refused=0 WHERE id=?", (identity,))
+            for identity in refused - accepted:
+                db.execute(
+                    "UPDATE push_subscriptions SET refused=refused+1 WHERE id=?", (identity,)
+                )
+                removed += db.execute(
+                    "DELETE FROM push_subscriptions WHERE id=? AND refused>=2", (identity,)
+                ).rowcount
+        return removed
 
 
 def _claimed(response: httpx.Response) -> list[dict]:
@@ -372,11 +406,22 @@ class Sender:
         key = server_key(Path(config.database).parent)
         devices.keep_key(public_key_id(key))
         targets = devices.every()
+        answers = {"refused": set(), "accepted": set()}
         for device, label in notices:
             others = [target for target in targets if target["id"] != device]
-            self._round(key, devices, others, notice(device, label), False, result)
+            self._round(key, devices, others, notice(device, label), False, result, answers)
+        targets, items = self._claim(devices, targets)
+        result["claimed"] = len(items)
+        for item in items:
+            self._round(key, devices, targets, message(item), item["urgent"], result, answers)
+        result["removed"] += devices.counted(answers["refused"], answers["accepted"])
+        return result
+
+    def _claim(self, devices: Devices, targets: list[dict]) -> tuple[list[dict], list[dict]]:
+        """What Pi lets through now, and the devices still on once it answered."""
+        config = self.app.state.config
         if not targets or not config.pi_owner_key:
-            return result
+            return targets, []
         try:
             response = self.app.state.client.post(
                 config.pi_url.rstrip("/") + "/push/claim",
@@ -385,27 +430,25 @@ class Sender:
                 timeout=10,
             )
         except httpx.HTTPError:
-            return result
+            return targets, []
         # Read again: a device turned off, or sign-out everywhere, during the claim is not woken.
         on = {target["id"] for target in devices.every()}
-        targets = [target for target in targets if target["id"] in on]
-        items = _claimed(response)
-        result["claimed"] = len(items)
-        for item in items:
-            self._round(key, devices, targets, message(item), item["urgent"], result)
-        return result
+        return [target for target in targets if target["id"] in on], _claimed(response)
 
-    def _round(self, key, devices: Devices, targets, body: bytes, urgent: bool, result) -> None:
+    def _round(self, key, devices: Devices, targets, body: bytes, urgent, result, answers) -> None:
         failed = 0
         for target in targets:
-            if target.get("gone"):
-                continue
+            if target.get("gone") or target["id"] in answers["refused"]:
+                continue  # one refusal a round: a refusing push service is not asked again
             status = self._send(key, target, body, urgent)
             if status in GONE:
                 devices.remove(target["id"])
                 target["gone"] = True
                 result["removed"] += 1
+            elif status in REFUSED:
+                answers["refused"].add(target["id"])
             elif status is not None and 200 <= status < 300:
+                answers["accepted"].add(target["id"])
                 result["sent"] += 1
             else:
                 failed += 1
