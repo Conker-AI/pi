@@ -2,6 +2,8 @@
 each provider is asked. A model with no control ignores it and the settings reply says so."""
 
 import json
+import threading
+import time
 from contextlib import closing
 from types import SimpleNamespace
 
@@ -12,7 +14,7 @@ from test_suggestions import config
 
 from pi.conversation import output_settings
 from pi.conversation.store import Store
-from pi.models import effort
+from pi.models import effort, inference_control
 from pi.models import providers as provider_module
 from pi.models import roles as model_roles
 from pi.models.direct import AnthropicProvider, GeminiProvider, OpenAIProvider
@@ -490,3 +492,30 @@ def test_the_capability_lookup_is_short_and_a_failure_is_remembered(monkeypatch)
         assert "output_config" not in provider._payload([Message("user", "Hi")], "claude-x")
         provider._payload([Message("user", "Hi")], "claude-x")
     assert seen == [effort.CAPABILITY_TIMEOUT] and effort.CAPABILITY_TIMEOUT <= 2.0
+
+
+def test_a_stop_does_not_wait_for_the_capability_lookup(monkeypatch):
+    effort._capabilities.clear()
+    release = threading.Event()
+
+    def hung(url, **options):
+        release.wait(5)
+        raise httpx.ConnectTimeout("down")
+
+    monkeypatch.setattr(effort.httpx, "get", hung)
+    provider = AnthropicProvider("k", allow_paid=True)
+    token = inference_control.Token()
+    threading.Timer(0.1, token.cancel).start()
+    started = time.monotonic()
+    try:
+        with (
+            inference_control.bind(token),
+            asked("high"),
+            pytest.raises(inference_control.InferenceCancelled),
+        ):
+            provider._payload([Message("user", "Hi")], "claude-hung")
+        assert time.monotonic() - started < 1.0
+        # A cancelled lookup is not a failure of the service: nothing is remembered for it.
+        assert ("k", "claude-hung") not in effort._capabilities
+    finally:
+        release.set()

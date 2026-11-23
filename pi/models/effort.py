@@ -15,10 +15,15 @@ low/medium/high for gpt-oss.
 from __future__ import annotations
 
 import re
+import threading
 import time
+from typing import cast
 from urllib.parse import quote
 
 import httpx
+
+from pi.models import inference_control
+from pi.models.inference_control import Token
 
 LEVELS = ("light", "medium", "high", "max")
 
@@ -42,7 +47,7 @@ _ROUTE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$")
 CAPABILITY_URL = "https://api.anthropic.com/v1/models/"
 CAPABILITY_TTL = 3600.0
 CAPABILITY_FAILED_TTL = 300.0
-CAPABILITY_TIMEOUT = 1.5  # seconds a Stop or deadline can wait on the first uncached lookup
+CAPABILITY_TIMEOUT = 1.5  # seconds an answer can wait on the first uncached lookup
 _capabilities: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
 
 
@@ -68,14 +73,34 @@ def ollama_value(route: str, level: str | None) -> str | None:
 def anthropic_levels(api_key: str, route: str, headers: dict) -> frozenset[str] | None:
     """The effort levels this Claude model supports, from its own capability list; None when it
     has none or the list could not be read (the setting is then ignored). Cached; a failed read
-    is remembered briefly so a down service is not asked on every answer."""
+    is remembered briefly so a down service is not asked on every answer. A Stop or deadline of
+    the answer does not wait for an uncached read: it is cancelled at once and nothing is kept."""
     if not _ROUTE.match(route):
         return None
     key = (api_key, route)
-    now = time.monotonic()
     cached = _capabilities.get(key)
-    if cached is not None and now < cached[0]:
+    if cached is not None and time.monotonic() < cached[0]:
         return cached[1]
+    token = cast("Token | None", inference_control.current())
+    if token is None:
+        return _read_levels(key, route, headers)
+    done = threading.Event()
+    found: list[frozenset[str] | None] = []
+
+    def read():
+        try:
+            found.append(_read_levels(key, route, headers, lambda: not token.stopped.is_set()))
+        finally:
+            done.set()
+
+    threading.Thread(target=read, daemon=True).start()
+    with token.register(done.set):
+        done.wait()
+    token.check()
+    return found[0] if found else None
+
+
+def _read_levels(key, route, headers, keep=lambda: True) -> frozenset[str] | None:
     levels: frozenset[str] | None = None
     try:
         response = httpx.get(
@@ -96,8 +121,9 @@ def anthropic_levels(api_key: str, route: str, headers: dict) -> frozenset[str] 
     except (httpx.HTTPError, ValueError, AttributeError, TypeError):
         pass
     levels = levels or None
-    ttl = CAPABILITY_TTL if levels is not None else CAPABILITY_FAILED_TTL
-    _capabilities[key] = (now + ttl, levels)
+    if levels is not None or keep():
+        ttl = CAPABILITY_TTL if levels is not None else CAPABILITY_FAILED_TTL
+        _capabilities[key] = (time.monotonic() + ttl, levels)
     return levels
 
 
