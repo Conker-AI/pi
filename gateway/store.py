@@ -19,6 +19,7 @@ DEVICE_SECONDS = 400 * 86400  # Browsers keep a cookie at most 400 days.
 DEVICE_ROWS = 20
 FAILURE_SECONDS = 30 * 86400
 FAILURE_ROWS = 500
+HOST_ATTEMPT_SECONDS = 300  # host_password: five wrong passwords in this window wait
 
 
 class AuthError(Exception):
@@ -371,14 +372,17 @@ class AuthStore:
         attempt_id = secrets.token_urlsafe(24)
         with self.transaction() as db:
             self._prune(db)
-            since = self.clock() - 300
+            since = self.clock() - HOST_ATTEMPT_SECONDS
             if (
                 db.execute(
                     "SELECT count(*) FROM login_attempts WHERE budget='host' AND at>?", (since,)
                 ).fetchone()[0]
                 >= 5
             ):
-                raise AuthError("Too many password attempts. Wait fifteen minutes and retry.", 429)
+                minutes = HOST_ATTEMPT_SECONDS // 60
+                raise AuthError(
+                    f"Too many password attempts. Wait {minutes} minutes and retry.", 429
+                )
             db.execute(
                 "INSERT INTO login_attempts(at,source,attempt_id,budget) VALUES(?,?,?,'host')",
                 (self.clock(), digest("host"), attempt_id),

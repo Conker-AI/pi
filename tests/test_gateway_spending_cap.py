@@ -125,7 +125,8 @@ def test_wrong_passwords_are_limited_and_a_right_one_then_waits(pi, store, auth)
         for _ in range(5):
             assert ask(auth, client, {"password": "x" * 20, "changes": {"cents": 1}})[0] == 1
         code, _, err = ask(auth, client, {"password": PASSWORD, "changes": {"cents": 1}})
-    assert code == 1 and "Too many password attempts" in err
+    assert code == 1 and "Too many password attempts. Wait 5 minutes and retry." in err
+    assert module.HOST_ATTEMPT_SECONDS == 300
     assert prefs.load(store)["preferences"]["spendingCap"]["cents"] == 500
 
 
@@ -185,3 +186,19 @@ def test_the_command_is_wired_and_reads_stdin(monkeypatch):
     with pytest.raises(SystemExit) as stopped:
         entry.main()
     assert stopped.value.code == 0 and seen == ["/tmp/auth.db"]
+
+
+def test_the_wait_the_lockout_names_is_the_real_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(module, "password_hash", fast)
+    now = [1_000_000.0]
+    auth = AuthStore(tmp_path / "clocked.db", clock=lambda: now[0])
+    auth.set_password(PASSWORD, initial=True)
+    for _ in range(5):
+        with pytest.raises(AuthError, match="not accepted"):
+            auth.host_password("x" * 20)
+    now[0] += module.HOST_ATTEMPT_SECONDS - 1
+    with pytest.raises(AuthError, match="Wait 5 minutes") as locked:
+        auth.host_password(PASSWORD)
+    assert locked.value.status == 429
+    now[0] += 2  # the named wait is over: the right password goes through
+    auth.host_password(PASSWORD)
