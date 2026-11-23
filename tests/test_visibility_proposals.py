@@ -162,10 +162,15 @@ def test_job_notes_from_a_trashed_chat_leave_the_inbox_and_come_back(store):
     agent_jobs._note(store, "run_a", "job_a", gone, None, "Secret found", "", DAY.timestamp())
     agent_jobs._note(store, "run_b", "job_b", kept, None, "Gym booked", "", DAY.timestamp())
     trash(store, [gone])
-    assert [note["title"] for note in job_notes.notes(store)] == ["Gym booked"]
-    assert [item["title"] for item in job_notes.needs_you(store)] == ["Gym booked"]
+    assert [note["title"] for note in job_notes.notes(store, now=DAY.timestamp())] == ["Gym booked"]
+    assert [item["title"] for item in job_notes.needs_you(store, now=DAY.timestamp())] == [
+        "Gym booked"
+    ]
     trash(store, [gone], trashed=False)
-    assert {note["title"] for note in job_notes.notes(store)} == {"Secret found", "Gym booked"}
+    assert {note["title"] for note in job_notes.notes(store, now=DAY.timestamp())} == {
+        "Secret found",
+        "Gym booked",
+    }
 
 
 def test_a_chat_in_the_trash_before_the_first_pass_hides_none_of_its_ideas(store, monkeypatch):

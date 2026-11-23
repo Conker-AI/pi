@@ -378,7 +378,7 @@ def _impact_counts(store, day_start, week_start):
     return {"today": today, "week": week}
 
 
-def needs_you_items(store, day_start) -> list[dict]:
+def needs_you_items(store, day_start, now=None) -> list[dict]:
     """What waits for the owner now, urgent first, then oldest first; at most 50.
 
     The Inbox shows these, and web push (`push_queue`) may wake the owner's devices for them.
@@ -393,7 +393,7 @@ def needs_you_items(store, day_start) -> list[dict]:
     items.extend(updates.needs_you(store))
     items.extend(change_requests.needs_you(store))
     items.extend(asks.needs_you(store))
-    items.extend(job_notes.needs_you(store))
+    items.extend(job_notes.needs_you(store, now))
     items.extend(recall_notices.needs_you(store))
 
     items.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
@@ -415,7 +415,7 @@ def inbox(store, *, now=None):
     # The week is the last seven local days, today included (DST-safe: local dates, not seconds).
     week_start = _local_midnight(today - timedelta(days=6), zone)
 
-    needs_you = needs_you_items(store, day_start)
+    needs_you = needs_you_items(store, day_start, now)
     handled = sorted(
         _handled_items(store, day_start)
         + plan_alerts.resets(store, day_start)

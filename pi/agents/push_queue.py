@@ -74,7 +74,8 @@ def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
         db.execute("BEGIN IMMEDIATE")
         # Read the Inbox while holding the write lock: a forget, trash or answer cannot commit
         # between this read and the claim (the reads see committed rows; WAL lets them run).
-        waiting = inbox.needs_you_items(store, inbox.local_day_start(store, now.timestamp()))
+        moment = now.timestamp()
+        waiting = inbox.needs_you_items(store, inbox.local_day_start(store, moment), moment)
         # Unreadable preferences raise: nothing is claimed, so nothing is sent (fail closed).
         row = db.execute("SELECT preferences FROM owner_preferences WHERE singleton=1").fetchone()
         preferences = prefs.OwnerPreferences.model_validate_json(row["preferences"])

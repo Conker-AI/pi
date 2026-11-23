@@ -78,14 +78,17 @@ def test_the_chat_of_an_adopted_job_stays_visible_when_its_source_is_trashed(sto
     # The adopted job is listed and runs as the owner's, so its chat and notes show too.
     assert mine in {row["id"] for row in jobs.list_jobs(store)}
     assert hidden_now(store, [mine_chat, conker_chat]) == {conker_chat}
-    assert [item["sessionId"] for item in job_notes.notes(store)] == [mine_chat]
+    assert [item["sessionId"] for item in job_notes.notes(store, now=DAY)] == [mine_chat]
     listed = {row["id"] for row in store.list_sessions()}
     assert mine_chat in listed and conker_chat not in listed
     found = {row["recordId"] for row in search.conversation_metadata(store, MARK)[0]}
     assert found == {mine_chat}
     trash(store, source, trashed=False)
     assert hidden_now(store, [mine_chat, conker_chat]) == set()
-    assert {item["sessionId"] for item in job_notes.notes(store)} == {mine_chat, conker_chat}
+    assert {item["sessionId"] for item in job_notes.notes(store, now=DAY)} == {
+        mine_chat,
+        conker_chat,
+    }
 
 
 def test_a_job_adopted_after_its_source_was_trashed_shows_again(store):

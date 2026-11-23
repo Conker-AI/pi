@@ -6,9 +6,10 @@ to the gateway's `/hooks/{job_id}` with the secret in the `X-Conker-Hook-Token` 
 the address, because request paths are written to the server's access log.
 
 Each call admits at most one run, at most one every 30 seconds per job, and never while the job
-is still running. What the caller sent waits for that run and is handed to the agent as
-information from outside Conker, never as instructions. It is saved with the run, in one
-transaction, and its copy here is kept until the run has ended (a repeated dispatch must build the
+is still running. The owner also sets how many calls one job accepts in an hour and the largest
+body (`proactivity.hooks.rate`, `proactivity.hooks.size`). What the caller sent waits for that run
+and is handed to the agent as information from outside Conker, never as instructions. It is saved
+with the run, in one transaction, and its copy here is kept until the run has ended (a repeated dispatch must build the
 same text to replay), then swept on the next call; the text itself stays in the run's message in
 the job's chat until that chat is forgotten, which drops a copy still here too. From then on the whole chat counts as holding outside content (`pi.turns.access`) and
 none of its messages is sent to memory. Tools still ask exactly as in chat, so a webhook can never
@@ -24,8 +25,9 @@ import secrets
 import time
 import uuid
 
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
-from pi.schedule import jobs
+from pi.schedule import job_limits, jobs
 from pi.schedule.job_models import Definition
 
 HOOK_REQUEST = "hook_"
@@ -33,6 +35,10 @@ TOKEN = re.compile(r"^hook_[A-Za-z0-9_-]{43}$")
 MIN_GAP_SECONDS = 30
 MAX_PAYLOAD = 8000
 STALE_EVENT_SECONDS = 86400
+# The owner's limits (Conker's settings registry): calls one job accepts in an hour, and the
+# largest body in KB. A value of the wrong type or out of range keeps the default.
+RATE, RATE_RANGE, RATE_DEFAULT = "proactivity.hooks.rate", (1, 600), 60
+SIZE, SIZE_RANGE, SIZE_DEFAULT = "proactivity.hooks.size", (1, 16), 16
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_job_hooks (
  job_id TEXT PRIMARY KEY REFERENCES scheduled_jobs(id),
@@ -99,6 +105,23 @@ def _payload(body) -> str:
     return text if len(text) <= MAX_PAYLOAD else text[: MAX_PAYLOAD - 1] + "…"
 
 
+def _within_limits(store, job_id, body, now) -> None:
+    """Refuse a body over the owner's size, or a call past his calls an hour for this job."""
+    size = job_limits.whole(owner_settings.value(store, SIZE), SIZE_RANGE, SIZE_DEFAULT)
+    encoded = json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
+    if len(encoded) > size * 1024:
+        raise HookError("hook_too_large", f"Webhook payloads are at most {size} KB.", 413)
+    rate = job_limits.whole(owner_settings.value(store, RATE), RATE_RANGE, RATE_DEFAULT)
+    with store._connect() as db:
+        started = db.execute(
+            "SELECT COUNT(*) FROM scheduled_runs WHERE job_id=? AND request_id LIKE ? "
+            "AND started_at>?",
+            (job_id, HOOK_REQUEST + "%", now - 3600),
+        ).fetchone()[0]
+    if started >= rate:
+        raise HookError("hook_rate", f"This webhook accepts {rate} calls an hour.", 429)
+
+
 def receive(store, job_id, token, body, now=None) -> dict:
     """Start the job once for this call, or say plainly why not. Never raises on a busy job."""
     now = time.time() if now is None else now
@@ -119,6 +142,7 @@ def receive(store, job_id, token, body, now=None) -> dict:
     definition = _agent_job(store, job_id)
     if not definition.enabled:
         return {"started": False, "reason": "paused"}
+    _within_limits(store, job_id, body, now)
     # The gap is claimed in one statement before the run starts: checked first and written
     # after, two calls at once both passed it, and a run that ended fast let both start.
     with store._connect() as db:
