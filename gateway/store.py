@@ -20,6 +20,10 @@ DEVICE_ROWS = 20
 FAILURE_SECONDS = 30 * 86400
 FAILURE_ROWS = 500
 HOST_ATTEMPT_SECONDS = 300  # host_password: five wrong passwords in this window wait
+# Browser password checks: five per budget or source address in ATTEMPT_SECONDS; the shared
+# budget also holds thirty in all, kept for ATTEMPT_KEEP_SECONDS (_prune).
+ATTEMPT_SECONDS = 300
+ATTEMPT_KEEP_SECONDS = 900
 
 
 class AuthError(Exception):
@@ -167,9 +171,10 @@ class AuthStore:
     def owner_window(self, revision: int, minutes: int, *, saved: bool) -> bool:
         """Record the owner's sign-out window from a preferences document Pi returned.
 
-        `minutes` 0 means no window shorter than the host's. A save is his latest choice and always
-        wins. A read wins when its revision is not older than the one kept; an older read (one that
-        raced a save) may only shorten the window, so a late answer never loosens it. Returns
+        `minutes` 0 means no window shorter than the host's. A save relayed from Settings is his
+        latest choice and always wins. A read, or a host command's save recorded after Pi answered
+        (`saved=False`), wins when its revision is not older than the one kept; an older one (one
+        that raced a save) may only shorten the window, so a late answer never loosens it. Returns
         whether the value was kept.
         """
         if (
@@ -204,7 +209,7 @@ class AuthStore:
             "(SELECT id FROM sessions)",
             (now,),
         )
-        db.execute("DELETE FROM login_attempts WHERE at<=?", (now - 900,))
+        db.execute("DELETE FROM login_attempts WHERE at<=?", (now - ATTEMPT_KEEP_SECONDS,))
         db.execute("DELETE FROM known_devices WHERE used<=?", (now - DEVICE_SECONDS,))
         db.execute("DELETE FROM password_failures WHERE at<=?", (now - FAILURE_SECONDS,))
         db.execute(
@@ -324,7 +329,8 @@ class AuthStore:
             self._prune(db)
             row = self._session(db, token, authenticated=authenticated)
             budget = self._budget(db, row, device)
-            since = self.clock() - 300
+            since = self.clock() - ATTEMPT_SECONDS
+            window = ATTEMPT_SECONDS  # what the lockout tells him to wait
             if budget is not None:
                 own = db.execute(
                     "SELECT count(*) FROM login_attempts WHERE budget=? AND at>?", (budget, since)
@@ -339,8 +345,12 @@ class AuthStore:
                     (digest(source), since),
                 ).fetchone()[0]
                 blocked = attempts >= 30 or local >= 5
+                if attempts >= 30:
+                    window = ATTEMPT_KEEP_SECONDS
             if blocked:
-                raise AuthError("Too many password attempts. Wait fifteen minutes and retry.", 429)
+                raise AuthError(
+                    f"Too many password attempts. Wait {window // 60} minutes and retry.", 429
+                )
             db.execute(
                 "INSERT INTO login_attempts(at,source,attempt_id,budget) VALUES(?,?,?,?)",
                 (self.clock(), digest(source), attempt_id, budget),
@@ -364,10 +374,11 @@ class AuthStore:
     def host_password(self, password: str) -> None:
         """The owner's password typed at the host for one change that asks for it.
 
-        For host commands that cannot take a browser proof (`spending-cap`). Host attempts have
-        their own budget, five wrong ones per five minutes, so browsers cannot use it up; a right
-        one frees its attempt. Anyone controlling the host can still reset the password: this
-        makes the sanctioned command ask the owner, it is not a wall against the host itself.
+        For host commands that cannot take a browser proof (`spending-cap`, `owner-preferences`,
+        a serious yes through `apply approvals`). Host attempts have their own budget, five
+        wrong ones per five minutes, so browsers cannot use it up; a right one frees its attempt.
+        Anyone controlling the host can still reset the password: this makes the sanctioned
+        command ask the owner, it is not a wall against the host itself.
         """
         attempt_id = secrets.token_urlsafe(24)
         with self.transaction() as db:

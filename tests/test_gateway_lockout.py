@@ -193,3 +193,29 @@ def test_alerts_need_his_session_and_seen_takes_an_empty_object(boundary):
     assert client.get("/auth/alerts").json()["unseen"] == 0
     client.cookies.clear()
     assert client.get("/auth/alerts").status_code == 401
+
+
+def test_the_wait_a_lockout_names_is_the_window_that_blocked_it(auth, clock):
+    # One source, a known browser or a signed-in tab: five in five minutes.
+    owner = sign_in(auth)
+    for _ in range(5):
+        refused(lambda: sign_in(auth, "typo", source="phone"), 401)
+        refused(lambda: auth.verify(owner["token"], "typo", "home", "decision"), 401)
+    for call in (
+        lambda: sign_in(auth, source="phone"),
+        lambda: auth.verify(owner["token"], PASSWORD, "home", "decision"),
+    ):
+        with pytest.raises(AuthError, match="Wait 5 minutes") as locked:
+            call()
+        assert locked.value.status == 429
+    clock[0] += module.ATTEMPT_SECONDS + 1
+    assert sign_in(auth, source="phone")["authenticated"]
+    # Thirty from everyone fill the shared budget, which keeps them fifteen minutes.
+    clock[0] += module.ATTEMPT_KEEP_SECONDS
+    for stranger in range(6):
+        for _ in range(5):
+            refused(lambda s=stranger: sign_in(auth, "guess", f"stranger-{s}"), 401)
+    with pytest.raises(AuthError, match="Wait 15 minutes"):
+        sign_in(auth, source="a new place")
+    clock[0] += module.ATTEMPT_KEEP_SECONDS
+    assert sign_in(auth, source="a new place")["authenticated"]

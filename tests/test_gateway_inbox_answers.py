@@ -70,12 +70,14 @@ def test_the_cli_decision_continues_too():
 
     def upstream(request):
         seen.append(request)
+        if request.method == "GET":  # a normal request: the yes needs no password
+            return httpx.Response(200, json={"id": "req_1", "approval_level": 1})
         return httpx.Response(200, json={"id": "req_1", "status": "approved"})
 
     payload = {"operation": "decide", "id": "req_1", "status": "approved"}
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
         apply_resource(config(), "approvals", io.BytesIO(json.dumps(payload).encode()), client)
-    toolgate, pi = seen
+    _, toolgate, pi = seen
     assert toolgate.url.path == "/v2/owner/requests/req_1/decision"
     assert pi.url.path == "/approvals/req_1/decided"
     assert json.loads(pi.content) == {"status": "approved", "note": ""}
