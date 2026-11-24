@@ -179,7 +179,7 @@ app.include_router(skills_api.router(lambda: app.state.store, require_skill_read
 app.include_router(context_api.router(lambda: app.state.store, require_owner))
 app.include_router(definitions_api.router(lambda: app.state.store, require_owner))
 app.include_router(continuity_api.router(lambda: app.state.store, require_admin))
-app.include_router(inbox_api.router(lambda: app.state.store, require_admin))
+app.include_router(inbox_api.router(lambda: app.state.store, require_admin, require_owner))
 app.include_router(plan_alerts_api.router(lambda: app.state.store, require_owner))
 app.include_router(self_check_api.router(lambda: app.state.store, require_owner))
 app.include_router(updates_api.router(lambda: app.state.store, require_owner, require_admin))

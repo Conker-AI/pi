@@ -8,6 +8,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from auth_mutation_push import PUSH_CASES
+
 ROOT = Path(__file__).resolve().parents[1]
 API = "tests/test_gateway_api.py::"
 STORE = "tests/test_gateway_store.py::"
@@ -440,6 +442,9 @@ CASES += [
     ),
 ]
 
+# Web push (scripts/auth_mutation_push.py).
+CASES += PUSH_CASES
+
 
 def main() -> int:
     # In the OS temp directory, never in the checkout.
@@ -469,6 +474,8 @@ def main() -> int:
             "test_security_preferences_password.py",
             "test_gateway_host_preferences.py",
             "test_gateway_cli_approval_password.py",
+            "test_gateway_push.py",
+            "test_push_queue.py",
             "test_gateway_mcp_class.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)

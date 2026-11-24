@@ -39,7 +39,7 @@ CASES = [
     ),
     (
         "F1-budget-denial-enters-model-loop",
-        "pi/turns/loop.py",
+        "pi/turns/attempts.py",
         'if refusal.code == "BUDGET_DENIED":',
         "if False:",
         EXEC,

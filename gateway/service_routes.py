@@ -9,7 +9,12 @@ import httpx
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from pi.api.browser_contract import owner_allowed, runtime_allowed, session_only_write
+from pi.api.browser_contract import (
+    gateway_only,
+    owner_allowed,
+    runtime_allowed,
+    session_only_write,
+)
 
 from .chat_bodies import check as check_chat_call
 from .operations import json_body
@@ -178,7 +183,8 @@ def router(app, session, forward, admit_write, stream_transport):
     async def control(path: str, request: Request):
         session(request)
         target = "/" + path
-        if not owner_allowed(request.method, target):
+        # A route only the gateway itself calls (a web push claim) is never the browser's.
+        if not owner_allowed(request.method, target) or gateway_only(request.method, target):
             raise AuthError("This owner operation is not available through the gateway.", 403)
         if target.startswith("/memory/corrections") and request.scope["query_string"]:
             raise AuthError("Memory corrections do not accept query parameters.", 422)

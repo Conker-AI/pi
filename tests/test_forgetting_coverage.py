@@ -61,6 +61,8 @@ IDS_ONLY = {
     "outside_sessions",
     "proactive_reservations",
     "proposal_watermark",
+    # Web push claims: a digest of an Inbox item's kind and id and when it was sent.
+    "push_deliveries",
     "research_model_calls",
     "response_families",
     "response_retries",
