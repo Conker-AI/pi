@@ -291,10 +291,24 @@ def test_sign_out_everywhere_and_a_new_password_turn_every_device_off(world):
     subscribe(client, headers, FCM, p256dh, secret)
     app.state.auth.revoke()
     assert push.Devices(app.state.auth).ids() == []
-    subscribe_direct = push.Devices(app.state.auth)
-    subscribe_direct.add(FCM, p256dh, secret, session="s", key="k", label="Chrome")
+    subscribe(client, sign_in(client), FCM, p256dh, secret)
+    assert len(push.Devices(app.state.auth).ids()) == 1
     app.state.auth.set_password("another synthetic owner phrase")
-    assert subscribe_direct.ids() == []
+    assert push.Devices(app.state.auth).ids() == []
+
+
+def test_a_device_is_never_put_on_a_sign_in_that_was_signed_out(world):
+    _, _, _, app, _ = world
+    _, p256dh, secret = device()
+    gone = app.state.auth.sessions()[0]["id"]
+    app.state.auth.revoke(gone)  # sign-out lands while the request waits for its body
+    for renew in (False, True):
+        with pytest.raises(auth_module.AuthError) as refused:
+            push.Devices(app.state.auth).add(
+                FCM, p256dh, secret, session=gone, key="k", label="Chrome", renew=renew
+            )
+        assert refused.value.status == 401
+    assert push.Devices(app.state.auth).ids() == []
 
 
 def test_a_round_sends_fixed_words_to_every_device_and_drops_a_gone_one(world):

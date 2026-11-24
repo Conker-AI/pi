@@ -282,6 +282,12 @@ class Devices:
         only moves a device that is on to this sign-in: it never turns one on again."""
         identity = hashlib.sha256(endpoint.encode()).hexdigest()[:32]
         with self.auth.transaction() as db:
+            # Checked under the write lock that sign-out takes, so a sign-out that lands while
+            # this request waits never leaves a device on a sign-in that no longer exists.
+            if not db.execute(
+                "SELECT 1 FROM sessions WHERE id=? AND authenticated=1", (session,)
+            ).fetchone():
+                raise AuthError("Sign in again.", 401, code="push_session_gone")
             known = db.execute(
                 "SELECT 1 FROM push_subscriptions WHERE id=?", (identity,)
             ).fetchone()
