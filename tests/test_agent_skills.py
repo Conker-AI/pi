@@ -222,3 +222,25 @@ def test_an_agent_conker_files_carries_no_skills(store):
     with pytest.raises(ValueError):
         agent_requests._checked("agent", configuration(["review"]).model_dump())
     assert agent_requests._checked("agent", configuration().model_dump()).skillIds == []
+
+
+def test_one_skill_limit_per_turn_across_the_agent_and_the_picks(store):
+    for name in ("a", "b", "c", "d", "e"):
+        imported(store, name, f"Skill {name}.")
+    agent = agents.create(store, configuration(["a", "b", "c"]))
+    cases = (
+        # The owner's picks always load; the agent's own fill what is left, in order.
+        (["d"], [("a", "agent"), ("b", "agent"), ("d", None)], ["c"]),
+        # A pick the agent already carries counts once and as chosen.
+        (["c", "d", "e"], [("c", "agent"), ("d", None), ("e", None)], ["a", "b"]),
+    )
+    for number, (picks, loaded, left_out) in enumerate(cases):
+        sid, request = chat_with(store, agent), f"turn_limit_request_{number}"
+        submissions.reserve(store, request, sid, "Look", {}, skill_ids=picks)
+        bound = submissions.bind(store, request)
+        execution = session_settings.execution(store, sid, turn_id=bound["turn_id"])
+        assert [(item["id"], item.get("source")) for item in execution["skills"]] == loaded
+        assert execution["skillsSkipped"] == [
+            {"id": value, "reason": "over the limit of three skills per turn"} for value in left_out
+        ]
+        assert len(skills.messages(execution)) == 3
