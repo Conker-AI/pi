@@ -347,8 +347,9 @@ class AgentJobs:
     """Job executor: AI jobs run a turn; every other target goes to ToolGate unchanged."""
 
     def __init__(self, store, loop, published=None, briefing=None):
-        # `briefing(store, job_id)` is extra input text for a run (the Morning check-in's open
-        # loops); it is passed in because this package cannot import the loops.
+        # `briefing(store, job_id, **run)` is extra input text for a run (the Morning check-in's
+        # open loops and calendar events); it is passed in because this package cannot import
+        # them. `run` names the run, its start, its zone, its agent and that agent's client.
         self.store, self.loop, self.published = store, loop, published
         self.briefing = briefing
 
@@ -408,7 +409,20 @@ class AgentJobs:
         # When Pi took the run up, not when it is dispatched: a repeated dispatch sends the same
         # text, so it replays the saved turn instead of being refused as a different request.
         started = when(row["started_at"], definition["timeZone"])
-        extra = self.briefing(self.store, row["job_id"]) if self.briefing else ""
+        clients = getattr(self.published, "clients", {}) if self.published is not None else {}
+        extra = (
+            self.briefing(
+                self.store,
+                row["job_id"],
+                client=clients.get(definition["agentId"]),
+                run_id=run_id,
+                started_at=row["started_at"],
+                time_zone=definition["timeZone"],
+                agent_id=definition["agentId"],
+            )
+            if self.briefing
+            else ""
+        )
         extra = f"\n\n{extra}" if extra else ""
         text = f"{PREAMBLE}\n\n{started}\n\n{reason}{definition['instructions']}{extra}"
         try:

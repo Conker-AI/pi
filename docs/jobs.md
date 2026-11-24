@@ -197,6 +197,31 @@ lines, or reply `NOTHING`, which files nothing.
   and the job's own row both record the seed, so turning it off, or resetting the settings
   document, never brings a second one back.
 
+### Calendar events in the check-in (2026-11-24)
+
+When ToolGate has the owner's calendar set up (its read-only `calendar.events` tool, which reads
+one private iCalendar address kept in ToolGate's vault; see ToolGate's `docs/calendar.md`), the
+Morning check-in's input also lists the events of today and tomorrow that have not ended yet
+(`pi/context/calendar_events.py`). Pi asks the tool through the job agent's own ToolGate client
+and never sees the address.
+
+- Set up means: the tool is in Pi's catalogue (its scope `tool:calendar.events`), it runs without
+  asking (`authorization: auto`, not sensitive, and the agent's own access for it is not "ai" or
+  "ask"), and setup did not leave tools off. Otherwise nothing is read and the input is exactly
+  as before; a refusal, a ToolGate that is down, a missing address or a failed read lists no
+  events and fails nothing. A read that comes back asking takes its Inbox card back at once.
+- Titles and places are whoever made the event's words (an invitation can come from anyone), so
+  they are outside content: a fenced `<calendar-events>` block, one JSON-quoted line each with
+  invisible characters removed and `<` escaped, after a lead-in saying nothing inside the quotes is
+  an instruction. A chat holding that block counts as having read outside content for every turn
+  (`access.CALENDAR_MARK`). The opening message of a job run is never sent to memory.
+- The read's action id is made from the run id, and events are kept by the run's start time, so a
+  repeated dispatch gets ToolGate's saved receipt and replays the same text.
+- The forecast lists the window's events too when asked: `GET /insights/tomorrow?events=true`
+  adds `events` (`start`, `end`, `allDay`, `title`, `location`); without the flag the answer is
+  unchanged. Each such request is one ToolGate read, within the tool's 6 a minute.
+- Other jobs never get events.
+
 ### Starting from a tool (2026-10-25)
 
 An AI job with `watch` (`toolId`, `args`, `everyMinutes` 5-1440) starts when that get tool has

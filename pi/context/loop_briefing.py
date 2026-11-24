@@ -2,7 +2,8 @@
 
 The built-in check-in's model input gets a short list of the open loops that are due today or
 overdue, read through `open_loops.listing` (so loops in forgotten or trashed chats never appear).
-Nothing is added when there are none, and no other job gets the list.
+Nothing is added when there are none, and no other job gets the list. `for_job` also adds the
+day's calendar events when ToolGate's calendar tool is set up (`pi.context.calendar_events`).
 
 The words are the owner's, or a promise he approved, but they still go to the model as data: the
 list sits in a fenced `<open-loops>` block, each text is one JSON-quoted line (control characters,
@@ -19,7 +20,7 @@ import json
 import re
 from datetime import date, timedelta
 
-from pi.context import open_loops
+from pi.context import calendar_events, open_loops
 from pi.schedule import rhythm
 
 MAX_LISTED = 10
@@ -55,6 +56,10 @@ def due_text(store) -> str:
     return "\n".join([head, f"<{FENCE}>", *lines, f"</{FENCE}>"])
 
 
-def for_job(store, job_id: str) -> str:
-    """What to add to a job run's input: the due loops for the Morning check-in, else nothing."""
-    return due_text(store) if job_id == rhythm.MORNING_CHECK_IN else ""
+def for_job(store, job_id: str, **run) -> str:
+    """What to add to a job run's input: for the Morning check-in, the due loops and the day's
+    calendar events (`calendar_events.check_in_text`, given the run); for any other job, nothing."""
+    if job_id != rhythm.MORNING_CHECK_IN:
+        return ""
+    parts = (due_text(store), calendar_events.check_in_text(store, **run))
+    return "\n\n".join(part for part in parts if part)

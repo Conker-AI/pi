@@ -15,6 +15,10 @@ Built only from what Pi already keeps, nothing is run or changed:
   own checks (`pi.agents.tomorrow_runs`); the proposal pass too when its worker runs. Times are
   instants; `timeZone` is the owner's, to show them in.
 
+- `events`: only when asked (`?events=true`), the owner's calendar events inside the window, read
+  through ToolGate's `calendar.events` (`pi.context.calendar_events`); an empty list when the tool
+  is not set up. Titles and places are whoever made the event's words.
+
 A job from a chat that is forgotten or in the Trash is not listed (it does not run) and neither is
 a parked turn of such a chat. `jobs` counts the clock's slots; `runs` says which of them would run.
 """
@@ -52,6 +56,14 @@ class TomorrowApproval(Strict):
     expiresAt: float
 
 
+class TomorrowEvent(Strict):
+    start: str  # an ISO date for an all-day event, else an ISO time with its offset
+    end: str  # an all-day event ends on the day after its last day
+    allDay: bool
+    title: str
+    location: str | None
+
+
 class Tomorrow(Strict):
     schemaVersion: Literal[1]
     since: float
@@ -62,6 +74,8 @@ class Tomorrow(Strict):
     approvals: list[TomorrowApproval]
     timeZone: str
     runs: list[TomorrowRun]
+    # Present only when asked for, so a reader that does not know the field never sees it.
+    events: list[TomorrowEvent] | None = None
 
 
 def _slots(definition: Definition, first: float, until: float, anchor: float) -> int:
