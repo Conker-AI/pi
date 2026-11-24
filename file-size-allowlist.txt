@@ -2,5 +2,4 @@
 # Each may only shrink; delete its line once it is under the limit. Never add a line.
 pi/api/server.py 556
 pi/memory/service.py 554
-pi/turns/loop.py 594
 pi/turns/native_tools.py 561
