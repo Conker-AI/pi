@@ -35,6 +35,14 @@ async def lifespan(app):
         offers.close()
 
 
+def erasure_health(state) -> dict:
+    """Pi's health check `import_erasures` (import_offers.erasure_health), by the sender."""
+    offers = getattr(state, "import_offers", None)
+    if offers is None:
+        return {"status": "not_configured", "reason": "Pi's import sender is not running"}
+    return import_offers.erasure_health(offers.store, offers)
+
+
 def _too_large():
     limit = import_formats.MAX_BYTES // (1024 * 1024)
     return imports.ImportRefused("too_large", f"The file is larger than {limit} MB.", 413)

@@ -99,7 +99,18 @@ each erasure goes only through the listener its words went to (another one waits
 problem);
 `GET /imports` counts both (`memory.erasing`, `memory.notFoundToErase`). A word whose offer was
 saved by MemoryGate but whose answer never reached Pi has no evidence id and cannot be erased this
-way. The background sender holds
+way.
+
+Until an erasure settles, MemoryGate still holds those words, so everything Pi reads back leaves
+them out (`pi.conversation.hidden_records`, the rule for chats in the Trash): a turn's recall,
+`conker.recall`, saved recall, the chat view and retries. The deleted chat's evidence is left out
+by id. A memory MemoryGate's listener made from it is not named by anything Pi holds, so while any
+erasure waits every `automatic_listener` memory, and every episode and evidence titled
+"Imported from ...", is left out; they come back once none waits. Deleting the chat advances the
+recall generation, so a recall retrieved before it is not kept. Pi's health check
+`import_erasures` turns degraded when an erasure still waits three days after the deletion, or at
+once when the listener refuses it (401, 403, 404); Pi's self-check then files one Inbox health
+card saying the words are still stored and which setting to fix, and closes it when that is over. The background sender holds
 a lock for each offer from re-reading its row to recording the answer, and the deletion takes the
 same lock, so no word of a chat is offered while or after it is deleted. Owner backups made before
 still hold the chat.

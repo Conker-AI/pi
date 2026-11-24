@@ -51,8 +51,9 @@ CREATE TABLE IF NOT EXISTS memory_contexts (
     recorded_at REAL NOT NULL
 );
 -- One number every clearing of saved recall advances (`invalidate_recall`: a memory forget or
--- correction, a forgotten chat, an erased import). Read before a recall is retrieved and compared
--- when it is saved, so a recall in flight across such a change never keeps what it removed.
+-- correction, a forgotten chat, an erased import), and so does deleting an imported chat that went
+-- to memory. Read before a recall is retrieved and compared when it is saved, so a recall in
+-- flight across such a change never keeps what it removed.
 CREATE TABLE IF NOT EXISTS recall_generation (
     id INTEGER PRIMARY KEY CHECK(id=1),
     value INTEGER NOT NULL

@@ -55,6 +55,24 @@ CASES = [
         'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',
         "pass",
     ),
+    (
+        "deleted-import-recalled-while-erasing",
+        "pi/conversation/hidden_records.py",
+        "if imported and _from_import(key, item):",
+        "if False:",
+    ),
+    (
+        "deleted-import-evidence-recalled",
+        "pi/conversation/hidden_records.py",
+        'found["evidence"] |= {row[0] for row in rows}',
+        "pass",
+    ),
+    (
+        "import-deletion-keeps-the-generation",
+        "pi/memory/import_deletion.py",
+        'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',
+        "pass",
+    ),
     ("shutdown-releases-inflight-upload", "pi/memory/service.py", "self.thread.join()", "pass"),
 ]
 SOURCE = "pi"

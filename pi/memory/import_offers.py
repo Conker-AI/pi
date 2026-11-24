@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 import threading
 import time
 from datetime import UTC, datetime
@@ -44,6 +45,21 @@ NOTE = (
     "to Conker, and the owner did not approve them as a memory."
 )
 PAUSE_SECONDS = 60.0
+# An erasure still waiting this long after its chat was deleted is an Inbox card (erasure_health).
+OVERDUE_SECONDS = 3 * 86400.0
+STILL_STORED = "A deleted imported chat's words are still stored in memory: "
+FIXES = {
+    "key": "MemoryGate refuses Pi's import key. Rotate the import listener's key, set "
+    "PI_MEMORYGATE_IMPORT_KEY to it and restart Pi.",
+    "source": "MemoryGate does not know Pi's import listener. Set PI_MEMORYGATE_IMPORT_SOURCE "
+    "to the one they went to and restart Pi.",
+    "elsewhere": "they went to another import listener. Set PI_MEMORYGATE_IMPORT_SOURCE back to "
+    "it and restart Pi.",
+    "unset": "Pi's import listener is not set up. Set PI_MEMORYGATE_IMPORT_SOURCE and "
+    "PI_MEMORYGATE_IMPORT_KEY, then restart Pi.",
+    "slow": "MemoryGate has not erased them in 3 days. Check that MemoryGate runs; Pi keeps "
+    "trying.",
+}
 
 
 class ListenerClient:
@@ -186,12 +202,15 @@ class Offers:
         self.paused_until = 0.0
         self.problem: str | None = None
         self.erase_problem: str | None = None
+        # The HTTP code with which the listener itself refused an erasure (401, 403, 404).
+        self.erase_refused: int | None = None
 
     def drain_once(self, limit: int = 20) -> int:
         if self.client is None or self.clock() < self.paused_until:
             return 0
         # A deleted chat's words leave MemoryGate before any new word goes in.
         erased = import_deletion.erase_waiting(self.store, self.client, self.clock, limit)
+        self.erase_refused = erased.paused if erased.paused in (401, 403, 404) else None
         if erased.paused:
             self.paused_until = self.clock() + PAUSE_SECONDS
             self.problem = _refused(erased.paused)
@@ -328,4 +347,45 @@ def status(store, offers: Offers | None) -> dict:
         "erasing": erasing.get("pending", 0),
         "notFoundToErase": erasing.get("missing", 0),
         "problem": problem,
+    }
+
+
+def erasure_health(store, offers: Offers | None, *, now: float | None = None) -> dict:
+    """Pi's health check `import_erasures`: degraded while words of a deleted imported chat stay in
+    MemoryGate OVERDUE_SECONDS after the deletion, or at once while the import listener refuses
+    their erasure (401, 403, 404). Pi's self-check files it as one Inbox card at once
+    (`alertAfterSeconds`) and closes it when that is over. Counts and fixed words only; one with
+    no deletion time counts as overdue, and an unreadable table as broken."""
+    now = time.time() if now is None else now
+    try:
+        with store._connect() as db:
+            rows = db.execute(
+                "SELECT e.source_key, COUNT(*), MIN(COALESCE(d.deleted_at, 0)) "
+                "FROM import_evidence_erasures e "
+                "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
+                "WHERE e.state='pending' GROUP BY e.source_key"
+            ).fetchall()
+    except (sqlite3.Error, RuntimeError):
+        return {"status": "unavailable", "reason": "Pi could not read what it still has to erase."}
+    waiting = sum(row[1] for row in rows)
+    client = offers.client if offers is not None else None
+    refused = offers.erase_refused if offers is not None and waiting else None
+    late = [row[0] for row in rows if now - row[2] >= OVERDUE_SECONDS]
+    if not refused and not late:
+        return {"status": "ok", "erasing": waiting}
+    if refused in (401, 403):
+        fix = "key"
+    elif refused == 404:
+        fix = "source"
+    elif client is None:
+        fix = "unset"
+    elif any(key is not None and key != client.source_key for key in late):
+        fix = "elsewhere"
+    else:
+        fix = "slow"
+    return {
+        "status": "degraded",
+        "erasing": waiting,
+        "reason": STILL_STORED + FIXES[fix],
+        "alertAfterSeconds": 0,
     }

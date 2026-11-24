@@ -7,7 +7,10 @@ A record is hidden when it cites a hidden chat or one of its messages, or when P
   the message id and the receiving agent (`receipt_ids`);
 - a memory Conker kept on its own carries no chat at all: keep_results names it;
 - a memory a hidden chat rewrote through a memory proposal keeps its id but its text came from
-  that chat, so it is hidden while the edit was applied or may have been (applying, unknown).
+  that chat, so it is hidden while the edit was applied or may have been (applying, unknown);
+- an imported chat the owner deleted (pi.memory.import_deletion) stays in MemoryGate until its
+  erasure there settles: its evidence is named by id, and what MemoryGate made from it while any
+  erasure waits (see LISTENER_MEMORY).
 
 `own` is the chat the reading is for. A chat in the Trash opened by its own id still recalls its
 own records, so with `own` set that chat counts as visible here; another hidden chat's records stay
@@ -21,6 +24,7 @@ from functools import lru_cache
 from uuid import NAMESPACE_URL, uuid5
 
 from pi.conversation import visibility
+from pi.memory.imports import LABELS
 
 # The MemoryGate kind of a recall package group's records, where Pi can name a hidden one by id.
 RECORD_KINDS = {"memories": "memory", "evidence": "evidence"}
@@ -28,6 +32,15 @@ RECORD_KINDS = {"memories": "memory", "evidence": "evidence"}
 # of every hidden chat, so the same formula would run once per result per message. The formula is
 # pure (no state, no clock), so a cached answer is never stale; it bounds memory, not correctness.
 _DERIVED_CACHE = 32768
+# A deleted imported chat's words stay in MemoryGate until its erasure settles, and saved recall
+# is cleared when it does. Its evidence is named by id, also once MemoryGate answered not found:
+# it gives that answer for another listener's event too. What MemoryGate made from it is not: a
+# listener memory's id is MemoryGate's own and recall names no evidence for it. So while any
+# erasure waits, every memory MemoryGate's listener made is left out, with every episode and
+# evidence titled as an imported chat (pi.memory.import_offers.event); all come back once none
+# waits.
+LISTENER_MEMORY = "automatic_listener"
+IMPORT_TITLES = tuple(f"{label}: " for label in LABELS.values())
 
 
 @lru_cache(maxsize=_DERIVED_CACHE)
@@ -130,7 +143,34 @@ def _records(db, agent_ids, own) -> dict[str, set[str]]:
             found["evidence"].add(evidence)
             found["analysis"].add(analysis)
             found["memory"].add(memory)
+    if _table(db, "import_evidence_erasures"):
+        rows = db.execute("SELECT evidence_id FROM import_evidence_erasures")
+        found["evidence"] |= {row[0] for row in rows}
     return found
+
+
+def erasing(db) -> bool:
+    """Whether a deleted imported chat's erasure in MemoryGate still waits (LISTENER_MEMORY)."""
+    return _table(db, "import_evidence_erasures") and (
+        db.execute(
+            "SELECT 1 FROM import_evidence_erasures WHERE state='pending' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+
+
+def _from_import(key, item) -> bool:
+    """A record that may hold a deleted imported chat's words while its erasure waits."""
+    if not isinstance(item, dict):
+        return False
+    if key == "memories":
+        return item.get("source_type") == LISTENER_MEMORY
+    title = item.get("title")
+    return (
+        key in ("episodes", "evidence")
+        and isinstance(title, str)
+        and title.startswith(IMPORT_TITLES)
+    )
 
 
 class Reading:
@@ -141,12 +181,19 @@ class Reading:
 
     def __init__(self):
         self._found: dict[tuple, dict[str, set[str]]] = {}
+        self._erasing: bool | None = None
 
     def records(self, db, agent_ids, exempt) -> dict[str, set[str]]:
         key = (tuple(sorted(set(agent_ids) - {None, ""})), exempt)
         if key not in self._found:
             self._found[key] = _records(db, key[0], exempt)
         return self._found[key]
+
+    def erasing(self, db) -> bool:
+        """Whether an imported chat's erasure waits, read once per reading."""
+        if self._erasing is None:
+            self._erasing = erasing(db)
+        return self._erasing
 
 
 def hidden_records(db, agent_ids=(), own=None) -> dict[str, set[str]]:
@@ -176,9 +223,10 @@ def _cited(item):
 def filter_cited(store, groups, agent_ids=(), own=None, reading=None, db=None) -> dict[str, list]:
     """Each group's items (`groups` maps a recall package group name to its list) without the
     records of a hidden chat other than `own`: named by `hidden_records`, or citing that chat or
-    one of its messages. Read on one snapshot; `reading` (a Reading) shares the named records
-    across the checks of one history build. `db`: a caller's connection, already in the snapshot
-    it reads, used instead of opening one."""
+    one of its messages; and while a deleted imported chat's erasure waits, what MemoryGate made
+    from an imported chat (LISTENER_MEMORY). Read on one snapshot; `reading` (a Reading) shares
+    what it read across the checks of one history build. `db`: a caller's connection, already in
+    the snapshot it reads, used instead of opening one."""
     if db is None:
         with store._connect() as db:
             db.execute("BEGIN")
@@ -200,11 +248,15 @@ def filter_cited(store, groups, agent_ids=(), own=None, reading=None, db=None) -
         if key in RECORD_KINDS
         for item in items
     )
-    records = (reading or Reading()).records(db, agent_ids, exempt) if named else {}
+    reading = reading or Reading()
+    records = reading.records(db, agent_ids, exempt) if named else {}
+    imported = reading.erasing(db)
 
     def hidden(key, item):
         identity = _text(item.get("id")) if isinstance(item, dict) else None
         if identity in records.get(RECORD_KINDS.get(key, ""), ()):
+            return True
+        if imported and _from_import(key, item):
             return True
         return any(s in gone or owner.get(m) in gone for s, m in _cited(item))
 

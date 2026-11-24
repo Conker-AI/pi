@@ -9,7 +9,10 @@ Each word of the chat that already went to MemoryGate is erased there too, with 
 made from it (analyses, the memory it alone supports): the deletion queues the evidence ids in the
 same transaction, and the background sender erases them before it offers anything new, retrying
 until MemoryGate answers (`erase_waiting`). The sender holds its lock for each offer, and the
-deletion takes the same lock, so no word of a chat is sent while or after it is deleted.
+deletion takes the same lock, so no word of a chat is sent while or after it is deleted. Until an
+erasure settles, recall and every saved recall leave out what may hold those words
+(pi.conversation.hidden_records), and one still waiting after three days, or refused by the
+listener, is an Inbox card (`import_offers.erasure_health`).
 """
 
 from __future__ import annotations
@@ -85,6 +88,10 @@ def delete_chat(store, chat_id: str, *, sending=None, source_key: str | None = N
                 "VALUES (?,?,?)",
                 [(evidence_id, chat_id, source_key) for evidence_id in evidence],
             )
+            if evidence:
+                # Recall leaves these words out from now on; one retrieved before is not kept
+                # (the recall generation, pi.memory.store).
+                db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")
             db.execute(
                 "DELETE FROM import_memory_offers WHERE message_id IN "
                 "(SELECT id FROM imported_messages WHERE chat_id=?)",
