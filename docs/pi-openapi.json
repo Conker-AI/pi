@@ -10164,6 +10164,81 @@
         }
       }
     },
+    "/insights/quiet/weeks": {
+      "get": {
+        "summary": "Weeks",
+        "description": "The last `weeks` ISO weeks in the owner's zone: what Conker raised, what became of it.",
+        "operationId": "weeks_insights_quiet_weeks_get",
+        "parameters": [
+          {
+            "name": "weeks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 26,
+              "minimum": 1,
+              "default": 8,
+              "title": "Weeks"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuietWeeks"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/archive": {
       "post": {
         "summary": "Archive Chats",
@@ -35751,6 +35826,35 @@
         ],
         "title": "Options"
       },
+      "Outcomes": {
+        "properties": {
+          "raised": {
+            "type": "integer",
+            "title": "Raised"
+          },
+          "actedOn": {
+            "type": "integer",
+            "title": "Actedon"
+          },
+          "dismissed": {
+            "type": "integer",
+            "title": "Dismissed"
+          },
+          "unanswered": {
+            "type": "integer",
+            "title": "Unanswered"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "raised",
+          "actedOn",
+          "dismissed",
+          "unanswered"
+        ],
+        "title": "Outcomes"
+      },
       "Output": {
         "properties": {
           "format": {
@@ -37025,6 +37129,121 @@
           "previous"
         ],
         "title": "QuietInsights"
+      },
+      "QuietWeek": {
+        "properties": {
+          "week": {
+            "type": "string",
+            "title": "Week"
+          },
+          "startsAt": {
+            "type": "number",
+            "title": "Startsat"
+          },
+          "endsAt": {
+            "type": "number",
+            "title": "Endsat"
+          },
+          "asks": {
+            "type": "integer",
+            "title": "Asks"
+          },
+          "raised": {
+            "type": "integer",
+            "title": "Raised"
+          },
+          "approvalsAsked": {
+            "type": "integer",
+            "title": "Approvalsasked"
+          },
+          "pushed": {
+            "type": "integer",
+            "title": "Pushed"
+          },
+          "actedOn": {
+            "type": "integer",
+            "title": "Actedon"
+          },
+          "dismissed": {
+            "type": "integer",
+            "title": "Dismissed"
+          },
+          "unanswered": {
+            "type": "integer",
+            "title": "Unanswered"
+          },
+          "usefulShare": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usefulshare"
+          },
+          "suggestions": {
+            "$ref": "#/components/schemas/Outcomes"
+          },
+          "questions": {
+            "$ref": "#/components/schemas/Outcomes"
+          },
+          "changeRequests": {
+            "$ref": "#/components/schemas/Outcomes"
+          },
+          "notices": {
+            "$ref": "#/components/schemas/Outcomes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "week",
+          "startsAt",
+          "endsAt",
+          "asks",
+          "raised",
+          "approvalsAsked",
+          "pushed",
+          "actedOn",
+          "dismissed",
+          "unanswered",
+          "usefulShare",
+          "suggestions",
+          "questions",
+          "changeRequests",
+          "notices"
+        ],
+        "title": "QuietWeek"
+      },
+      "QuietWeeks": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "timeZone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/QuietWeek"
+            },
+            "type": "array",
+            "title": "Weeks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "timeZone",
+          "weeks"
+        ],
+        "title": "QuietWeeks"
       },
       "QuietWindow": {
         "properties": {
