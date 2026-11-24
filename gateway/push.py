@@ -244,8 +244,8 @@ def _payload(title: str, url: str, tag: str) -> bytes:
 
 
 def message(item: dict) -> bytes:
-    """What the lock screen may show: a fixed title for the kind (only that Conker needs him when
-    the owner turned notification text off), and where a tap goes."""
+    """What the lock screen may show: a fixed title for the kind (only that Conker needs the owner
+    when the owner turned notification text off), and where a tap goes."""
     title = TITLES.get(item["kind"], GENERIC) if item.get("preview", True) else GENERIC
     return _payload(title, INBOX, item["tag"])
 

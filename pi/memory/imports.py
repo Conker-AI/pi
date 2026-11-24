@@ -94,9 +94,10 @@ def add_listener_columns(db, source: str | None = None) -> None:
     refusal, for tables an older Pi created without them.
 
     What an older Pi sent is attributed to `source`, the import listener configured at the
-    upgrade: a server has had only one, so that is where the words went. An erasure an older Pi
-    recorded under another listener is evidence of a second one and stays unknown, as does every
-    row when no listener is configured: NULL, still erasing (ERASING)."""
+    upgrade: a server that has had only one sent its words there. An erasure an older Pi recorded
+    under another listener is evidence of a second one: then any word may have gone to either,
+    and no offer or erasure is attributed. Nothing is when no listener is configured either: NULL,
+    still erasing (ERASING) until a listener erases it."""
     for table, column, kind in (
         ("import_memory_offers", "source_key", "TEXT"),
         ("import_evidence_erasures", "offered_via", "TEXT"),
@@ -105,6 +106,12 @@ def add_listener_columns(db, source: str | None = None) -> None:
         if column not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
     if not source:
+        return
+    if db.execute(
+        "SELECT 1 FROM import_evidence_erasures WHERE source_key IS NOT NULL AND source_key<>? "
+        "LIMIT 1",
+        (source,),
+    ).fetchone():
         return
     db.execute(
         "UPDATE import_memory_offers SET source_key=? "
