@@ -232,14 +232,20 @@ def agent_snapshot(db, execution):
 
 
 def snapshot(db, identities, execution):
-    """The agent's skills, then the ones the owner picked for this message."""
+    """The agent's skills, then the ones the owner picked for this message, and the agent's ones
+    left out for the turn limit.
+
+    One limit per turn across both lists (`MAX_SKILLS`): the owner's picks always load (a pick
+    the agent already carries counts once), and the agent's own fill what is left, in order."""
     validate_ids(identities)
     if identities and execution["privacy"]["harnessDisabled"]:
         _error("skills_no_harness", "No-harness mode excludes skill instructions.")
     if identities and _scoped_out(execution):
         _error("skills_scope", "Select skills on ordinary conversations.")
     carried = [value for value in execution.get("skills", []) if value.get("source") == "agent"]
-    selected = list(carried)
+    automatic = [value for value in carried if value["id"] not in identities]
+    over = automatic[agents.MAX_SKILLS - len(identities) :]
+    selected = [value for value in carried if value not in over]
     for identity in identities:
         row = _row(db, identity)
         if not row["enabled"]:
@@ -247,7 +253,10 @@ def snapshot(db, identities, execution):
         if identity not in {value["id"] for value in carried}:
             selected.append(_view(row, detail=True))
     _combined(selected)
-    return selected
+    skipped = [
+        {"id": value["id"], "reason": "over the limit of three skills per turn"} for value in over
+    ]
+    return selected, skipped
 
 
 def messages(execution):

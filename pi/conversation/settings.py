@@ -396,8 +396,10 @@ def reserve(
     if model_id is not None:
         snapshot["answerModelId"] = model_id
     if skill_ids:
-        # The agent's own skills first, then this message's picks, one list.
-        snapshot["skills"] = skills.snapshot(db, skill_ids, snapshot)
+        # The agent's own skills first, then this message's picks, one list under one limit.
+        snapshot["skills"], over = skills.snapshot(db, skill_ids, snapshot)
+        if over:
+            snapshot["skillsSkipped"] = snapshot.get("skillsSkipped", []) + over
     db.execute("INSERT INTO submission_settings VALUES (?,?)", (request_id, json.dumps(snapshot)))
     project_context.record_dependencies(db, identity, snapshot)
 
