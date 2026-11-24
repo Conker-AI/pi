@@ -378,6 +378,34 @@ def _impact_counts(store, day_start, week_start):
     return {"today": today, "week": week}
 
 
+def needs_you_items(store, day_start, now=None) -> list[dict]:
+    """What waits for the owner now, urgent first, then oldest first; at most 50.
+
+    The Inbox shows these, and web push (`push_queue`) may wake the owner's devices for them.
+    """
+    items = []
+    approval_turns = store.awaiting_approval()
+    items.extend(_needs_approval_items(store, day_start, approval_turns))
+    items.extend(_needs_suggestion_items(store))
+    items.extend(_needs_attention_items(store, approval_turns))
+    items.extend(plan_alerts.needs_you(store))
+    items.extend(self_check.needs_you(store))
+    items.extend(updates.needs_you(store))
+    items.extend(change_requests.needs_you(store))
+    items.extend(asks.needs_you(store))
+    items.extend(job_notes.needs_you(store, now))
+    items.extend(recall_notices.needs_you(store))
+
+    items.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
+    return items[:50]
+
+
+def local_day_start(store, now: float) -> float:
+    """When the owner's local day began (the owner's time zone; UTC before any preferences were saved)."""
+    zone, _ = _owner_zone(store)
+    return _local_midnight(datetime.fromtimestamp(now, zone).date(), zone)
+
+
 def inbox(store, *, now=None):
     """Generate the inbox view of everything that happened and everything that needs the owner."""
     now = now or time.time()
@@ -387,22 +415,7 @@ def inbox(store, *, now=None):
     # The week is the last seven local days, today included (DST-safe: local dates, not seconds).
     week_start = _local_midnight(today - timedelta(days=6), zone)
 
-    needs_you = []
-    approval_turns = store.awaiting_approval()
-    needs_you.extend(_needs_approval_items(store, day_start, approval_turns))
-    needs_you.extend(_needs_suggestion_items(store))
-    needs_you.extend(_needs_attention_items(store, approval_turns))
-    needs_you.extend(plan_alerts.needs_you(store))
-    needs_you.extend(self_check.needs_you(store))
-    needs_you.extend(updates.needs_you(store))
-    needs_you.extend(change_requests.needs_you(store))
-    needs_you.extend(asks.needs_you(store))
-    needs_you.extend(job_notes.needs_you(store, now))
-    needs_you.extend(recall_notices.needs_you(store))
-
-    needs_you.sort(key=lambda x: (not x.get("urgency", {}).get("urgent", False), x["since"]))
-    needs_you = needs_you[:50]  # Limit to 50
-
+    needs_you = needs_you_items(store, day_start, now)
     handled = sorted(
         _handled_items(store, day_start)
         + plan_alerts.resets(store, day_start)

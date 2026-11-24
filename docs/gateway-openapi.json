@@ -667,6 +667,78 @@
         }
       }
     },
+    "/api/push": {
+      "get": {
+        "summary": "Read",
+        "description": "The server's public key (made on first use) and the devices with notifications on.",
+        "operationId": "read_api_push_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions": {
+      "post": {
+        "summary": "Subscribe",
+        "description": "Turn notifications on for the device this subscription names, for this sign-in: signing\nthis browser out turns it off. The other devices are told one more is on. With\n`\"renew\": true` (the browser after each sign-in) it only moves a device that is on to this\nsign-in, and a device that is off answers 404.",
+        "operationId": "subscribe_api_push_subscriptions_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push/subscriptions/{device}/delete": {
+      "post": {
+        "summary": "Unsubscribe",
+        "description": "Turn notifications off for one device; turning off one that is already off is fine.",
+        "operationId": "unsubscribe_api_push_subscriptions__device__delete_post",
+        "parameters": [
+          {
+            "name": "device",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/terminal": {
       "post": {
         "summary": "Terminal Create",

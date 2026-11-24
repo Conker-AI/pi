@@ -11,6 +11,7 @@ from pi.agents import (
     continuity,
     keep,
     prompt_templates,
+    push_queue,
     retired_workflows,
     skills,
     team_schema,
@@ -155,6 +156,7 @@ def install(db):
     db.executescript(background_thinking.SCHEMA)
     db.executescript(jobs.SCHEMA)
     continuity.initialize(db)
+    push_queue.initialize(db)
     db.executescript(drafts.SCHEMA)
     db.executescript(context_summaries.SCHEMA)
     attachments.initialize(db)
