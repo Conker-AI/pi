@@ -14,9 +14,12 @@ keeps its own record (`continuity_migrations`).
 
 from __future__ import annotations
 
+import os
+
 from pi.agents import change_requests, keep
 from pi.content import attachments
 from pi.core.migrations import Migration
+from pi.memory import import_offers
 from pi.memory import imports as assistant_imports
 from pi.owner import notice_merge
 from pi.setup import model_probes
@@ -54,6 +57,12 @@ def turn_columns(db):
     )
 
 
+def import_erasure_listener(db):
+    """The listener columns of imported words, with what an older Pi sent attributed to the
+    import listener configured now (PI_MEMORYGATE_IMPORT_SOURCE): see add_listener_columns."""
+    assistant_imports.add_listener_columns(db, import_offers.configured_source(os.environ))
+
+
 MIGRATIONS = (
     Migration("0001-turn-route-approval-usage", turn_columns),
     Migration("0002-setup-probe-operation", model_probes.add_operation),
@@ -64,5 +73,5 @@ MIGRATIONS = (
     Migration("0006-notices", notice_merge.merge_old_tables),
     Migration("0007-change-request-promise", change_requests.widen_promise, rebuild=True),
     # Which import listener each offer went to, so a deleted chat's erasure goes through it.
-    Migration("0008-import-erasure-listener", assistant_imports.add_listener_columns),
+    Migration("0008-import-erasure-listener", import_erasure_listener),
 )

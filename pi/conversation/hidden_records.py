@@ -38,8 +38,8 @@ _DERIVED_CACHE = 32768
 # listener memory's id is MemoryGate's own and recall names no evidence for it. So while any
 # erasure may still hold words (pi.memory.imports.ERASING: waiting, or not found by a listener
 # other than the one they went to), every memory MemoryGate's listener made is left out, with
-# every episode and evidence titled as an imported chat (pi.memory.import_offers.event); all
-# come back once none does.
+# every episode and evidence titled as an imported chat (pi.memory.import_offers.event), and from
+# the library every analysis and observation (DERIVED_CARDS); all come back once none does.
 LISTENER_MEMORY = "automatic_listener"
 IMPORT_TITLES = tuple(f"{label}: " for label in LABELS.values())
 
@@ -174,13 +174,18 @@ def _from_import(key, item) -> bool:
 
 # The recall package group of each kind of MemoryGate library card.
 CARD_GROUPS = {"memory": "memories", "episode": "episodes", "evidence": "evidence"}
+# Library cards recall never returns, made from evidence: an analysis quotes the words it read and
+# an observation is written from what was read; neither card names where that came from.
+DERIVED_CARDS = frozenset({"analysis", "observation"})
 
 
 def from_import(card) -> bool:
     """A library card (its `type` is the kind) that may hold a deleted imported chat's words: left
-    out, as from recall, while `erasing` is true."""
+    out, as from recall, while `erasing` is true; every analysis and observation with them."""
     kind = card.get("type") if isinstance(card, dict) else None
-    return _from_import(CARD_GROUPS.get(kind, ""), card) if isinstance(kind, str) else False
+    if not isinstance(kind, str):
+        return False
+    return kind in DERIVED_CARDS or _from_import(CARD_GROUPS.get(kind, ""), card)
 
 
 class Reading:

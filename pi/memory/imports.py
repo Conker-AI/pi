@@ -81,16 +81,22 @@ CREATE TABLE IF NOT EXISTS import_evidence_erasures (
 # An erasure whose words MemoryGate may still hold: it waits, or MemoryGate's answer of not found
 # came from a listener that is not the one they were offered to (that answer is the same for
 # another listener's event), or Pi does not know that one. Fails closed for rows from before
-# offers recorded their listener. Columns of import_evidence_erasures, unqualified.
+# offers recorded their listener that it could not attribute (add_listener_columns). Columns of
+# import_evidence_erasures, unqualified.
 ERASING = (
     "(state='pending' OR (state='missing' AND (offered_via IS NULL OR source_key IS NULL "
     "OR source_key<>offered_via)))"
 )
 
 
-def add_listener_columns(db) -> None:
+def add_listener_columns(db, source: str | None = None) -> None:
     """Migration: the listener each offer went to, and each erasure's offered listener and last
-    refusal, for tables an older Pi created without them. Their rows keep NULL: unknown."""
+    refusal, for tables an older Pi created without them.
+
+    What an older Pi sent is attributed to `source`, the import listener configured at the
+    upgrade: a server has had only one, so that is where the words went. An erasure an older Pi
+    recorded under another listener is evidence of a second one and stays unknown, as does every
+    row when no listener is configured: NULL, still erasing (ERASING)."""
     for table, column, kind in (
         ("import_memory_offers", "source_key", "TEXT"),
         ("import_evidence_erasures", "offered_via", "TEXT"),
@@ -98,6 +104,18 @@ def add_listener_columns(db) -> None:
     ):
         if column not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+    if not source:
+        return
+    db.execute(
+        "UPDATE import_memory_offers SET source_key=? "
+        "WHERE source_key IS NULL AND evidence_id IS NOT NULL",
+        (source,),
+    )
+    db.execute(
+        "UPDATE import_evidence_erasures SET offered_via=?, source_key=? "
+        "WHERE offered_via IS NULL AND (source_key IS NULL OR source_key=?)",
+        (source, source, source),
+    )
 
 
 class ImportRefused(ServiceError):

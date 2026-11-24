@@ -96,10 +96,13 @@ MemoryGate blanks the evidence and removes its analyses, links and each listener
 else supports; a memory the owner wrote keeps its text. A failure is retried with backoff, a
 refused listener pauses the sender, and an event MemoryGate does not have is kept as missing;
 each erasure goes only through the listener its words went to, which Pi records with each offer
-(another one waits, named in the problem; for a word offered before Pi recorded it, the configured
-listener stands in, and its "not found" does not count as erased, since MemoryGate gives that
-answer for another listener's event too: each other listener configured later is asked once);
-`GET /imports` counts both (`memory.erasing`, `memory.notFoundToErase`). A word whose offer was
+(another one waits, named in the problem). The upgrade that added this record attributes what an
+older Pi sent to the listener configured at that start (`PI_MEMORYGATE_IMPORT_SOURCE`), since a
+server has had only one. A word Pi still cannot place (no listener was configured then, or an older Pi
+had queued its erasure under another one) goes through the configured listener, whose "not found"
+does not count as erased, since MemoryGate gives that answer for another listener's event too;
+each other listener configured later is asked once. `GET /imports` counts both (`memory.erasing`,
+`memory.notFoundToErase`). A word whose offer was
 saved by MemoryGate but whose answer never reached Pi has no evidence id and cannot be erased this
 way.
 
@@ -108,7 +111,10 @@ them out (`pi.conversation.hidden_records`, the rule for chats in the Trash): a 
 `conker.recall`, saved recall, the chat view, retries and owner search. The deleted chat's evidence is left out
 by id. A memory MemoryGate's listener made from it is not named by anything Pi holds, so while any
 erasure waits every `automatic_listener` memory, and every episode and evidence titled
-"Imported from ...", is left out; they come back once none waits. Deleting the chat advances the
+"Imported from ...", is left out, and owner search leaves out every analysis and observation too;
+they come back once none waits. A word Pi cannot place that no listener erases keeps this so
+for good: the Inbox card says Conker cannot tell which memory listener these words went to. There
+is no way yet for the owner to confirm such an erasure by hand. Deleting the chat advances the
 recall generation, so a recall retrieved before it is not kept. Pi's health check
 `import_erasures` turns degraded when an erasure still waits three days after the deletion, or at
 once when the listener refuses it (401, 403, 404, kept on the erasure, so a restart does not

@@ -268,7 +268,10 @@ def test_not_found_where_pi_does_not_know_the_words_went_stays_erasing(setup):
     Memory(store, Recalls(package())).prepare(tid, "Anything?")
     assert memory_store.context(store, tid)["package"]["memories"] == [OWN]
     check = health(store, sender, deleted_at(store) + 3 * DAY + 1)
-    assert check["status"] == "degraded" and "PI_MEMORYGATE_IMPORT_SOURCE back" in check["reason"]
+    # Not "set the listener back": Pi does not know which one that would be.
+    assert check["status"] == "degraded" and "back" not in check["reason"]
+    assert "cannot tell which memory listener" in check["reason"]
+    assert len(check["reason"]) <= self_check.REASON_CHARS
     # The same listener is not asked again; another one configured later is, once.
     sent = len(listener.requests)
     sender.drain_once()
@@ -338,6 +341,9 @@ def test_owner_search_leaves_out_a_deleted_import_while_its_erasure_waits(setup)
         },
         {"type": "episode", "id": "ep-1", "title": TITLE + " needle", "preview": SECRET},
         {"type": "evidence", "id": "ev-1", "title": "needle", "preview": SECRET},
+        # Made from the evidence; their cards name no source.
+        {"type": "analysis", "id": "an-1", "title": "needle", "preview": SECRET},
+        {"type": "observation", "id": "ob-1", "title": "needle", "preview": SECRET},
         {
             "type": "memory",
             "id": "m-own",
@@ -357,5 +363,5 @@ def test_owner_search_leaves_out_a_deleted_import_while_its_erasure_waits(setup)
     assert found() == {"m-own"}
     listener.answers = [erased("ev-1")]
     assert sender.drain_once() == 1
-    # MemoryGate blanked the erased evidence; this stand-in still lists all four.
+    # MemoryGate blanked the erased evidence; this stand-in still lists them all.
     assert found() == {card["id"] for card in cards}

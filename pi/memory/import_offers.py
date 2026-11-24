@@ -57,6 +57,9 @@ FIXES = {
     "it and restart Pi.",
     "unset": "Pi's import listener is not set up. Set PI_MEMORYGATE_IMPORT_SOURCE and "
     "PI_MEMORYGATE_IMPORT_KEY, then restart Pi.",
+    # Sent by a Pi that did not record where, and not found where Pi looked (docs/imports.md).
+    "unknown": "Conker cannot tell which memory listener these words went to, so memories made "
+    "from imported chats stay out of recall.",
     "slow": "MemoryGate has not erased them in 3 days. Check that MemoryGate runs; Pi keeps "
     "trying.",
 }
@@ -121,6 +124,12 @@ class ListenerClient:
 
     def close(self):
         self.http.close()
+
+
+def configured_source(environ) -> str | None:
+    """The import listener's source key set in `environ`, None when none or not a valid one."""
+    source = environ.get("PI_MEMORYGATE_IMPORT_SOURCE", "").strip()
+    return source if SOURCE_KEY.fullmatch(source) else None
 
 
 def from_environment(environ) -> ListenerClient | None:
@@ -360,14 +369,18 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
     key = client.source_key if client is not None else None
     try:
         with store._connect() as db:
-            waiting, oldest, refused, elsewhere = db.execute(
+            waiting, oldest, refused, unknown, elsewhere = db.execute(
                 "SELECT COUNT(*), MIN(COALESCE(d.deleted_at, 0)), "
                 # Refused by the listener configured now, for an erasure that goes through it.
                 "MAX(CASE WHEN e.state='pending' AND (e.source_key IS NULL OR e.source_key=?) "
                 "THEN e.refused END), "
-                # Under another listener, or one MemoryGate's listener did not have.
-                "MIN(CASE WHEN e.state='missing' OR (e.source_key IS NOT NULL "
-                "AND e.source_key IS NOT ?) THEN COALESCE(d.deleted_at, 0) END) "
+                # Not found, and Pi does not know which listener the words went to.
+                "MIN(CASE WHEN e.state='missing' AND e.offered_via IS NULL "
+                "THEN COALESCE(d.deleted_at, 0) END), "
+                # Under another listener: the one they went to did not answer for them.
+                "MIN(CASE WHEN (e.state='missing' AND e.offered_via IS NOT NULL) OR "
+                "(e.state='pending' AND e.source_key IS NOT NULL AND e.source_key IS NOT ?) "
+                "THEN COALESCE(d.deleted_at, 0) END) "
                 "FROM import_evidence_erasures e "
                 "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
                 f"WHERE {imports.ERASING}",
@@ -384,6 +397,8 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
         fix = "source"
     elif client is None:
         fix = "unset"
+    elif unknown is not None and now - unknown >= OVERDUE_SECONDS:
+        fix = "unknown"
     elif elsewhere is not None and now - elsewhere >= OVERDUE_SECONDS:
         fix = "elsewhere"
     else:
