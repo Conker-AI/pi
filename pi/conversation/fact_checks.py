@@ -15,6 +15,7 @@ from pi.conversation import settings as session_settings
 from pi.core import once
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
+from pi.models import owner_choices
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -232,16 +233,20 @@ def _prepare(store, sid, mid, body):
             raise CheckError("not_configured", "Fact checks need a model configuration.", 503)
         routes = {model["id"]: model["route"] for model in configuration["models"]}
 
-        if body.model_id is None:
+        # The owner's first usable model for this job, when the request names none.
+        chosen = body.model_id or owner_choices.first(
+            store, configuration, owner_choices.FACT_CHECK
+        )
+        if chosen is None:
             role = "routing"
             routing = configuration["roleSettings"]["roles"]["routing"]
             models = {routing["modelId"]}
             if routing["failure"] == "fallback":
                 models.update(routing["fallbackModelIds"])
         else:
-            if body.model_id not in routes:
+            if chosen not in routes:
                 raise CheckError("unknown_model", "Unknown fact check model.", 422)
-            role, models = "answer", {body.model_id}
+            role, models = "answer", {chosen}
 
         message = store.get_message(mid)
         if message is None or message["session_id"] != sid:
@@ -326,7 +331,7 @@ def _check(store, providers, sid: str, mid: str, body: Check):
             role,
             prompt,
             providers,
-            **cast("dict[str, Any]", {"override": body.model_id} if body.model_id else {}),
+            **cast("dict[str, Any]", {"override": next(iter(models))} if role == "answer" else {}),
         )
 
         parsed = _parse_fact_check_result(decision["completion"].text, source_ids)

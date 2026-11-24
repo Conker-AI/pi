@@ -16,6 +16,7 @@ from pydantic import Field
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 from pi.models import effort as model_effort
+from pi.models import owner_choices
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 
@@ -118,11 +119,10 @@ def parse(text: str, models: frozenset[str] = frozenset()) -> dict:
     }
 
 
-def answer_models(configuration: dict) -> list[dict]:
+def answer_models(configuration: dict, preferred: list[str] | None = None) -> list[dict]:
     """The models the answer role may use, with what the owner wrote about each; none when there
-    is no choice to make (fewer than two)."""
-    providers = {p["id"] for p in configuration["providers"] if p["enabled"]}
-    eligible = configuration["roleSettings"]["roles"]["answer"]["eligibleModelIds"]
+    is no choice to make (fewer than two). `preferred` (the owner's list for the mode, already
+    kept to usable models by `owner_choices.preferred`) narrows and orders them when not empty."""
     models = {m["id"]: m for m in configuration["models"] if m["enabled"]}
     offered = [
         {
@@ -130,10 +130,22 @@ def answer_models(configuration: dict) -> list[dict]:
             "name": models[i]["name"],
             "about": models[i]["routingDescription"] or models[i]["name"],
         }
-        for i in dict.fromkeys(eligible)
-        if i in models and models[i]["providerId"] in providers
+        for i in (preferred or owner_choices.usable(configuration))
     ]
     return offered if len(offered) > 1 else []
+
+
+def _owner_choices(store, proposal: dict, mode: str, preferred: list[str]) -> dict:
+    """The owner's Think setting and a mode list of one model decide those parts themselves."""
+    reasons = dict(proposal["reasons"])
+    think = owner_choices.think(store)
+    if think is not None:
+        proposal = {**proposal, "think": think}
+        reasons["think"] = f"Your Think setting is {'on' if think else 'off'}."
+    if len(preferred) == 1:
+        proposal = {**proposal, "answerModelId": preferred[0]}
+        reasons["model"] = f"The only model you chose for {mode.capitalize()} mode."
+    return {**proposal, "reasons": reasons}
 
 
 def propose(store, providers, body: Request, *, source_privacy) -> dict:
@@ -155,7 +167,13 @@ def propose(store, providers, body: Request, *, source_privacy) -> dict:
         raise ProposalError(
             "not_configured", "Auto needs a routing model. Choose one in Models settings.", 503
         )
-    offered = answer_models(saved["configuration"])
+    preferred = (
+        owner_choices.preferred(store, saved["configuration"], owner_choices.MODE_MODELS[body.mode])
+        if body.mode in owner_choices.MODE_MODELS
+        else []
+    )
+    offered = answer_models(saved["configuration"], preferred)
+    usual = owner_choices.complexity(store)
     messages = [
         Message("system", f"{INSTRUCTIONS}{MODEL_INSTRUCTIONS if offered else ''}"),
         Message(
@@ -165,6 +183,8 @@ def propose(store, providers, body: Request, *, source_privacy) -> dict:
                     "message": body.text,
                     "guidance": MODE_INSTRUCTIONS[body.mode],
                     **({"models": offered} if offered else {}),
+                    # The owner's own word on how hard his requests usually are; this one decides.
+                    **({"usualComplexity": usual} if usual else {}),
                 },
                 ensure_ascii=False,
             ),
@@ -178,7 +198,7 @@ def propose(store, providers, body: Request, *, source_privacy) -> dict:
             "unavailable", "Auto could not choose settings. Choose them yourself or try again.", 503
         ) from None
     return {
-        **proposal,
+        **_owner_choices(store, proposal, body.mode, preferred),
         "modelId": decision["modelId"],
         "configurationRevision": saved["revision"],
     }
