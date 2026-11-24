@@ -337,3 +337,43 @@ def test_recall_retrieved_before_saved_recall_was_cleared_is_not_saved(tmp_path)
     memory_store.save_context(store, current, "ok", recalled, memory_store.generation(store))
     assert memory_store.context(store, current)["package"] == recalled
     store.close()
+
+
+def test_a_deleted_imported_chat_stays_out_of_recall_while_its_erasure_waits(tmp_path):
+    # MemoryGate holds its words until the erasure settles (pi.memory.import_deletion): its
+    # evidence by id, and what the listener made from an imported chat, are left out until then.
+    from pi.conversation import hidden_records
+    from pi.memory import import_deletion
+
+    store = Store(tmp_path / "pi.db")
+    with store._connect() as db:
+        db.execute("INSERT INTO imported_chats VALUES ('imp_1','claude','c1','Private',0,0,0,0)")
+        db.execute(
+            "INSERT INTO imported_messages(id,chat_id,seq,export_id,author,text) "
+            "VALUES ('im_1','imp_1',0,'m1','user','my pin is 4417')"
+        )
+        db.execute(
+            "INSERT INTO import_memory_offers(message_id,state,evidence_id) "
+            "VALUES ('im_1','sent','ev-1')"
+        )
+    before = memory_store.generation(store)
+    import_deletion.delete_chat(store, "imp_1", source_key="assistant-imports")
+    assert memory_store.generation(store) == before + 1  # a recall in flight is not kept
+    own = {"id": "m-own", "text": "tea", "source_type": "user"}
+    recalled = {
+        "memories": [
+            {"id": "m-imp", "text": "my pin is 4417", "source_type": "automatic_listener"},
+            own,
+        ],
+        "episodes": [{"id": "ep-1", "title": "Imported from Claude: Private"}],
+        "evidence": [{"id": "ev-1", "title": "Forgotten listener event"}],
+    }
+    shown = hidden_records.filter_package(store, recalled)
+    assert (shown["memories"], shown["episodes"], shown["evidence"]) == ([own], [], [])
+    with store._connect() as db:  # not found, where Pi does not know the words went: may be held
+        db.execute("UPDATE import_evidence_erasures SET state='missing'")
+    assert hidden_records.filter_package(store, recalled)["memories"] == [own]
+    with store._connect() as db:
+        db.execute("DELETE FROM import_evidence_erasures")
+    assert hidden_records.filter_package(store, recalled) is recalled
+    store.close()

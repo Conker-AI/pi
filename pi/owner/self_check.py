@@ -3,8 +3,9 @@
 Every few minutes the worker reads the same checks as `GET /health` (Pi's database, memory, the
 local and hosted models, voice, ToolGate, the clean-up after deleted chats). A check that stays
 `unavailable` or `degraded` for PERSIST_SECONDS raises one alert, an Inbox card saying what is
-broken and since when; a blip shorter than that raises nothing. When the check works again the
-alert closes and the Inbox's handled list says so. The owner may dismiss an alert; it stays
+broken and since when; a blip shorter than that raises nothing. A check that waits on its own
+before it reports a failure says so (`alertAfterSeconds`, never longer) and is raised sooner.
+When the check works again the alert closes and the Inbox's handled list says so. The owner may dismiss an alert; it stays
 hidden until that check recovers and breaks again, and its recovery is not announced. After a
 stop longer than STALE_SECONDS, a broken check starts its wait again. An `unknown` status (a
 provider that is configured but not proven) is not an alert.
@@ -60,6 +61,7 @@ NAMES = {
     "speech": "Voice",
     "action_boundary": "Tools (ToolGate)",
     "forget_followups": "Clean-up after deleted chats",
+    "import_erasures": "Erasing deleted imported chats",
 }
 
 
@@ -78,6 +80,14 @@ def _name(check: str) -> str:
 def _reason(check: dict) -> str:
     reason = check.get("reason")
     return reason[:REASON_CHARS] if isinstance(reason, str) else ""
+
+
+def _wait(check: dict) -> float:
+    """How long a failure lasts before it is raised: PERSIST_SECONDS unless the check says less."""
+    wait = check.get("alertAfterSeconds")
+    if isinstance(wait, (int, float)) and not isinstance(wait, bool) and wait >= 0:
+        return min(float(wait), PERSIST_SECONDS)
+    return PERSIST_SECONDS
 
 
 def _one(db, name: str, check: dict, now: float) -> dict | None:
@@ -106,7 +116,7 @@ def _one(db, name: str, check: dict, now: float) -> dict | None:
             (status, _reason(check), alert["id"]),
         )
         return None
-    if broken and now - since >= PERSIST_SECONDS:
+    if broken and now - since >= _wait(check):
         identity = "sc_" + uuid.uuid4().hex
         db.execute(
             "INSERT INTO self_check_alerts VALUES (?,?,?,?,?,NULL,NULL)",

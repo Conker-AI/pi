@@ -5,10 +5,11 @@ from contextlib import closing
 
 import pytest
 
-from pi.conversation import forget_queue, forgetting, upgrades
+from pi.conversation import forget_queue, forgetting, hidden_records, upgrades
 from pi.conversation.store import Store
 from pi.core import migrations
 from pi.core.version import VERSION
+from pi.memory import imports
 
 IDS = [step.id for step in upgrades.MIGRATIONS]
 TURN_COLUMNS = (
@@ -69,6 +70,13 @@ def old_database(path):
             db.execute(f"ALTER TABLE turns DROP COLUMN {column}")
         db.execute("ALTER TABLE attachments DROP COLUMN storage")
         db.execute("ALTER TABLE setup_model_probe_requests DROP COLUMN operation")
+        db.execute("ALTER TABLE import_memory_offers DROP COLUMN source_key")
+        db.execute("ALTER TABLE import_evidence_erasures DROP COLUMN offered_via")
+        db.execute("ALTER TABLE import_evidence_erasures DROP COLUMN refused")
+        db.execute(
+            "INSERT INTO import_evidence_erasures(evidence_id, chat_id, source_key, state) "
+            "VALUES ('ev-old','imp_old','assistant-imports','missing')"
+        )
         db.commit()
         assert not columns(db, "turns") & set(TURN_COLUMNS)
 
@@ -83,6 +91,7 @@ def test_ids_are_append_only():
         "0005-keep-result-agent-team",
         "0006-notices",
         "0007-change-request-promise",
+        "0008-import-erasure-listener",
     ]
 
 
@@ -94,7 +103,8 @@ def test_a_fresh_database_records_every_migration(tmp_path):
     assert {row[2] for row in recorded} == {VERSION}
 
 
-def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path):
+def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path, monkeypatch):
+    monkeypatch.delenv("PI_MEMORYGATE_IMPORT_SOURCE", raising=False)
     path = tmp_path / "pi.db"
     old_database(path)
     with closing(Store(path)) as store:
@@ -103,6 +113,11 @@ def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path):
             assert set(TURN_COLUMNS) <= columns(db, "turns")
             assert "storage" in columns(db, "attachments")
             assert "operation" in columns(db, "setup_model_probe_requests")
+            assert "source_key" in columns(db, "import_memory_offers")
+            assert {"offered_via", "refused"} <= columns(db, "import_evidence_erasures")
+            # Pi did not record where its words went and no listener is configured to say:
+            # not found does not settle it.
+            assert hidden_records.erasing(db)
             assert db.execute("SELECT acted FROM turns WHERE id='t1'").fetchone()[0] == 0
             assert [r[0] for r in db.execute("SELECT target_id FROM keep_results")] == ["job_1"]
             indexes = {
@@ -121,6 +136,51 @@ def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path):
         new = store.start_turn(store.create_session())
         assert store.get_turn(new)["usage_version"] == 1
     assert [row[0] for row in ledger(path)] == IDS
+
+
+@pytest.mark.parametrize("listener", ["assistant-imports", None, "../evidence"])
+def test_an_upgrade_attributes_what_an_older_pi_sent_to_the_listener_configured(
+    tmp_path, monkeypatch, listener
+):
+    # An older Pi did not record which import listener its words went to; a server has had one.
+    if listener:
+        monkeypatch.setenv("PI_MEMORYGATE_IMPORT_SOURCE", listener)
+    else:
+        monkeypatch.delenv("PI_MEMORYGATE_IMPORT_SOURCE", raising=False)
+    path = tmp_path / "pi.db"
+    old_database(path)  # ev-old: not found by assistant-imports
+    with closing(sqlite3.connect(path)) as db:
+        db.executescript(
+            "INSERT INTO imported_chats VALUES ('imp_kept','claude','x1','Kept',1,1,1,1);"
+            "INSERT INTO imported_messages(id,chat_id,seq,export_id,author,text) "
+            "VALUES ('imsg_kept','imp_kept',0,'m1','user','hello');"
+            "INSERT INTO import_memory_offers(message_id,state,evidence_id) "
+            "VALUES ('imsg_kept','sent','ev-sent');"
+            # Queued by an older Pi under another listener: there were two, so it stays unknown.
+            "INSERT INTO import_evidence_erasures(evidence_id,chat_id,source_key,state) "
+            "VALUES ('ev-other','imp_old','other-imports','missing'), "
+            "('ev-unset','imp_old',NULL,'pending');"
+        )
+    with closing(Store(path)) as store, store._connect() as db:
+        still = {
+            row[0]
+            for row in db.execute(
+                f"SELECT evidence_id FROM import_evidence_erasures WHERE {imports.ERASING}"
+            )
+        }
+        via = dict(db.execute("SELECT evidence_id, offered_via FROM import_evidence_erasures"))
+        routed = db.execute(
+            "SELECT source_key FROM import_evidence_erasures WHERE evidence_id='ev-unset'"
+        ).fetchone()[0]
+        offer = db.execute("SELECT source_key FROM import_memory_offers").fetchone()[0]
+    if listener == "assistant-imports":
+        # Its not found settles; the one deleted while unset now goes only through it.
+        assert still == {"ev-other", "ev-unset"} and offer == listener
+        assert via == {"ev-old": listener, "ev-other": None, "ev-unset": listener}
+        assert routed == listener
+    else:  # none configured, or not a source key: nothing is attributed
+        assert still == {"ev-old", "ev-other", "ev-unset"} and offer is None
+        assert set(via.values()) == {None} and routed is None
 
 
 def test_starting_again_applies_nothing_new(tmp_path):

@@ -38,6 +38,7 @@ from pi.api.routes import definitions as definitions_api
 from pi.api.routes import drafts as drafts_api
 from pi.api.routes import filesystem as filesystem_api
 from pi.api.routes import forgetting as forgetting_api
+from pi.api.routes import imports as imports_api
 from pi.api.routes import inbox as inbox_api
 from pi.api.routes import inference as inference_api
 from pi.api.routes import insights as insights_api
@@ -406,6 +407,8 @@ def health():
             if getattr(app.state, "forget_followups", None) is not None
             else {"status": "not_configured", "reason": "Pi's follow-up worker is not running"}
         ),
+        # Words of deleted imported chats MemoryGate still holds (pi.memory.import_offers).
+        "import_erasures": imports_api.erasure_health(app.state),
     }
     degraded = sorted(name for name, c in checks.items() if c["status"] not in HEALTHY)
     result = {
@@ -429,10 +432,7 @@ app.state.health_probe = health
 app.include_router(sessions_api.router(lambda: app.state, require_key, require_admin))
 app.include_router(forgetting_api.router(lambda: app.state, require_owner))
 
-
 app.include_router(memory_api.router(lambda: app.state, require_key, require_owner))
-from pi.api.routes import imports as imports_api  # noqa: E402
-
 app.include_router(
     imports_api.router(
         lambda: app.state.store, lambda: getattr(app.state, "import_offers", None), require_owner

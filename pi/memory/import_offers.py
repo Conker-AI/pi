@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 import threading
 import time
 from datetime import UTC, datetime
@@ -44,6 +45,24 @@ NOTE = (
     "to Conker, and the owner did not approve them as a memory."
 )
 PAUSE_SECONDS = 60.0
+# An erasure still waiting this long after its chat was deleted is an Inbox card (erasure_health).
+OVERDUE_SECONDS = 3 * 86400.0
+STILL_STORED = "A deleted imported chat's words are still stored in memory: "
+FIXES = {
+    "key": "MemoryGate refuses Pi's import key. Rotate the import listener's key, set "
+    "PI_MEMORYGATE_IMPORT_KEY to it and restart Pi.",
+    "source": "MemoryGate does not know Pi's import listener. Set PI_MEMORYGATE_IMPORT_SOURCE "
+    "to the one they went to and restart Pi.",
+    "elsewhere": "they went to another import listener. Set PI_MEMORYGATE_IMPORT_SOURCE back to "
+    "it and restart Pi.",
+    "unset": "Pi's import listener is not set up. Set PI_MEMORYGATE_IMPORT_SOURCE and "
+    "PI_MEMORYGATE_IMPORT_KEY, then restart Pi.",
+    # Sent by a Pi that did not record where, and not found where Pi looked (docs/imports.md).
+    "unknown": "Conker cannot tell which memory listener these words went to, so memories made "
+    "from imported chats stay out of recall.",
+    "slow": "MemoryGate has not erased them in 3 days. Check that MemoryGate runs; Pi keeps "
+    "trying.",
+}
 
 
 class ListenerClient:
@@ -105,6 +124,12 @@ class ListenerClient:
 
     def close(self):
         self.http.close()
+
+
+def configured_source(environ) -> str | None:
+    """The import listener's source key set in `environ`, None when none or not a valid one."""
+    source = environ.get("PI_MEMORYGATE_IMPORT_SOURCE", "").strip()
+    return source if SOURCE_KEY.fullmatch(source) else None
 
 
 def from_environment(environ) -> ListenerClient | None:
@@ -240,10 +265,11 @@ class Offers:
             self._failed(row, refused, code)
             return "refused" if refused else "failed"
         with self.store._connect() as db:
+            # The listener too: only it can erase the event if the chat is deleted.
             db.execute(
                 "UPDATE import_memory_offers SET state='sent',evidence_id=?,sent_at=?,"
-                "error='' WHERE message_id=? AND state='pending'",
-                (evidence, self.clock(), row["message_id"]),
+                "error='',source_key=? WHERE message_id=? AND state='pending'",
+                (evidence, self.clock(), client.source_key, row["message_id"]),
             )
         return "sent"
 
@@ -328,4 +354,58 @@ def status(store, offers: Offers | None) -> dict:
         "erasing": erasing.get("pending", 0),
         "notFoundToErase": erasing.get("missing", 0),
         "problem": problem,
+    }
+
+
+def erasure_health(store, offers: Offers | None, *, now: float | None = None) -> dict:
+    """Pi's health check `import_erasures`: degraded while words of a deleted imported chat may
+    stay in MemoryGate (imports.ERASING) OVERDUE_SECONDS after the deletion, or at once while the
+    import listener refuses their erasure (401, 403, 404; kept on the row, so a restart does not
+    forget it). Pi's self-check files it as one Inbox card at once (`alertAfterSeconds`) and
+    closes it when that is over. Counts and fixed words only; one with no deletion time counts as
+    overdue, and an unreadable table as broken."""
+    now = time.time() if now is None else now
+    client = offers.client if offers is not None else None
+    key = client.source_key if client is not None else None
+    try:
+        with store._connect() as db:
+            waiting, oldest, refused, unknown, elsewhere = db.execute(
+                "SELECT COUNT(*), MIN(COALESCE(d.deleted_at, 0)), "
+                # Refused by the listener configured now, for an erasure that goes through it.
+                "MAX(CASE WHEN e.state='pending' AND (e.source_key IS NULL OR e.source_key=?) "
+                "THEN e.refused END), "
+                # Not found, and Pi does not know which listener the words went to.
+                "MIN(CASE WHEN e.state='missing' AND e.offered_via IS NULL "
+                "THEN COALESCE(d.deleted_at, 0) END), "
+                # Under another listener: the one they went to did not answer for them.
+                "MIN(CASE WHEN (e.state='missing' AND e.offered_via IS NOT NULL) OR "
+                "(e.state='pending' AND e.source_key IS NOT NULL AND e.source_key IS NOT ?) "
+                "THEN COALESCE(d.deleted_at, 0) END) "
+                "FROM import_evidence_erasures e "
+                "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
+                f"WHERE {imports.ERASING}",
+                (key, key),
+            ).fetchone()
+    except (sqlite3.Error, RuntimeError):
+        return {"status": "unavailable", "reason": "Pi could not read what it still has to erase."}
+    refused = refused if client is not None else None
+    if not refused and not (waiting and now - oldest >= OVERDUE_SECONDS):
+        return {"status": "ok", "erasing": waiting}
+    if refused in (401, 403):
+        fix = "key"
+    elif refused == 404:
+        fix = "source"
+    elif client is None:
+        fix = "unset"
+    elif unknown is not None and now - unknown >= OVERDUE_SECONDS:
+        fix = "unknown"
+    elif elsewhere is not None and now - elsewhere >= OVERDUE_SECONDS:
+        fix = "elsewhere"
+    else:
+        fix = "slow"
+    return {
+        "status": "degraded",
+        "erasing": waiting,
+        "reason": STILL_STORED + FIXES[fix],
+        "alertAfterSeconds": 0,
     }

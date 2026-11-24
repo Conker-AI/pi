@@ -360,8 +360,11 @@ def lexical(store, memory, toolgate, query, settings, stage):
                 partial = page.get("next_after") is not None or stage == "text"
                 with store._connect() as db:
                     gone = hidden_records(db, (getattr(memory.client, "agent_id", None),))
+                    imported = shared_hidden.erasing(db)
                 for row in page["objects"]:
-                    if (row.get("type"), row["id"]) in gone:
+                    if (row.get("type"), row["id"]) in gone or (
+                        imported and shared_hidden.from_import(row)
+                    ):
                         continue
                     add(
                         source,

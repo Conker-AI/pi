@@ -251,16 +251,17 @@ def replay(store, turn_id):
 
 def _require_visible_recall(store, turn_id, sid):
     """The saved input carries the turn's recall as text, which cannot be edited safely: refuse a
-    retry when part of that recall now comes from another chat that is forgotten or in the Trash
-    (pi.conversation.hidden_records). The chat's own records stay usable."""
+    retry when part of that recall now comes from another chat that is forgotten or in the Trash,
+    or from a deleted imported chat (pi.conversation.hidden_records). The chat's own records stay
+    usable."""
     from pi.memory import store as memory_store
 
     package = memory_store.context(store, turn_id).get("package")
     if hidden_records.filter_package(store, package, (), sid) is not package:
         raise context_controls.ContextError(
             "retry_source_unavailable",
-            "Part of what this answer recalled came from a chat that was forgotten or moved to "
-            "Trash. Ask again instead of retrying.",
+            "Part of what this answer recalled came from a chat that was forgotten, deleted or "
+            "moved to Trash. Ask again instead of retrying.",
         )
 
 
