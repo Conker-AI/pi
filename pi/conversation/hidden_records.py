@@ -24,7 +24,7 @@ from functools import lru_cache
 from uuid import NAMESPACE_URL, uuid5
 
 from pi.conversation import visibility
-from pi.memory.imports import LABELS
+from pi.memory.imports import ERASING, LABELS
 
 # The MemoryGate kind of a recall package group's records, where Pi can name a hidden one by id.
 RECORD_KINDS = {"memories": "memory", "evidence": "evidence"}
@@ -36,9 +36,10 @@ _DERIVED_CACHE = 32768
 # is cleared when it does. Its evidence is named by id, also once MemoryGate answered not found:
 # it gives that answer for another listener's event too. What MemoryGate made from it is not: a
 # listener memory's id is MemoryGate's own and recall names no evidence for it. So while any
-# erasure waits, every memory MemoryGate's listener made is left out, with every episode and
-# evidence titled as an imported chat (pi.memory.import_offers.event); all come back once none
-# waits.
+# erasure may still hold words (pi.memory.imports.ERASING: waiting, or not found by a listener
+# other than the one they went to), every memory MemoryGate's listener made is left out, with
+# every episode and evidence titled as an imported chat (pi.memory.import_offers.event); all
+# come back once none does.
 LISTENER_MEMORY = "automatic_listener"
 IMPORT_TITLES = tuple(f"{label}: " for label in LABELS.values())
 
@@ -150,11 +151,9 @@ def _records(db, agent_ids, own) -> dict[str, set[str]]:
 
 
 def erasing(db) -> bool:
-    """Whether a deleted imported chat's erasure in MemoryGate still waits (LISTENER_MEMORY)."""
+    """Whether MemoryGate may still hold a deleted imported chat's words (LISTENER_MEMORY)."""
     return _table(db, "import_evidence_erasures") and (
-        db.execute(
-            "SELECT 1 FROM import_evidence_erasures WHERE state='pending' LIMIT 1"
-        ).fetchone()
+        db.execute(f"SELECT 1 FROM import_evidence_erasures WHERE {ERASING} LIMIT 1").fetchone()
         is not None
     )
 
@@ -171,6 +170,17 @@ def _from_import(key, item) -> bool:
         and isinstance(title, str)
         and title.startswith(IMPORT_TITLES)
     )
+
+
+# The recall package group of each kind of MemoryGate library card.
+CARD_GROUPS = {"memory": "memories", "episode": "episodes", "evidence": "evidence"}
+
+
+def from_import(card) -> bool:
+    """A library card (its `type` is the kind) that may hold a deleted imported chat's words: left
+    out, as from recall, while `erasing` is true."""
+    kind = card.get("type") if isinstance(card, dict) else None
+    return _from_import(CARD_GROUPS.get(kind, ""), card) if isinstance(kind, str) else False
 
 
 class Reading:

@@ -68,6 +68,12 @@ CASES = [
         "pass",
     ),
     (
+        "not-found-elsewhere-settles",
+        "pi/memory/imports.py",
+        "(state='missing' AND (offered_via IS NULL",
+        "(0 AND (offered_via IS NULL",
+    ),
+    (
         "import-deletion-keeps-the-generation",
         "pi/memory/import_deletion.py",
         'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',

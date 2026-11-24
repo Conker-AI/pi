@@ -5,7 +5,7 @@ from contextlib import closing
 
 import pytest
 
-from pi.conversation import forget_queue, forgetting, upgrades
+from pi.conversation import forget_queue, forgetting, hidden_records, upgrades
 from pi.conversation.store import Store
 from pi.core import migrations
 from pi.core.version import VERSION
@@ -69,6 +69,13 @@ def old_database(path):
             db.execute(f"ALTER TABLE turns DROP COLUMN {column}")
         db.execute("ALTER TABLE attachments DROP COLUMN storage")
         db.execute("ALTER TABLE setup_model_probe_requests DROP COLUMN operation")
+        db.execute("ALTER TABLE import_memory_offers DROP COLUMN source_key")
+        db.execute("ALTER TABLE import_evidence_erasures DROP COLUMN offered_via")
+        db.execute("ALTER TABLE import_evidence_erasures DROP COLUMN refused")
+        db.execute(
+            "INSERT INTO import_evidence_erasures(evidence_id, chat_id, source_key, state) "
+            "VALUES ('ev-old','imp_old','assistant-imports','missing')"
+        )
         db.commit()
         assert not columns(db, "turns") & set(TURN_COLUMNS)
 
@@ -83,6 +90,7 @@ def test_ids_are_append_only():
         "0005-keep-result-agent-team",
         "0006-notices",
         "0007-change-request-promise",
+        "0008-import-erasure-listener",
     ]
 
 
@@ -103,6 +111,10 @@ def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path):
             assert set(TURN_COLUMNS) <= columns(db, "turns")
             assert "storage" in columns(db, "attachments")
             assert "operation" in columns(db, "setup_model_probe_requests")
+            assert "source_key" in columns(db, "import_memory_offers")
+            assert {"offered_via", "refused"} <= columns(db, "import_evidence_erasures")
+            # Pi did not record where its words went: not found does not settle it.
+            assert hidden_records.erasing(db)
             assert db.execute("SELECT acted FROM turns WHERE id='t1'").fetchone()[0] == 0
             assert [r[0] for r in db.execute("SELECT target_id FROM keep_results")] == ["job_1"]
             indexes = {

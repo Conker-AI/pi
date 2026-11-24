@@ -3,11 +3,16 @@ reads back (pi.conversation.hidden_records), and an erasure that does not settle
 the Inbox (pi.memory.import_offers.erasure_health, pi.owner.self_check). No network."""
 
 import json
+from types import SimpleNamespace
 
+import httpx
 import pytest
+from test_assistant_import_api import KEY
 from test_import_evidence_erase import SECRET, SOURCE, erased, sent_chat, setup  # noqa: F401
 
 from pi.context import controls as context_controls
+from pi.context import universal_search
+from pi.conversation import hidden_records
 from pi.conversation import settings as session_settings
 from pi.memory import import_deletion, import_offers
 from pi.memory import store as memory_store
@@ -205,14 +210,152 @@ def test_a_refused_listener_files_the_inbox_item_at_once(setup, code, fix):
     assert self_check.needs_you(store) == []
 
 
-def test_an_erasure_for_another_listener_names_the_setting_after_three_days(setup):
-    store, sender, *_ = setup
-    chat_id = sent_chat(store, sender, SECRET)
-    import_deletion.delete_chat(store, chat_id, sending=sender.sending, source_key="old-imports")
-    sender.drain_once()
+def erasing(store):
     with store._connect() as db:
-        deleted_at = db.execute("SELECT deleted_at FROM imported_chat_deletions").fetchone()[0]
-    assert health(store, sender, deleted_at + DAY)["status"] == "ok"
-    check = health(store, sender, deleted_at + 3 * DAY + 1)
+        return hidden_records.erasing(db)
+
+
+def deleted_at(store):
+    with store._connect() as db:
+        return db.execute("SELECT deleted_at FROM imported_chat_deletions").fetchone()[0]
+
+
+def offered_via(store, key):
+    """The words went to listener `key` (None: a Pi that did not record where)."""
+    with store._connect() as db:
+        db.execute("UPDATE import_memory_offers SET source_key=?", (key,))
+
+
+def configured(sender, listener, key):
+    """Pi restarted with listener `key`, on the same MemoryGate stand-in."""
+    transport = httpx.MockTransport(listener.handle)
+    client = import_offers.ListenerClient("http://memorygate:8020", key, KEY, transport=transport)
+    return import_offers.Offers(sender.store, client, clock=sender.clock)
+
+
+@pytest.mark.parametrize("configured_at_deletion", ["new-imports", None])
+def test_an_erasure_goes_only_through_the_listener_its_words_went_to(setup, configured_at_deletion):
+    # Imported with one listener; deleted with another configured, or with none.
+    store, sender, listener, _ = setup
+    chat_id = sent_chat(store, sender, SECRET)
+    offered_via(store, "old-imports")
+    import_deletion.delete_chat(
+        store, chat_id, sending=sender.sending, source_key=configured_at_deletion
+    )
+    other = configured(sender, listener, "new-imports")
+    sent = len(listener.requests)
+    listener.answers = [(200, {"status": "not_found", "evidence_id": "ev-1", "memory_ids": []})]
+    other.drain_once()
+    # The other listener cannot answer for it: it is not asked, and the words stay left out.
+    assert len(listener.requests) == sent and erasing(store)
+    assert health(store, other, deleted_at(store) + DAY)["status"] == "ok"
+    check = health(store, other, deleted_at(store) + 3 * DAY + 1)
     assert check["status"] == "degraded" and "PI_MEMORYGATE_IMPORT_SOURCE back" in check["reason"]
     assert "old-imports" not in json.dumps(check)
+    other.close()
+
+
+def test_not_found_where_pi_does_not_know_the_words_went_stays_erasing(setup):
+    store, sender, listener, _ = setup
+    chat_id = sent_chat(store, sender, SECRET)
+    offered_via(store, None)  # offered by an older Pi
+    import_deletion.delete_chat(store, chat_id, sending=sender.sending, source_key=SOURCE)
+    listener.answers = [(200, {"status": "not_found", "evidence_id": "ev-1", "memory_ids": []})]
+    sender.drain_once()
+    # MemoryGate answers not found for another listener's event too: it may still hold them.
+    assert erasing(store)
+    tid = store.start_turn(store.create_session())
+    Memory(store, Recalls(package())).prepare(tid, "Anything?")
+    assert memory_store.context(store, tid)["package"]["memories"] == [OWN]
+    check = health(store, sender, deleted_at(store) + 3 * DAY + 1)
+    assert check["status"] == "degraded" and "PI_MEMORYGATE_IMPORT_SOURCE back" in check["reason"]
+    # The same listener is not asked again; another one configured later is, once.
+    sent = len(listener.requests)
+    sender.drain_once()
+    assert len(listener.requests) == sent
+    other = configured(sender, listener, "old-imports")
+    listener.answers = [erased("ev-1")]
+    assert other.drain_once() == 1
+    assert listener.requests[-1].url.path.endswith("/old-imports/evidence/ev-1")
+    assert not erasing(store) and health(store, other, deleted_at(store) + 4 * DAY)["erasing"] == 0
+    other.close()
+
+
+def test_not_found_by_the_listener_the_words_went_to_settles(setup):
+    store, sender, listener, _ = setup
+    deleted(store, sender)
+    listener.answers = [(200, {"status": "not_found", "evidence_id": "ev-1", "memory_ids": []})]
+    sender.drain_once()
+    assert not erasing(store)
+    assert health(store, sender, deleted_at(store) + 4 * DAY)["status"] == "ok"
+
+
+def test_a_refusal_is_remembered_across_a_restart(setup):
+    store, sender, listener, clock = setup
+    deleted(store, sender)
+    listener.answers = [(401, {"detail": "invalid listener key"})]
+    sender.drain_once()
+    check = health(store, sender, clock.now)
+    [raised] = self_check.record(store, {"import_erasures": check}, now=clock.now)
+    restarted = configured(sender, listener, SOURCE)  # before its first drain
+    again = health(store, restarted, clock.now + 60)
+    assert again["status"] == "degraded" and "PI_MEMORYGATE_IMPORT_KEY" in again["reason"]
+    assert self_check.record(store, {"import_erasures": again}, now=clock.now + 60) == []
+    assert [item["id"] for item in self_check.needs_you(store)] == [raised["alertId"]]
+    # A lockout after the refusals keeps the refusal; an erasure clears it.
+    listener.answers = [(429, {"detail": "Too many failed attempts"})]
+    restarted.drain_once()
+    assert health(store, restarted, clock.now + 120)["status"] == "degraded"
+    clock.now += import_offers.PAUSE_SECONDS + 1
+    listener.answers = [erased("ev-1")]
+    assert restarted.drain_once() == 1
+    assert health(store, restarted, clock.now)["status"] == "ok"
+    restarted.close()
+
+
+class Library:
+    """MemoryGate's library: cards with a type and id; a memory card names its source type."""
+
+    agent_id = "companion"
+
+    def __init__(self, cards):
+        self.cards = cards
+
+    def inspect(self, operation, payload):
+        return {"scope": "all", "objects": self.cards, "next_after": None}
+
+
+def test_owner_search_leaves_out_a_deleted_import_while_its_erasure_waits(setup):
+    store, sender, listener, _ = setup
+    deleted(store, sender)
+    cards = [
+        {
+            "type": "memory",
+            "id": "m-imp",
+            "title": "needle",
+            "preview": SECRET,
+            "source_type": "automatic_listener",
+        },
+        {"type": "episode", "id": "ep-1", "title": TITLE + " needle", "preview": SECRET},
+        {"type": "evidence", "id": "ev-1", "title": "needle", "preview": SECRET},
+        {
+            "type": "memory",
+            "id": "m-own",
+            "title": "needle",
+            "preview": "tea",
+            "source_type": "user",
+        },
+    ]
+    memory = SimpleNamespace(client=Library(cards))
+
+    def found():
+        rows, _ = universal_search.lexical(
+            store, memory, None, "needle", {"sources": ["memory"]}, "metadata"
+        )
+        return {row["recordId"] for row in rows}
+
+    assert found() == {"m-own"}
+    listener.answers = [erased("ev-1")]
+    assert sender.drain_once() == 1
+    # MemoryGate blanked the erased evidence; this stand-in still lists all four.
+    assert found() == {card["id"] for card in cards}

@@ -160,9 +160,10 @@ def test_erasing_comes_before_new_offers_and_an_odd_id_is_never_sent(setup):
 
 def test_erasures_wait_for_the_listener_their_words_went_to(setup):
     store, sender, listener, _ = setup
-    import_deletion.delete_chat(
-        store, sent_chat(store, sender, SECRET), sending=sender.sending, source_key="old-listener"
-    )
+    chat_id = sent_chat(store, sender, SECRET)
+    with store._connect() as db:  # offered through a listener configured before this one
+        db.execute("UPDATE import_memory_offers SET source_key='old-listener'")
+    import_deletion.delete_chat(store, chat_id, sending=sender.sending, source_key=SOURCE)
     requests = len(listener.requests)
 
     sender.drain_once()

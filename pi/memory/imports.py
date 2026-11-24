@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS import_memory_offers (
  message_id TEXT PRIMARY KEY REFERENCES imported_messages(id),
  state TEXT NOT NULL CHECK(state IN ('pending','sent','refused')),
  attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
- error TEXT NOT NULL DEFAULT '', evidence_id TEXT, sent_at REAL
+ error TEXT NOT NULL DEFAULT '', evidence_id TEXT, sent_at REAL,
+ source_key TEXT -- the listener it went to; NULL when sent by a Pi that did not record it
 );
 CREATE INDEX IF NOT EXISTS import_memory_offers_waiting
  ON import_memory_offers(next_at) WHERE state='pending';
@@ -67,13 +68,36 @@ CREATE TABLE IF NOT EXISTS imported_chat_deletions (
  evidence_ids TEXT NOT NULL, UNIQUE(source, export_id)
 );
 -- MemoryGate evidence of a deleted imported chat still to erase there (import_deletion): ids only.
+-- source_key: the listener its erasure goes through (the one it was offered to, when known), and
+-- after a not found, the one that answered; offered_via: the one it was offered to, NULL when Pi
+-- did not record it; refused: the HTTP code the listener last refused it with (401, 403, 404).
 CREATE TABLE IF NOT EXISTS import_evidence_erasures (
  evidence_id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, source_key TEXT,
  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','missing')),
  attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
- error TEXT NOT NULL DEFAULT ''
+ error TEXT NOT NULL DEFAULT '', offered_via TEXT, refused INTEGER
 );
 """
+# An erasure whose words MemoryGate may still hold: it waits, or MemoryGate's answer of not found
+# came from a listener that is not the one they were offered to (that answer is the same for
+# another listener's event), or Pi does not know that one. Fails closed for rows from before
+# offers recorded their listener. Columns of import_evidence_erasures, unqualified.
+ERASING = (
+    "(state='pending' OR (state='missing' AND (offered_via IS NULL OR source_key IS NULL "
+    "OR source_key<>offered_via)))"
+)
+
+
+def add_listener_columns(db) -> None:
+    """Migration: the listener each offer went to, and each erasure's offered listener and last
+    refusal, for tables an older Pi created without them. Their rows keep NULL: unknown."""
+    for table, column, kind in (
+        ("import_memory_offers", "source_key", "TEXT"),
+        ("import_evidence_erasures", "offered_via", "TEXT"),
+        ("import_evidence_erasures", "refused", "INTEGER"),
+    ):
+        if column not in {row[1] for row in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
 
 class ImportRefused(ServiceError):

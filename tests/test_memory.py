@@ -370,6 +370,9 @@ def test_a_deleted_imported_chat_stays_out_of_recall_while_its_erasure_waits(tmp
     }
     shown = hidden_records.filter_package(store, recalled)
     assert (shown["memories"], shown["episodes"], shown["evidence"]) == ([own], [], [])
+    with store._connect() as db:  # not found, where Pi does not know the words went: may be held
+        db.execute("UPDATE import_evidence_erasures SET state='missing'")
+    assert hidden_records.filter_package(store, recalled)["memories"] == [own]
     with store._connect() as db:
         db.execute("DELETE FROM import_evidence_erasures")
     assert hidden_records.filter_package(store, recalled) is recalled

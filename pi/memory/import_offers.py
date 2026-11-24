@@ -202,15 +202,12 @@ class Offers:
         self.paused_until = 0.0
         self.problem: str | None = None
         self.erase_problem: str | None = None
-        # The HTTP code with which the listener itself refused an erasure (401, 403, 404).
-        self.erase_refused: int | None = None
 
     def drain_once(self, limit: int = 20) -> int:
         if self.client is None or self.clock() < self.paused_until:
             return 0
         # A deleted chat's words leave MemoryGate before any new word goes in.
         erased = import_deletion.erase_waiting(self.store, self.client, self.clock, limit)
-        self.erase_refused = erased.paused if erased.paused in (401, 403, 404) else None
         if erased.paused:
             self.paused_until = self.clock() + PAUSE_SECONDS
             self.problem = _refused(erased.paused)
@@ -259,10 +256,11 @@ class Offers:
             self._failed(row, refused, code)
             return "refused" if refused else "failed"
         with self.store._connect() as db:
+            # The listener too: only it can erase the event if the chat is deleted.
             db.execute(
                 "UPDATE import_memory_offers SET state='sent',evidence_id=?,sent_at=?,"
-                "error='' WHERE message_id=? AND state='pending'",
-                (evidence, self.clock(), row["message_id"]),
+                "error='',source_key=? WHERE message_id=? AND state='pending'",
+                (evidence, self.clock(), client.source_key, row["message_id"]),
             )
         return "sent"
 
@@ -351,27 +349,34 @@ def status(store, offers: Offers | None) -> dict:
 
 
 def erasure_health(store, offers: Offers | None, *, now: float | None = None) -> dict:
-    """Pi's health check `import_erasures`: degraded while words of a deleted imported chat stay in
-    MemoryGate OVERDUE_SECONDS after the deletion, or at once while the import listener refuses
-    their erasure (401, 403, 404). Pi's self-check files it as one Inbox card at once
-    (`alertAfterSeconds`) and closes it when that is over. Counts and fixed words only; one with
-    no deletion time counts as overdue, and an unreadable table as broken."""
+    """Pi's health check `import_erasures`: degraded while words of a deleted imported chat may
+    stay in MemoryGate (imports.ERASING) OVERDUE_SECONDS after the deletion, or at once while the
+    import listener refuses their erasure (401, 403, 404; kept on the row, so a restart does not
+    forget it). Pi's self-check files it as one Inbox card at once (`alertAfterSeconds`) and
+    closes it when that is over. Counts and fixed words only; one with no deletion time counts as
+    overdue, and an unreadable table as broken."""
     now = time.time() if now is None else now
+    client = offers.client if offers is not None else None
+    key = client.source_key if client is not None else None
     try:
         with store._connect() as db:
-            rows = db.execute(
-                "SELECT e.source_key, COUNT(*), MIN(COALESCE(d.deleted_at, 0)) "
+            waiting, oldest, refused, elsewhere = db.execute(
+                "SELECT COUNT(*), MIN(COALESCE(d.deleted_at, 0)), "
+                # Refused by the listener configured now, for an erasure that goes through it.
+                "MAX(CASE WHEN e.state='pending' AND (e.source_key IS NULL OR e.source_key=?) "
+                "THEN e.refused END), "
+                # Under another listener, or one MemoryGate's listener did not have.
+                "MIN(CASE WHEN e.state='missing' OR (e.source_key IS NOT NULL "
+                "AND e.source_key IS NOT ?) THEN COALESCE(d.deleted_at, 0) END) "
                 "FROM import_evidence_erasures e "
                 "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
-                "WHERE e.state='pending' GROUP BY e.source_key"
-            ).fetchall()
+                f"WHERE {imports.ERASING}",
+                (key, key),
+            ).fetchone()
     except (sqlite3.Error, RuntimeError):
         return {"status": "unavailable", "reason": "Pi could not read what it still has to erase."}
-    waiting = sum(row[1] for row in rows)
-    client = offers.client if offers is not None else None
-    refused = offers.erase_refused if offers is not None and waiting else None
-    late = [row[0] for row in rows if now - row[2] >= OVERDUE_SECONDS]
-    if not refused and not late:
+    refused = refused if client is not None else None
+    if not refused and not (waiting and now - oldest >= OVERDUE_SECONDS):
         return {"status": "ok", "erasing": waiting}
     if refused in (401, 403):
         fix = "key"
@@ -379,7 +384,7 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
         fix = "source"
     elif client is None:
         fix = "unset"
-    elif any(key is not None and key != client.source_key for key in late):
+    elif elsewhere is not None and now - elsewhere >= OVERDUE_SECONDS:
         fix = "elsewhere"
     else:
         fix = "slow"

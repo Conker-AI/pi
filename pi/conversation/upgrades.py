@@ -17,6 +17,7 @@ from __future__ import annotations
 from pi.agents import change_requests, keep
 from pi.content import attachments
 from pi.core.migrations import Migration
+from pi.memory import imports as assistant_imports
 from pi.owner import notice_merge
 from pi.setup import model_probes
 
@@ -62,4 +63,6 @@ MIGRATIONS = (
     # Plan alerts and AI job notes into one notices table (ids kept); the two old tables go.
     Migration("0006-notices", notice_merge.merge_old_tables),
     Migration("0007-change-request-promise", change_requests.widen_promise, rebuild=True),
+    # Which import listener each offer went to, so a deleted chat's erasure goes through it.
+    Migration("0008-import-erasure-listener", assistant_imports.add_listener_columns),
 )
