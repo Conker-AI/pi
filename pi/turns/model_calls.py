@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pi.actions import tools as tool_protocol
 from pi.actions.toolgate import ToolGateUnavailable
-from pi.models import effort, live_stream
+from pi.models import effort, live_stream, owner_choices
 from pi.models import roles as model_roles
 from pi.models.openrouter import ModelUnusable
 from pi.models.providers import Message, ProviderUnavailable
@@ -208,7 +208,11 @@ class ModelCalls:
                     else None
                 ),
                 configuration_revision=execution["modelConfigurationRevision"],
-                hints=ctx.owner_hints() if role == "answer" else None,
+                hints=(
+                    owner_choices.routing_hints(self.store, ctx.owner_hints())
+                    if role == "answer"
+                    else None
+                ),
                 effort=answer_effort(execution) if role == "answer" else None,
             )
             completion = result["completion"]

@@ -244,8 +244,10 @@ def _payload(title: str, url: str, tag: str) -> bytes:
 
 
 def message(item: dict) -> bytes:
-    """What the lock screen may show: a fixed title for the kind, and where a tap goes."""
-    return _payload(TITLES.get(item["kind"], GENERIC), INBOX, item["tag"])
+    """What the lock screen may show: a fixed title for the kind (only that Conker needs him when
+    the owner turned notification text off), and where a tap goes."""
+    title = TITLES.get(item["kind"], GENERIC) if item.get("preview", True) else GENERIC
+    return _payload(title, INBOX, item["tag"])
 
 
 def notice(device: str, label: str) -> bytes:
@@ -356,7 +358,13 @@ def _claimed(response: httpx.Response) -> list[dict]:
     if not isinstance(items, list) or len(items) > 20:
         return []
     return [
-        {"kind": item["kind"], "urgent": item["urgent"], "tag": item["tag"]}
+        # An older Pi says nothing about preview; anything but true hides the kind.
+        {
+            "kind": item["kind"],
+            "urgent": item["urgent"],
+            "tag": item["tag"],
+            "preview": item.get("preview", True) is True,
+        }
         for item in items
         if isinstance(item, dict)
         and isinstance(item.get("kind"), str)

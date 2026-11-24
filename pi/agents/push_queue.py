@@ -15,19 +15,24 @@ the claimed items to the devices the owner turned on. The rules, in one place:
   transaction that checks it, so a retry or a second claim at once never sends it again. A claim
   the gateway could not send is lost, not repeated (the Inbox still shows the item).
 
-A held item (quiet hours, budget) is not consumed: it may be claimed later while it still waits.
+- The owner's settings (Conker's settings registry): `notifications.quiet_days` holds every item
+  on those days of his local week, urgent ones too; with `notifications.preview` off a claim says
+  `"preview": false`, and the gateway then sends only that something needs him.
+
+A held item (quiet hours, quiet day, budget) is not consumed: it may be claimed later while it still waits.
 Nothing here keeps a title or any text: a claim is a digest of the item's kind and id and a time.
 """
 
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from pydantic import Field
 
 from pi.agents import inbox
 from pi.core import owner_preferences as prefs
+from pi.core import owner_settings as owner_settings
 from pi.core.models import Strict
 
 SCHEMA = """
@@ -37,6 +42,8 @@ CREATE TABLE IF NOT EXISTS push_deliveries (
 CREATE INDEX IF NOT EXISTS push_deliveries_claimed ON push_deliveries(claimed_at);
 """
 ONE = prefs.Usage(suggestions=1, researchMinutes=0, costCents=0)
+QUIET_DAYS, PREVIEW = "notifications.quiet_days", "notifications.preview"
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
 class Claim(Strict):
@@ -66,6 +73,12 @@ def _pushed_today(db, preferences, now: datetime) -> int:
     )
 
 
+def _quiet_day(db, day: str) -> bool:
+    """Whether the owner's local `day` (an ISO date) is one he keeps free of notifications."""
+    days = owner_settings.value_in(db, QUIET_DAYS)
+    return isinstance(days, list) and WEEKDAYS[date.fromisoformat(day).weekday()] in days
+
+
 def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
     body = Claim.model_validate(body.model_dump())
     now = now or datetime.now(UTC)
@@ -81,6 +94,8 @@ def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
         preferences = prefs.OwnerPreferences.model_validate_json(row["preferences"])
         day = prefs.local_day(preferences, now)
         used = _pushed_today(db, preferences, now)
+        quiet_day = _quiet_day(db, day)
+        preview = owner_settings.value_in(db, PREVIEW) is not False
         for item in waiting:
             if len(claimed) == body.limit:
                 break
@@ -88,6 +103,9 @@ def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
                 continue
             key = item_key(item)
             if db.execute("SELECT 1 FROM push_deliveries WHERE item_key=?", (key,)).fetchone():
+                continue
+            if quiet_day:
+                held.add("quiet_day")
                 continue
             urgent = item.get("urgency", {}).get("urgent") is True
             reasons = prefs.admission_reasons(
@@ -102,6 +120,7 @@ def claim(store, body: Claim, *, now: datetime | None = None) -> dict:
                 held.update(reasons)
                 continue
             db.execute("INSERT INTO push_deliveries VALUES (?,?)", (key, now.timestamp()))
-            claimed.append({"kind": item["kind"], "urgent": urgent, "tag": key[:16]})
+            shown = {} if preview else {"preview": False}
+            claimed.append({"kind": item["kind"], "urgent": urgent, "tag": key[:16], **shown})
         db.commit()
     return {"items": claimed, "held": sorted(held), "delivery": "at-most-once"}

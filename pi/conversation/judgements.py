@@ -15,6 +15,7 @@ from pi.conversation import versions
 from pi.core import once
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
+from pi.models import owner_choices
 from pi.models import roles as model_roles
 from pi.models.providers import Message
 from pi.schedule import tasks
@@ -140,16 +141,18 @@ def _prepare(store, sid, root, body):
         if configuration is None:
             raise JudgeError("not_configured", "Judging needs a model configuration.", 503)
         routes = {model["id"]: model["route"] for model in configuration["models"]}
-        if body.model_id is None:
+        # The owner's first usable model for this job, when the request names none.
+        chosen = body.model_id or owner_choices.first(store, configuration, owner_choices.JUDGE)
+        if chosen is None:
             role = "routing"
             routing = configuration["roleSettings"]["roles"]["routing"]
             judges = {routing["modelId"]}
             if routing["failure"] == "fallback":
                 judges.update(routing["fallbackModelIds"])
         else:
-            if body.model_id not in routes:
+            if chosen not in routes:
                 raise JudgeError("unknown_model", "Unknown judge model.", 422)
-            role, judges = "answer", {body.model_id}
+            role, judges = "answer", {chosen}
         judge_routes = {routes[model_id] for model_id in judges if model_id in routes}
         family = versions._view(db, sid, root)
         policy = context_controls.load(store, sid)["policy"]
@@ -233,7 +236,7 @@ def _judge(store, providers, sid: str, root: str, body: Judge):
             role,
             prompt,
             providers,
-            **cast("dict[str, Any]", {"override": body.model_id} if body.model_id else {}),
+            **cast("dict[str, Any]", {"override": next(iter(judges))} if role == "answer" else {}),
         )
         parsed = _parse_judge_result(decision["completion"].text)
         if set(parsed["scores"]) != set(labels) or decision["modelId"] not in judges:
