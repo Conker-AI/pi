@@ -26,8 +26,9 @@ events, the block says so.
 
 The check-in's read uses an action id made from the run id (`pi.core.check_in_reads`), and keeps
 events by the run's start time, so a repeated dispatch of the same run gets ToolGate's saved
-receipt and sends the same text. Forgetting the check-in's chat finds the read by that id and
-blanks its receipt in ToolGate (`pi.actions.tool_forgets`). Limit: the catalogue is asked again
+receipt and sends the same text. The read is recorded under the run's chat before it is sent, so
+forgetting that chat finds it however far the run got and blanks its receipt in ToolGate
+(`pi.actions.tool_forgets`). Limit: the catalogue is asked again
 on a repeat, so a tool the owner changed in between makes the replay differ and the run fails as
 a conflict (as a loop closed in between does).
 """
@@ -89,7 +90,7 @@ def _event(raw, zone: ZoneInfo) -> dict | None:
             if begins.tzinfo is None or ends.tzinfo is None:
                 return None
             begins, ends = begins.astimezone(zone), ends.astimezone(zone)
-    except ValueError:
+    except (ValueError, OverflowError):  # a time past year 1 or 9999 in the owner's zone
         return None
     if ends < begins:
         return None
@@ -102,15 +103,16 @@ def _event(raw, zone: ZoneInfo) -> dict | None:
     }
 
 
-def read(store, client, *, days: int, zone: str, action_id: str, agent_id: str = "companion"):
+def read(store, client, *, days: int, zone: str, action_id: str, agent_id: str, chat):
     """The events ToolGate gives for `days` days from today in `zone`, parsed, and whether some
-    could not be read; no events for any reason there are none (see the module notes)."""
+    could not be read; no events for any reason there are none (see the module notes). `chat` is
+    the run and its chat, which the read is recorded under before it is sent."""
     args = {"days": days, "time_zone": zone}
     result = background_reads.answer(
-        store, client, TOOL, args, action_id=action_id, agent_id=agent_id
+        store, client, TOOL, args, action_id=action_id, agent_id=agent_id, chat=chat
     )
     rows = result.get("events") if result is not None else None
-    if not isinstance(rows, list):
+    if result is None or not isinstance(rows, list):
         return [], False
     tz = ZoneInfo(zone)
     events = [event for row in rows if (event := _event(row, tz))]
@@ -162,12 +164,13 @@ def check_in_text(
     *,
     client=None,
     run_id: str = "",
+    session_id: str = "",
     started_at: float | None = None,
     time_zone: str = "UTC",
     agent_id: str = "companion",
 ) -> str:
     """The section for the Morning check-in's input, or "" when there are no events."""
-    if client is None or not run_id or started_at is None:
+    if client is None or not run_id or not session_id or started_at is None:
         return ""
     zone = ZoneInfo(time_zone)
     since = datetime.fromtimestamp(started_at, zone)
@@ -178,6 +181,7 @@ def check_in_text(
         zone=time_zone,
         action_id=check_in_reads.calendar_action(run_id),
         agent_id=agent_id,
+        chat=(run_id, session_id),
     )
     events = _between(events, since, since + timedelta(days=CHECK_IN_DAYS))
     if not events:

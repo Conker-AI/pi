@@ -35,6 +35,8 @@ IDS_ONLY = {
     "approval_withdrawals",
     # ToolGate request and action ids of a forgotten chat, to forget there (gap 9).
     "toolgate_forgets",
+    # A check-in read's ToolGate action id, its run and the chat it was made for; never its text.
+    "check_in_reads",
     # Every ToolGate approval request a turn parked on (the turn keeps only the latest).
     "turn_approval_requests",
     "attachment_removals",

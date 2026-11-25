@@ -350,7 +350,8 @@ class AgentJobs:
     def __init__(self, store, loop, published=None, briefing=None):
         # `briefing(store, job_id, **run)` is extra input text for a run (the Morning check-in's
         # open loops, calendar events and mail); it is passed in because this package cannot import
-        # them. `run` names the run, its start, its zone, its agent and that agent's client.
+        # them. `run` names the run, its chat, its start, its zone, its agent and that agent's
+        # client.
         self.store, self.loop, self.published = store, loop, published
         self.briefing = briefing
 
@@ -417,6 +418,7 @@ class AgentJobs:
                 row["job_id"],
                 client=clients.get(definition["agentId"]),
                 run_id=run_id,
+                session_id=session_id,
                 started_at=row["started_at"],
                 time_zone=definition["timeZone"],
                 agent_id=definition["agentId"],

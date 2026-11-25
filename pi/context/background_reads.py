@@ -4,9 +4,12 @@
 A read is made before the run's turn, through the job agent's own ToolGate client, and only when
 it cannot ask the owner (`answer`): the tool is in Pi's catalogue, its authorization is `auto`, it
 is not sensitive, the agent's own access for it is "allow", and setup did not leave tools off. A
-refusal, a ToolGate that is down, an unknown outcome or a failed result reads nothing. A read that
+refusal, a ToolGate that is down, an outcome still unknown after one poll of its receipt, or a
+failed result reads nothing; a stored receipt without its content gets one fresh read. A read that
 comes back asking anyway (the owner changed the tool in between) takes its Inbox card back at once:
-a background read never asks.
+a background read never asks. Before anything is sent, the read is recorded under the run and
+its chat (`pi.core.check_in_reads.record`), so forgetting that chat always finds it; without a
+run and a chat to record it under, nothing is read.
 
 What such a tool returns from outside (a title, a subject, a sender) comes fenced by ToolGate,
 `[UNTRUSTED_<KIND>_CONTENT field=<name>]`, the text, `[/UNTRUSTED_<KIND>_CONTENT]` on three lines
@@ -27,10 +30,11 @@ import json
 from collections import Counter
 
 from pi.agents import profiles
-from pi.core import setup_choices
+from pi.core import check_in_reads, setup_choices
 from pi.core.toolgate_types import (
     ApprovalRequired,
     ToolGateUnavailable,
+    ToolPending,
     ToolRefused,
     ToolResult,
 )
@@ -92,13 +96,40 @@ def _usable(store, client, agent_id: str, tool_id: str) -> bool:
     return access.get(tool_id, "allow") == "allow"
 
 
-def answer(store, client, tool_id: str, args: dict, *, action_id: str, agent_id: str):
+def _redacted(result) -> bool:
+    return isinstance(result, dict) and result.get("redacted") is True
+
+
+def answer(store, client, tool_id: str, args: dict, *, action_id: str, agent_id: str, chat):
     """The tool's result (a dict) for this read, or None when nothing was read (see the module
-    notes); a repeated `action_id` gets ToolGate's saved receipt, never a second read."""
-    if not _usable(store, client, agent_id, tool_id):
+    notes). `chat` is (run id, session id): each read is recorded under them before it is sent.
+
+    A repeated `action_id` (a repeated dispatch), or a poll after a timeout, gets ToolGate's
+    stored receipt, never a second read. A stored receipt that is `redacted` (the mail's keeps
+    counts and UIDs only) says the read happened but its content is gone: it is never taken for
+    an empty or failed read. Then exactly one fresh read is made under a new action id; if that
+    one gives no content either, nothing was read."""
+    run_id, session_id = chat
+    if not (run_id and session_id) or not _usable(store, client, agent_id, tool_id):
         return None
+    result = _read(store, client, tool_id, args, action_id, agent_id, chat)
+    if _redacted(result):
+        fresh = check_in_reads.fresh_action(action_id)
+        result = _read(store, client, tool_id, args, fresh, agent_id, chat)
+    return None if _redacted(result) else result
+
+
+def _read(store, client, tool_id: str, args: dict, action_id: str, agent_id: str, chat):
+    """One read under `action_id`, recorded under the run's chat first; its result or None."""
+    run_id, session_id = chat
+    check_in_reads.record(
+        store, action_id, run_id=run_id, session_id=session_id, tool_id=tool_id, agent_id=agent_id
+    )
     try:
         outcome = client.invoke(tool_id, args, action_id=action_id)
+        if isinstance(outcome, ToolPending):
+            # The answer was lost (a timeout): ask once for this action's receipt, never again.
+            outcome = client.check_action(action_id, tool_id)
     except (ToolRefused, ToolGateUnavailable):
         return None
     if isinstance(outcome, ApprovalRequired):

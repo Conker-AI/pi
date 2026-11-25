@@ -28,14 +28,16 @@ shows at most `MAX_ALIKE` times, then how many more came from it, so a flood of 
 cannot hide the other mail. The block comes last in the check-in's input.
 
 The read's action id comes from the run id (`pi.core.check_in_reads.mail_action`), so a repeated
-dispatch gets ToolGate's saved receipt and sends the same text, never a second read; forgetting
-the check-in's chat finds the read by that id and blanks its receipt in ToolGate
-(`pi.actions.tool_forgets`). The forecast (`GET /insights/tomorrow`) never reads mail.
+dispatch gets ToolGate's saved receipt and sends the same text, never a second read. The read is
+recorded under the run's chat before it is sent, so forgetting that chat finds it however far the
+run got and blanks its receipt in ToolGate (`pi.actions.tool_forgets`). The forecast
+(`GET /insights/tomorrow`) never reads mail.
 
 Limits: ToolGate answers at most 50 messages, newest first, so a flood of more than that leaves
 older mail out of the read (the block then says some could not be read). A check-in replay after
-the owner changed the tool, or after the first read's outcome was unknown, differs from the first
-send and the run fails as a conflict (as the calendar's does).
+the owner changed the tool, or after the first read's outcome was unknown, or once ToolGate keeps
+only counts in a mail receipt, differs from the first send: the run then fails as a conflict (as
+the calendar's does), and nothing is read twice.
 """
 
 from __future__ import annotations
@@ -82,9 +84,10 @@ def _message(raw, zone: ZoneInfo) -> dict | None:
         return None
     try:
         received = datetime.fromisoformat(date)
-    except ValueError:
-        return None
-    if received.tzinfo is None:
+        if received.tzinfo is None:
+            return None
+        received = received.astimezone(zone)
+    except (ValueError, OverflowError):  # a time past year 1 or 9999 in the owner's zone
         return None
     sender = raw["from"]
     values = {
@@ -93,7 +96,7 @@ def _message(raw, zone: ZoneInfo) -> dict | None:
         "subject": raw.get("subject"),
         "snippet": raw.get("snippet"),
     }
-    message = {"uid": uid, "received": received.astimezone(zone), "attached": attached}
+    message = {"uid": uid, "received": received, "attached": attached}
     for field, value in values.items():
         shaped, text = _field(value, field)
         if not shaped:
@@ -102,11 +105,13 @@ def _message(raw, zone: ZoneInfo) -> dict | None:
     return message
 
 
-def read(store, client, *, hours: int, zone: str, action_id: str, agent_id: str = "companion"):
+def read(store, client, *, hours: int, zone: str, action_id: str, agent_id: str, chat):
     """The messages ToolGate gives for the last `hours` hours, parsed, newest first, and whether
-    some could not be read; not connected or not read for any reason, there are none."""
+    some could not be read; not connected or not read for any reason, there are none. `chat` is
+    the run and its chat, which the read is recorded under before it is sent."""
+    args = {"hours": hours}
     result = background_reads.answer(
-        store, client, TOOL, {"hours": hours}, action_id=action_id, agent_id=agent_id
+        store, client, TOOL, args, action_id=action_id, agent_id=agent_id, chat=chat
     )
     if result is None or result.get("connected") is not True:
         return [], False
@@ -165,12 +170,13 @@ def check_in_text(
     *,
     client=None,
     run_id: str = "",
+    session_id: str = "",
     started_at: float | None = None,
     time_zone: str = "UTC",
     agent_id: str = "companion",
 ) -> str:
     """The section for the Morning check-in's input, or "" when there is no mail to list."""
-    if client is None or not run_id or started_at is None:
+    if client is None or not run_id or not session_id or started_at is None:
         return ""
     messages, partial = read(
         store,
@@ -179,6 +185,7 @@ def check_in_text(
         zone=time_zone,
         action_id=check_in_reads.mail_action(run_id),
         agent_id=agent_id,
+        chat=(run_id, session_id),
     )
     if not messages:
         return ""

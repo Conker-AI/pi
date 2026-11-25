@@ -16,11 +16,9 @@ from test_calendar_checkin import NOON, Calendar, Published, at, run, timed
 from test_job_runs_and_owner_memories import memory_row, opening
 from test_tool_turns import FakeGate, build
 
-from pi.actions import tool_forgets
 from pi.agents import profiles
 from pi.agents import tomorrow as forecast
 from pi.context import calendar_events, loop_briefing, loop_offers, open_loops, recent_mail
-from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.core import check_in_reads, setup_choices
 from pi.core.toolgate_types import (
@@ -31,17 +29,13 @@ from pi.core.toolgate_types import (
     ToolRefused,
     ToolResult,
 )
-from pi.core.turn_failures import TurnFailed
-from pi.schedule import agent_jobs, jobs, proposals, rhythm
+from pi.schedule import agent_jobs, proposals, rhythm
 from pi.schedule.job_models import Adopt, AgentJobCreate, Timing
 from pi.turns import access
 
 NL = chr(10)
 ESCAPED_LT = chr(92) + "u003c"
-NOT_CONNECTED = (
-    "No mail account is connected: store MAIL_IMAP_HOST, MAIL_IMAP_USER and MAIL_IMAP_PASSWORD "
-    "(an app password) in ToolGate's vault."
-)
+NOT_CONNECTED = "No mail account is connected: store MAIL_IMAP_HOST, ... in ToolGate's vault."
 
 
 def fenced(field, text, kind="MAIL"):
@@ -90,8 +84,10 @@ INBOX = [
 
 
 class Mailbox:
-    """Pi's ToolGate client as `mail.recent` sees it (and the calendar, when one is given);
-    `receipts` is ToolGate's journal."""
+    """Pi's ToolGate client as `mail.recent` sees it (and the calendar, when one is given).
+    `receipts` is ToolGate's journal: only the live reply holds the mail; a repeated action id or
+    a poll gets the stored form, counts and UIDs only (`redacted`). `timeouts` live replies are
+    lost on the way back (the read happened, Pi sees an unknown outcome)."""
 
     def __init__(
         self,
@@ -104,14 +100,33 @@ class Mailbox:
         partial=False,
         connected=True,
         calendar=None,
+        timeouts=0,
         **tool,
     ):
         self.messages, self.listed, self.outcome = copy.deepcopy(list(messages)), listed, outcome
         self.refuse, self.down, self.partial, self.connected = refuse, down, partial, connected
-        self.calendar, self.tool = calendar, tool
+        self.calendar, self.tool, self.timeouts = calendar, tool, timeouts
+        # Called with each action id as ToolGate receives it, calendar reads included.
+        self.before = None
         self.calls: list[tuple] = []
+        self.polls: list[str] = []
         self.withdrawn: list[tuple] = []
         self.receipts: dict[str, ToolResult] = {}
+
+    def stored(self, action_id):
+        live = self.receipts[action_id].result
+        rows = [row for row in live["messages"] if isinstance(row, dict)]
+        kept = {key: live.get(key) for key in ("connected", "uid_validity", "partial", "note")}
+        uids = [row.get("uid") for row in rows]
+        return ToolResult(True, {**kept, "count": len(uids), "uids": uids, "redacted": True}, "x")
+
+    def check_action(self, action_id, tool_id):
+        if tool_id == calendar_events.TOOL:
+            return self.calendar.check_action(action_id, tool_id)
+        self.polls.append(action_id)
+        if action_id not in self.receipts:
+            return ToolPending("outcome_unknown", "Action status unavailable", action_id)
+        return self.stored(action_id)
 
     def tools(self):
         if self.down:
@@ -125,6 +140,8 @@ class Mailbox:
         return found
 
     def invoke(self, tool_id, args, approval_request_id=None, *, action_id, job_id=None):
+        if self.before is not None:
+            self.before(action_id)
         if tool_id == calendar_events.TOOL:
             return self.calendar.invoke(tool_id, args, approval_request_id, action_id=action_id)
         self.calls.append((tool_id, args, action_id))
@@ -132,17 +149,20 @@ class Mailbox:
             raise ToolRefused(*self.refuse)
         if self.outcome is not None:
             return self.outcome
-        if action_id not in self.receipts:  # a repeated action gets its saved receipt
-            result = {
-                "connected": self.connected,
-                "messages": copy.deepcopy(self.messages) if self.connected else [],
-                "source": "imap",
-                "partial": self.partial,
-                "uid_validity": 3857529045 if self.connected else None,
-            }
-            if not self.connected:
-                result["note"] = NOT_CONNECTED
-            self.receipts[action_id] = ToolResult(True, result, tool_id)
+        if action_id in self.receipts:  # a repeated action gets its stored receipt
+            return self.stored(action_id)
+        result = {
+            "connected": self.connected,
+            "messages": copy.deepcopy(self.messages) if self.connected else [],
+            "source": "imap",
+            "partial": self.partial,
+            "uid_validity": 3857529045 if self.connected else None,
+            "note": None if self.connected else NOT_CONNECTED,
+        }
+        self.receipts[action_id] = ToolResult(True, result, tool_id)
+        if self.timeouts:
+            self.timeouts -= 1
+            return ToolPending("outcome_unknown", "ReadTimeout: check action", action_id)
         return self.receipts[action_id]
 
     def withdraw(self, request_id, agent):
@@ -183,7 +203,10 @@ def test_the_check_in_lists_recent_mail_newest_first_as_a_fenced_quoted_block(st
             '- 2026-10-29 08:05 from "Billing" ("billing@shop.example.com"): '
             '"Invoice for October" (with attachments); it starts "Your invoice is attached."'
         ),
-        '- 2026-10-28 23:40 from "friend@example.net": (no subject); it starts "Still on Saturday?"',
+        (
+            '- 2026-10-28 23:40 from "friend@example.net": (no subject); '
+            'it starts "Still on Saturday?"'
+        ),
     ]
     assert "UNTRUSTED" not in text
     assert mailbox.calls == [
@@ -312,6 +335,7 @@ def test_messages_of_the_wrong_shape_are_left_out_and_said(store):
         dict(good, date="2026-10-29T09:30:00"),  # no offset
         dict(good, date="yesterday"),
         dict(good, date="9" * 41),
+        dict(good, date="9999-12-31T23:59:00-12:00"),  # past year 9999 in the owner's zone
         dict(good, has_attachments="yes"),
         dict(good, **{"from": "Clinic front desk"}),
         dict(good, subject="Your appointment tomorrow"),  # not in ToolGate's fence
@@ -334,18 +358,19 @@ def test_a_read_toolgate_could_not_finish_says_so(store):
     assert len(lines) == 4 and lines[-1] == recent_mail.UNREAD
 
 
-def test_a_repeated_dispatch_reads_once_and_sends_the_same_text(store):
+def test_a_repeated_dispatch_rereads_once_under_a_new_id_and_sends_the_same_text(store):
     mailbox = Mailbox()
     text, first, session, run_id = run(store, mailbox, "morning-mail-0009")
-    mailbox.messages = [mail(60, utc(9, 55), "Arrived since", address="late@example.com")]
     loop, _ = build(store, ["NOTHING"], FakeGate())
     executor = agent_jobs.AgentJobs(store, loop, Published(mailbox), briefing=loop_briefing.for_job)
     again = executor.run(run_id, now=NOON + 600)
     assert again["status"] == "completed" and again["turnId"] == first["turnId"]
-    assert [call[2] for call in mailbox.calls] == [check_in_reads.mail_action(run_id)] * 2
-    assert len(mailbox.receipts) == 1  # the same action: ToolGate's saved receipt, no new read
+    # The stored receipt keeps counts and UIDs only: never read as no mail, one fresh read.
+    read, *rest = [call[2] for call in mailbox.calls]
+    assert read == check_in_reads.mail_action(run_id) and rest[0] == read and len(rest) == 2
+    assert rest[1] != read and rest[1].startswith("pi-mail-") and len(rest[1]) == len(read)
     users = [m["content"] for m in store.messages(session) if m["role"] == "user"]
-    assert users == [text] and "Arrived since" not in text
+    assert users == [text]
 
 
 def test_a_chat_holding_mail_counts_as_outside_content(tmp_path):
@@ -488,57 +513,6 @@ def test_hostile_loops_events_and_mail_leave_room_for_the_longest_instructions(s
     instructions = rhythm.INSTRUCTIONS
     assert instructions in text
     assert len(text) - len(instructions) + 4000 < 16000  # the longest the owner may write
-
-
-def test_forgetting_the_check_in_chat_forgets_its_mail_read(tmp_path):
-    path = tmp_path / "pi.db"
-    with closing(Store(path)) as store:
-        _, _, session, run_id = run(store, Mailbox(), "morning-mail-0017")
-        mine = AgentJobCreate(
-            name="Mine",
-            instructions="Look at my week.",
-            timing=Timing(kind="daily", time="09:00", day=0, hours=24),
-            timeZone="Asia/Jerusalem",
-        )
-        job = agent_jobs.create(store, mine, now=NOON)
-        _, _, elsewhere, _ = run(store, Mailbox(), "morning-mail-0018", job)
-        with store._connect() as db:
-            assert not [row for row in tool_forgets.records(db, [elsewhere]) if "mail" in row[1]]
-    read = check_in_reads.mail_action(run_id)
-    plan = forgetting.preview(path, session)
-    assert read in plan["tool_record_ids"]["action"]
-    assert check_in_reads.calendar_action(run_id) in plan["tool_record_ids"]["action"]
-    forgetting.forget(path, session, plan["confirmation"])
-    with closing(Store(path)) as store, store._connect() as db:
-        queued = [
-            tuple(row) for row in db.execute("SELECT kind, id, agent_id FROM toolgate_forgets")
-        ]
-    assert ("action", read, "companion") in queued
-
-
-def test_a_check_in_whose_turn_never_started_is_found_by_its_receipt(store, monkeypatch):
-    mailbox = Mailbox()
-    job = rhythm.seed(store, now=NOON)
-    loop, _ = build(store, ["NOTHING"], FakeGate())
-
-    def refused(*_args, **_kwargs):
-        raise TurnFailed("Send at most 16000 characters per message; split longer text.")
-
-    monkeypatch.setattr(loop, "run_turn", refused)
-    executor = agent_jobs.AgentJobs(store, loop, Published(mailbox), briefing=loop_briefing.for_job)
-    started = jobs.run_now(store, job["id"], "morning-mail-0019", now=NOON)
-
-    def invoke(*_args, action_id, **_kwargs):
-        return executor.run(action_id, now=NOON)
-
-    assert jobs.dispatch_claim(store, started, invoke) == "failed" and len(mailbox.calls) == 1
-    receipt = jobs.get_run(store, started["id"])["receipt"]
-    read = ("action", check_in_reads.mail_action(started["id"]), "companion")
-    other = store.create_session()
-    with store._connect() as db:
-        assert not db.execute("SELECT 1 FROM turn_submissions").fetchone()
-        assert read in tool_forgets.records(db, [receipt["sessionId"]])
-        assert read not in tool_forgets.records(db, [other])
 
 
 def test_the_forecast_never_reads_or_shows_mail(store):

@@ -223,8 +223,13 @@ and never sees the address.
   could not read some events (`partial`), the block says `(some events could not be read)`.
 - The read's action id is made from the run id (`pi/core/check_in_reads.py`), and events are kept
   by the run's start time, so a repeated dispatch gets ToolGate's saved receipt and replays the
-  same text. Forgetting the check-in's chat also asks ToolGate to blank that read's receipt (the
-  events' titles and places), found by the same id from the run (`pi/actions/tool_forgets.py`).
+  same text. A read whose answer was lost (a timeout) is polled once by its id (`check_action`).
+- Before the read is sent it is recorded under the run and the chat the run's turn will use
+  (`check_in_reads.record`, table `check_in_reads`, ids only), the way a chat's tool action is
+  recorded before dispatch. Forgetting the check-in's chat therefore asks ToolGate to blank that
+  read's receipt (the events' titles and places) however far the run got, even when Pi stopped
+  between the read and the turn (`pi/actions/tool_forgets.py`). Without a run and a chat to
+  record it under, nothing is read.
 - The forecast (`GET /insights/tomorrow`) does not read the calendar: a read there would leave a
   receipt that no chat holds, so nothing could forget it.
 - Other jobs never get events.
@@ -261,15 +266,21 @@ and never sees the account. Reading, fences and bounds are shared with the calen
   calendar (3,000) the check-in stays under the 16,000-character message limit. One sender shows
   at most twice, then `(+N more from this sender)`, so a flood of notifications cannot hide the
   other mail. The mail block comes last.
-- The read's action id is made from the run id (`check_in_reads.mail_action`): a repeated dispatch
-  gets ToolGate's saved receipt and sends the same text, never a second read. Forgetting the
-  check-in's chat also asks ToolGate to blank that read's receipt (senders, subjects, snippets),
-  found from the run like the calendar's (`pi/actions/tool_forgets.py`).
+- The read's action id is made from the run id (`check_in_reads.mail_action`) and recorded under
+  the run's chat before it is sent, like the calendar's, so forgetting the check-in's chat blanks
+  that read's receipt in ToolGate however far the run got.
+- ToolGate's stored mail receipt keeps counts and UIDs only (`"redacted": true`): only the live
+  reply holds the mail. When Pi gets the stored form instead (a repeated dispatch of the same run,
+  or a poll after a timeout), the read happened but its content is gone: Pi never takes it for
+  "no mail" or a failure, and makes exactly one fresh read under a new action id
+  (`check_in_reads.fresh_action`), recorded under the chat the same way. If that one gives no
+  content either (lost again, refused, failed), the check-in runs without mail, as when no
+  account is connected.
 - The forecast (`GET /insights/tomorrow`) never reads mail. Other jobs never get mail.
 - Limits: ToolGate answers at most 50 messages, so a flood of more than 50 leaves older mail out
-  of the read (the block then says some could not be read). A check-in whose run stopped between
-  the read and its turn names no chat, so no forget finds that read (its mail never reached a
-  chat), as for the calendar.
+  of the read (the block then says some could not be read). A repeated dispatch reads the mail
+  afresh; if mail arrived since the first send, its text differs and the run fails as a conflict
+  (nothing runs twice), as a loop closed in between does.
 
 ### Starting from a tool (2026-10-25)
 

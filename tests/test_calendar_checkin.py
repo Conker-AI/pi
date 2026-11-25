@@ -140,6 +140,11 @@ class Calendar:
             self.receipts[action_id] = ToolResult(True, result, tool_id)
         return self.receipts[action_id]
 
+    def check_action(self, action_id, tool_id):
+        if action_id in self.receipts:
+            return self.receipts[action_id]
+        return ToolPending("outcome_unknown", "Action status unavailable", action_id)
+
     def withdraw(self, request_id, agent):
         self.withdrawn.append((request_id, agent))
         return "withdrawn"
