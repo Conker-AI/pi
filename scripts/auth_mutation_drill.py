@@ -475,6 +475,8 @@ def main() -> int:
             "test_gateway_host_preferences.py",
             "test_gateway_cli_approval_password.py",
             "test_gateway_push.py",
+            "test_gateway_push_session.py",
+            "test_gateway_push_pinned.py",
             "test_push_queue.py",
             "test_gateway_mcp_class.py",
         ):

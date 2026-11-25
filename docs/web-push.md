@@ -50,15 +50,23 @@ software, not the owner's server).
   at most 10. Only the push services of Chrome, Edge, Firefox and Safari are accepted as endpoints
   (`fcm.googleapis.com`, `android.googleapis.com`, `*.push.services.mozilla.com`,
   `*.push.apple.com`, `*.notify.windows.com`; HTTPS on 443), so the gateway never posts to an
-  address inside the server's network. A device the push service reports gone (404, 410) is
+  address inside the server's network. A name is not an address, so each connection resolves the
+  push host once and refuses the whole answer if any address in it is not a public internet
+  address (private, loopback, link-local, multicast, reserved, unspecified, shared, or an IPv6
+  address carrying such an IPv4 one: mapped, 6to4, Teredo, NAT64); it then connects to a checked
+  address with no second lookup, and TLS still checks the push service's own name (SNI and the
+  certificate; `gateway/push_transport.py`). A device the push service reports gone (404, 410) is
   removed; one it refuses (401, 403) is removed when that happens two rounds in a row (once can be
   the push service's own bad moment; a round that reaches it starts the count over).
 - A device belongs to the sign-in that turned it on: signing that browser out (or signing it out
   from the list of browsers) turns it off; signing out everywhere and a new password turn every
   device off. A sign-in that only idles out keeps its device, since notifications are for a closed
-  tab. Each sign-in gets a new id, so after every sign-in, and when Settings opens, the browser sends
-  its subscription again with `"renew": true`, which moves a device that is on to the new sign-in
-  (signing out there then turns it off) and never turns on one that was removed or signed out
+  tab. Each sign-in gets a new id, so a sign-in from the same browser moves its devices to the new
+  sign-in (signing out there then turns them off): the browser's remembered-sign-in token is linked
+  to the sign-in it came with (`gateway/known_browsers.py`), and only the token it was given last
+  carries them. The browser also sends its subscription again with `"renew": true` after every
+  sign-in and when Settings opens, which moves a device that is on to the new sign-in (for a
+  browser whose remembered token was lost) and never turns on one that was removed or signed out
   (404). Settings lists the devices newest first, with when each was turned on and a short name
   from fixed words ("Chrome on Android"; the User-Agent itself is never kept), each with Remove.
 - When one more device is turned on, the devices already on get "A new device will get Conker
@@ -91,5 +99,8 @@ turned off again (ADR-0010). The browser relay refuses `/push/claim`
 
 ## Rollback
 
-New tables only (`push_deliveries` in Pi, `push_subscriptions` in the gateway) and one key file; an
-older version ignores them and sends nothing. Updating again finds the devices still on.
+New tables only (`push_deliveries` in Pi, `push_subscriptions` and `known_device_signins` in the
+gateway) and one key file; an older version ignores them and sends nothing. Updating again finds
+the devices still on; a sign-in the older version made has no link, so its devices move only by
+renewal. A gateway database from an earlier build of this feature (no `refused` column) fails each
+round before anything is claimed or sent; delete its `push_subscriptions` table or the database.

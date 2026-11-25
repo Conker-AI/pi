@@ -5,6 +5,9 @@ Each case is (name, file, original text, mutated text, the test that must fail).
 
 PUSH = "tests/test_gateway_push.py::"
 PUSH_CLAIM = "tests/test_push_queue.py::"
+SESSION = "tests/test_gateway_push_session.py::"
+PINNED = "tests/test_gateway_push_pinned.py::"
+INSIDE = PINNED + "test_a_push_host_that_resolves_inside_the_network_is_never_connected"
 PUSH_CASES = [
     (
         "push-claim-relayed-for-the-browser",
@@ -110,5 +113,64 @@ PUSH_CASES = [
         'db.execute("BEGIN IMMEDIATE")',
         'db.execute("BEGIN")',
         PUSH_CLAIM + "test_a_chat_forgotten_while_the_inbox_is_read_is_never_claimed",
+    ),
+    (
+        "push-client-not-pinned",
+        "gateway/api.py",
+        "transport=push_transport or PinnedTransport(),",
+        "transport=push_transport,",
+        INSIDE + "[inside0]",
+    ),
+    (
+        "push-private-answer-connected",
+        "gateway/push_transport.py",
+        "if not addresses or not all(public(address) for address in addresses):",
+        "if not addresses:",
+        INSIDE + "[inside1]",
+    ),
+    (
+        "push-mixed-answer-connected",
+        "gateway/push_transport.py",
+        "not all(public(address) for address in addresses)",
+        "not any(public(address) for address in addresses)",
+        INSIDE + "[inside19]",
+    ),
+    (
+        "push-multicast-connected",
+        "gateway/push_transport.py",
+        "or each.is_multicast",
+        "or False",
+        INSIDE + "[inside7]",
+    ),
+    (
+        "push-nat64-connected",
+        "gateway/push_transport.py",
+        "if ip in NAT64:",
+        "if False:",
+        INSIDE + "[inside17]",
+    ),
+    (
+        "push-device-left-on-an-idled-out-sign-in",
+        "gateway/known_browsers.py",
+        '"UPDATE push_subscriptions SET session_id=? WHERE session_id=?"',
+        '"UPDATE push_subscriptions SET session_id=? WHERE session_id=? AND 0"',
+        SESSION + "test_a_device_follows_its_browser_to_the_next_sign_in_without_a_renewal",
+    ),
+    (
+        "push-replaced-token-carries-devices",
+        "gateway/known_browsers.py",
+        '" ON known.token_hash=link.token_hash WHERE link.token_hash=?"',
+        '" ON 1 WHERE link.token_hash=?"',
+        SESSION + "test_a_token_an_older_gateway_replaced_carries_nothing",
+    ),
+    (
+        "push-old-table-sends-first",
+        "gateway/push.py",
+        (
+            '"SELECT id,endpoint,p256dh,auth,created,session_id,key_id,label,refused"\n'
+            '                " FROM push_subscriptions"'
+        ),
+        '"SELECT * FROM push_subscriptions"',
+        SESSION + "test_a_gateway_database_from_before_refused_sends_nothing_and_keeps_running",
     ),
 ]
