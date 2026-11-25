@@ -254,8 +254,8 @@ CASES = [
     (
         "raw-device-token-at-rest",
         "gateway/store.py",
-        'VALUES(?,?,?)", (digest(kept), now, now))',
-        'VALUES(?,?,?)", (kept, now, now))',
+        "known_browsers.signed_in(db, presented, digest(kept),",
+        "known_browsers.signed_in(db, presented, kept,",
         LOCKOUT + "test_each_sign_in_replaces_the_device_token_and_only_its_hash_is_kept",
     ),
     (
