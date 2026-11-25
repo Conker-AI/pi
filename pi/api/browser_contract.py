@@ -206,6 +206,7 @@ OWNER_ROUTES = {
         r"/insights/tomorrow",  # read-only: what Conker will start on its own soon (R-U10)
         # Read-only: counts of what asked for the owner and what did not, never his words.
         r"/insights/quiet",
+        r"/insights/quiet/weeks",  # the same counts per ISO week (R-E13)
         # Read-only: duplicates, contradictions, expired and unused memories to review.
         r"/memory/upkeep",
         # Read-only: the answers that used one memory (ids and chat titles, no words).

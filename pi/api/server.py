@@ -57,6 +57,7 @@ from pi.api.routes import projects as projects_api
 from pi.api.routes import prompt_templates as prompt_templates_api
 from pi.api.routes import prompts as prompts_api
 from pi.api.routes import proposals as proposals_api
+from pi.api.routes import quiet_weeks as quiet_weeks_api
 from pi.api.routes import self_check as self_check_api
 from pi.api.routes import session_settings as session_settings_api
 from pi.api.routes import sessions as sessions_api
@@ -240,10 +241,8 @@ app.include_router(
 )
 app.include_router(session_settings_api.router(lambda: app.state.store, require_owner))
 app.include_router(output_settings_api.router(lambda: app.state.store, require_owner))
-app.include_router(decisions_api.router(lambda: app.state.store, require_owner))
-app.include_router(open_loops_api.router(lambda: app.state.store, require_owner))
-app.include_router(tomorrow_api.router(lambda: app.state.store, require_owner))
-app.include_router(insights_api.router(lambda: app.state.store, require_owner))
+for store_routes in (decisions_api, open_loops_api, tomorrow_api, insights_api, quiet_weeks_api):
+    app.include_router(store_routes.router(lambda: app.state.store, require_owner))
 app.include_router(
     naming_api.router(lambda: app.state.store, lambda: app.state.router.adapters(), require_owner)
 )
