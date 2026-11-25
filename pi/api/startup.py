@@ -24,8 +24,8 @@ from pi.memory import corrections as memory_corrections
 from pi.memory import edits as memory_edits
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
+from pi.models import redaction, service_inference, spending_cap
 from pi.models import secrets as provider_secrets
-from pi.models import service_inference, spending_cap
 from pi.models.direct import ADAPTERS as DIRECT_ADAPTERS
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
@@ -244,6 +244,9 @@ async def lifespan(app: FastAPI):
         ),
         [adapter.name for _, adapter in DIRECT_ADAPTERS],
     )
+    # Every request to an online model leaves through here: the owner's Hide secrets from online
+    # models (pi.models.redaction). Ollama, `local`, is not wrapped.
+    hosted, direct_providers = redaction.wrap(store, hosted, direct_providers)
     app.state.hosted = hosted
     app.state.provider_credentials = sorted(
         name
