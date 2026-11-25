@@ -14,9 +14,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
 
+from . import known_browsers
+
 HASH_SLOTS = threading.BoundedSemaphore(1)
 DEVICE_SECONDS = 400 * 86400  # Browsers keep a cookie at most 400 days.
-DEVICE_ROWS = 20
 FAILURE_SECONDS = 30 * 86400
 FAILURE_ROWS = 500
 HOST_ATTEMPT_SECONDS = 300  # host_password: five wrong passwords in this window wait
@@ -117,6 +118,7 @@ class AuthStore:
                     key_id TEXT NOT NULL, label TEXT NOT NULL,
                     refused INTEGER NOT NULL DEFAULT 0);
             """)
+            db.execute(known_browsers.SCHEMA)
             columns = {row[1] for row in db.execute("PRAGMA table_info(sessions)")}
             if "verified_at" not in columns:
                 # Existing sessions have no known password-verification time: fail closed.
@@ -218,6 +220,7 @@ class AuthStore:
         )
         db.execute("DELETE FROM login_attempts WHERE at<=?", (now - ATTEMPT_KEEP_SECONDS,))
         db.execute("DELETE FROM known_devices WHERE used<=?", (now - DEVICE_SECONDS,))
+        known_browsers.forget(db)
         db.execute("DELETE FROM password_failures WHERE at<=?", (now - FAILURE_SECONDS,))
         db.execute(
             "DELETE FROM password_failures WHERE rowid NOT IN "
@@ -434,17 +437,12 @@ class AuthStore:
                 raise AuthError("Credentials changed during login. Start sign-in again.")
             db.execute("DELETE FROM sessions WHERE token_hash=?", (digest(token),))
             db.execute("DELETE FROM login_attempts WHERE attempt_id=?", (attempt_id,))
-            # A fresh token every sign-in; the one presented (if any) stops counting.
-            if device and len(device) <= 128:
-                db.execute("DELETE FROM known_devices WHERE token_hash=?", (digest(device),))
-            kept, now = secrets.token_urlsafe(32), self.clock()
-            db.execute("INSERT INTO known_devices VALUES(?,?,?)", (digest(kept), now, now))
-            db.execute(
-                "DELETE FROM known_devices WHERE token_hash NOT IN "
-                "(SELECT token_hash FROM known_devices ORDER BY used DESC LIMIT ?)",
-                (DEVICE_ROWS,),
-            )
-            return {**self._new(db, True, generation), "device": kept}
+            # A fresh known-device token every sign-in; this browser's devices with
+            # notifications on move to this sign-in (known_browsers.py).
+            value, kept = self._new(db, True, generation), secrets.token_urlsafe(32)
+            presented = digest(device) if device and len(device) <= 128 else None
+            known_browsers.signed_in(db, presented, digest(kept), value["id"], self.clock())
+            return {**value, "device": kept}
 
     def verify(self, token: str, password: str, source: str, fingerprint: str) -> dict:
         generation, attempt_id = self._check_password(token, password, source, authenticated=True)
