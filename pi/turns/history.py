@@ -14,7 +14,7 @@ from pi.memory import store as memory_store
 from pi.models.providers import Message, ProviderUnavailable
 from pi.models.routing import TurnContext
 from pi.turns import context as turn_context
-from pi.turns import prompt_prefix, recall
+from pi.turns import history_window, prompt_prefix, recall
 from pi.turns import steering as turn_steering
 from pi.turns.failures import TurnFailed
 
@@ -131,6 +131,12 @@ class History:
         selected_history = context_controls.select_history(
             policy, known_history, retrieved_ids, hidden_ids
         )
+        reply_to = execution.get("replyToMessageId")
+        # The owner's Chat history, Keep web pages and Largest tool result; a fork's own summary
+        # (turn_id and request_id both None) still reads the whole chat.
+        window = history_window.Window(self.store, turn_id, policy)
+        if turn_id or request_id:
+            selected_history = window.rows(selected_history, reply_to)
         cancelled = context_controls.cancelled_input_ids(self.store, selected_history)
         if cancelled:
             messages.append(
@@ -145,7 +151,6 @@ class History:
                 )
             )
         prefix_messages = list(messages)
-        reply_to = execution.get("replyToMessageId")
         if reply_to and not any(row["id"] == reply_to for row in selected_history):
             raise context_controls.ContextError(
                 "reply_excluded",
@@ -174,6 +179,7 @@ class History:
             text = content if isinstance(content, str) else str(content)
             text = agent_calls.expand(self.store, row["role"], text)
             text = recall.expand(self.store, row["role"], text, reading=reading, agents=readers)
+            text = window.text(row, text)
             messages.append(Message(row["role"], text))
             if row["id"] in attached_ids:
                 try:

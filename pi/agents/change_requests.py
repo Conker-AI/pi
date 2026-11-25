@@ -48,6 +48,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from pi.agents import memory_topics
 from pi.conversation import visibility
 from pi.core import rebuild
 from pi.core.errors import ServiceError
@@ -86,6 +87,11 @@ class ChangeRequestError(ServiceError):
 
 class Full(ValueError):
     """Too many of Conker's requests already wait for the owner; a plain answer for the model."""
+
+
+class Unwanted(Full):
+    """A memory naming one of the owner's Never remember topics (`pi.agents.memory_topics`);
+    answered to the model like Full, and nothing is filed."""
 
 
 class DraftSaved(Strict):
@@ -159,7 +165,12 @@ def summary_text(summary: str) -> str:
 
 def file(store, kind, title, summary, payload, *, session_id=None, turn_id=None, now=None) -> dict:
     """Record one request exactly as Conker asked; nothing is created yet. Full when too many of
-    its requests already wait for the owner."""
+    its requests already wait for the owner. Unwanted when a memory names a Never remember topic."""
+    if kind == "memory" and (topic := memory_topics.named(store, str(payload.get("text", "")))):
+        raise Unwanted(
+            f"The owner never wants anything about {topic} remembered. Nothing was saved or "
+            "filed; do not try again or say it was remembered."
+        )
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         if (
