@@ -6,6 +6,7 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Security:** the image build fails if libzstd1 is older than 1.5.7+dfsg-1+deb13u1 (CVE-2026-124851), so a cached layer from before the fix cannot be reused.
 - **Security:** the owner terminal image build fails if libzstd1 is older than 1.5.7+dfsg-1+deb13u1 (CVE-2026-124851), so a cached layer from before the fix cannot be reused.
 
 ## 0.29.1
