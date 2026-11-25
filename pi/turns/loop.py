@@ -15,7 +15,8 @@ everywhere at once.
 closed with a summary and a child opened seeded by it, pointing back at the
 parent. Dropping the middle would silently lose what was said; rewriting it
 would break the first rule. Forking keeps the lineage walkable, which is also
-how MemoryGate treats evidence.
+how MemoryGate treats evidence. The owner's Chat history setting may give the model less of the
+chat (`pi.turns.history_window`); that is his choice, and the transcript stays whole.
 """
 
 from __future__ import annotations
