@@ -10017,7 +10017,7 @@
     "/insights/tomorrow": {
       "get": {
         "summary": "Tomorrow",
-        "description": "What starts on its own in the next `hours` hours; nothing is run or changed. With\n`events=true`, also the calendar's events in that window (one read-only ToolGate call).",
+        "description": "What starts on its own in the next `hours` hours; nothing is run or changed.",
         "operationId": "tomorrow_insights_tomorrow_get",
         "parameters": [
           {
@@ -10030,16 +10030,6 @@
               "minimum": 1,
               "default": 24,
               "title": "Hours"
-            }
-          },
-          {
-            "name": "events",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Events"
             }
           },
           {
@@ -40320,20 +40310,6 @@
             },
             "type": "array",
             "title": "Runs"
-          },
-          "events": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/TomorrowEvent"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events"
           }
         },
         "additionalProperties": false,
@@ -40381,47 +40357,6 @@
           "expiresAt"
         ],
         "title": "TomorrowApproval"
-      },
-      "TomorrowEvent": {
-        "properties": {
-          "start": {
-            "type": "string",
-            "title": "Start"
-          },
-          "end": {
-            "type": "string",
-            "title": "End"
-          },
-          "allDay": {
-            "type": "boolean",
-            "title": "Allday"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "location": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Location"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "start",
-          "end",
-          "allDay",
-          "title",
-          "location"
-        ],
-        "title": "TomorrowEvent"
       },
       "TomorrowJob": {
         "properties": {

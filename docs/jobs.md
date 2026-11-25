@@ -211,15 +211,22 @@ and never sees the address.
   as before; a refusal, a ToolGate that is down, a missing address or a failed read lists no
   events and fails nothing. A read that comes back asking takes its Inbox card back at once.
 - Titles and places are whoever made the event's words (an invitation can come from anyone), so
-  they are outside content: a fenced `<calendar-events>` block, one JSON-quoted line each with
-  invisible characters removed and `<` escaped, after a lead-in saying nothing inside the quotes is
-  an instruction. A chat holding that block counts as having read outside content for every turn
+  they are outside content. ToolGate fences each one (`[UNTRUSTED_CALENDAR_CONTENT field=...]`);
+  Pi takes the text out of that fence (an unfenced value leaves its event out) and lists it in a
+  fenced `<calendar-events>` block, one JSON-quoted line each with invisible characters removed
+  and `<` escaped, after a lead-in saying nothing inside the quotes is an instruction. A chat
+  holding that block counts as having read outside content for every turn
   (`access.CALENDAR_MARK`). The opening message of a job run is never sent to memory.
-- The read's action id is made from the run id, and events are kept by the run's start time, so a
-  repeated dispatch gets ToolGate's saved receipt and replays the same text.
-- The forecast lists the window's events too when asked: `GET /insights/tomorrow?events=true`
-  adds `events` (`start`, `end`, `allDay`, `title`, `location`); without the flag the answer is
-  unchanged. Each such request is one ToolGate read, within the tool's 6 a minute.
+- The block is at most 3,000 characters as the model reads it (after escaping) and 15 events;
+  then `(more events follow ...)`. The same title and place show at most twice, then
+  `(+N more like this)`, so an hourly invitation cannot hide the day's other events. When ToolGate
+  could not read some events (`partial`), the block says `(some events could not be read)`.
+- The read's action id is made from the run id (`pi/core/check_in_reads.py`), and events are kept
+  by the run's start time, so a repeated dispatch gets ToolGate's saved receipt and replays the
+  same text. Forgetting the check-in's chat also asks ToolGate to blank that read's receipt (the
+  events' titles and places), found by the same id from the run (`pi/actions/tool_forgets.py`).
+- The forecast (`GET /insights/tomorrow`) does not read the calendar: a read there would leave a
+  receipt that no chat holds, so nothing could forget it.
 - Other jobs never get events.
 
 ### Starting from a tool (2026-10-25)

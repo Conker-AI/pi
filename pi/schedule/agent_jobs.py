@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from pi.conversation import submissions
+from pi.core import check_in_reads
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
@@ -70,7 +71,7 @@ MAX_ENABLED = 20
 CONKER_PER_DAY = 3
 # Jobs Pi ships (`pi.schedule.rhythm`), each with a fixed id: never counted in CONKER_PER_DAY,
 # since Conker did not choose to make them.
-BUILT_IN = ("job_beca06ba345a8b3170a4d8e2473fe00f",)
+BUILT_IN = (check_in_reads.MORNING_CHECK_IN,)
 # Why a run of a job Conker made was held back (the owner's proactive budget refused it).
 # Why the owner's own limits held a run back before any model was asked: the run's outcome code
 # and the words its receipt keeps. Such a run did nothing and is recorded as skipped, never failed.
