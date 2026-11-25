@@ -19,6 +19,7 @@ import re
 import time
 
 from pi.actions.toolgate import ToolGateUnavailable
+from pi.core import check_in_reads
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS toolgate_forgets (
@@ -95,6 +96,24 @@ def records(db, session_ids) -> list[tuple[str, str, str]]:
                 f"SELECT a.id, {agent} FROM tool_actions a JOIN turns t ON t.id=a.turn_id {join}"
                 f"WHERE t.session_id IN ({marks}) ORDER BY a.id",
                 session_ids,
+            )
+        ]
+    if {"scheduled_runs", "turn_submissions"} <= tables:
+        # The Morning check-in's calendar read is made before the run's turn, so it is in neither
+        # list above (`pi.core.check_in_reads`). A run belongs to the chats its submission names,
+        # or, when its turn never started (refused before it was recorded), the chat its receipt
+        # names. The read was made as the run's agent (its definition's `agentId`).
+        found += [
+            ("action", check_in_reads.calendar_action(row[0]), row[1])
+            for row in db.execute(
+                "SELECT r.id, CASE WHEN json_valid(r.definition) THEN "
+                "json_extract(r.definition,'$.agentId') END FROM scheduled_runs r "
+                "WHERE r.job_id=? AND (EXISTS (SELECT 1 FROM "
+                "turn_submissions s WHERE s.request_id=r.id AND "
+                f"(s.requested_session_id IN ({marks}) OR s.effective_session_id IN ({marks}))) "
+                "OR (json_valid(r.receipt) AND "
+                f"json_extract(r.receipt,'$.sessionId') IN ({marks}))) ORDER BY r.id",
+                (check_in_reads.MORNING_CHECK_IN, *session_ids, *session_ids, *session_ids),
             )
         ]
     return [(kind, identity, owner or "companion") for kind, identity, owner in found]

@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from pi.conversation import submissions
+from pi.core import check_in_reads
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
 from pi.core.turn_failures import TurnFailed
@@ -70,7 +71,7 @@ MAX_ENABLED = 20
 CONKER_PER_DAY = 3
 # Jobs Pi ships (`pi.schedule.rhythm`), each with a fixed id: never counted in CONKER_PER_DAY,
 # since Conker did not choose to make them.
-BUILT_IN = ("job_beca06ba345a8b3170a4d8e2473fe00f",)
+BUILT_IN = (check_in_reads.MORNING_CHECK_IN,)
 # Why a run of a job Conker made was held back (the owner's proactive budget refused it).
 # Why the owner's own limits held a run back before any model was asked: the run's outcome code
 # and the words its receipt keeps. Such a run did nothing and is recorded as skipped, never failed.
@@ -347,8 +348,9 @@ class AgentJobs:
     """Job executor: AI jobs run a turn; every other target goes to ToolGate unchanged."""
 
     def __init__(self, store, loop, published=None, briefing=None):
-        # `briefing(store, job_id)` is extra input text for a run (the Morning check-in's open
-        # loops); it is passed in because this package cannot import the loops.
+        # `briefing(store, job_id, **run)` is extra input text for a run (the Morning check-in's
+        # open loops and calendar events); it is passed in because this package cannot import
+        # them. `run` names the run, its start, its zone, its agent and that agent's client.
         self.store, self.loop, self.published = store, loop, published
         self.briefing = briefing
 
@@ -408,7 +410,20 @@ class AgentJobs:
         # When Pi took the run up, not when it is dispatched: a repeated dispatch sends the same
         # text, so it replays the saved turn instead of being refused as a different request.
         started = when(row["started_at"], definition["timeZone"])
-        extra = self.briefing(self.store, row["job_id"]) if self.briefing else ""
+        clients = getattr(self.published, "clients", {}) if self.published is not None else {}
+        extra = (
+            self.briefing(
+                self.store,
+                row["job_id"],
+                client=clients.get(definition["agentId"]),
+                run_id=run_id,
+                started_at=row["started_at"],
+                time_zone=definition["timeZone"],
+                agent_id=definition["agentId"],
+            )
+            if self.briefing
+            else ""
+        )
         extra = f"\n\n{extra}" if extra else ""
         text = f"{PREAMBLE}\n\n{started}\n\n{reason}{definition['instructions']}{extra}"
         try:

@@ -12,7 +12,8 @@ is one more reason to ask, never a reason to run. ToolGate enforces the floor ag
 "run" only from a key he made a policy delegate. See context/design/automation-and-access.md.
 
 Outside content is any text in the turn the owner did not write: a result from a tool that is not
-Conker's own, a webhook payload (once one arrives, for the whole chat,
+Conker's own, calendar events in a check-in's input (for the whole chat), a webhook payload (once
+one arrives, for the whole chat,
 `pi.core.outside.mark_outside`; the writer lives in core so schedule can call it, the reader is
 outside_content() here), a memory
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
@@ -56,6 +57,9 @@ TOOL_DEFAULT = {"auto": "allow", "ai_review": "ai", "owner_confirmation": "ask"}
 CHAT_LEVELS = ("default", "ask", "ai", "full")
 # Wrapped by Pi around a webhook's payload; a run that carries one has read outside content.
 WEBHOOK_MARK = "<webhook>"
+# Wrapped by Pi around calendar events (`pi.context.calendar_events.FENCE`): their titles and
+# places are whoever made the event's words, so a chat that holds them has read outside content.
+CALENDAR_MARK = "<calendar-events>"
 # Conker's question to him (`pi.turns.native_tools.ASK`) and a tool draft (`DRAFT_TOOL`).
 native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
@@ -118,7 +122,9 @@ _IN_CHAT = (
 
 def outside_content(store, session_id, owner_text, native, *, turn_id=None, execution=None):
     """True once this turn can read text the owner did not write (see the module notes)."""
-    if WEBHOOK_MARK in (owner_text or "") or (execution or {}).get("projectContext"):
+    if any(mark in (owner_text or "") for mark in (WEBHOOK_MARK, CALENDAR_MARK)) or (
+        execution or {}
+    ).get("projectContext"):
         return True
     with store._connect() as db:
         if turn_id and asks.answer_words(db, turn_id) is not None:
@@ -134,8 +140,9 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
         ).fetchone():
             return True
         if db.execute(
-            f"SELECT 1 FROM messages m WHERE {_IN_CHAT} AND m.role='user' AND m.content LIKE ?",
-            (*chat, f"%{WEBHOOK_MARK}%"),
+            f"SELECT 1 FROM messages m WHERE {_IN_CHAT} AND m.role='user' "
+            "AND (m.content LIKE ? OR m.content LIKE ?)",
+            (*chat, f"%{WEBHOOK_MARK}%", f"%{CALENDAR_MARK}%"),
         ).fetchone():
             return True
         if db.execute(
