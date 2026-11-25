@@ -85,6 +85,27 @@ CASES = [
         'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',
         "pass",
     ),
+    (
+        "settled-import-recalled",
+        "pi/conversation/hidden_records.py",
+        'f"SELECT 1 FROM import_evidence_erasures WHERE {ERASING} LIMIT 1"',
+        (
+            'f"SELECT 1 FROM import_evidence_erasures WHERE {ERASING} AND chat_id NOT IN "'
+            '"(SELECT chat_id FROM import_erasure_settlements) LIMIT 1"'
+        ),
+    ),
+    (
+        "settled-while-a-listener-can-erase",
+        "pi/memory/import_settle.py",
+        "    if reachable:",
+        "    if False:",
+    ),
+    (
+        "settlement-keeps-saved-recall",
+        "pi/memory/import_settle.py",
+        "cleared = memory_store.invalidate_recall(db)",
+        "cleared = 0",
+    ),
     ("shutdown-releases-inflight-upload", "pi/memory/service.py", "self.thread.join()", "pass"),
 ]
 SOURCE = "pi"

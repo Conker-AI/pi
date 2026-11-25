@@ -21,6 +21,8 @@ ORIGIN = "https://localhost:8050"
 # webhook call through the runtime channel, and forgetting through the owner-control channel.
 HOOK = "/api/pi/hooks/job_" + "a" * 32
 FORGET = "/api/control/pi/memory/forget"
+# Settling a stuck imported-chat erasure by hand is a forget action too.
+SETTLE = "/api/control/pi/imports/erasures/imp_" + "0" * 32 + "/settle"
 
 
 @pytest.fixture
@@ -76,7 +78,7 @@ def proof(client, headers, path, body):
     return response.json()
 
 
-@pytest.mark.parametrize("path", [HOOK, FORGET])
+@pytest.mark.parametrize("path", [HOOK, FORGET, SETTLE])
 def test_every_password_write_requires_exact_single_use_proof(boundary, path):
     # Owner decisions ask for the password by ToolGate's level: test_gateway_approval_levels.py.
     client, _, headers, seen, _ = boundary

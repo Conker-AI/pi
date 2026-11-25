@@ -141,7 +141,8 @@ UPDATES = {"update_offers", "update_results"}
 
 # Chats imported from a ChatGPT or Claude export (pi.memory.imports): another assistant's chats,
 # kept apart from Pi's own, so no Pi chat's text is ever in them; the batches and offers hold
-# counts, digests, ids and states; a deleted imported chat leaves only its ids and counts.
+# counts, digests, ids and states; a deleted imported chat leaves only its ids and counts, and an
+# erasure of it the owner settled by hand (pi.memory.import_settle) only its id, a time and counts.
 IMPORTS = {
     "imported_chats",
     "imported_messages",
@@ -149,6 +150,7 @@ IMPORTS = {
     "import_memory_offers",
     "imported_chat_deletions",
     "import_evidence_erasures",
+    "import_erasure_settlements",
 }
 
 

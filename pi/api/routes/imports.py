@@ -2,8 +2,9 @@
 
 The body of a preview or an import is the export's `conversations.json` itself, read in bounded
 chunks; a preview saves nothing. An import names the previewed file by its SHA-256 digest, so the
-owner's yes is for exactly the file he saw. Nothing here runs a model, a tool or a turn. Deleting
-an imported chat removes it for good (`pi.memory.import_deletion`).
+owner's yes is for exactly the file the owner saw. Nothing here runs a model, a tool or a turn.
+Deleting an imported chat removes it for good (`pi.memory.import_deletion`); an erasure of its
+words that no memory listener will finish may be settled by hand (`pi.memory.import_settle`).
 
 The router's lifespan starts the sender that offers imported words to MemoryGate's import
 listener (`pi.memory.import_offers`), after Pi's own startup and stopped before it closes.
@@ -11,7 +12,9 @@ listener (`pi.memory.import_offers`), after Pi's own startup and stopped before 
 
 from __future__ import annotations
 
+import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -19,9 +22,19 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from starlette.concurrency import run_in_threadpool
 
 from pi.core.models import described
-from pi.memory import import_deletion, import_formats, import_offers, import_replies, imports
+from pi.memory import (
+    import_deletion,
+    import_formats,
+    import_offers,
+    import_replies,
+    import_settle,
+    imports,
+)
+from pi.owner import self_check
 
+log = logging.getLogger("pi.api.imports")
 Source = Literal["chatgpt", "claude"]
+CHAT_ID = r"^imp_[0-9a-f]{32}$"
 
 
 @asynccontextmanager
@@ -73,6 +86,15 @@ def router(store, offers, authorize):
     def configured():
         sender = offers()
         return sender is not None and sender.client is not None
+
+    def sender_now():
+        """The sender, and the listener set now; without it Pi cannot tell, so it refuses."""
+        sender = offers()
+        if sender is None:
+            raise imports.ImportRefused(
+                "unavailable", "Pi's import sender is not running. Restart Pi.", 503
+            )
+        return sender, sender.client.source_key if sender.client is not None else None
 
     @api.post("/{source}/preview")
     async def preview(source: Source, request: Request):
@@ -129,6 +151,28 @@ def router(store, offers, authorize):
         )
         if sender is not None:
             sender.wake()
+        return receipt
+
+    @api.get("/erasures", responses=described(import_replies.ImportErasureList))
+    def erasures():
+        """Deleted imported chats whose words MemoryGate may still hold, and which are stuck."""
+        _, listener = sender_now()
+        return import_settle.erasures(store(), listener=listener)
+
+    @api.post(
+        "/erasures/{chat_id}/settle", responses=described(import_replies.ImportErasureSettlement)
+    )
+    def settle(chat_id: str = Path(pattern=CHAT_ID)):
+        """Settle by hand a deleted imported chat's erasure no listener will finish: Pi keeps its
+        words hidden for good and stops reporting it. The browser asks for the password."""
+        sender, listener = sender_now()
+        receipt = import_settle.settle(store(), chat_id, listener=listener)
+        # The Inbox card closes now rather than at the next self-check, which would close it too.
+        try:
+            check = import_offers.erasure_health(store(), sender)
+            self_check.record(store(), {"import_erasures": check}, partial=True)
+        except sqlite3.Error:
+            log.warning("The Inbox card about imported chats is updated at the next self-check.")
         return receipt
 
     return api

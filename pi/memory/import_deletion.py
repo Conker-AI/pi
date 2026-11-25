@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import httpx
 
 from pi.memory import store as memory_store
-from pi.memory.imports import LABELS, ImportRefused
+from pi.memory.imports import LABELS, REACHABLE, ImportRefused
 
 MEMORY_NOTE = (
     "Your words from this chat are being erased from memory too, with the memories made from "
@@ -135,13 +135,12 @@ def erase_waiting(store, client, clock=time.time, limit: int = 20) -> Erased:
     so the count shows it; a refusal of the listener itself pauses the sender as for offers and
     is kept on the row (`refused`). Erasures recorded for another listener wait, named in the
     problem, until it is set back. One a listener did not find, offered before Pi recorded where,
-    is tried once more through each other listener configured later."""
+    is tried once more through each other listener configured later, also once the owner settled
+    it by hand (import_settle): one that still holds the words erases them then."""
     with store._connect() as db:
         rows = db.execute(
-            "SELECT evidence_id, attempts FROM import_evidence_erasures WHERE next_at<=? AND ("
-            "(state='pending' AND (source_key IS NULL OR source_key=?)) OR (state='missing' "
-            "AND offered_via IS NULL AND (source_key IS NULL OR source_key<>?))"
-            ") ORDER BY next_at, evidence_id LIMIT ?",
+            "SELECT evidence_id, attempts FROM import_evidence_erasures WHERE next_at<=? AND "
+            f"{REACHABLE} ORDER BY next_at, evidence_id LIMIT ?",
             (clock(), client.source_key, client.source_key, limit),
         ).fetchall()
         elsewhere = db.execute(
