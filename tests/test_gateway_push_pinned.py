@@ -3,6 +3,7 @@ push service's own name (gateway/push_transport.py). No test here reaches the in
 
 import datetime
 import hashlib
+import ipaddress
 import socket
 import ssl
 import threading
@@ -157,6 +158,17 @@ def test_a_public_answer_is_connected_by_address_without_a_second_lookup(gateway
     assert app.state.push.tick()["sent"] == 0
     # Each checked address in turn, as the operating system would, and DNS once.
     assert tried == [(address, 443) for address in PUBLIC] and asked == [HOST]
+
+
+def test_a_mapped_address_is_judged_by_its_ipv4_address(monkeypatch):
+    from gateway import push_transport
+
+    # Python changed how a mapped address is classified within 3.12. Even where the IPv6 tables
+    # call it public, the IPv4 address inside decides too.
+    monkeypatch.setattr(ipaddress.IPv6Address, "is_global", property(lambda self: True))
+    monkeypatch.setattr(ipaddress.IPv6Address, "is_private", property(lambda self: False))
+    assert push_transport.public("::ffff:10.0.0.7") is False
+    assert push_transport.public("::ffff:" + PUBLIC[0]) is True
 
 
 def certificates(folder, name: str) -> tuple[str, str, str]:

@@ -52,8 +52,9 @@ software, not the owner's server).
   `*.push.apple.com`, `*.notify.windows.com`; HTTPS on 443), so the gateway never posts to an
   address inside the server's network. A name is not an address, so each connection resolves the
   push host once and refuses the whole answer if any address in it is not a public internet
-  address (private, loopback, link-local, multicast, reserved, unspecified, shared, or an IPv6
-  address carrying such an IPv4 one: mapped, 6to4, Teredo, NAT64); it then connects to a checked
+  address (private, loopback, link-local, multicast, reserved, unspecified or shared; a mapped IPv6
+  address is judged by its IPv4 address too, and 6to4, Teredo and NAT64 fall in ranges already
+  refused); it then connects to a checked
   address with no second lookup, and TLS still checks the push service's own name (SNI and the
   certificate; `gateway/push_transport.py`). A device the push service reports gone (404, 410) is
   removed; one it refuses (401, 403) is removed when that happens two rounds in a row (once can be

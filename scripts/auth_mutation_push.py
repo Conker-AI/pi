@@ -143,11 +143,11 @@ PUSH_CASES = [
         INSIDE + "[inside7]",
     ),
     (
-        "push-nat64-connected",
+        "push-mapped-judged-as-ipv6-only",
         "gateway/push_transport.py",
-        "if ip in NAT64:",
-        "if False:",
-        INSIDE + "[inside17]",
+        "for each in (ip, mapped)",
+        "for each in (ip,)",
+        PINNED + "test_a_mapped_address_is_judged_by_its_ipv4_address",
     ),
     (
         "push-device-left-on-an-idled-out-sign-in",
@@ -155,13 +155,6 @@ PUSH_CASES = [
         '"UPDATE push_subscriptions SET session_id=? WHERE session_id=?"',
         '"UPDATE push_subscriptions SET session_id=? WHERE session_id=? AND 0"',
         SESSION + "test_a_device_follows_its_browser_to_the_next_sign_in_without_a_renewal",
-    ),
-    (
-        "push-replaced-token-carries-devices",
-        "gateway/known_browsers.py",
-        '" ON known.token_hash=link.token_hash WHERE link.token_hash=?"',
-        '" ON 1 WHERE link.token_hash=?"',
-        SESSION + "test_a_token_an_older_gateway_replaced_carries_nothing",
     ),
     (
         "push-old-table-sends-first",

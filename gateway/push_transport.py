@@ -6,10 +6,11 @@ address, though: DNS for an allowed name could answer with an address inside the
 (a changed record, a resolver the host does not control), and a connection or handshake would
 reach it. So each new connection resolves the push host once and refuses the whole answer when
 any address in it is not on the public internet: private, loopback, link-local, multicast,
-reserved, unspecified or shared, or an IPv6 address that carries such an IPv4 one (mapped, 6to4,
-Teredo, NAT64). Then it connects to a checked address itself, with no second lookup, and TLS still
-names the real host: SNI and the certificate check use the endpoint's hostname, so the far end
-must prove it is that push service.
+reserved, unspecified or shared, and an IPv4-mapped IPv6 address is judged by its IPv4 address
+too. (6to4, Teredo and NAT64 addresses fall in ranges Python already counts as private or
+reserved, so they are refused whatever they carry.) Then it connects to a checked address itself,
+with no second lookup, and TLS still names the real host: SNI and the certificate check use the
+endpoint's hostname, so the far end must prove it is that push service.
 """
 
 from __future__ import annotations
@@ -23,22 +24,14 @@ from typing import Any
 import httpcore
 import httpx
 
-NAT64 = ipaddress.ip_network("64:ff9b::/96")
-
 
 def public(address: str) -> bool:
-    """Whether one resolved address is a public internet address, and so is any IPv4 address it
-    carries."""
+    """Whether one resolved address is a public internet address (a mapped IPv4 one: both)."""
     try:
         ip = ipaddress.ip_address(address)
     except ValueError:
         return False
-    judged: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
-    if isinstance(ip, ipaddress.IPv6Address):
-        judged += [inner for inner in (ip.ipv4_mapped, ip.sixtofour) if inner]
-        judged += list(ip.teredo or ())
-        if ip in NAT64:
-            judged.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+    mapped = ip.ipv4_mapped if isinstance(ip, ipaddress.IPv6Address) else None
     return all(
         each.is_global
         and not (
@@ -49,7 +42,8 @@ def public(address: str) -> bool:
             or each.is_reserved
             or each.is_unspecified
         )
-        for each in judged
+        for each in (ip, mapped)
+        if each is not None
     )
 
 
