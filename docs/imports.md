@@ -127,11 +127,13 @@ still hold the chat.
 ### Settling a stuck erasure by hand
 
 `GET /imports/erasures` lists deleted imported chats whose words MemoryGate may still hold, newest
-first (ids and counts only): `stuck` when no listener set now will erase any of them, `erasing`
-with the reason otherwise, and the ones already settled. The Inbox card of `import_erasures`
+first, a page at a time (`limit` up to 100, `offset`, `total`, `nextOffset`; ids and counts
+only): `stuck` when no listener set now will erase any of them, `erasing` with the reason
+otherwise. The ones already settled are left out unless asked for (`state=settled` or `all`). The Inbox card of `import_erasures`
 names this list (`step`). `POST /imports/erasures/{id}/settle` settles one (`pi.memory.import_settle`);
 through the browser it asks for the password, as deleting forever does. It is refused while the
-listener set now can still erase a word of the chat (`listener_reachable`: wait), while a word waits
+listener set now can still erase a word of the chat (`listener_reachable`: wait, or, while that
+listener refuses Pi's key or source, fix it as the Inbox card says), while a word waits
 for a listener the owner can set up or set back, or when nothing is left to erase (`not_stuck`).
 Settling clears Pi's saved copies the way a memory forget does (saved recall, saved
 `conker.recall` results, captured model inputs), keeps the erasure rows so every reader keeps the

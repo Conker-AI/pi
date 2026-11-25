@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import time
 
+from pi.memory import import_offers
 from pi.memory import store as memory_store
 from pi.memory.imports import ERASING, LABELS, REACHABLE, ImportRefused
 
@@ -42,31 +43,44 @@ REFUSALS = {
     "not_stuck": "Nothing of this chat is stuck: its words wait for an import listener you can "
     "set up or set back (the Inbox card says which), or nothing is left to erase.",
 }
+# While the listener set now refuses Pi (401, 403: its key; 404: its source), waiting does not
+# help: the refusal names what to fix there first (import_offers.FIXES, as the Inbox card does).
+REFUSED_FIX = {401: "key", 403: "key", 404: "source"}
+THEN = " Then Conker tries these words again; settle by hand only if it does not find them."
+# Which erasures the list shows: not settled yet (the default), settled by hand, or both.
+SHOWN = {"open": "s.chat_id IS NULL", "settled": "s.chat_id IS NOT NULL", "all": "1"}
 LIST_LIMIT = 100
 
 
-def _held(db, chat_id: str, listener: str | None) -> tuple[str, int]:
-    """This deleted chat's erasure: `stuck` (it may be settled) or why not, and how many of its
-    words MemoryGate may still hold. `listener`: the import listener set now, None for none."""
+def _held(db, chat_id: str, listener: str | None) -> tuple[str, int, int | None]:
+    """This deleted chat's erasure: `stuck` (it may be settled) or why not, how many of its
+    words MemoryGate may still hold, and the refusal of the listener set now (`listener`, None
+    for none) for a word it still tries, if any."""
     held, pending = db.execute(
         "SELECT COUNT(*), COALESCE(SUM(state='pending'), 0) FROM import_evidence_erasures "
         f"WHERE chat_id=? AND {ERASING}",
         (chat_id,),
     ).fetchone()
     # With no listener set up, the sender tries nothing (REACHABLE would match NULL keys).
-    reachable = (
-        listener is not None
-        and db.execute(
-            f"SELECT 1 FROM import_evidence_erasures WHERE chat_id=? AND {REACHABLE} LIMIT 1",
+    reachable, refused = (
+        (0, None)
+        if listener is None
+        else db.execute(
+            "SELECT COUNT(*), MAX(refused) FROM import_evidence_erasures "
+            f"WHERE chat_id=? AND {REACHABLE}",
             (chat_id, listener, listener),
         ).fetchone()
-        is not None
     )
     if reachable:
-        return "listener_reachable", held
+        return "listener_reachable", held, refused
     if pending or not held:
-        return "not_stuck", held
-    return "stuck", held
+        return "not_stuck", held, None
+    return "stuck", held, None
+
+
+def _message(state: str, refused: int | None) -> str:
+    fix = REFUSED_FIX.get(refused) if state == "listener_reachable" and refused else None
+    return import_offers.FIXES[fix] + THEN if fix else REFUSALS[state]
 
 
 def _settlement(db, chat_id: str):
@@ -108,9 +122,9 @@ def settle(store, chat_id: str, *, listener: str | None, clock=time.time) -> dic
             if prior is not None:
                 db.rollback()
                 return _receipt(deletion, prior, None)
-            state, held = _held(db, chat_id, listener)
+            state, held, refused = _held(db, chat_id, listener)
             if state != "stuck":
-                raise ImportRefused(state, REFUSALS[state], 409)
+                raise ImportRefused(state, _message(state, refused), 409)
             # Recall leaves the words out from now on as before; Pi's saved copies go now.
             cleared = memory_store.invalidate_recall(db)
             db.execute(
@@ -127,28 +141,35 @@ def settle(store, chat_id: str, *, listener: str | None, clock=time.time) -> dic
     return _receipt(deletion, settled, not busy)
 
 
-def erasures(store, *, listener: str | None, limit: int = LIST_LIMIT) -> dict:
-    """Deleted imported chats whose words MemoryGate may still hold, the latest first: whether
-    each may be settled now, or why not, and the ones the owner settled. Ids and counts only."""
+def erasures(
+    store, *, listener: str | None, state: str = "open", limit: int = 50, offset: int = 0
+) -> dict:
+    """Deleted imported chats whose words MemoryGate may still hold, the latest first, a page at
+    a time: whether each may be settled now, or why not. `state` (SHOWN): those not settled yet,
+    the ones the owner settled, or all. Ids and counts only."""
+    where = (
+        "WHERE (s.chat_id IS NOT NULL OR EXISTS (SELECT 1 FROM import_evidence_erasures e "
+        f"WHERE e.chat_id=d.id AND {ERASING})) AND {SHOWN[state]}"
+    )
+    joined = (
+        "FROM imported_chat_deletions d LEFT JOIN import_erasure_settlements s ON s.chat_id=d.id "
+    )
     with store._connect() as db:
         db.execute("BEGIN")
+        total = db.execute(f"SELECT COUNT(*) {joined}{where}").fetchone()[0]
         rows = db.execute(
-            "SELECT d.id, d.source, d.deleted_at, s.settled_at, s.words "
-            "FROM imported_chat_deletions d "
-            "LEFT JOIN import_erasure_settlements s ON s.chat_id=d.id "
-            "WHERE s.chat_id IS NOT NULL OR EXISTS (SELECT 1 FROM import_evidence_erasures e "
-            f"WHERE e.chat_id=d.id AND {ERASING}) "
-            "ORDER BY d.deleted_at DESC, d.id LIMIT ?",
-            (limit,),
+            f"SELECT d.id, d.source, d.deleted_at, s.settled_at, s.words {joined}{where} "
+            "ORDER BY d.deleted_at DESC, d.id DESC LIMIT ? OFFSET ?",
+            (min(limit, LIST_LIMIT), offset),
         ).fetchall()
         items = []
         for row in rows:
             if row["settled_at"] is not None:
-                state, words, refusal = "settled_by_owner", row["words"], None
+                shown, words, refusal = "settled_by_owner", row["words"], None
             else:
-                state, words = _held(db, row["id"], listener)
-                refusal = None if state == "stuck" else state
-                state = "stuck" if refusal is None else "erasing"
+                held, words, refused = _held(db, row["id"], listener)
+                refusal = None if held == "stuck" else (held, _message(held, refused))
+                shown = "stuck" if refusal is None else "erasing"
             items.append(
                 {
                     "deletionId": row["id"],
@@ -156,9 +177,15 @@ def erasures(store, *, listener: str | None, limit: int = LIST_LIMIT) -> dict:
                     "label": LABELS[row["source"]],
                     "deletedAt": row["deleted_at"],
                     "words": words,
-                    "state": state,
-                    "refusal": {"code": refusal, "message": REFUSALS[refusal]} if refusal else None,
+                    "state": shown,
+                    "refusal": {"code": refusal[0], "message": refusal[1]} if refusal else None,
                     "settledAt": row["settled_at"],
                 }
             )
-    return {"schemaVersion": 1, "erasures": items, "note": NOTE}
+    return {
+        "schemaVersion": 1,
+        "total": total,
+        "erasures": items,
+        "nextOffset": offset + len(rows) if offset + len(rows) < total else None,
+        "note": NOTE,
+    }

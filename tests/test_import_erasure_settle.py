@@ -142,7 +142,10 @@ def test_the_owner_settles_a_stuck_erasure_by_hand_and_the_card_closes(
     history = http.get("/imports", headers=owner()).json()["memory"]
     assert history["settledByHand"] == 1 and history["notFoundToErase"] == 0
     assert history["problem"] is None
-    [item] = http.get("/imports/erasures", headers=owner()).json()["erasures"]
+    # Settled ones leave the list; asked for, they are there.
+    assert http.get("/imports/erasures", headers=owner()).json()["total"] == 0
+    settled = http.get("/imports/erasures?state=settled", headers=owner()).json()
+    [item] = settled["erasures"]
     assert (item["state"], item["settledAt"]) == ("settled_by_owner", receipt["settledAt"])
 
 
@@ -333,3 +336,81 @@ def test_the_browser_asks_for_the_password_to_settle():
     assert not browser_contract.password_write("GET", "/imports/erasures")
     for lookalike in (path("imp_x"), path("imp_" + "0" * 32) + "/x", "/imports/erasures/x"):
         assert not browser_contract.owner_allowed("POST", lookalike), lookalike
+
+
+def deletions(store, count, *, settled=0):
+    """`count` deleted imported chats, one word each that the listener set now did not find
+    (stuck); the newest `settled` of them settled by hand. Answers their ids, newest first."""
+    ids = [f"imp_{number:032x}" for number in range(count)]
+    with store._connect() as db:
+        for number, chat_id in enumerate(ids):
+            db.execute(
+                "INSERT INTO imported_chat_deletions VALUES (?,?,?,?,?,?,?)",
+                (chat_id, "claude", f"k{number}", 1000.0 + number, 1, 1, "[]"),
+            )
+            db.execute(
+                "INSERT INTO import_evidence_erasures(evidence_id,chat_id,source_key,state) "
+                "VALUES (?,?,?,'missing')",
+                (f"ev-{number}", chat_id, SOURCE),
+            )
+        for chat_id in ids[count - settled :]:
+            db.execute("INSERT INTO import_erasure_settlements VALUES (?,2000.0,1,0)", (chat_id,))
+    return ids[::-1]
+
+
+def test_the_list_pages_and_leaves_settled_erasures_out_unless_asked(http, store):
+    # More than one page, the newest settled: every stuck one is reachable, the oldest included.
+    newest_first = deletions(store, 115, settled=10)
+    seen, offset = [], 0
+    while offset is not None:
+        page = http.get(f"/imports/erasures?limit=100&offset={offset}", headers=owner())
+        assert page.status_code == 200, page.text
+        body = page.json()
+        assert body["total"] == 105
+        seen += [(item["deletionId"], item["state"]) for item in body["erasures"]]
+        offset = body["nextOffset"]
+    assert seen == [(chat_id, "stuck") for chat_id in newest_first[10:]]
+    first = http.get("/imports/erasures", headers=owner()).json()
+    assert len(first["erasures"]) == 50 and first["nextOffset"] == 50
+    done = http.get("/imports/erasures?state=settled", headers=owner()).json()
+    assert done["total"] == 10 and {item["state"] for item in done["erasures"]} == {
+        "settled_by_owner"
+    }
+    assert http.get("/imports/erasures?state=all", headers=owner()).json()["total"] == 115
+    past = http.get("/imports/erasures?offset=500", headers=owner()).json()
+    assert (past["total"], past["erasures"], past["nextOffset"]) == (105, [], None)
+    for bad in ("state=done", "limit=101", "limit=0", "offset=-1"):
+        assert http.get(f"/imports/erasures?{bad}", headers=owner()).status_code == 422, bad
+
+
+@pytest.mark.parametrize(
+    ("code", "fix"),
+    [(401, "PI_MEMORYGATE_IMPORT_KEY"), (403, "PI_MEMORYGATE_IMPORT_KEY"), (404, "SOURCE")],
+)
+def test_a_listener_set_later_that_refuses_is_named_on_the_card_and_by_a_settle(
+    store, offers, listener, code, fix
+):
+    # A word not found where Pi looked is tried once more through a listener set since. If that
+    # listener refuses (its key or its source), the fix is the listener, not settling by hand.
+    from pi.memory import import_settle
+
+    chat_id = stuck(store, offers, listener)
+    other = configured(offers, listener, "old-imports")
+    listener.answers = [(code, {"detail": "refused"})]
+    other.drain_once()
+    late = deleted_at(store) + 3 * DAY + 1
+    check = import_offers.erasure_health(store, other, now=late)
+    assert check["status"] == "degraded" and fix in check["reason"]
+    assert "settle" not in check["reason"]
+    with pytest.raises(imports.ImportRefused) as refused:
+        import_settle.settle(store, chat_id, listener="old-imports")
+    assert refused.value.code == "listener_reachable" and fix in refused.value.message
+    [item] = import_settle.erasures(store, listener="old-imports")["erasures"]
+    assert item["refusal"]["code"] == "listener_reachable" and fix in item["refusal"]["message"]
+    # The listener answers again and does not have them either: now it may be settled.
+    other.paused_until = 0
+    listener.answers = [NOT_FOUND]
+    other.drain_once()
+    assert "settle it by hand" in import_offers.erasure_health(store, other, now=late)["reason"]
+    assert import_settle.settle(store, chat_id, listener="old-imports")["wordsSettled"] == 1
+    other.close()
