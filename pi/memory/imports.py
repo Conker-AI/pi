@@ -77,6 +77,12 @@ CREATE TABLE IF NOT EXISTS import_evidence_erasures (
  attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
  error TEXT NOT NULL DEFAULT '', offered_via TEXT, refused INTEGER
 );
+-- A deleted imported chat's erasure the owner settled by hand (pi.memory.import_settle): counts
+-- only. Its rows above stay, so the words stay hidden; it is no longer reported or waited on.
+CREATE TABLE IF NOT EXISTS import_erasure_settlements (
+ chat_id TEXT PRIMARY KEY, settled_at REAL NOT NULL, words INTEGER NOT NULL,
+ cleared INTEGER NOT NULL
+);
 """
 # An erasure whose words MemoryGate may still hold: it waits, or MemoryGate's answer of not found
 # came from a listener that is not the one they were offered to (that answer is the same for
@@ -86,6 +92,17 @@ CREATE TABLE IF NOT EXISTS import_evidence_erasures (
 ERASING = (
     "(state='pending' OR (state='missing' AND (offered_via IS NULL OR source_key IS NULL "
     "OR source_key<>offered_via)))"
+)
+# The owner settled the erasure of this row's chat by hand (import_settle). MemoryGate may still
+# hold its words, so it stays ERASING for every reader (pi.conversation.hidden_records).
+SETTLED = "chat_id IN (SELECT chat_id FROM import_erasure_settlements)"
+# What Pi still works on and reports (import_offers.erasure_health): ERASING, not settled.
+OPEN = f"({ERASING} AND NOT {SETTLED})"
+# Rows the sender asks the listener `?` (bound twice) to erase (import_deletion.erase_waiting):
+# its own pending ones, and one more try of each not found that Pi cannot place.
+REACHABLE = (
+    "((state='pending' AND (source_key IS NULL OR source_key=?)) OR (state='missing' "
+    "AND offered_via IS NULL AND (source_key IS NULL OR source_key<>?)))"
 )
 
 

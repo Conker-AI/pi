@@ -16,6 +16,10 @@ so services that start together are not reported as broken.
 - `not_configured` and `unknown` (configured, not proven) are never alerts.
 - The owner may dismiss an alert (`POST /self-check/alerts/{id}/dismiss`, the signed-in session
   is enough). It stays hidden until the check recovers and breaks again.
+- A card may name a step the owner can take (`step`): the `import_erasures` card names
+  `/imports/erasures`, where a deleted imported chat's erasure no listener will finish is settled
+  by hand ([imports](imports.md)). Settling reads that check again at once, so its card closes
+  then rather than at the next check.
 
 `GET /self-check` (owner credential; browser read) lists each check's last status and since
 when, and the open alerts. The rows hold check names, statuses and the checks' fixed reason

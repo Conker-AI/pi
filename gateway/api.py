@@ -36,6 +36,7 @@ from . import (
 from .dashboard import API_CSP, UI_CSP, DashboardAssets
 from .diagnostics import collect_diagnostics
 from .operations import fingerprint
+from .push_transport import PinnedTransport
 from .store import AuthError, AuthStore
 from .terminal_client import RemoteTerminal, TerminalSidecar
 from .terminals import Terminals
@@ -246,9 +247,12 @@ def create_app(
                 transport=transport, timeout=660, follow_redirects=False, trust_env=False
             ) as client,
             # The browsers' push services, on the internet: no proxy from the environment, no
-            # redirects, a short wait (gateway/push.py).
+            # redirects, a short wait (gateway/push.py), public addresses only (push_transport.py).
             httpx.Client(
-                transport=push_transport, timeout=10, follow_redirects=False, trust_env=False
+                transport=push_transport or PinnedTransport(),
+                timeout=10,
+                follow_redirects=False,
+                trust_env=False,
             ) as push_client,
         ):
             app.state.client = client

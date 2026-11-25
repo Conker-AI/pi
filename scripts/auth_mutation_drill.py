@@ -255,8 +255,8 @@ CASES = [
     (
         "raw-device-token-at-rest",
         "gateway/store.py",
-        'VALUES(?,?,?)", (digest(kept), now, now))',
-        'VALUES(?,?,?)", (kept, now, now))',
+        "known_browsers.signed_in(db, presented, digest(kept),",
+        "known_browsers.signed_in(db, presented, kept,",
         LOCKOUT + "test_each_sign_in_replaces_the_device_token_and_only_its_hash_is_kept",
     ),
     (
@@ -478,6 +478,8 @@ def main() -> int:
             "test_gateway_host_preferences.py",
             "test_gateway_cli_approval_password.py",
             "test_gateway_push.py",
+            "test_gateway_push_session.py",
+            "test_gateway_push_pinned.py",
             "test_push_queue.py",
             "test_gateway_mcp_class.py",
             "test_gateway_tool_settings.py",

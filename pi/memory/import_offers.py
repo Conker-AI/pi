@@ -58,8 +58,9 @@ FIXES = {
     "unset": "Pi's import listener is not set up. Set PI_MEMORYGATE_IMPORT_SOURCE and "
     "PI_MEMORYGATE_IMPORT_KEY, then restart Pi.",
     # Sent by a Pi that did not record where, and not found where Pi looked (docs/imports.md).
-    "unknown": "Conker cannot tell which memory listener these words went to, so memories made "
-    "from imported chats stay out of recall.",
+    # The owner may settle such an erasure by hand (import_settle).
+    "unknown": "Conker cannot tell which memory listener these went to, so imported memories "
+    "stay out of recall. If none has them, settle it by hand.",
     "slow": "MemoryGate has not erased them in 3 days. Check that MemoryGate runs; Pi keeps "
     "trying.",
 }
@@ -325,9 +326,11 @@ def status(store, offers: Offers | None) -> dict:
         counts = dict(
             db.execute("SELECT state, COUNT(*) FROM import_memory_offers GROUP BY state").fetchall()
         )
+        # An erasure the owner settled by hand is counted apart (import_settle).
         erasing = dict(
             db.execute(
-                "SELECT state, COUNT(*) FROM import_evidence_erasures GROUP BY state"
+                f"SELECT CASE WHEN {imports.SETTLED} THEN 'settled' ELSE state END, COUNT(*) "
+                "FROM import_evidence_erasures GROUP BY 1"
             ).fetchall()
         )
     configured = offers is not None and offers.client is not None
@@ -353,6 +356,7 @@ def status(store, offers: Offers | None) -> dict:
         # Words of deleted imported chats still to erase in MemoryGate, and ones it did not have.
         "erasing": erasing.get("pending", 0),
         "notFoundToErase": erasing.get("missing", 0),
+        "settledByHand": erasing.get("settled", 0),
         "problem": problem,
     }
 
@@ -362,8 +366,9 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
     stay in MemoryGate (imports.ERASING) OVERDUE_SECONDS after the deletion, or at once while the
     import listener refuses their erasure (401, 403, 404; kept on the row, so a restart does not
     forget it). Pi's self-check files it as one Inbox card at once (`alertAfterSeconds`) and
-    closes it when that is over. Counts and fixed words only; one with no deletion time counts as
-    overdue, and an unreadable table as broken."""
+    closes it when that is over, or when the owner settled it by hand (imports.OPEN). Counts and
+    fixed words only; one with no deletion time counts as overdue, and an unreadable table as
+    broken."""
     now = time.time() if now is None else now
     client = offers.client if offers is not None else None
     key = client.source_key if client is not None else None
@@ -383,7 +388,7 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
                 "THEN COALESCE(d.deleted_at, 0) END) "
                 "FROM import_evidence_erasures e "
                 "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
-                f"WHERE {imports.ERASING}",
+                f"WHERE {imports.OPEN}",
                 (key, key),
             ).fetchone()
     except (sqlite3.Error, RuntimeError):

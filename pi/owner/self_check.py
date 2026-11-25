@@ -63,6 +63,10 @@ NAMES = {
     "forget_followups": "Clean-up after deleted chats",
     "import_erasures": "Erasing deleted imported chats",
 }
+# A step the owner may take from a check's card, and the route that lists what it applies to:
+# a deleted imported chat's erasure no listener will finish is settled by hand
+# (pi.memory.import_settle; the browser asks for the password).
+STEPS = {"import_erasures": {"kind": "settle-import-erasure", "list": "/imports/erasures"}}
 
 
 class SelfCheckError(ServiceError):
@@ -137,8 +141,10 @@ def _close_gone(db, seen: set, now: float) -> list[dict]:
     return [{"change": "cleared", "alertId": identity} for identity in gone]
 
 
-def record(store, checks: dict, *, now: float | None = None) -> list[dict]:
-    """Keep each check's state; raise, update or close alerts. Returns what changed."""
+def record(store, checks: dict, *, now: float | None = None, partial: bool = False) -> list[dict]:
+    """Keep each check's state; raise, update or close alerts. Returns what changed. `partial`:
+    `checks` is not every check (one read again after the owner acted on its card), so the
+    alerts of checks it leaves out stay as they are."""
     now = time.time() if now is None else now
     changes = []
     with store._connect() as db:
@@ -151,7 +157,7 @@ def record(store, checks: dict, *, now: float | None = None) -> list[dict]:
                     change = _one(db, name[:NAME_CHARS], check, now)
                     if change is not None:
                         changes.append(change)
-            if seen:
+            if seen and not partial:
                 changes.extend(_close_gone(db, seen, now))
             db.commit()
         except BaseException:
@@ -171,18 +177,23 @@ def needs_you(store) -> list[dict]:
             "SELECT * FROM self_check_alerts WHERE cleared_at IS NULL AND dismissed_at IS NULL "
             "ORDER BY raised_at"
         ).fetchall()
-    return [
-        {
-            "kind": "health",
-            "id": row["id"],
-            "title": f"{_name(row['check_name'])} is not working",
-            "since": row["raised_at"],
-            "status": row["status"],
-            "reason": row["reason"] or None,
-            "source": _source(row),
-        }
-        for row in rows
-    ]
+    return [_card(row) for row in rows]
+
+
+def _card(row) -> dict:
+    card = {
+        "kind": "health",
+        "id": row["id"],
+        "title": f"{_name(row['check_name'])} is not working",
+        "since": row["raised_at"],
+        "status": row["status"],
+        "reason": row["reason"] or None,
+        "source": _source(row),
+    }
+    step = STEPS.get(row["check_name"])
+    if step is not None:
+        card["step"] = dict(step)
+    return card
 
 
 def recovered(store, since: float) -> list[dict]:

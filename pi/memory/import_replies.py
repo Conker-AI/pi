@@ -1,6 +1,6 @@
 """The replies of Pi's owner import routes (`/imports`), described in OpenAPI (D-01).
 
-They name what pi.memory.imports, import_offers and import_deletion already send; the routes
+They name what pi.memory.imports, import_offers, import_deletion and import_settle send; the routes
 describe them with `pi.core.models.described` and do not re-validate the reply. `source` is
 closed: imported chats carry a CHECK on it and an import's source is the route's own Literal.
 """
@@ -68,6 +68,8 @@ class ImportMemoryStatus(Strict):
     refused: int
     erasing: int
     notFoundToErase: int
+    # Words of deleted chats whose erasure the owner settled by hand (import_settle).
+    settledByHand: int
     problem: str | None
 
 
@@ -128,4 +130,49 @@ class ImportedChatDeletion(Strict):
     messagesDeleted: int
     offeredToMemory: int
     memoryNote: str | None
+    fileScrubbed: bool | None
+
+
+class ImportErasureRefusal(Strict):
+    """Why an erasure cannot be settled by hand now (import_settle.REFUSALS)."""
+
+    code: Literal["listener_reachable", "not_stuck"]
+    message: str
+
+
+class ImportErasure(Strict):
+    """One deleted imported chat whose words MemoryGate may still hold: `stuck` may be settled by
+    hand; `erasing` cannot be yet (`refusal` says why). Ids and counts only."""
+
+    deletionId: str
+    source: ImportSource
+    label: str
+    deletedAt: float
+    words: int
+    state: Literal["erasing", "stuck", "settled_by_owner"]
+    refusal: ImportErasureRefusal | None
+    settledAt: float | None
+
+
+class ImportErasureList(Strict):
+    schemaVersion: Literal[1]
+    erasures: list[ImportErasure]
+    # What settling one does, to show before the owner confirms it.
+    note: str
+
+
+class ImportErasureSettlement(Strict):
+    """The record of an erasure the owner settled by hand: counts and fixed words only. Nothing is
+    said to be erased in MemoryGate. `fileScrubbed` is None when this repeats the record."""
+
+    schemaVersion: Literal[1]
+    deletionId: str
+    source: ImportSource
+    label: str
+    state: Literal["settled_by_owner"]
+    deletedAt: float
+    settledAt: float
+    wordsSettled: int
+    savedRecallCleared: int
+    note: str
     fileScrubbed: bool | None

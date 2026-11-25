@@ -327,8 +327,14 @@ class Devices:
             db.execute("DELETE FROM push_subscriptions WHERE key_id<>?", (current,))
 
     def every(self) -> list[dict]:
+        # Named columns: a table from an earlier build of web push fails the round before
+        # anything is claimed or sent, never after the sends.
         with self.auth.transaction(write=False) as db:
-            return [dict(row) for row in db.execute("SELECT * FROM push_subscriptions")]
+            rows = db.execute(
+                "SELECT id,endpoint,p256dh,auth,created,session_id,key_id,label,refused"
+                " FROM push_subscriptions"
+            )
+            return [dict(row) for row in rows]
 
     def counted(self, refused: set[str], accepted: set[str]) -> int:
         """After a round: a device that took a message starts over; one the push service refused
