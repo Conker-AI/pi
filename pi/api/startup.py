@@ -233,7 +233,6 @@ async def lifespan(app: FastAPI):
     app.state.owner_key_hash = owner_hash
     app.state.service_key_hashes = service_keys
     app.state.store = store
-    app.state.local = local
     # Every paid call passes the owner's daily cap (pi.models.spending_cap).
     spending_cap.recover_interrupted(store)
     hosted, direct_providers = spending_cap.wrap(
@@ -244,9 +243,10 @@ async def lifespan(app: FastAPI):
         ),
         [adapter.name for _, adapter in DIRECT_ADAPTERS],
     )
-    # Every request to an online model leaves through here: the owner's Hide secrets from online
-    # models (pi.models.redaction). Ollama, `local`, is not wrapped.
-    hosted, direct_providers = redaction.wrap(store, hosted, direct_providers)
+    # Every request that can leave this server goes through here: the owner's Hide secrets from
+    # online models (pi.models.redaction). Ollama is local only on this server, for local models.
+    local, hosted, direct_providers = redaction.wrap(store, local, hosted, direct_providers)
+    app.state.local = local
     app.state.hosted = hosted
     app.state.provider_credentials = sorted(
         name

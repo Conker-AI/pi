@@ -16,8 +16,11 @@ from made_up_secrets import (
     FINE_GRAINED_SHAPE,
     GITHUB_SHAPE,
     GOOGLE_SHAPE,
+    HUGGING_FACE_SHAPE,
     JWT_SHAPE,
     KEY_LINES,
+    MADE_UP_VALUE,
+    NPM_SHAPE,
     OPENAI_SHAPE,
     SLACK_SHAPE,
     STRIPE_SHAPE,
@@ -48,8 +51,20 @@ def cleaned(text):
         (f"maps {GOOGLE_SHAPE}", "key", GOOGLE_SHAPE),
         (f"session {JWT_SHAPE}", "key", JWT_SHAPE),
         ("Authorization: Bear" + f"er {BEARER_SHAPE}", "key", BEARER_SHAPE),
+        (f"hugging face {HUGGING_FACE_SHAPE}", "key", HUGGING_FACE_SHAPE),
+        (f"npm {NPM_SHAPE}", "key", NPM_SHAPE),
+        *(
+            (name + "=" + MADE_UP_VALUE, "key", MADE_UP_VALUE)
+            for name in ("GITHUB_TOKEN", "HF_TOKEN", "SLACK_TOKEN", "discord_token", "X-Api-Key")
+        ),
+        (f'"aws_secret_access_key": "{MADE_UP_VALUE}"', "key", MADE_UP_VALUE),
         ("DB_PASSWORD=hunter2 and more", "password", "hunter2"),
         ("password: pa55word", "password", "pa55word"),
+        # After a password's name any value but a placeholder is one, short or plain.
+        ("password=hunter", "password", "hunter"),
+        ("password: dragon", "password", "dragon"),
+        ("password=my.secret.pw", "password", "my.secret.pw"),
+        ("SMTP_PASS=letmein", "password", "letmein"),
         ('passwd = "with spaces 1"', "password", "with spaces 1"),
         ("secret='made.up.1'", "password", "made.up.1"),
         ("client_secret: madeup123", "password", "madeup123"),
@@ -87,8 +102,16 @@ def test_each_kind_of_secret_is_replaced_by_its_marker(text, kind, secret):
         "Bearer authentication-scheme-header, the bearer of good news",
         "password_length=12, PASSWORD_FILE=/run/secrets/db, has_password: true",
         "password: null, password: ${DB_PASSWORD}, password: '<your password>', password=****",
-        'password = getpass(), password=pw, password: str, if password == "x"',
+        "password: changeme, password=xxx, password: {{ vault_pw }}, password=%DB_PW%, pass: $PW",
+        'password = getpass(), password: str, password: string; if password == "x"',
+        "password=self.password, password=settings.DB_PASSWORD, password: config.get('db')",
         'secret = request.form.get("secret"), api_key: Optional[str]',
+        "api_key=settings.OPENAI_API_KEY, api_key: os.environ['OPENAI_API_KEY']",
+        # A key's name with a value too plain to be a key: code, counts and ids.
+        "primary_key: id, sort_key=created_at, foreign_key: users.id, input_token: 1234",
+        "max_tokens=4096, page_token=CAoQAA, hotkey: ctrl+shift+p",
+        # pwd is also the working directory.
+        "pwd: /home/user, OLDPWD=C:\\Users\\owner, PWD=/srv/conker",
         DASHES + "BEGIN PRIVATE KEY" + DASHES + " is how such a block starts",
         "monkey: banana, keyboard=qwerty",
     ],
@@ -160,6 +183,28 @@ def test_redaction_never_breaks_json(document):
         json.loads(cleaned(json.dumps(out))[0])
 
 
+@pytest.mark.parametrize("depth", [0, 1, 2])
+def test_an_unquoted_json_value_is_replaced_by_a_quoted_marker(depth):
+    text = json.dumps({"password": 12345678, "card": 4111111111111111, "n": 1})
+    for _ in range(depth):
+        text = json.dumps(text)
+    out, counts = cleaned(text)
+    for _ in range(depth + 1):
+        out = json.loads(out)
+    assert out == {"password": "[removed: password]", "card": "[removed: card number]", "n": 1}
+    assert counts == {"password": 1, "card": 1}
+
+
+def test_the_rest_of_a_key_cut_by_a_line_wrap_goes_too():
+    rest = "fake1" * 6
+    out, counts = cleaned(f"my key is {OPENAI_SHAPE}\n{rest}\nThanks")
+    assert out == "my key is [removed: key]\nThanks" and counts == {"key": 1}
+    escaped, _ = cleaned(json.dumps({"text": f"{GITHUB_SHAPE}\n{rest}\n{rest}\nok"}))
+    assert json.loads(escaped) == {"text": "[removed: key]\nok"}
+    # A word on the next line is not part of the key.
+    assert cleaned(f"{OPENAI_SHAPE}\nRegards")[0] == "[removed: key]\nRegards"
+
+
 def test_redacting_twice_changes_nothing_more():
     text = " ".join(
         [OPENAI_SHAPE, "password: pa55word", f'"secret": "{GITHUB_SHAPE}"', CARD, pem()]
@@ -218,8 +263,14 @@ def test_off_unless_the_owner_turns_it_on(store):
     assert redaction.DEFAULT is False and not redaction.enabled(store)
     choose(store, {"privacy.redact": True})
     assert redaction.enabled(store)
-    choose(store, {"privacy.redact": "yes"})
+    choose(store, {"privacy.redact": False})
     assert not redaction.enabled(store)
+
+
+@pytest.mark.parametrize("stored", ["true", 1, "on", "yes", "false", 0, None, "", [], {}])
+def test_only_a_stored_false_turns_it_off(store, stored):
+    choose(store, {"privacy.redact": stored})
+    assert redaction.enabled(store)
 
 
 def test_a_setting_that_cannot_be_read_counts_as_on(store):
@@ -277,17 +328,26 @@ def test_two_calls_at_once_each_count_only_their_own(store):
     assert seen == {"one": {"key": 1}, "two": {"card": 2}}
 
 
-def test_only_online_adapters_are_wrapped(store):
+class Ollama(Adapter):
+    def __init__(self, base_url):
+        super().__init__("ollama")
+        self.base_url = base_url
+
+
+def test_every_adapter_that_can_send_off_this_server_is_wrapped(store):
     local = Adapter("decisions", "http://127.0.0.1:8060")
     remote = Adapter("decisions", "https://decisions.example.test")
-    hosted, providers = redaction.wrap(
-        store, Adapter("openrouter"), {"decisions": local, "remote": remote, "openai": Adapter("x")}
+    ollama, hosted, providers = redaction.wrap(
+        store,
+        Ollama("http://ollama:11434"),
+        Adapter("openrouter"),
+        {"decisions": local, "remote": remote, "openai": Adapter("x")},
     )
-    assert isinstance(hosted, redaction.Redacting)
+    assert isinstance(ollama, redaction.Redacting) and isinstance(hosted, redaction.Redacting)
     assert providers["decisions"] is local
     assert isinstance(providers["remote"], redaction.Redacting)
     assert isinstance(providers["openai"], redaction.Redacting)
-    assert redaction.wrap(store, None, {}) == (None, {})
+    assert redaction.wrap(store, None, None, {}) == (None, None, {})
     # Everything but the request reads through to the adapter.
     assert providers["remote"].url == "https://decisions.example.test"
     with pytest.raises(AttributeError):
@@ -297,3 +357,27 @@ def test_only_online_adapters_are_wrapped(store):
         setattr(remote, name, lambda *args, **kwargs: "sent")
         with pytest.raises(AttributeError):
             getattr(providers["remote"], name)
+
+
+@pytest.mark.parametrize(
+    ("url", "model", "redacted"),
+    [
+        ("http://ollama:11434", "qwen3:4b", False),  # its service on this server's network
+        ("http://127.0.0.1:11434", "llama3.2", False),
+        ("http://localhost:11434", "llama3.2", False),
+        ("http://[::1]:11434", "llama3.2", False),
+        ("http://ollama:11434", "gpt-oss:120b-cloud", True),  # Ollama answers these online
+        ("http://ollama:11434", "glm-4.6:cloud", True),
+        ("http://127.0.0.1:11434", "kimi-k2:1t-cloud", True),
+        ("http://ollama.example.test:11434", "qwen3:4b", True),
+        ("http://10.0.0.5:11434", "qwen3:4b", True),
+        ("http://ollama-gpu:11434", "qwen3:4b", True),
+        ("not a url", "qwen3:4b", True),
+    ],
+)
+def test_ollama_is_local_only_on_this_server_and_for_local_models(store, url, model, redacted):
+    choose(store, {"privacy.redact": True})
+    adapter = Ollama(url)
+    wrapped, _, _ = redaction.wrap(store, adapter, None, {})
+    wrapped.complete_bounded([Message("user", "use " + OPENAI_SHAPE)], model=model, timeout=5)
+    assert (OPENAI_SHAPE not in adapter.sent[0][0].content) is redacted

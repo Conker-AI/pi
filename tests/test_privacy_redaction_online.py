@@ -58,7 +58,7 @@ ASKED = {
 }
 
 
-def sent_by(monkeypatch, tmp_path, provider, *, redact, decisions="https://decisions.example.test"):
+def sent_by(monkeypatch, tmp_path, provider, *, redact, model=None, **urls):
     """Start Pi with every provider configured, ask one of them, and return what left Pi."""
     for name in list(os.environ):
         if name.startswith("PI_"):
@@ -72,7 +72,8 @@ def sent_by(monkeypatch, tmp_path, provider, *, redact, decisions="https://decis
         "PI_ALLOW_PAID_MODELS": "1",
         "PI_SUBSCRIPTION_URL": "http://127.0.0.1:9/",
         "PI_SUBSCRIPTION_KEY": "s" * 32,
-        "PI_DECISION_URL": decisions,
+        "PI_DECISION_URL": urls.get("decisions", "https://decisions.example.test"),
+        "PI_OLLAMA_URL": urls.get("ollama", "http://ollama:11434"),
         "PI_DECISION_KEY": "d" * 32,
     }.items():
         monkeypatch.setenv(name, value)
@@ -92,9 +93,9 @@ def sent_by(monkeypatch, tmp_path, provider, *, redact, decisions="https://decis
             if redact:
                 choose(api.app.state.store, {"privacy.redact": True})
             adapter = api.app.state.router.adapters()[provider]
-            model, messages = ASKED[provider]
+            asked, messages = ASKED[provider]
             with pytest.raises(ProviderUnavailable):
-                adapter.complete_bounded(messages(), model=model, timeout=5)
+                adapter.complete_bounded(messages(), model=model or asked, timeout=5)
 
     asyncio.run(run())
     assert bodies, f"{provider} sent nothing"
@@ -118,6 +119,17 @@ def test_online_models_get_the_request_as_it_is_while_the_setting_is_off(monkeyp
 def test_local_models_get_the_request_as_it_is(monkeypatch, tmp_path, provider):
     sent = sent_by(monkeypatch, tmp_path, provider, redact=True, decisions="http://127.0.0.1:8060")
     assert OPENAI_SHAPE in sent and CARD in sent and "[removed:" not in sent
+
+
+@pytest.mark.parametrize(
+    ("url", "model"),
+    [("https://gpu.example.test", "qwen3:4b"), ("http://ollama:11434", "gpt-oss:120b-cloud")],
+    ids=["elsewhere", "cloud-model"],
+)
+def test_ollama_off_this_server_or_with_a_cloud_model_is_online(monkeypatch, tmp_path, url, model):
+    sent = sent_by(monkeypatch, tmp_path, "ollama", redact=True, model=model, ollama=url)
+    assert [secret[:12] for secret in SECRETS if secret in sent] == []
+    assert "[removed: key]" in sent and "[removed: card number]" in sent
 
 
 class Echo(FakeGate):
