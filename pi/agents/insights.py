@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pi.conversation import visibility
+from pi.core import notices as notice_kinds
 from pi.core.models import Strict
 
 DAY = 86400.0
@@ -104,7 +105,9 @@ def _window(db, since: float, until: float) -> dict:
         dismissed = _count(db, "owner_asks", f"state='dismissed' AND {done}", span)
         waits += _waits(db, "owner_asks", "answered_at", span)
     if _has(db, "notices"):
-        notices = _count(db, "notices", made, span)
+        # Only Conker's notices ask the owner; the owner's own shares and memory notes do not.
+        conker = f"kind IN ('{notice_kinds.PLAN}','{notice_kinds.AGENT_JOB}') AND {made}"
+        notices = _count(db, "notices", conker, span)
     if _has(db, "response_votes"):
         voted = "updated_at >= ? AND updated_at < ?"
         ups = _count(db, "response_votes", f"vote='up' AND {voted}", span)

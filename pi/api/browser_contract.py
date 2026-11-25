@@ -163,7 +163,7 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}",
         r"/jobs/job_[0-9a-f]{32}/runs",
         r"/jobs/agent/notes",
-        # Text he shared from another app, each in a chat of its own (pi.agents.shared_notes).
+        # Text the owner shared from another app, each in a chat of its own (pi.agents.shared_notes).
         r"/inbox/shared",
         r"/change-requests",
         r"/asks",
@@ -275,7 +275,7 @@ OWNER_ROUTES = {
         # Taking a job Conker made as his own: from then on its runs count as his.
         r"/jobs/job_[0-9a-f]{32}/adopt",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
-        # Saving shared text makes a chat and runs no model; he can forget the chat as any other.
+        # Saving shared text makes a chat and runs no model; the owner can forget it like any chat.
         r"/inbox/shared",
         r"/inbox/shared/note_[a-f0-9]{32}/dismiss",
         r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
