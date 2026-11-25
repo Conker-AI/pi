@@ -17,6 +17,7 @@ What works end to end in a real deployment is tracked in Conker's
 | [Auto settings](auto-settings.md) | Proposed settings for the next message in Auto mode |
 | [First-run setup status](setup-status.md) | Versioned owner-only setup evidence |
 | [Direct text providers](direct-providers.md) | Hosted providers without a router |
+| [Hide secrets from online models](secret-redaction.md) | Keys, passwords and card numbers removed before a request leaves |
 | [Browser authentication](browser-auth.md) | Gateway login, sessions, recovery |
 | [Turn submissions](turn-submissions.md) | Durable sends and exact message provenance |
 

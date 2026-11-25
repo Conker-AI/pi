@@ -1,9 +1,14 @@
-"""Content-free provider attempts; the original research ledger remains readable."""
+"""Content-free provider attempts; the original research ledger remains readable.
+
+An attempt also keeps how many secrets of each kind were hidden from the online model it went to
+(`redacted`, from `pi.models.redaction`), never what they were.
+"""
 
 import json
 import math
 import time
 import uuid
+from collections import Counter
 
 FIELDS = ("input_tokens", "output_tokens", "cached_tokens", "cost_usd")
 METRICS = (*FIELDS, "summed_call_ms")
@@ -30,6 +35,7 @@ EXTRA_COLUMNS = {
     "actual_model": "TEXT",
     "elapsed_ms": "INTEGER",
     "failure_kind": "TEXT",
+    "redacted": "TEXT",
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS research_model_calls (
@@ -39,7 +45,7 @@ CREATE TABLE IF NOT EXISTS research_model_calls (
  started_at REAL NOT NULL, ended_at REAL,
  input_tokens INTEGER, output_tokens INTEGER, cached_tokens INTEGER, cost_usd REAL,
  lane TEXT NOT NULL DEFAULT 'foreground', provider_id TEXT, model_id TEXT,
- actual_provider TEXT, actual_model TEXT, elapsed_ms INTEGER, failure_kind TEXT
+ actual_provider TEXT, actual_model TEXT, elapsed_ms INTEGER, failure_kind TEXT, redacted TEXT
 );
 CREATE INDEX IF NOT EXISTS research_calls_turn ON research_model_calls(turn_id);
 """
@@ -154,6 +160,27 @@ def _label(value, limit):
     return value if isinstance(value, str) and 1 <= len(value) <= limit else None
 
 
+def _removed(counts: Counter) -> str | None:
+    """How many secrets of each kind a call had hidden, as stored; None when it hid none."""
+    return json.dumps(dict(sorted(counts.items()))) if counts else None
+
+
+def _hidden(value) -> dict | None:
+    """The stored counts as the receipt shows them; anything malformed shows as None."""
+    from pi.models.redaction import MARKERS
+
+    try:
+        counts = json.loads(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+    if not isinstance(counts, dict) or not all(
+        kind in MARKERS and type(count) is int and 0 < count <= MAX_TOKEN_COUNT
+        for kind, count in counts.items()
+    ):
+        return None
+    return counts or None
+
+
 def _failure(exc):
     from pi.models import inference_control
 
@@ -221,21 +248,26 @@ def observer(store, execution, role="answer"):
                 _refresh(db, turn_id)
             db.commit()
         started = time.monotonic()
+        from pi.models import redaction
+
+        removed: Counter = Counter()
         try:
             from pi.models import inference_control
 
             inference_control.check()
-            completion = invoke()
+            with redaction.tally(removed):
+                completion = invoke()
         except Exception as exc:
             with store._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
                 db.execute(
                     "UPDATE research_model_calls SET status='failed',ended_at=?,elapsed_ms=?,"
-                    "failure_kind=? WHERE id=? AND status='pending'",
+                    "failure_kind=?,redacted=? WHERE id=? AND status='pending'",
                     (
                         time.time(),
                         max(0, round((time.monotonic() - started) * 1000)),
                         _failure(exc),
+                        _removed(removed),
                         identity,
                     ),
                 )
@@ -248,7 +280,7 @@ def observer(store, execution, role="answer"):
             db.execute("BEGIN IMMEDIATE")
             db.execute(
                 "UPDATE research_model_calls SET status='reported',ended_at=?,elapsed_ms=?,"
-                "actual_provider=?,actual_model=?,"
+                "actual_provider=?,actual_model=?,redacted=?,"
                 + ",".join(key + "=?" for key in FIELDS)
                 + " WHERE id=? AND status='pending'",
                 (
@@ -256,6 +288,7 @@ def observer(store, execution, role="answer"):
                     elapsed,
                     _label(completion.provider, 100),
                     _label(completion.model, 300),
+                    _removed(removed),
                     *(_value(completion, key) for key in FIELDS),
                     identity,
                 ),
@@ -323,6 +356,7 @@ def receipt(store, turn_id):
                     "model_id": _label(row["model_id"], 200),
                     "actual_provider": _label(row["actual_provider"], 100),
                     "actual_model": _label(row["actual_model"], 300),
+                    "redacted": _hidden(row["redacted"]),
                 }
                 for row in reversed(rows[:MAX_ATTEMPTS])
             ],

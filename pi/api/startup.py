@@ -24,8 +24,8 @@ from pi.memory import corrections as memory_corrections
 from pi.memory import edits as memory_edits
 from pi.memory.service import Memory, MemoryClient
 from pi.models import evaluations as model_evaluations
+from pi.models import redaction, service_inference, spending_cap
 from pi.models import secrets as provider_secrets
-from pi.models import service_inference, spending_cap
 from pi.models.direct import ADAPTERS as DIRECT_ADAPTERS
 from pi.models.direct import configured as configured_direct_providers
 from pi.models.openrouter import OpenRouterProvider
@@ -233,7 +233,6 @@ async def lifespan(app: FastAPI):
     app.state.owner_key_hash = owner_hash
     app.state.service_key_hashes = service_keys
     app.state.store = store
-    app.state.local = local
     # Every paid call passes the owner's daily cap (pi.models.spending_cap).
     spending_cap.recover_interrupted(store)
     hosted, direct_providers = spending_cap.wrap(
@@ -244,6 +243,10 @@ async def lifespan(app: FastAPI):
         ),
         [adapter.name for _, adapter in DIRECT_ADAPTERS],
     )
+    # Every request that can leave this server goes through here: the owner's Hide secrets from
+    # online models (pi.models.redaction). Ollama is local only on this server, for local models.
+    local, hosted, direct_providers = redaction.wrap(store, local, hosted, direct_providers)
+    app.state.local = local
     app.state.hosted = hosted
     app.state.provider_credentials = sorted(
         name
