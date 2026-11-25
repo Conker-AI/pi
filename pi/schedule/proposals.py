@@ -1,19 +1,18 @@
 """The proposal engine: notice what the owner keeps doing and offer to take it on.
 
-A pass reads the owner's own messages since its watermark, asks the configured
-`proposals` model what looks repeated, forgotten or automatable, and records at most
-a few proposals, each tied to the messages that prompted it. Nothing executes:
-accepting records a decision; any later action still goes through ToolGate.
+A pass reads the owner's own messages since its watermark, asks the configured `proposals` model
+what looks repeated, forgotten or automatable, and records at most a few proposals, each tied to
+the messages that prompted it. Nothing executes: accepting records a decision; any later action
+still goes through ToolGate.
 
 Boundaries, in order of when they apply:
 - The role must be enabled by the owner; an upgrade never turns it on.
 - The daily suggestion budget and quiet hours are enforced by `proactive_budget`
   before any model call. A denied pass costs nothing and changes nothing.
-- Only user messages outside incognito, harness-disabled or hidden chats (forgotten or in the
-  Trash, `pi.conversation.visibility`) are read.
+- Only user messages outside incognito, harness-disabled, hidden (forgotten or in the Trash,
+  `pi.conversation.visibility`) or outside chats (someone else's text) are read.
 - Every proposal must cite supplied message aliases; invented evidence is dropped.
-- Declines are remembered. "Never" suppresses the same idea for good, and plain
-  declines for 30 days, so the owner is not asked twice.
+- Declines are remembered: "Never" suppresses the idea for good, a plain decline for 30 days.
 - A proposal from a hidden chat is not listed, decided or shown to the model (`hidden_ids`); it
   comes back when the chat is restored. A chat already hidden when the pass started was not
   read, so it hides none of that pass's ideas (`visibility.hidden_since`).
@@ -40,11 +39,12 @@ MAX_EVIDENCE_CHARACTERS = 24_000
 MIN_EVIDENCE_MESSAGES = 3
 MAX_PER_PASS = 3
 DECLINE_MEMORY_SECONDS = 30 * 86400
-# A message the model may read in a pass (`_evidence` adds the window and "not hidden now"): the
-# owner's own words (an AI job's scheduled prompt is not something he keeps asking for) outside
-# incognito. The privacy flags and a chat's job link never change after a message is written.
+# A message a pass may read (`_evidence` adds the window and "not hidden now"): the owner's own
+# words outside incognito; never an AI job's prompt or a chat marked outside (someone else's text).
+# Privacy flags, a chat's job link and its outside mark never change after a message is written.
 _READABLE = """m.role='user'
    AND m.session_id NOT IN (SELECT session_id FROM agent_job_sessions)
+   AND m.session_id NOT IN (SELECT session_id FROM outside_sessions)
    AND COALESCE(pv.memory_disabled,0)=0 AND COALESCE(pv.harness_disabled,0)=0"""
 # Proposals that came from a hidden chat: one that cites its message, or one whose pass could
 # have read it (a readable message in the pass's window, the chat still visible when the pass

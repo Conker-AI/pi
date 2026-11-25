@@ -7,7 +7,8 @@ outside content. Nothing is saved until he approves it (`open_loops.approve_requ
 - the cited message is a user message in a chat he can see; hidden, forgotten, private-memory
   and job chats are not offered (the pass does not read them, and this checks again at write time,
   inside the pass's own transaction);
-- chats whose "user" text Pi or a model wrote (team roles, agent calls) are never offered;
+- chats whose "user" text Pi or a model wrote (team roles, agent calls), or someone else wrote
+  (a chat marked outside: shared from another app, a webhook payload), are never offered;
 - one offer per message, ever: a declined or approved one is remembered by its message id;
 - the chat's and the Inbox's open-request caps apply; a full Inbox skips the offer quietly;
 - the offered words must be a stretch of the cited message itself (case and spacing aside), and
@@ -52,6 +53,7 @@ def _owner_message(db, session_id: str, message_id: str) -> str | None:
         ("agent_job_sessions", "session_id"),
         ("team_steps", "session_id"),
         ("agent_calls", "child_session_id"),
+        ("outside_sessions", "session_id"),
     ):
         if db.execute(f"SELECT 1 FROM {table} WHERE {column}=?", (session_id,)).fetchone():
             return None
