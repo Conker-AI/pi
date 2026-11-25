@@ -20,6 +20,7 @@ from pi.api.browser_contract import (
     session_only_write,
 )
 from pi.conversation.store import Store
+from tests.test_gateway_cli_tool_password import PASSWORD, auth  # noqa: F401 - fixture
 from tests.test_gateway_mutation import config
 
 OWNER = "tool-drafts-owner-key-" + "o" * 32
@@ -285,16 +286,18 @@ def test_the_cli_retries_and_reports_publications_through_the_owner_routes(paylo
 
 
 @pytest.mark.parametrize("conker", [True, False])
-def test_the_cli_publishes_for_conker_with_the_chat_key(conker):
+def test_the_cli_publishes_for_conker_with_the_chat_key(auth, conker):
     seen = []
 
     def upstream(request):
         seen.append(request)
         return httpx.Response(200, json={"toolId": TOOL_ID})
 
+    # Publishing to run unasked needs the owner's password (test_gateway_cli_tool_password.py).
     payload = {"operation": "publish", "id": "topic-reader", **PUBLISHED, "conkerMayUse": conker}
+    raw = json.dumps({**payload, "password": PASSWORD}).encode()
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        apply_resource(config(), "tools", io.BytesIO(json.dumps(payload).encode()), client)
+        apply_resource(config(), "tools", io.BytesIO(raw), client, auth)
     [request] = seen
     assert request.url.path == "/v2/owner/editor-drafts/topic-reader/publish"
     assert json.loads(request.content) == {
