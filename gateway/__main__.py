@@ -118,6 +118,8 @@ def main() -> None:
             "renew-certificate",
             "spending-cap",
             "owner-preferences",
+            "lockdown",
+            "check-password",
         ],
     )
     parser.add_argument("resource", nargs="?")
@@ -179,7 +181,12 @@ def main() -> None:
 
         from .api import Config
         from .inspection import inspect_resource, resources
-        from .mutation import PASSWORD_REQUIRED_EXIT, PasswordRequired, apply_resource
+        from .mutation import (
+            PASSWORD_REQUIRED_EXIT,
+            PASSWORD_RESOURCES,
+            PasswordRequired,
+            apply_resource,
+        )
         from .mutation import resources as mutation_resources
 
         if args.resource is None:
@@ -189,8 +196,8 @@ def main() -> None:
         config.validate()
         with httpx.Client(trust_env=False, follow_redirects=False, timeout=10) as client:
             if args.command == "apply":
-                # A decision may need the owner's password (gateway/mutation.py), checked here.
-                auth = AuthStore(args.db) if args.resource == "approvals" else None
+                # A decision or a tool change may need the owner's password (gateway/mutation.py).
+                auth = AuthStore(args.db) if args.resource in PASSWORD_RESOURCES else None
                 try:
                     value = apply_resource(config, args.resource, sys.stdin.buffer, client, auth)
                 except PasswordRequired as exc:
@@ -322,6 +329,16 @@ def main() -> None:
         from . import host_preferences
 
         raise SystemExit(host_preferences.main(args.db))
+    elif args.command == "lockdown":
+        # The owner's password and the switch on stdin (gateway/lockdown.py).
+        from . import lockdown
+
+        raise SystemExit(lockdown.main(args.db))
+    elif args.command == "check-password":
+        # The owner's password on stdin, for a host change no service can ask it for.
+        from . import host_check
+
+        raise SystemExit(host_check.main(args.db))
     elif args.command == "certificate":
         print((Path(args.db).parent / "tls.crt").read_text(), end="")
     else:

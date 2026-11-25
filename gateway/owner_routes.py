@@ -427,33 +427,6 @@ def router(app, session, forward, admit_write, upstream):
             b"",
         )
 
-    @routes.get("/api/owner/lockdown")
-    @routes.post("/api/owner/lockdown")
-    async def lockdown(request: Request):
-        """ToolGate's lockdown: no tool or workflow runs and no agent files a request. Turning it
-        on only takes power away, so his session is enough; turning it off gives the power back,
-        so it asks for the password."""
-        from starlette.concurrency import run_in_threadpool
-
-        session(request)
-        if request.scope["query_string"]:
-            raise AuthError("Lockdown does not accept query parameters.", 422)
-        body = await json_body(request, max_bytes=1024) if request.method == "POST" else None
-        if body is not None:
-            if set(body) != {"enabled"} or type(body["enabled"]) is not bool:
-                raise AuthError("Send only enabled: true or false.", 422)
-            if not body["enabled"]:
-                admit_write(request, body)
-        return await run_in_threadpool(
-            forward,
-            request.method,
-            app.state.config.toolgate_url.rstrip("/") + "/v2/owner/lockdown",
-            "X-ToolGate-Owner-Key",
-            app.state.config.owner_key,
-            body,
-            b"",
-        )
-
     @routes.get("/api/owner/requests")
     def owner_requests(request: Request):
         session(request)

@@ -187,7 +187,7 @@ one-use password proof where the table says so). Upstream headers never reach th
 | `PUT /api/owner/tool-settings` `{"expected_revision","settings"}` | session | ToolGate `PUT /v2/owner/settings` |
 | `GET /api/owner/lockdown` | session | ToolGate `GET /v2/owner/lockdown` |
 | `POST /api/owner/lockdown` `{"enabled": true}` | session | ToolGate `POST /v2/owner/lockdown` |
-| `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` |
+| `POST /api/owner/lockdown` `{"enabled": false}` | password | ToolGate `POST /v2/owner/lockdown` with `X-ToolGate-Owner-Proof: password` |
 | `GET /api/owner/tools/{id}/runs?limit=1..50` | session | ToolGate `GET /v2/owner/tools/{id}/runs` (owner key) |
 | `POST /api/owner/tools/{id}/runs` `{"action_id": "owner_<32 hex>", "args", "approval_request_id"?}` | session | ToolGate `POST /v2/owner/tools/{id}/runs` (owner key and the chat's execution key) |
 | `POST /api/owner/mcp/tools/{id}/class` `{"read_class": "act_outward", "expected_version"}` | session | ToolGate `POST /v2/owner/mcp/tools/{id}/class` (owner key): the tool asks for every call again |
@@ -225,7 +225,13 @@ request is `invalid_host_operation` (422).
 also sends the chat's own execution key, as the editor-draft run route does; the action id makes
 a retry safe, and a tool that deletes or pays still asks for the password at ToolGate. ToolGate's answers and refusals (a stale revision is 409, a tool
 that asks is `CONFIRMATION_REQUIRED`, resumed with the same `action_id` and its
-`approval_request_id`) pass through as its JSON.
+`approval_request_id`) pass through as its JSON. ToolGate cannot check the password, so it lifts
+lockdown only when the owner key comes with `X-ToolGate-Owner-Proof: password`, which the gateway
+sends only after its own check (`gateway/lockdown.py`: this route, and `python -m gateway
+lockdown` at the host). The owner key alone, as the settings relay of `conker config set` sends
+it from the gateway's container, is refused 403 `password_required`. The proof is the gateway's
+word, not a secret: it stops a command that never asked from lifting lockdown, not someone who
+holds the gateway's keys.
 
 ## Running and recovery
 
@@ -255,9 +261,15 @@ it (`AuthStore.host_password`: its own budget of five wrong per five minutes, so
 host cannot use up each other's tries). It arrives on stdin with the change, never in argv or
 the environment: `spending-cap` (the daily cap), `owner-preferences` (a preferences save Pi
 refused on the recovery key: the sign-out time, a new chat's access, the daily budgets;
-[owner-preferences.md](owner-preferences.md)) and `apply approvals` (a yes at level 3, or at a
+[owner-preferences.md](owner-preferences.md)), `apply approvals` (a yes at level 3, or at a
 level that cannot be read, exactly as the Inbox route above; without it the command decides
-nothing and exits 3).
+nothing and exits 3), `apply tools` (letting chats run a published tool, or publishing one to run
+without asking or for Conker to use, exactly as the Tools routes above; without it nothing is
+sent and it exits 3), `lockdown` (`{"password", "enabled"}`: ToolGate's lockdown with the proof
+above) and `check-password` (`{"password"}` only, answering `{"checked": true}`: for a host
+change no service can ask for it, `conker providers spending on|off|recover`, which writes the
+paid-model policy into the host's files). Withdrawing access, saving a draft, publishing to ask
+first each time and a run by hand need no password, as in the browser.
 
 ## Optional same-origin dashboard assets
 

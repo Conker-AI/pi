@@ -13,6 +13,7 @@ from gateway.mutation import MutationError, apply_resource
 from gateway.toolgate_contract import owner_editor_allowed
 from pi.api.browser_contract import owner_allowed
 from tests.test_characters import profile as character_profile
+from tests.test_gateway_cli_tool_password import PASSWORD, auth  # noqa: F401 - fixture
 from tests.test_gateway_mutation import config, editor_document
 
 
@@ -292,7 +293,7 @@ def test_call_apply_rejects_media_and_untyped_routes_before_network():
     ],
 )
 def test_tool_apply_keeps_owner_and_execution_channels_separate(
-    payload, path, forwarded, execution
+    auth, payload, path, forwarded, execution
 ):
     seen = []
 
@@ -300,8 +301,11 @@ def test_tool_apply_keeps_owner_and_execution_channels_separate(
         seen.append(request)
         return httpx.Response(200, json={"status": "recorded"})
 
+    # A grant needs the owner's password (tests/test_gateway_cli_tool_password.py); it is checked
+    # here and never forwarded, whatever the change.
+    raw = json.dumps({**payload, "password": PASSWORD}).encode()
     with httpx.Client(transport=httpx.MockTransport(upstream)) as client:
-        result = apply_resource(config(), "tools", io.BytesIO(json.dumps(payload).encode()), client)
+        result = apply_resource(config(), "tools", io.BytesIO(raw), client, auth)
 
     assert result["status"] == "recorded"
     request = seen[0]
