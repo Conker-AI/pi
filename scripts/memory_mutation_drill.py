@@ -74,6 +74,12 @@ CASES = [
         "(0 AND (offered_via IS NULL",
     ),
     (
+        "second-listener-credited-at-upgrade",
+        "pi/memory/imports.py",
+        "WHERE source_key IS NOT NULL AND source_key<>? ",
+        "WHERE 0 AND source_key<>? ",
+    ),
+    (
         "import-deletion-keeps-the-generation",
         "pi/memory/import_deletion.py",
         'db.execute("UPDATE recall_generation SET value=value+1 WHERE id=1")',

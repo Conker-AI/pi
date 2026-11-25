@@ -138,9 +138,17 @@ def test_an_old_database_upgrades_keeps_its_rows_and_records(tmp_path, monkeypat
     assert [row[0] for row in ledger(path)] == IDS
 
 
-@pytest.mark.parametrize("listener", ["assistant-imports", None, "../evidence"])
+@pytest.mark.parametrize(
+    ("listener", "second"),
+    [
+        ("assistant-imports", False),
+        ("assistant-imports", True),
+        (None, False),
+        ("../evidence", False),
+    ],
+)
 def test_an_upgrade_attributes_what_an_older_pi_sent_to_the_listener_configured(
-    tmp_path, monkeypatch, listener
+    tmp_path, monkeypatch, listener, second
 ):
     # An older Pi did not record which import listener its words went to; a server has had one.
     if listener:
@@ -156,11 +164,15 @@ def test_an_upgrade_attributes_what_an_older_pi_sent_to_the_listener_configured(
             "VALUES ('imsg_kept','imp_kept',0,'m1','user','hello');"
             "INSERT INTO import_memory_offers(message_id,state,evidence_id) "
             "VALUES ('imsg_kept','sent','ev-sent');"
-            # Queued by an older Pi under another listener: there were two, so it stays unknown.
             "INSERT INTO import_evidence_erasures(evidence_id,chat_id,source_key,state) "
-            "VALUES ('ev-other','imp_old','other-imports','missing'), "
-            "('ev-unset','imp_old',NULL,'pending');"
+            "VALUES ('ev-unset','imp_old',NULL,'pending');"
         )
+        if second:  # queued by an older Pi under another listener: there were two
+            db.execute(
+                "INSERT INTO import_evidence_erasures(evidence_id,chat_id,source_key,state) "
+                "VALUES ('ev-other','imp_old','other-imports','missing')"
+            )
+            db.commit()
     with closing(Store(path)) as store, store._connect() as db:
         still = {
             row[0]
@@ -173,14 +185,14 @@ def test_an_upgrade_attributes_what_an_older_pi_sent_to_the_listener_configured(
             "SELECT source_key FROM import_evidence_erasures WHERE evidence_id='ev-unset'"
         ).fetchone()[0]
         offer = db.execute("SELECT source_key FROM import_memory_offers").fetchone()[0]
-    if listener == "assistant-imports":
+    if listener == "assistant-imports" and not second:
         # Its not found settles; the one deleted while unset now goes only through it.
-        assert still == {"ev-other", "ev-unset"} and offer == listener
-        assert via == {"ev-old": listener, "ev-other": None, "ev-unset": listener}
+        assert still == {"ev-unset"} and offer == listener
+        assert via == {"ev-old": listener, "ev-unset": listener}
         assert routed == listener
-    else:  # none configured, or not a source key: nothing is attributed
-        assert still == {"ev-old", "ev-other", "ev-unset"} and offer is None
-        assert set(via.values()) == {None} and routed is None
+    else:  # none configured, not a source key, or a second listener: nothing is attributed
+        assert still == {"ev-old", "ev-unset"} | ({"ev-other"} if second else set())
+        assert offer is None and set(via.values()) == {None} and routed is None
 
 
 def test_starting_again_applies_nothing_new(tmp_path):
