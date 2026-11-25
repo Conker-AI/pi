@@ -58,6 +58,7 @@ INSIDE = [
     ("2002:a00:7::1",),  # 6to4 of 10.0.0.7
     (PUBLIC[0], "10.0.0.7"),  # one address inside refuses the whole answer
     ("not an address",),
+    ("fec0::1",),  # site-local, deprecated but still routed by some networks
 ]
 
 

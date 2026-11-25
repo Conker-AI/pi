@@ -6,7 +6,7 @@ address, though: DNS for an allowed name could answer with an address inside the
 (a changed record, a resolver the host does not control), and a connection or handshake would
 reach it. So each new connection resolves the push host once and refuses the whole answer when
 any address in it is not on the public internet: private, loopback, link-local, multicast,
-reserved, unspecified or shared, and an IPv4-mapped IPv6 address is judged by its IPv4 address
+reserved, unspecified, shared or site-local, and an IPv4-mapped IPv6 address is judged by its IPv4 address
 too. (6to4, Teredo and NAT64 addresses fall in ranges Python already counts as private or
 reserved, so they are refused whatever they carry.) Then it connects to a checked address itself,
 with no second lookup, and TLS still names the real host: SNI and the certificate check use the
@@ -41,6 +41,7 @@ def public(address: str) -> bool:
             or each.is_multicast
             or each.is_reserved
             or each.is_unspecified
+            or (isinstance(each, ipaddress.IPv6Address) and each.is_site_local)
         )
         for each in (ip, mapped)
         if each is not None

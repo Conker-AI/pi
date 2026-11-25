@@ -52,7 +52,7 @@ software, not the owner's server).
   `*.push.apple.com`, `*.notify.windows.com`; HTTPS on 443), so the gateway never posts to an
   address inside the server's network. A name is not an address, so each connection resolves the
   push host once and refuses the whole answer if any address in it is not a public internet
-  address (private, loopback, link-local, multicast, reserved, unspecified or shared; a mapped IPv6
+  address (private, loopback, link-local, site-local, multicast, reserved, unspecified or shared; a mapped IPv6
   address is judged by its IPv4 address too, and 6to4, Teredo and NAT64 fall in ranges already
   refused); it then connects to a checked
   address with no second lookup, and TLS still checks the push service's own name (SNI and the

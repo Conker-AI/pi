@@ -157,6 +157,34 @@ PUSH_CASES = [
         SESSION + "test_a_device_follows_its_browser_to_the_next_sign_in_without_a_renewal",
     ),
     (
+        "push-sign-in-moves-every-browsers-devices",
+        "gateway/known_browsers.py",
+        '"UPDATE push_subscriptions SET session_id=? WHERE session_id=?"',
+        '"UPDATE push_subscriptions SET session_id=? WHERE session_id=? OR 1"',
+        SESSION + "test_a_sign_in_moves_only_its_own_browsers_devices",
+    ),
+    (
+        "push-replaced-token-carries-devices",
+        "gateway/known_browsers.py",
+        '" ON known.token_hash=link.token_hash WHERE link.token_hash=?"',
+        '" ON 1 WHERE link.token_hash=?"',
+        SESSION + "test_only_a_link_whose_token_is_still_remembered_carries_devices",
+    ),
+    (
+        "push-link-outlives-its-token",
+        "gateway/known_browsers.py",
+        "    forget(db)\n\n\ndef forget(",
+        "    pass\n\n\ndef forget(",
+        SESSION + "test_only_a_link_whose_token_is_still_remembered_carries_devices",
+    ),
+    (
+        "push-site-local-connected",
+        "gateway/push_transport.py",
+        "or (isinstance(each, ipaddress.IPv6Address) and each.is_site_local)",
+        "or False",
+        INSIDE + "[inside21]",
+    ),
+    (
         "push-old-table-sends-first",
         "gateway/push.py",
         (
