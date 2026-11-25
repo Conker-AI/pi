@@ -2264,38 +2264,6 @@
         }
       }
     },
-    "/api/owner/lockdown": {
-      "get": {
-        "summary": "Lockdown",
-        "description": "ToolGate's lockdown: no tool or workflow runs and no agent files a request. Turning it\non only takes power away, so his session is enough; turning it off gives the power back,\nso it asks for the password.",
-        "operationId": "lockdown_api_owner_lockdown_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Lockdown",
-        "description": "ToolGate's lockdown: no tool or workflow runs and no agent files a request. Turning it\non only takes power away, so his session is enough; turning it off gives the power back,\nso it asks for the password.",
-        "operationId": "lockdown_api_owner_lockdown_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/owner/requests": {
       "get": {
         "summary": "Owner Requests",
@@ -2417,6 +2385,38 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner/lockdown": {
+      "get": {
+        "summary": "Lockdown",
+        "description": "ToolGate's lockdown: the session turns it on; off asks for the password first.",
+        "operationId": "lockdown_api_owner_lockdown_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Lockdown",
+        "description": "ToolGate's lockdown: the session turns it on; off asks for the password first.",
+        "operationId": "lockdown_api_owner_lockdown_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }

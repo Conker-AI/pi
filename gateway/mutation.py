@@ -2,9 +2,10 @@
 
 A decision on a ToolGate request (`approvals`) asks for exactly what the Inbox asks for
 (`approval_levels`): a yes at level 3, or at a level that cannot be read, needs the owner's
-password, which comes with the decision on stdin (`"password"`); without it nothing is decided and
-the command exits with `PASSWORD_REQUIRED_EXIT`, so the CLI can ask for it and send the same
-decision once more.
+password. A tool change (`tools`) asks for exactly what Tools asks for (`owner_routes`): letting
+chats run a published tool, and publishing one to run without asking or for Conker to use. The
+password comes with the change on stdin (`"password"`); without it nothing is sent and the command
+exits with `PASSWORD_REQUIRED_EXIT`, so the CLI can ask for it and send the same change once more.
 """
 
 from __future__ import annotations
@@ -89,11 +90,13 @@ class MutationError(ValueError):
 
 
 class PasswordRequired(MutationError):
-    """A yes the Inbox would ask the password for, sent without it: nothing was decided."""
+    """A change the Inbox or Tools would ask the password for, sent without it: nothing was sent."""
 
 
-# What `python -m gateway apply approvals` exits with on PasswordRequired.
+# What `python -m gateway apply approvals|tools` exits with on PasswordRequired.
 PASSWORD_REQUIRED_EXIT = 3
+# The resources whose stdin may carry the owner's password; anywhere else it is an unknown field.
+PASSWORD_RESOURCES = frozenset({"approvals", "tools"})
 
 
 # After the write was sent, or once the service answered 2xx, it may already have been made.
@@ -106,6 +109,9 @@ class Mutation:
     path: str
     payload: dict
     authority: Literal["owner", "runtime", "toolgate-owner", "toolgate-owner-execution"] = "owner"
+    # It widens what Conker may do, so its browser route asks for the password (approvals decide
+    # by their level instead, `_admit_decision`).
+    password: bool = False
 
 
 def resources() -> tuple[str, ...]:
@@ -338,11 +344,14 @@ def _resolve(resource: str, payload: dict) -> Mutation:
         except ValidationError:
             raise MutationError("Tool apply request has an unsupported shape.") from None
         body = value.model_dump(exclude={"operation", "id"}, exclude_none=True)
+        # As Tools asks: chats may run it, or it runs without asking, or Conker may use it.
+        password = isinstance(value, ToolAccess) and value.enabled
         if isinstance(value, ToolSave):
             path = f"/v2/owner/editor-drafts/{value.id}"
             authority = "toolgate-owner"
         elif isinstance(value, ToolPublish):
             path = f"/v2/owner/editor-drafts/{value.id}/publish"
+            password = value.authorization == "auto" or value.conkerMayUse
             # Granting Conker's key needs that key; the owner key alone cannot name it.
             authority = "toolgate-owner-execution" if value.conkerMayUse else "toolgate-owner"
             if not value.conkerMayUse:
@@ -354,7 +363,7 @@ def _resolve(resource: str, payload: dict) -> Mutation:
             suffix = "access" if isinstance(value, ToolAccess) else "runs"
             path = f"/v2/owner/editor-drafts/{value.id}/{suffix}"
             authority = "toolgate-owner-execution"
-        return Mutation("POST", path, body, authority=authority)
+        return Mutation("POST", path, body, authority=authority, password=password)
     raise MutationError("Unknown apply resource. Choose one of: " + ", ".join(resources()))
 
 
@@ -387,12 +396,17 @@ def _admit_decision(
                 "This yes asks for your password, as the Inbox does. Nothing was decided."
             )
         return
+    _check_password(auth, password, "Nothing was decided.")
+
+
+def _check_password(auth: AuthStore | None, password, nothing: str) -> None:
+    """The owner's password from stdin, with the host budget (`AuthStore.host_password`)."""
     if not isinstance(password, str) or not password or auth is None:
-        raise MutationError("The password could not be checked. Nothing was decided.")
+        raise MutationError(f"The password could not be checked. {nothing}")
     try:
         auth.host_password(password)
     except AuthError as exc:
-        raise MutationError(f"{exc} Nothing was decided.") from None
+        raise MutationError(f"{exc} {nothing}") from None
 
 
 def apply_resource(
@@ -402,7 +416,7 @@ def apply_resource(
     client: httpx.Client,
     auth: AuthStore | None = None,
 ) -> dict:
-    """One host-CLI write. `auth` checks the owner's password for a decision that needs it."""
+    """One host-CLI write. `auth` checks the owner's password for a change that needs it."""
     if resource not in MUTATIONS:
         raise MutationError("Unknown apply resource. Choose one of: " + ", ".join(resources()))
     request_limit = characters.MAX_REQUEST_BYTES if resource == "character" else MAX_REQUEST_BYTES
@@ -417,8 +431,7 @@ def apply_resource(
         raise MutationError("Apply request is invalid JSON.") from None
     if not isinstance(payload, dict):
         raise MutationError("Apply request must be a JSON object.")
-    # Only a decision may carry the owner's password; anywhere else it is an unsupported field.
-    password = payload.pop("password", None) if resource == "approvals" else None
+    password = payload.pop("password", None) if resource in PASSWORD_RESOURCES else None
     operation = _resolve(resource, payload)
     if operation.authority == "owner":
         if not config.pi_owner_key or not owner_allowed(operation.method, operation.path):
@@ -456,6 +469,13 @@ def apply_resource(
         }
     if resource == "approvals":
         _admit_decision(config, client, auth, payload, password)
+    elif operation.password and password is None:
+        raise PasswordRequired(
+            "This change asks for your password, as Tools does. Nothing was changed."
+        )
+    elif password is not None:
+        # A password sent is always checked, even for a change that needs none.
+        _check_password(auth, password, "Nothing was changed.")
 
     try:
         with client.stream(

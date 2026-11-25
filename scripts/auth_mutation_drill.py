@@ -8,6 +8,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from auth_mutation_host import HOST_CASES
 from auth_mutation_push import PUSH_CASES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -444,6 +445,8 @@ CASES += [
 
 # Web push (scripts/auth_mutation_push.py).
 CASES += PUSH_CASES
+# Lockdown off, `apply tools` and check-password at the host (scripts/auth_mutation_host.py).
+CASES += HOST_CASES
 
 
 def main() -> int:
@@ -477,6 +480,10 @@ def main() -> int:
             "test_gateway_push.py",
             "test_push_queue.py",
             "test_gateway_mcp_class.py",
+            "test_gateway_tool_settings.py",
+            "test_gateway_lockdown_password.py",
+            "test_gateway_cli_tool_password.py",
+            "test_gateway_check_password.py",
         ):
             shutil.copyfile(ROOT / "tests" / file, target / "tests" / file)
         if filename:
