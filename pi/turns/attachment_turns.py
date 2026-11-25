@@ -3,6 +3,7 @@
 import json
 
 from pi.content import attachment_passages, attachments, image_input
+from pi.context import project_files
 from pi.conversation import settings as session_settings
 from pi.models.providers import Message
 
@@ -68,6 +69,8 @@ def bind(db, request_id, session_id, message_id):
     if ids:
         attachments.bind(db, session_id, message_id, ids)
         release(db, request_id)
+        # Sent in a project chat, they join the project (`files.to_project`).
+        project_files.join(db, session_id, ids)
 
 
 def release(db, request_id):

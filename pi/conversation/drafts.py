@@ -1,4 +1,9 @@
-"""Owner draft storage; drafts never enter model context or memory ingestion."""
+"""Owner draft storage; drafts never enter model context or memory ingestion.
+
+A new chat's draft starts in the owner's Research by default mode (`research.default`: off, web
+or deep; off for anything else) until he picks one for it: a draft that never chose a mode holds
+none and is read with the setting's current value.
+"""
 
 import json
 import time
@@ -6,6 +11,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from pi.core import owner_settings as owner_settings
 from pi.core.errors import ServiceError
 from pi.core.models import Strict
 
@@ -39,6 +45,13 @@ CREATE TABLE IF NOT EXISTS draft_starts (
  session_id TEXT NOT NULL REFERENCES sessions(id), created_at REAL NOT NULL
 );
 """
+RESEARCH_DEFAULT = "research.default"
+
+
+def research_default(db) -> str:
+    """The research mode a new chat starts with."""
+    value = owner_settings.value_in(db, RESEARCH_DEFAULT)
+    return value if value in ("web", "deep") else "off"
 
 
 class Intent(Strict):
@@ -180,9 +193,12 @@ def _new(db):
     payload = (
         json.loads(row["payload"])
         if row
-        else NewSave(expected_revision=0, text="").model_dump(exclude={"expected_revision"})
+        else NewSave(expected_revision=0, text="").model_dump(
+            exclude={"expected_revision", "research_mode"}
+        )
     )
     return {
+        "research_mode": research_default(db),
         "schemaVersion": 1,
         "session_id": None,
         "task_id": None,
@@ -272,6 +288,10 @@ def start(store, body):
             (body.request_id, body.expected_revision, sid, time.time()),
         )
         _write_new(db, NewSave(expected_revision=body.expected_revision, text=""))
+        # The next new chat has chosen no mode yet, so it starts in the owner's default.
+        db.execute(
+            "UPDATE new_conversation_draft SET payload=json_remove(payload,'$.research_mode')"
+        )
         result = _start_view(
             db,
             db.execute(

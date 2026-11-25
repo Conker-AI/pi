@@ -1,6 +1,8 @@
 """Literal owner search over retained public conversation text, with exact IDs.
 
-A forgotten or trashed chat is never searched (`pi.conversation.visibility`)."""
+A forgotten or trashed chat is never searched (`pi.conversation.visibility`); an archived chat
+only when the owner includes archived chats (`search.archived`, off unless he turns it on).
+"""
 
 from functools import lru_cache
 
@@ -9,6 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pi.conversation import settings as session_settings
 from pi.conversation import visibility
 from pi.conversation.search_excerpt import excerpt
+from pi.core import owner_settings as owner_settings
+
+ARCHIVED = "search.archived"
+
+
+def archived_sql(db, column: str) -> str:
+    """The clause that leaves archived chats out of search, read in the caller's transaction;
+    empty when the owner includes them. Only an exact true includes them."""
+    if owner_settings.value_in(db, ARCHIVED) is True:
+        return ""
+    return f" AND {column} NOT IN (SELECT session_id FROM session_archive)"
 
 
 def search(store, query, limit=30, cursor=None):
@@ -56,6 +69,7 @@ def search(store, query, limit=30, cursor=None):
             FROM messages m JOIN sessions s ON s.id=m.session_id
             WHERE m.role IN ('user','assistant') AND NOT """
             + visibility.hidden_sql("s.id")
+            + archived_sql(db, "s.id")
             + r"""
               AND json_valid(m.content) AND json_type(m.content)='text'
               AND instr(search_casefold(json_extract(m.content,'$')),?)>0

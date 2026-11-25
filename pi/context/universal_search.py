@@ -2,7 +2,8 @@
 
 Nothing from a forgotten or trashed chat is listed (`pi.conversation.visibility`): not the chat,
 its tasks, activity or artifacts, the memories cited from it or saved from its messages, nor an
-agent or AI job Conker kept from it. Restoring the chat brings them back.
+agent or AI job Conker kept from it. Restoring the chat brings them back. An archived chat's
+words and title are found only when the owner includes archived chats (`search.archived`).
 """
 
 import hashlib
@@ -161,7 +162,8 @@ def conversation_metadata(store, query):
         )
         rows = db.execute(
             f"SELECT id,title,summary FROM sessions WHERE NOT {visibility.hidden_sql('sessions.id')} "
-            "AND search_metadata_match(title,summary) "
+            + conversation_search.archived_sql(db, "sessions.id")
+            + " AND search_metadata_match(title,summary) "
             "ORDER BY created_at DESC,id DESC"
         )
         # Stream matches on this same read snapshot. The shared privacy policy

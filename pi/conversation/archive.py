@@ -1,10 +1,11 @@
 """Archived and trashed chats: the owner hides chats from the chat list and brings them back.
 
 Both are list states only. They change no message, turn, memory or job, so they are reversible
-and need no password. An archived chat stays readable and searchable; a trashed chat is also left
-out of search and memory recall until it is restored or deleted forever (forget_queue). One
-request sets the state of up to 100 chats in one transaction; a chat that does not exist or was
-forgotten fails the whole request, so nothing is half done. Forgetting a chat deletes both rows.
+and need no password. An archived chat stays readable, and searchable when the owner includes
+archived chats (`search.archived`); a trashed chat is left out of search and memory recall until
+it is restored or deleted forever (forget_queue). One request sets the state of up to 100 chats
+in one transaction; a chat that does not exist or was forgotten fails the whole request, so
+nothing is half done. Forgetting a chat deletes both rows.
 
 A chat made from a chat in the Trash (sessions.parent_id, all the way up) is hidden with it
 (pi.conversation.visibility), so restoring it alone would take it out of the Trash view and leave
