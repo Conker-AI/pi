@@ -292,3 +292,8 @@ def test_only_online_adapters_are_wrapped(store):
     assert providers["remote"].url == "https://decisions.example.test"
     with pytest.raises(AttributeError):
         _ = providers["remote"]._private
+    # Nor anything that would send text around the cleaned copy.
+    for name in ("choose", "rank_memories", "client", "transport"):
+        setattr(remote, name, lambda *args, **kwargs: "sent")
+        with pytest.raises(AttributeError):
+            getattr(providers["remote"], name)

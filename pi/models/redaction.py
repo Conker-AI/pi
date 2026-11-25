@@ -48,6 +48,9 @@ MARKERS = {
 }
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 UNSENT = "Pi could not hide the secrets in this request, so it was not sent to an online model."
+# Adapter members that send text without `complete`: a decision service's `choose` and
+# `rank_memories`, and the raw HTTP client and transport. A wrapped adapter does not hand them out.
+UNWRAPPED = frozenset({"choose", "rank_memories", "client", "transport"})
 
 # Space between lines, written out or as a JSON escape.
 _SPACE = r"(?:[ \t\r\n]|\\[nrt])+"
@@ -198,6 +201,8 @@ class Redacting:
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)  # never recurse before __init__ ran (copy, pickle)
+        if name in UNWRAPPED:
+            raise AttributeError(f"{name} would send text past redaction")
         return getattr(self._adapter, name)
 
     def complete(self, messages, *, model: str):
