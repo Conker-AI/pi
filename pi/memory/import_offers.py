@@ -376,9 +376,9 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
         with store._connect() as db:
             waiting, oldest, refused, unknown, elsewhere = db.execute(
                 "SELECT COUNT(*), MIN(COALESCE(d.deleted_at, 0)), "
-                # Refused by the listener configured now, for an erasure that goes through it.
-                "MAX(CASE WHEN e.state='pending' AND (e.source_key IS NULL OR e.source_key=?) "
-                "THEN e.refused END), "
+                # Refused by the listener configured now, for an erasure it still tries: its own
+                # pending ones and the one more try of a word Pi cannot place (imports.REACHABLE).
+                f"MAX(CASE WHEN {imports.REACHABLE} THEN e.refused END), "
                 # Not found, and Pi does not know which listener the words went to.
                 "MIN(CASE WHEN e.state='missing' AND e.offered_via IS NULL "
                 "THEN COALESCE(d.deleted_at, 0) END), "
@@ -389,7 +389,7 @@ def erasure_health(store, offers: Offers | None, *, now: float | None = None) ->
                 "FROM import_evidence_erasures e "
                 "LEFT JOIN imported_chat_deletions d ON d.id=e.chat_id "
                 f"WHERE {imports.OPEN}",
-                (key, key),
+                (key, key, key),
             ).fetchone()
     except (sqlite3.Error, RuntimeError):
         return {"status": "unavailable", "reason": "Pi could not read what it still has to erase."}

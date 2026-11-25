@@ -22461,9 +22461,48 @@
     "/imports/erasures": {
       "get": {
         "summary": "Erasures",
-        "description": "Deleted imported chats whose words MemoryGate may still hold, and which are stuck.",
+        "description": "Deleted imported chats whose words MemoryGate may still hold and which are stuck, a\npage at a time; settled ones only when asked (`state`).",
         "operationId": "erasures_imports_erasures_get",
         "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "settled",
+                "all"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "State"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
           {
             "name": "X-Pi-Owner-Key",
             "in": "header",
@@ -33557,12 +33596,27 @@
             "const": 1,
             "title": "Schemaversion"
           },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
           "erasures": {
             "items": {
               "$ref": "#/components/schemas/ImportErasure"
             },
             "type": "array",
             "title": "Erasures"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextoffset"
           },
           "note": {
             "type": "string",
@@ -33573,10 +33627,13 @@
         "type": "object",
         "required": [
           "schemaVersion",
+          "total",
           "erasures",
+          "nextOffset",
           "note"
         ],
-        "title": "ImportErasureList"
+        "title": "ImportErasureList",
+        "description": "One page, the latest deletion first; `total` counts every one the `state` asked for."
       },
       "ImportErasureRefusal": {
         "properties": {

@@ -154,10 +154,17 @@ def router(store, offers, authorize):
         return receipt
 
     @api.get("/erasures", responses=described(import_replies.ImportErasureList))
-    def erasures():
-        """Deleted imported chats whose words MemoryGate may still hold, and which are stuck."""
+    def erasures(
+        state: Literal["open", "settled", "all"] = "open",
+        limit: int = Query(50, ge=1, le=import_settle.LIST_LIMIT),
+        offset: int = Query(0, ge=0, le=1_000_000),
+    ):
+        """Deleted imported chats whose words MemoryGate may still hold and which are stuck, a
+        page at a time; settled ones only when asked (`state`)."""
         _, listener = sender_now()
-        return import_settle.erasures(store(), listener=listener)
+        return import_settle.erasures(
+            store(), listener=listener, state=state, limit=limit, offset=offset
+        )
 
     @api.post(
         "/erasures/{chat_id}/settle", responses=described(import_replies.ImportErasureSettlement)

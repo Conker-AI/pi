@@ -155,8 +155,12 @@ class ImportErasure(Strict):
 
 
 class ImportErasureList(Strict):
+    """One page, the latest deletion first; `total` counts every one the `state` asked for."""
+
     schemaVersion: Literal[1]
+    total: int
     erasures: list[ImportErasure]
+    nextOffset: int | None
     # What settling one does, to show before the owner confirms it.
     note: str
 
