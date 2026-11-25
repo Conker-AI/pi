@@ -22458,6 +22458,142 @@
         }
       }
     },
+    "/imports/erasures": {
+      "get": {
+        "summary": "Erasures",
+        "description": "Deleted imported chats whose words MemoryGate may still hold, and which are stuck.",
+        "operationId": "erasures_imports_erasures_get",
+        "parameters": [
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportErasureList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports/erasures/{chat_id}/settle": {
+      "post": {
+        "summary": "Settle",
+        "description": "Settle by hand a deleted imported chat's erasure no listener will finish: Pi keeps its\nwords hidden for good and stops reporting it. The browser asks for the password.",
+        "operationId": "settle_imports_erasures__chat_id__settle_post",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^imp_[0-9a-f]{32}$",
+              "title": "Chat Id"
+            }
+          },
+          {
+            "name": "X-Pi-Owner-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Owner-Key"
+            }
+          },
+          {
+            "name": "X-Pi-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Pi-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportErasureSettlement"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/proposals": {
       "get": {
         "summary": "List Proposals",
@@ -33342,6 +33478,208 @@
         ],
         "title": "ImportChatCounts"
       },
+      "ImportErasure": {
+        "properties": {
+          "deletionId": {
+            "type": "string",
+            "title": "Deletionid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "deletedAt": {
+            "type": "number",
+            "title": "Deletedat"
+          },
+          "words": {
+            "type": "integer",
+            "title": "Words"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "erasing",
+              "stuck",
+              "settled_by_owner"
+            ],
+            "title": "State"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportErasureRefusal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settledAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settledat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "deletionId",
+          "source",
+          "label",
+          "deletedAt",
+          "words",
+          "state",
+          "refusal",
+          "settledAt"
+        ],
+        "title": "ImportErasure",
+        "description": "One deleted imported chat whose words MemoryGate may still hold: `stuck` may be settled by\nhand; `erasing` cannot be yet (`refusal` says why). Ids and counts only."
+      },
+      "ImportErasureList": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "erasures": {
+            "items": {
+              "$ref": "#/components/schemas/ImportErasure"
+            },
+            "type": "array",
+            "title": "Erasures"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "erasures",
+          "note"
+        ],
+        "title": "ImportErasureList"
+      },
+      "ImportErasureRefusal": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "listener_reachable",
+              "not_stuck"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ImportErasureRefusal",
+        "description": "Why an erasure cannot be settled by hand now (import_settle.REFUSALS)."
+      },
+      "ImportErasureSettlement": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1,
+            "title": "Schemaversion"
+          },
+          "deletionId": {
+            "type": "string",
+            "title": "Deletionid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "chatgpt",
+              "claude"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "type": "string",
+            "const": "settled_by_owner",
+            "title": "State"
+          },
+          "deletedAt": {
+            "type": "number",
+            "title": "Deletedat"
+          },
+          "settledAt": {
+            "type": "number",
+            "title": "Settledat"
+          },
+          "wordsSettled": {
+            "type": "integer",
+            "title": "Wordssettled"
+          },
+          "savedRecallCleared": {
+            "type": "integer",
+            "title": "Savedrecallcleared"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "fileScrubbed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filescrubbed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "deletionId",
+          "source",
+          "label",
+          "state",
+          "deletedAt",
+          "settledAt",
+          "wordsSettled",
+          "savedRecallCleared",
+          "note",
+          "fileScrubbed"
+        ],
+        "title": "ImportErasureSettlement",
+        "description": "The record of an erasure the owner settled by hand: counts and fixed words only. Nothing is\nsaid to be erased in MemoryGate. `fileScrubbed` is None when this repeats the record."
+      },
       "ImportHistory": {
         "properties": {
           "schemaVersion": {
@@ -33427,6 +33765,10 @@
             "type": "integer",
             "title": "Notfoundtoerase"
           },
+          "settledByHand": {
+            "type": "integer",
+            "title": "Settledbyhand"
+          },
           "problem": {
             "anyOf": [
               {
@@ -33448,6 +33790,7 @@
           "refused",
           "erasing",
           "notFoundToErase",
+          "settledByHand",
           "problem"
         ],
         "title": "ImportMemoryStatus",

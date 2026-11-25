@@ -113,8 +113,8 @@ by id. A memory MemoryGate's listener made from it is not named by anything Pi h
 erasure waits every `automatic_listener` memory, and every episode and evidence titled
 "Imported from ...", is left out, and owner search leaves out every analysis and observation too;
 they come back once none waits. A word Pi cannot place that no listener erases keeps this so
-for good: the Inbox card says Conker cannot tell which memory listener these words went to. There
-is no way yet for the owner to confirm such an erasure by hand. Deleting the chat advances the
+for good: the Inbox card says Conker cannot tell which memory listener these words went to, and
+offers to settle it by hand (below). Deleting the chat advances the
 recall generation, so a recall retrieved before it is not kept. Pi's health check
 `import_erasures` turns degraded when an erasure still waits three days after the deletion, or at
 once when the listener refuses it (401, 403, 404, kept on the erasure, so a restart does not
@@ -123,6 +123,23 @@ card saying the words are still stored and which setting to fix, and closes it w
 a lock for each offer from re-reading its row to recording the answer, and the deletion takes the
 same lock, so no word of a chat is offered while or after it is deleted. Owner backups made before
 still hold the chat.
+
+### Settling a stuck erasure by hand
+
+`GET /imports/erasures` lists deleted imported chats whose words MemoryGate may still hold, newest
+first (ids and counts only): `stuck` when no listener set now will erase any of them, `erasing`
+with the reason otherwise, and the ones already settled. The Inbox card of `import_erasures`
+names this list (`step`). `POST /imports/erasures/{id}/settle` settles one (`pi.memory.import_settle`);
+through the browser it asks for the password, as deleting forever does. It is refused while the
+listener set now can still erase a word of the chat (`listener_reachable`: wait), while a word waits
+for a listener the owner can set up or set back, or when nothing is left to erase (`not_stuck`).
+Settling clears Pi's saved copies the way a memory forget does (saved recall, saved
+`conker.recall` results, captured model inputs), keeps the erasure rows so every reader keeps the
+words and every listener memory hidden for good, and stops counting them in the card and in
+`GET /imports` (`memory.settledByHand`). The receipt holds counts and a fixed note: nothing was
+erased in MemoryGate, and a copy may remain where no listener reached. A repeat answers with the
+same receipt. A listener configured later still tries each word once and erases what it holds.
+An older Pi does not know the settlement and counts the words as erasing again.
 
 ## Memory: outside content through MemoryGate's listener
 

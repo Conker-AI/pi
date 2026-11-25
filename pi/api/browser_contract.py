@@ -68,6 +68,8 @@ PASSWORD_WRITES = (
     r"/memory/forget(?:-many)?",
     # An imported chat is deleted for good; it cannot be imported back.
     r"/imports/chats/imp_[0-9a-f]{32}/delete",
+    # A deleted imported chat's erasure settled by hand: Pi stops trying and clears its copies.
+    r"/imports/erasures/imp_[0-9a-f]{32}/settle",
     # Chats deleted forever: Pi restarts and forgets them before it opens again.
     r"/forgetting/chats",
     # Sign-out time, quiet hours, proactivity and daily budgets.
@@ -244,6 +246,8 @@ OWNER_ROUTES = {
         r"/imports",
         r"/imports/chats",
         r"/imports/chats/imp_[0-9a-f]{32}",
+        # Read-only: deleted imported chats whose words memory may still hold (ids and counts).
+        r"/imports/erasures",
         # What deleting chats forever reaches (counts only) and the queued ones.
         r"/forgetting/chats",
     ),
@@ -333,6 +337,8 @@ OWNER_ROUTES = {
         r"/imports/(?:chatgpt|claude)/(?:preview|[0-9a-f]{64})",
         # Deleting one imported chat for good asks for the password (PASSWORD_WRITES).
         r"/imports/chats/imp_[0-9a-f]{32}/delete",
+        # Settling a stuck erasure of one by hand asks for it too (PASSWORD_WRITES).
+        r"/imports/erasures/imp_[0-9a-f]{32}/settle",
         # Deleting chats forever asks for the password (PASSWORD_WRITES).
         r"/forgetting/chats",
         # Web push: the gateway claims what may wake the owner's devices (GATEWAY_ONLY, never relayed).

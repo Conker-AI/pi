@@ -426,3 +426,54 @@ def test_an_upgrade_credits_no_listener_once_an_older_pi_had_two(tmp_path):
     import_deletion.erase_waiting(store, old)
     assert sorted(old.asked) == ["ev-0", "ev-1", "ev-2"] and erasing() == set()
     store.close()
+
+
+def test_an_erasure_the_owner_settles_by_hand_stays_hidden_for_good(tmp_path):
+    # No listener will erase words an older Pi sent without recording where, once the one set now
+    # did not find them. The owner may settle that by hand (pi.memory.import_settle): never while
+    # a listener set now can still erase them; then Pi clears its saved copies, and the words, and
+    # what MemoryGate may have made from them, stay out of recall for good.
+    from pi.conversation import hidden_records
+    from pi.core.errors import ServiceError
+    from pi.memory import import_deletion, import_settle, imports
+
+    store = Store(tmp_path / "pi.db")
+    with store._connect() as db:
+        db.execute("INSERT INTO imported_chats VALUES ('imp_1','claude','c1','Private',0,0,0,0)")
+        db.execute(
+            "INSERT INTO imported_messages(id,chat_id,seq,export_id,author,text) "
+            "VALUES ('im_1','imp_1',0,'m1','user','my pin is 4417')"
+        )
+        db.execute(
+            "INSERT INTO import_memory_offers(message_id,state,evidence_id) "
+            "VALUES ('im_1','sent','ev-1')"
+        )
+    import_deletion.delete_chat(store, "imp_1", source_key="new-imports")
+    import_deletion.erase_waiting(store, Listener("new-imports", found=False))
+    turn = store.start_turn(store.create_session())
+    own = {"id": "m-own", "text": "tea", "source_type": "user"}
+    recalled = {
+        "memories": [
+            {"id": "m-imp", "text": "my pin is 4417", "source_type": "automatic_listener"},
+            own,
+        ],
+        "evidence": [{"id": "ev-1", "title": "Imported from Claude: Private"}],
+    }
+    memory_store.save_context(store, turn, "ok", recalled)
+    with pytest.raises(ServiceError) as refused:  # a listener set since then is asked once
+        import_settle.settle(store, "imp_1", listener="old-imports")
+    assert refused.value.code == "listener_reachable"
+    assert memory_store.context(store, turn)["package"] == recalled
+
+    receipt = import_settle.settle(store, "imp_1", listener="new-imports")
+
+    assert receipt["state"] == "settled_by_owner" and receipt["wordsSettled"] == 1
+    assert memory_store.context(store, turn)["package"] is None  # Pi's saved copy is gone
+    shown = hidden_records.filter_package(store, recalled)
+    assert (shown["memories"], shown["evidence"]) == ([own], [])
+    with store._connect() as db:  # no longer reported (the card), still counted as held
+        assert not db.execute(
+            f"SELECT 1 FROM import_evidence_erasures WHERE {imports.OPEN}"
+        ).fetchone()
+        assert db.execute(f"SELECT 1 FROM import_evidence_erasures WHERE {ERASING}").fetchone()
+    store.close()

@@ -21,6 +21,7 @@ PASSWORD = [
     "/memory/forget",
     "/memory/forget-many",
     "/imports/chats/imp_" + "0" * 32 + "/delete",
+    "/imports/erasures/imp_" + "0" * 32 + "/settle",
     "/forgetting/chats",
     "/owner/preferences",
     f"/jobs/{JOB}/hook",
@@ -51,7 +52,7 @@ def allowed(path):
 
 
 def test_the_password_list_is_exact_and_every_entry_is_a_real_route():
-    assert len(PASSWORD_WRITES) == 10
+    assert len(PASSWORD_WRITES) == 11
     for pattern in PASSWORD_WRITES:
         assert [path for path in PASSWORD if re.fullmatch(pattern, path)], pattern
     for path in PASSWORD:
@@ -79,6 +80,8 @@ def test_lookalikes_of_a_password_route_do_not_slip_through_as_password_free():
         f"/jobs/{JOB}/hook/x",
         "/imports/chats/imp_x/delete",
         "/imports/chats/imp_" + "0" * 32 + "/delete/x",
+        "/imports/erasures/imp_x/settle",
+        "/imports/erasures/imp_" + "0" * 32 + "/settle/x",
         "/forgetting/chats/x",
         "/forgetting/chat",
     ):
