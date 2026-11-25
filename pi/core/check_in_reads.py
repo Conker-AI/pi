@@ -1,9 +1,10 @@
-"""The Morning check-in's fixed job id and the action id of each run's calendar read.
+"""The Morning check-in's fixed job id and the action ids of each run's calendar and mail reads.
 
-In core because the job (`pi.schedule`), the read (`pi.context.calendar_events`) and forgetting
-(`pi.actions.tool_forgets`) all need them and cannot import each other. The read is made before
-the run's turn, so it is no tool action of a turn: forgetting finds it from the run instead, by
-this id, and asks ToolGate to blank its receipt (the events' titles and places) with the chat.
+In core because the job (`pi.schedule`), the reads (`pi.context.calendar_events`,
+`pi.context.recent_mail`) and forgetting (`pi.actions.tool_forgets`) all need them and cannot
+import each other. The reads are made before the run's turn, so they are no tool actions of a
+turn: forgetting finds them from the run instead, by these ids, and asks ToolGate to blank their
+receipts (the events' titles and places, the mail's senders, subjects and snippets) with the chat.
 """
 
 from __future__ import annotations
@@ -18,3 +19,13 @@ def calendar_action(run_id: str) -> str:
     """The read's action id for one run: a repeated dispatch gets the same receipt back, and
     forgetting the run's chat can name it."""
     return "pi-calendar-" + hashlib.sha256(run_id.encode()).hexdigest()[:40]
+
+
+def mail_action(run_id: str) -> str:
+    """The mail read's action id for one run, made the same way."""
+    return "pi-mail-" + hashlib.sha256(run_id.encode()).hexdigest()[:40]
+
+
+def actions(run_id: str) -> tuple[str, ...]:
+    """Every read a check-in run can make before its turn: what forgetting its chat must name."""
+    return calendar_action(run_id), mail_action(run_id)

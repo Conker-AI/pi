@@ -229,6 +229,48 @@ and never sees the address.
   receipt that no chat holds, so nothing could forget it.
 - Other jobs never get events.
 
+### Mail in the check-in (2026-11-25)
+
+When ToolGate has the owner's mail account connected (its read-only `mail.recent` tool, which
+reads the INBOX over IMAP with an app password kept in ToolGate's vault; see ToolGate's
+`docs/mail.md`), the Morning check-in's input also lists the mail of the last 24 hours, newest
+first (`pi/context/recent_mail.py`). Pi asks the tool through the job agent's own ToolGate client
+and never sees the account. Reading, fences and bounds are shared with the calendar
+(`pi/context/background_reads.py`).
+
+- Set up means the same as for the calendar: the tool is in Pi's catalogue (scope
+  `tool:mail.recent`), it runs without asking, and setup did not leave tools off. Otherwise, and
+  when ToolGate answers `connected: false` (no account), refuses, is down or fails, nothing is
+  listed and the input is exactly as before: the check-in says nothing about mail. A read that
+  comes back asking takes its Inbox card back at once.
+- Senders, subjects and snippets are whoever sent the mail's words (anyone can send mail, and the
+  sender's name and address are only a claim), so they are outside content and may carry fake
+  instructions. ToolGate fences each field (`[UNTRUSTED_MAIL_CONTENT field=...]`); Pi takes the
+  text out of that exact fence (anything else leaves the message out and the block says
+  `(some messages could not be read ...)`) and lists one line per message in a fenced
+  `<recent-mail>` block: the received time, rebuilt by Pi in the job's zone, then each field as
+  its own JSON-quoted string (invisible characters removed, `<` escaped), after a lead-in saying
+  it is data, not instructions and not the owner's words. A chat holding that block counts as
+  having read outside content for every turn (`access.MAIL_MARK`), so remembering or promising
+  there always asks the owner. The run's opening message never goes to memory and never counts as
+  the owner's request, and job chats are no source of loop offers or proposals.
+- Bounded after escaping: each field is cut so its quoted form fits (name 42, address 82, subject
+  122, snippet 102 characters as the model reads them), so a message full of `<` costs no more
+  than a plain one; at most 8 messages and 2,000 characters for the block, then
+  `(more messages follow ...)`. With the longest instructions (4,000), the loops (6,000) and the
+  calendar (3,000) the check-in stays under the 16,000-character message limit. One sender shows
+  at most twice, then `(+N more from this sender)`, so a flood of notifications cannot hide the
+  other mail. The mail block comes last.
+- The read's action id is made from the run id (`check_in_reads.mail_action`): a repeated dispatch
+  gets ToolGate's saved receipt and sends the same text, never a second read. Forgetting the
+  check-in's chat also asks ToolGate to blank that read's receipt (senders, subjects, snippets),
+  found from the run like the calendar's (`pi/actions/tool_forgets.py`).
+- The forecast (`GET /insights/tomorrow`) never reads mail. Other jobs never get mail.
+- Limits: ToolGate answers at most 50 messages, so a flood of more than 50 leaves older mail out
+  of the read (the block then says some could not be read). A check-in whose run stopped between
+  the read and its turn names no chat, so no forget finds that read (its mail never reached a
+  chat), as for the calendar.
+
 ### Starting from a tool (2026-10-25)
 
 An AI job with `watch` (`toolId`, `args`, `everyMinutes` 5-1440) starts when that get tool has

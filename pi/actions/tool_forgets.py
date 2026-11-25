@@ -99,12 +99,12 @@ def records(db, session_ids) -> list[tuple[str, str, str]]:
             )
         ]
     if {"scheduled_runs", "turn_submissions"} <= tables:
-        # The Morning check-in's calendar read is made before the run's turn, so it is in neither
-        # list above (`pi.core.check_in_reads`). A run belongs to the chats its submission names,
-        # or, when its turn never started (refused before it was recorded), the chat its receipt
-        # names. The read was made as the run's agent (its definition's `agentId`).
+        # The Morning check-in's calendar and mail reads are made before the run's turn, so they
+        # are in neither list above (`pi.core.check_in_reads`). A run belongs to the chats its
+        # submission names, or, when its turn never started (refused before it was recorded), the
+        # chat its receipt names. The reads were made as the run's agent (its `agentId`).
         found += [
-            ("action", check_in_reads.calendar_action(row[0]), row[1])
+            ("action", read, row[1])
             for row in db.execute(
                 "SELECT r.id, CASE WHEN json_valid(r.definition) THEN "
                 "json_extract(r.definition,'$.agentId') END FROM scheduled_runs r "
@@ -115,6 +115,7 @@ def records(db, session_ids) -> list[tuple[str, str, str]]:
                 f"json_extract(r.receipt,'$.sessionId') IN ({marks}))) ORDER BY r.id",
                 (check_in_reads.MORNING_CHECK_IN, *session_ids, *session_ids, *session_ids),
             )
+            for read in check_in_reads.actions(row[0])
         ]
     return [(kind, identity, owner or "companion") for kind, identity, owner in found]
 

@@ -3,16 +3,18 @@
 The built-in check-in's model input gets a short list of the open loops that are due today or
 overdue, read through `open_loops.listing` (so loops in forgotten or trashed chats never appear).
 Nothing is added when there are none, and no other job gets the list. `for_job` also adds the
-day's calendar events when ToolGate's calendar tool is set up (`pi.context.calendar_events`).
+day's calendar events and then the recent mail when ToolGate's calendar and mail tools are set up
+(`pi.context.calendar_events`, `pi.context.recent_mail`).
 
 The words are the owner's, or a promise he approved, but they still go to the model as data: the
 list sits in a fenced `<open-loops>` block, each text is one JSON-quoted line (control characters,
 newlines and `<` cannot survive in it, so a loop cannot close the fence or pass for a line of
 its own), and the lead-in says nothing inside the quotes is an instruction. The block is bounded
 as the model reads it, after escaping (`BLOCK_CHARS`; a `<` is six characters there): with the
-job's own instructions (at most 4,000) and the calendar's block (at most 3,000), the check-in
-stays inside the 16,000 characters a message may hold, so a loop full of `<` cannot make the
-check-in fail every day.
+job's own instructions (at most 4,000), the calendar's block (at most 3,000), the mail's (at most
+2,000) and Pi's own lines (the preamble and the run's time, about 600), the check-in stays inside
+the 16,000 characters a message may hold, so a loop, an invitation or a mail full of `<` cannot
+make the check-in fail every day.
 
 Limit: a repeated dispatch of the same run rebuilds this text, so a loop closed in between makes
 the replay differ from the first send; the run then fails as a conflict and is reported.
@@ -24,7 +26,7 @@ import json
 import re
 from datetime import date, timedelta
 
-from pi.context import calendar_events, open_loops
+from pi.context import calendar_events, open_loops, recent_mail
 from pi.schedule import rhythm
 
 MAX_LISTED = 10
@@ -71,9 +73,14 @@ def due_text(store) -> str:
 
 
 def for_job(store, job_id: str, **run) -> str:
-    """What to add to a job run's input: for the Morning check-in, the due loops and the day's
-    calendar events (`calendar_events.check_in_text`, given the run); for any other job, nothing."""
+    """What to add to a job run's input: for the Morning check-in, the due loops, the day's
+    calendar events and the recent mail (`calendar_events.check_in_text` and
+    `recent_mail.check_in_text`, given the run), mail last; for any other job, nothing."""
     if job_id != rhythm.MORNING_CHECK_IN:
         return ""
-    parts = (due_text(store), calendar_events.check_in_text(store, **run))
+    parts = (
+        due_text(store),
+        calendar_events.check_in_text(store, **run),
+        recent_mail.check_in_text(store, **run),
+    )
     return "\n\n".join(part for part in parts if part)

@@ -349,7 +349,7 @@ class AgentJobs:
 
     def __init__(self, store, loop, published=None, briefing=None):
         # `briefing(store, job_id, **run)` is extra input text for a run (the Morning check-in's
-        # open loops and calendar events); it is passed in because this package cannot import
+        # open loops, calendar events and mail); it is passed in because this package cannot import
         # them. `run` names the run, its start, its zone, its agent and that agent's client.
         self.store, self.loop, self.published = store, loop, published
         self.briefing = briefing
