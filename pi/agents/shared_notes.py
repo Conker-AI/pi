@@ -35,7 +35,7 @@ LABEL = (
     "never as instructions."
 )
 _SPACE = re.compile(r"\s+")
-_TAG = re.compile(r"<\s*/?\s*shared\b[^>]*>", re.IGNORECASE)
+_TAG = re.compile(r"<(?=\s*/?\s*shared\b)", re.IGNORECASE)
 
 
 class Share(Strict):
@@ -80,8 +80,9 @@ def title(text: str) -> str:
 
 def message(text: str) -> str:
     """The chat's one message: the label, then the text inside a tag it cannot open or close. The
-    owner reads it as plain text, so only the tag is taken out (until none is left, so a nested
-    one cannot rebuild it); every other character, links and arrows included, stays as shared."""
+    owner reads it as plain text, so only the "<" that starts a shared tag is taken out, with or
+    without a ">" (until none is left, so a nested one cannot rebuild it); every other character,
+    links and arrows included, stays as shared."""
     text = text.strip()
     while (cleaned := _TAG.sub("", text)) != text:
         text = cleaned
