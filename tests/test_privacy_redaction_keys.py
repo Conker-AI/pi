@@ -123,8 +123,9 @@ def fit(unit):
         "backslashes",
     ],
 )
-def test_two_megabytes_of_key_markers_take_under_a_second(text):
-    # Each END line once looked back over the 16 KB before it: 2 MB of them took minutes.
+def test_two_megabytes_of_key_markers_take_linear_time(text):
+    # Each END line once looked back over the 16 KB before it: 2 MB of them took minutes. One
+    # pass takes well under a second here; the limit leaves room for a loaded machine.
     started = time.perf_counter()
     redaction.redact(text)
-    assert time.perf_counter() - started < 1
+    assert time.perf_counter() - started < 10

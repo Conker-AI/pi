@@ -4,9 +4,10 @@ Every request to a model that leaves this server goes through one wrapper, `Reda
 `pi.api.startup` puts around each adapter that can send one: OpenRouter, the direct-key
 providers, the ChatGPT and Claude subscriptions, a decision service that is not on this server's
 loopback, and Ollama. Ollama counts as local only at a loopback address or at `ollama`, its
-service on this server's own network, and only for its local models: a cloud model
-(`gpt-oss:120b-cloud`, `glm-4.6:cloud`) is answered online. While the setting is on, the wrapper
-sends a copy of the messages (system, owner, assistant, tool results, memories, attachment text)
+service on this server's own network, and only for a model Ollama itself says it answers
+(`OllamaModels`): a cloud model (`gpt-oss:120b-cloud`, `glm-4.6:cloud`, or one copied to any
+other name) is answered online. While the setting is on, the wrapper sends a copy of the
+messages (system, owner, assistant, tool results, memories, attachment text)
 in which private key blocks (`pi.models.redaction_pem`), API keys and tokens, password
 assignments and card numbers (`pi.models.redaction_shapes`) are replaced by a fixed marker
 ("[removed: key]"). The messages it was given, the stored chat and the model's answer, with any
@@ -29,6 +30,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+import time
 from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -50,8 +52,9 @@ UNSENT = "Pi could not hide the secrets in this request, so it was not sent to a
 # Adapter members that send text without `complete`: a decision service's `choose` and
 # `rank_memories`, and the raw HTTP client and transport. A wrapped adapter does not hand them out.
 UNWRAPPED = frozenset({"choose", "rank_memories", "client", "transport"})
-# An Ollama model that Ollama answers online: a `-cloud` name or a `cloud` tag.
+# An Ollama model that Ollama answers online by its name: a `-cloud` name or a `cloud` tag.
 CLOUD_MODEL = re.compile(r"(?:^|[-:/])cloud(?=$|:)", re.IGNORECASE)
+KEPT_FOR = 300.0  # seconds Ollama's answer about where a model runs is kept
 
 _UNSET = object()
 _tally: ContextVar[Counter | None] = ContextVar("redaction_tally", default=None)
@@ -129,7 +132,7 @@ class Redacting:
         return self._adapter.complete_bounded(sent, model=model, timeout=timeout)
 
     def _outgoing(self, messages, model):
-        if (self._stays is not None and self._stays(model)) or not enabled(self._store):
+        if not enabled(self._store) or (self._stays is not None and self._stays(model)):
             return messages
         try:
             sent, counts = outgoing(messages)
@@ -160,8 +163,33 @@ def on_this_server(url, service: str | None = None) -> bool:
         return False
 
 
-def _ollama_local(model) -> bool:
-    return isinstance(model, str) and CLOUD_MODEL.search(model) is None
+class OllamaModels:
+    """Which models an Ollama on this server answers itself. Ollama answers a cloud model online
+    under any name it is given, so a model is local only when Ollama says so (`remote`, its
+    /api/show answer). Each name is asked once and the answer kept for `KEPT_FOR`; a cloud name
+    is online without asking, and a model Ollama does not know, or a question it could not
+    answer, counts as online and is asked again next time."""
+
+    def __init__(self, adapter) -> None:
+        self._adapter = adapter
+        self._answers: dict[str, tuple[bool, float]] = {}
+
+    def __call__(self, model) -> bool:
+        if not isinstance(model, str) or CLOUD_MODEL.search(model):
+            return False
+        now = time.monotonic()
+        kept = self._answers.get(model)
+        if kept is not None and now - kept[1] < KEPT_FOR:
+            return kept[0]
+        try:
+            local = self._adapter.remote(model) is False
+        except Exception as exc:
+            log.warning("Ollama could not say where %s runs (%s)", model, type(exc).__name__)
+            return False
+        if len(self._answers) >= 256:
+            self._answers.clear()
+        self._answers[model] = (local, now)
+        return local
 
 
 def wrap(store, local, hosted, providers: dict) -> tuple:
@@ -175,7 +203,7 @@ def wrap(store, local, hosted, providers: dict) -> tuple:
         if name == "decisions" and on_this_server(getattr(adapter, "url", None)):
             return adapter
         if name == "ollama" and on_this_server(getattr(adapter, "base_url", None), "ollama"):
-            return Redacting(adapter, store, _ollama_local)
+            return Redacting(adapter, store, OllamaModels(adapter))
         return Redacting(adapter, store)
 
     return (

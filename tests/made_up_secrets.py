@@ -5,6 +5,7 @@ from pi.core import owner_settings
 
 DASHES = "-" * 5
 OPENAI_SHAPE = "sk" + "-proj-" + "fake0" * 5
+WIDE_OPENAI_SHAPE = "sk" + "-proj-" + "fake0" * 12  # as wide as a wrapped line
 GITHUB_SHAPE = "gh" + "p_" + "fake0" * 7 + "x"
 FINE_GRAINED_SHAPE = "github" + "_pat_" + "fake0_" * 10
 SLACK_SHAPE = "xo" + "xb-" + "1234-5678-fakefake"

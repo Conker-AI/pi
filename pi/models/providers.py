@@ -365,6 +365,24 @@ class OllamaProvider:
             return [], {"status": "not_configured", "reason": "no models pulled"}
         return models, None
 
+    def remote(self, model: str) -> bool:
+        """Whether Ollama answers `model` online: a cloud model, under whatever name it was
+        given (`ollama cp`), is one whose /api/show answer names its remote host. Raises when
+        Ollama cannot say: it is down, does not know the model or answers something else."""
+        response = httpx.post(
+            f"{self.base_url}/api/show",
+            verify=verification(self.base_url),
+            json={"model": model},
+            timeout=5.0,
+            follow_redirects=False,
+            trust_env=False,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not isinstance(body, dict):
+            raise ProviderUnavailable("unreadable model details")
+        return bool(body.get("remote_host") or body.get("remote_model"))
+
     def health_models(self, requested: list[str]) -> dict[str, dict]:
         """One inventory observation; availability belongs to each requested route."""
         models, failure = self._inventory()

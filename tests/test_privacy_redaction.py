@@ -6,6 +6,7 @@ import threading
 import time
 from collections import Counter
 from contextlib import closing
+from types import SimpleNamespace
 
 import pytest
 from made_up_secrets import (
@@ -24,6 +25,7 @@ from made_up_secrets import (
     OPENAI_SHAPE,
     SLACK_SHAPE,
     STRIPE_SHAPE,
+    WIDE_OPENAI_SHAPE,
     choose,
     pem,
 )
@@ -31,7 +33,7 @@ from made_up_secrets import (
 from pi.conversation.store import Store
 from pi.core.images import ImageInput
 from pi.models import redaction
-from pi.models.providers import Message, NotBilled
+from pi.models.providers import Message, NotBilled, ProviderUnavailable
 
 
 def cleaned(text):
@@ -68,6 +70,10 @@ def cleaned(text):
         ('passwd = "with spaces 1"', "password", "with spaces 1"),
         ("secret='made.up.1'", "password", "made.up.1"),
         ("client_secret: madeup123", "password", "madeup123"),
+        # Markdown around the name or the value.
+        ("**Password:** hunter2", "password", "hunter2"),
+        ("**Password**: hunter2", "password", "hunter2"),
+        ("Password: `hunter2`", "password", "hunter2"),
         (f"card {CARD} expires soon", "card", CARD),
         ("card 4111-1111-1111-1111.", "card", "4111-1111-1111-1111"),
         ("mastercard 5555555555554444", "card", "5555555555554444"),
@@ -114,6 +120,7 @@ def test_each_kind_of_secret_is_replaced_by_its_marker(text, kind, secret):
         "pwd: /home/user, OLDPWD=C:\\Users\\owner, PWD=/srv/conker",
         DASHES + "BEGIN PRIVATE KEY" + DASHES + " is how such a block starts",
         "monkey: banana, keyboard=qwerty",
+        "**Password:** ****, **password**: <your password>, password: `${DB_PASSWORD}`",
     ],
 )
 def test_ordinary_numbers_ids_and_code_are_left_alone(text):
@@ -196,13 +203,34 @@ def test_an_unquoted_json_value_is_replaced_by_a_quoted_marker(depth):
 
 
 def test_the_rest_of_a_key_cut_by_a_line_wrap_goes_too():
-    rest = "fake1" * 6
-    out, counts = cleaned(f"my key is {OPENAI_SHAPE}\n{rest}\nThanks")
+    rest, wide = "fake1" * 6, "Fake1" * 12
+    out, counts = cleaned(f"my key is {WIDE_OPENAI_SHAPE}\n{rest}\nThanks")
     assert out == "my key is [removed: key]\nThanks" and counts == {"key": 1}
-    escaped, _ = cleaned(json.dumps({"text": f"{GITHUB_SHAPE}\n{rest}\n{rest}\nok"}))
+    escaped, _ = cleaned(json.dumps({"text": f"{WIDE_OPENAI_SHAPE}\n{wide}\n{rest}\nok"}))
     assert json.loads(escaped) == {"text": "[removed: key]\nok"}
     # A word on the next line is not part of the key.
-    assert cleaned(f"{OPENAI_SHAPE}\nRegards")[0] == "[removed: key]\nRegards"
+    assert cleaned(f"{WIDE_OPENAI_SHAPE}\nRegards")[0] == "[removed: key]\nRegards"
+
+
+@pytest.mark.parametrize(
+    "after",
+    [
+        "OPENAI_MODEL=gpt-4o-mini\nDEBUG=True\nPORT=8080",
+        "123e4567-e89b-12d3-a456-426614174000\n223e4567-e89b-12d3-a456-426614174000",
+        "client=OpenAI(api_key=key)",
+        "made_up_name_1",
+        "label:Fake1Fake1",
+        "3f786850e387550fdab836ed7e6dc881de23001b",
+        "NextSteps1",
+    ],
+)
+def test_the_lines_after_a_key_that_no_wrap_cut_stay(after):
+    # A line that ends sooner than a wrap would cut it (60 characters) was not cut.
+    for line in (f"OPENAI_API_KEY={OPENAI_SHAPE}", f"token {OPENAI_SHAPE}", OPENAI_SHAPE):
+        assert cleaned(f"{line}\n{after}\n")[0].endswith(f"[removed: key]\n{after}\n")
+    # After a wide one, nor is a line with = : _ or - in it, which the key has none of.
+    if not after.isalnum():
+        assert cleaned(f"{WIDE_OPENAI_SHAPE}\n{after}\n")[0] == f"[removed: key]\n{after}\n"
 
 
 def test_redacting_twice_changes_nothing_more():
@@ -243,8 +271,15 @@ def test_the_messages_given_are_never_changed():
         "a" * 2_000_000,
         "sk-" * 700_000,
         ("x:" * 50 + "\n") * 20_000,
+        "eyJ-" * 500_000,
+        "eyJ" + "a" * 8 + "." + "eyJ-" * 500_000,
+        (WIDE_OPENAI_SHAPE + "\n") * 30_000,
+        ('password="' + "\\" * 3) * 160_000,
     ],
-    ids=["key-lines", "headers", "digits", "groups", "assignments", "word", "prefixes", "colons"],
+    ids=[
+        *("key-lines", "headers", "digits", "groups", "assignments", "word", "prefixes", "colons"),
+        *("token-dashes", "token-second-part", "wrapped-lines", "quote-runs"),
+    ],
 )
 def test_two_megabytes_of_hostile_text_takes_linear_time(text):
     started = time.perf_counter()
@@ -329,9 +364,17 @@ def test_two_calls_at_once_each_count_only_their_own(store):
 
 
 class Ollama(Adapter):
-    def __init__(self, base_url):
+    """Ollama, which says whether it answers a model online (`remote`) as its /api/show does."""
+
+    def __init__(self, base_url, remote=False):
         super().__init__("ollama")
-        self.base_url = base_url
+        self.base_url, self.answer, self.shown = base_url, remote, []
+
+    def remote(self, model):
+        self.shown.append(model)
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
 
 
 def test_every_adapter_that_can_send_off_this_server_is_wrapped(store):
@@ -381,3 +424,41 @@ def test_ollama_is_local_only_on_this_server_and_for_local_models(store, url, mo
     wrapped, _, _ = redaction.wrap(store, adapter, None, {})
     wrapped.complete_bounded([Message("user", "use " + OPENAI_SHAPE)], model=model, timeout=5)
     assert (OPENAI_SHAPE not in adapter.sent[0][0].content) is redacted
+
+
+@pytest.mark.parametrize(
+    ("remote", "redacted", "asked"),
+    [
+        (False, False, 1),
+        (True, True, 1),  # a cloud model copied to a local-looking name (`ollama cp`)
+        (ProviderUnavailable("made-up failure"), True, 2),  # unknown, or Ollama could not say
+        (ValueError("unreadable answer"), True, 2),
+    ],
+    ids=["local", "cloud-under-a-local-name", "show-failed", "show-unreadable"],
+)
+def test_ollama_is_asked_once_per_model_whether_it_answers_online(store, remote, redacted, asked):
+    choose(store, {"privacy.redact": True})
+    adapter = Ollama("http://ollama:11434", remote)
+    wrapped, _, _ = redaction.wrap(store, adapter, None, {})
+    for _ in range(2):
+        wrapped.complete_bounded([Message("user", "use " + OPENAI_SHAPE)], model="mine", timeout=5)
+    assert [OPENAI_SHAPE not in sent[0].content for sent in adapter.sent] == [redacted] * 2
+    # A definite answer is kept; one Ollama could not give is asked again next time.
+    assert adapter.shown == ["mine"] * asked
+    # A cloud name is online without asking, and nothing is asked while the setting is off.
+    wrapped.complete_bounded([Message("user", "x")], model="glm-4.6:cloud", timeout=5)
+    choose(store, {"privacy.redact": False})
+    wrapped.complete_bounded([Message("user", "x")], model="other", timeout=5)
+    assert adapter.shown == ["mine"] * asked
+
+
+def test_ollamas_answer_is_kept_only_for_a_while(store, monkeypatch):
+    choose(store, {"privacy.redact": True})
+    adapter = Ollama("http://127.0.0.1:11434")
+    wrapped, _, _ = redaction.wrap(store, adapter, None, {})
+    now = [1000.0]
+    monkeypatch.setattr(redaction, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    for step in (0, redaction.KEPT_FOR - 1, 1):
+        now[0] += step
+        wrapped.complete_bounded([Message("user", "x")], model="mine", timeout=5)
+    assert adapter.shown == ["mine", "mine"]

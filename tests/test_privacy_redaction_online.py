@@ -58,8 +58,12 @@ ASKED = {
 }
 
 
-def sent_by(monkeypatch, tmp_path, provider, *, redact, model=None, **urls):
-    """Start Pi with every provider configured, ask one of them, and return what left Pi."""
+LOCAL_MODEL = (200, {"details": {"family": "made-up"}})  # Ollama's /api/show for a local model
+
+
+def sent_by(monkeypatch, tmp_path, provider, *, redact, model=None, shown=LOCAL_MODEL, **urls):
+    """Start Pi with every provider configured, ask one of them, and return what left Pi.
+    `shown` is Ollama's /api/show answer: its status and body."""
     for name in list(os.environ):
         if name.startswith("PI_"):
             monkeypatch.delenv(name)
@@ -83,6 +87,8 @@ def sent_by(monkeypatch, tmp_path, provider, *, redact, model=None, **urls):
         request.read()
         if request.url.path.endswith("/api/v1/models"):
             return httpx.Response(200, json={"data": [FREE]}, request=request)
+        if request.url.path.endswith("/api/show"):
+            return httpx.Response(shown[0], json=shown[1], request=request)
         bodies.append(request.content.decode())
         return httpx.Response(503, json={"error": "synthetic"}, request=request)
 
@@ -121,13 +127,26 @@ def test_local_models_get_the_request_as_it_is(monkeypatch, tmp_path, provider):
     assert OPENAI_SHAPE in sent and CARD in sent and "[removed:" not in sent
 
 
+CLOUD_MODEL = (200, {"remote_host": "https://ollama.example.test:443", "remote_model": "made-up"})
+
+
 @pytest.mark.parametrize(
-    ("url", "model"),
-    [("https://gpu.example.test", "qwen3:4b"), ("http://ollama:11434", "gpt-oss:120b-cloud")],
-    ids=["elsewhere", "cloud-model"],
+    ("url", "model", "shown"),
+    [
+        ("https://gpu.example.test", "qwen3:4b", LOCAL_MODEL),
+        ("http://ollama:11434", "gpt-oss:120b-cloud", LOCAL_MODEL),
+        ("http://ollama:11434", "qwen3:4b", CLOUD_MODEL),
+        ("http://ollama:11434", "qwen3:4b", (404, {"error": "model not found"})),
+        ("http://ollama:11434", "qwen3:4b", (200, ["not", "details"])),
+    ],
+    ids=["elsewhere", "cloud-model", "cloud-under-a-local-name", "unknown-model", "unreadable"],
 )
-def test_ollama_off_this_server_or_with_a_cloud_model_is_online(monkeypatch, tmp_path, url, model):
-    sent = sent_by(monkeypatch, tmp_path, "ollama", redact=True, model=model, ollama=url)
+def test_ollama_off_this_server_or_with_a_cloud_model_is_online(
+    monkeypatch, tmp_path, url, model, shown
+):
+    sent = sent_by(
+        monkeypatch, tmp_path, "ollama", redact=True, model=model, shown=shown, ollama=url
+    )
     assert [secret[:12] for secret in SECRETS if secret in sent] == []
     assert "[removed: key]" in sent and "[removed: card number]" in sent
 

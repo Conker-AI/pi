@@ -15,10 +15,14 @@ providers, the ChatGPT and Claude subscriptions, a decision service that is not 
 loopback, and Ollama anywhere but here.
 
 Ollama counts as local only when its URL's host is a loopback address or `ollama`, its service
-on this server's own network, and then only for its local models: a cloud model (a `-cloud`
-name or a `cloud` tag, such as `gpt-oss:120b-cloud` or `glm-4.6:cloud`) is answered online and
-is redacted. Ollama on another machine, or reached by any other name (`host.docker.internal`, a
-LAN address), counts as online. A decision service on loopback gets every request as it is.
+on this server's own network, and then only for a model Ollama itself says it answers. A cloud
+model is answered online and is redacted: a `-cloud` name or a `cloud` tag (`gpt-oss:120b-cloud`,
+`glm-4.6:cloud`) without asking, and under any other name (`ollama cp glm-4.6:cloud mine`) when
+Ollama's `/api/show` answer for it names a remote host. Pi asks once per model name and keeps
+the answer for five minutes; a model Ollama does not know, or a question it cannot answer,
+counts as online and is asked again next time. Ollama on another machine, or reached by any
+other name (`host.docker.internal`, a LAN address), counts as online. A decision service on
+loopback gets every request as it is.
 
 The setting is read on every request, so a change applies to the next model call.
 
@@ -29,8 +33,8 @@ Each secret becomes a fixed marker; nothing else in the message changes.
 | Marker | What is found |
 |---|---|
 | `[removed: private key]` | A `BEGIN ... PRIVATE KEY` block with its header and key lines, and each half of one cut in two (a BEGIN line with the lines after it, or lines with the END line after them) |
-| `[removed: key]` | `sk-...`, Stripe `sk_live_`/`sk_test_`/`rk_live_`, GitHub `ghp_` (and `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack `xox[abprs]-`, AWS `AKIA`/`ASIA`, Google `AIza`, Hugging Face `hf_`, npm `npm_`, JSON web tokens, the token after `Bearer`, with the random-looking lines right after one cut by a line wrap; and the value after a name ending in `_key`, `-key`, `_token` or `-token` (`GITHUB_TOKEN=`, `X-Api-Key:`) when it looks like a key: 8 characters with a digit, or 32 of anything |
-| `[removed: password]` | Any value after a name ending in password, passwd, passphrase, pwd, secret, `_pass` or `-pass` and `:` or `=`, short or plain (`password=hunter`) |
+| `[removed: key]` | `sk-...`, Stripe `sk_live_`/`sk_test_`/`rk_live_`, GitHub `ghp_` (and `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack `xox[abprs]-`, AWS `AKIA`/`ASIA`, Google `AIza`, Hugging Face `hf_`, npm `npm_`, JSON web tokens, the token after `Bearer`, with the lines that continue one cut by a line wrap (see below); and the value after a name ending in `_key`, `-key`, `_token` or `-token` (`GITHUB_TOKEN=`, `X-Api-Key:`) when it looks like a key: 8 characters with a digit, or 32 of anything |
+| `[removed: password]` | Any value after a name ending in password, passwd, passphrase, pwd, secret, `_pass` or `-pass` and `:` or `=`, short or plain (`password=hunter`), in quotes, single quotes or backticks, and with Markdown's emphasis around the name (`**Password:** hunter2`) |
 | `[removed: card number]` | 13 to 19 digits (spaces or dashes allowed between groups) with a card network's prefix and length that pass the Luhn check |
 
 What stays:
@@ -44,7 +48,13 @@ What stays:
 - After a key's name, a value too plain to be a key (`primary_key: id`, `sort_key=created_at`).
 - Dates, phone numbers, git SHAs, UUIDs, IBANs and ordinary numbers.
 
-Prose after a password's name is taken too: in `secret: Santa is real`, "Santa" is removed.
+Prose after a password's name is taken too: in `secret: Santa is real`, "Santa" is removed, and
+in `Enter your password: then press OK`, "then".
+
+A key cut by a line wrap loses the lines that continue it, and only those: a line counts when
+the line before it is at least 60 characters wide (as wide as a wrap cuts) and the line holds
+nothing but the key's own characters, with no `=`, `:`, `_` or `-`, and looks random (a digit,
+or both cases). So the `.env` lines, git SHAs and UUIDs after a key stay.
 
 Key lines are found however they are wrapped: real line breaks, JSON escapes at any depth (a
 tool reading a JSON file, `terraform output -json`), HTML `<br>`, spaces, and a quoting or
@@ -52,13 +62,20 @@ comment mark at the start of each line (`> `, `# `, `// `, `| `).
 
 Every message the model is given is cleaned: system prompts, memories, the owner's and Conker's
 messages, tool results and attachment text. The stored chat, the history objects and the model's
-answer, with any tool request it makes, are never changed. A replacement never takes a quotation
-mark or half of a JSON escape, and one that stands for an unquoted JSON value
-(`{"password": 12345678}`) is quoted the way the member's name is, so tool requests and results
-stay valid JSON at any depth.
+answer, with any tool request it makes, are never changed. A replacement never takes a
+quotation mark or half of a JSON escape: an unquoted value never starts on a backslash, and a
+quoted value goes whole, read to its own closing quote at any depth of JSON written inside JSON
+strings (a tool result that holds a command's JSON output, or kubectl's last-applied
+annotation): the quote of a string inside d JSON strings is escaped by 2^d - 1 backslashes.
+A marker that stands for an unquoted
+JSON value (`{"password": 12345678}`, `[4111111111111111]`) is quoted at that value's depth: a
+member's value the way the member's name is, an array's value the way the string before it
+is. So tool requests and results stay valid JSON at any depth.
 
-Every search reads the text in one linear pass: 2 MB of BEGIN or END lines, or of anything
-else, takes well under a second.
+Every search reads the text in one linear pass. On 2 MB of the most hostile text found for
+each search (BEGIN or END lines, `eyJ-` repeated, backslash runs, quote runs, dense
+assignments or card numbers) the slowest takes a few seconds on a loaded machine; a typical
+request takes a few milliseconds.
 
 ## Fail closed
 
@@ -80,5 +97,10 @@ usage receipt: `GET /turns/{turn_id}/usage`, `attempts[].redacted`, for example
 - Key formats other than PEM (PuTTY `.ppk`), a key's lines without its BEGIN or END line, and a
   key split across quoted string literals in code.
 - Card numbers written with non-ASCII digits.
+- A key or token written right after a dash (`name-sk-...`), so that runs like `eyJ-eyJ-` stay
+  linear.
+- A model renamed in Ollama in the five minutes its last answer is kept is judged by that answer.
+- A card number after `[` or `,` inside a JSON string whose text starts with `,`, `:`, `]` or `}`
+  gets a marker quoted one level too shallow: nothing leaks, but that inner JSON breaks.
 - Images and audio. Speech (`PI_SPEECH_URL`) is sent as it is.
 - ToolGate's own Gemini adapter, which is outside Pi.
