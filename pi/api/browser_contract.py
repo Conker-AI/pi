@@ -163,6 +163,8 @@ OWNER_ROUTES = {
         r"/jobs/job_[0-9a-f]{32}",
         r"/jobs/job_[0-9a-f]{32}/runs",
         r"/jobs/agent/notes",
+        # Text he shared from another app, each in a chat of its own (pi.agents.shared_notes).
+        r"/inbox/shared",
         r"/change-requests",
         r"/asks",
         r"/asks/ask_[a-f0-9]{32}",
@@ -206,6 +208,7 @@ OWNER_ROUTES = {
         r"/insights/tomorrow",  # read-only: what Conker will start on its own soon (R-U10)
         # Read-only: counts of what asked for the owner and what did not, never his words.
         r"/insights/quiet",
+        r"/insights/quiet/weeks",  # the same counts per ISO week (R-E13)
         # Read-only: duplicates, contradictions, expired and unused memories to review.
         r"/memory/upkeep",
         # Read-only: the answers that used one memory (ids and chat titles, no words).
@@ -272,6 +275,9 @@ OWNER_ROUTES = {
         # Taking a job Conker made as his own: from then on its runs count as his.
         r"/jobs/job_[0-9a-f]{32}/adopt",
         r"/jobs/agent/notes/note_[a-f0-9]{32}/dismiss",
+        # Saving shared text makes a chat and runs no model; he can forget the chat as any other.
+        r"/inbox/shared",
+        r"/inbox/shared/note_[a-f0-9]{32}/dismiss",
         r"/asks/ask_[a-f0-9]{32}/(?:answer|dismiss)",
         # The gateway, after ToolGate recorded the owner's decision: run it, or close it. Pi grants nothing.
         r"/approvals/[A-Za-z0-9_-]{1,128}/decided",

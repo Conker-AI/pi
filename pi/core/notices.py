@@ -7,6 +7,8 @@ One table for every kind. Each kind keeps its own reader, item shape and dismiss
   the job's chat (`session_id`) and is forgotten with it (`redact`). It never resets.
 - `memory-recall` (pi.conversation.recall_notices): answers used a memory the owner has since corrected
   or forgotten. It holds ids only (no chat id, no words) and counts its reach when read.
+- `shared` (pi.agents.shared_notes): text the owner shared from another app. It links to the chat
+  holding the text (`session_id`) and is forgotten with it (`redact`). Its subject is the request id.
 
 `subject` is the kind's key: at most one notice per (kind, subject) while `reset_at` is NULL. A
 plan alert's subject is `provider:window`, so one per window period. A note's subject is its run,
@@ -41,7 +43,8 @@ CREATE INDEX IF NOT EXISTS notices_open ON notices(kind, dismissed_at, created_a
 PLAN = "plan"
 AGENT_JOB = "agent-job"
 MEMORY_RECALL = "memory-recall"
-KINDS = frozenset({PLAN, AGENT_JOB, MEMORY_RECALL})
+SHARED = "shared"
+KINDS = frozenset({PLAN, AGENT_JOB, MEMORY_RECALL, SHARED})
 
 
 # A note whose chat was forgotten. Normally `redact` removed it with the chat; this catches one

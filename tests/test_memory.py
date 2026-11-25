@@ -13,6 +13,7 @@ from pi.api import server as api
 from pi.conversation import forgetting
 from pi.conversation.store import Store
 from pi.memory import store as memory_store
+from pi.memory.imports import ERASING
 from pi.memory.service import Memory, MemoryClient
 from pi.models.providers import Completion
 from pi.models.routing import Router
@@ -376,4 +377,52 @@ def test_a_deleted_imported_chat_stays_out_of_recall_while_its_erasure_waits(tmp
     with store._connect() as db:
         db.execute("DELETE FROM import_evidence_erasures")
     assert hidden_records.filter_package(store, recalled) is recalled
+    store.close()
+
+
+class Listener:
+    """A MemoryGate import listener: `found` is whether it still held the words it is asked for."""
+
+    def __init__(self, source_key, found):
+        self.source_key, self.found, self.asked = source_key, found, []
+
+    def erase(self, evidence_id):
+        self.asked.append(evidence_id)
+        return self.found
+
+
+def test_an_upgrade_credits_no_listener_once_an_older_pi_had_two(tmp_path):
+    # An older Pi did not record where it sent imported words (imports.add_listener_columns). An
+    # erasure it queued under another listener shows the owner switched: any word may have gone
+    # to either, so the one set at the upgrade cannot settle it by not finding it.
+    from pi.memory import import_deletion, imports
+
+    store = Store(tmp_path / "pi.db")
+    with store._connect() as db:
+        db.execute("INSERT INTO imported_chats VALUES ('imp_1','claude','c1','Private',0,0,0,0)")
+        db.execute(
+            "INSERT INTO imported_messages(id,chat_id,seq,export_id,author,text) "
+            "VALUES ('im_1','imp_1',0,'m1','user','my pin is 4417')"
+        )
+        db.execute(
+            "INSERT INTO import_memory_offers(message_id,state,evidence_id) "
+            "VALUES ('im_1','sent','ev-1')"
+        )
+        db.execute(  # deleted under the old listener, and under the new one (not found there)
+            "INSERT INTO import_evidence_erasures(evidence_id,chat_id,source_key,state) VALUES "
+            "('ev-0','imp_0','old-imports','pending'), ('ev-2','imp_0','new-imports','missing')"
+        )
+        imports.add_listener_columns(db, "new-imports")
+    import_deletion.delete_chat(store, "imp_1", source_key="new-imports")
+
+    def erasing():
+        with store._connect() as db:
+            rows = db.execute(f"SELECT evidence_id FROM import_evidence_erasures WHERE {ERASING}")
+            return {row[0] for row in rows}
+
+    import_deletion.erase_waiting(store, Listener("new-imports", found=False))
+    assert erasing() == {"ev-0", "ev-1", "ev-2"}  # its not found settles none of them
+    old = Listener("old-imports", found=True)
+    import_deletion.erase_waiting(store, old)
+    assert sorted(old.asked) == ["ev-0", "ev-1", "ev-2"] and erasing() == set()
     store.close()

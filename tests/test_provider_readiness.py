@@ -331,7 +331,7 @@ def test_module_health_preserves_contract_enum_and_derived_status(monkeypatch, m
         ),
         "speech_credential_configured": False,
         "toolgate": None,
-        # A test that ran the app's lifespan before this one leaves its closed import sender here.
+        # An import sender another test left on the app reads its own closed store as broken.
         "import_offers": None,
     }.items():
         monkeypatch.setattr(api.app.state, key, value, raising=False)

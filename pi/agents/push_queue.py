@@ -16,8 +16,8 @@ the claimed items to the devices the owner turned on. The rules, in one place:
   the gateway could not send is lost, not repeated (the Inbox still shows the item).
 
 - The owner's settings (Conker's settings registry): `notifications.quiet_days` holds every item
-  on those days of his local week, urgent ones too; with `notifications.preview` off a claim says
-  `"preview": false`, and the gateway then sends only that something needs him.
+  on those days of the owner's local week, urgent ones too; with `notifications.preview` off a
+  claim says `"preview": false`, and the gateway then sends only that something needs the owner.
 
 A held item (quiet hours, quiet day, budget) is not consumed: it may be claimed later while it still waits.
 Nothing here keeps a title or any text: a claim is a digest of the item's kind and id and a time.
@@ -74,7 +74,7 @@ def _pushed_today(db, preferences, now: datetime) -> int:
 
 
 def _quiet_day(db, day: str) -> bool:
-    """Whether the owner's local `day` (an ISO date) is one he keeps free of notifications."""
+    """Whether the owner's local `day` (an ISO date) is one kept free of notifications."""
     days = owner_settings.value_in(db, QUIET_DAYS)
     return isinstance(days, list) and WEEKDAYS[date.fromisoformat(day).weekday()] in days
 
