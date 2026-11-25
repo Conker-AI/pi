@@ -6,6 +6,8 @@ be a decision with visible consequences.
 
 ## Unreleased
 
+- **Security:** the owner terminal image build fails if libzstd1 is older than 1.5.7+dfsg-1+deb13u1 (CVE-2026-124851), so a cached layer from before the fix cannot be reused.
+
 ## 0.29.1
 
 - **Internal refactors, no behaviour change.** Shared types and helpers, owner settings and preferences and the loopback helper moved into `pi.core` (package edges 84 -> 76); roles, memory store, submissions, the ToolGate client and agent jobs were split into smaller modules as pure moves (every file is under 600 lines again). (#293, #294, #295, #296)
