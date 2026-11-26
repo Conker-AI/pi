@@ -42,7 +42,7 @@ import time
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from pi.conversation import submissions
+from pi.conversation import archive, submissions
 from pi.core import check_in_reads
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
@@ -327,11 +327,15 @@ def session_for(store, job_id) -> str | None:
 
 
 def _open_session(store, job_id, definition) -> str:
-    """The job's chat; a forgotten or closed one is replaced, never reopened."""
+    """The job's chat; a forgotten, closed or trashed one is replaced, never reopened (a run
+    never writes into a chat the owner put in the Trash; restoring it later gives it back as it
+    was)."""
     session_id = session_for(store, job_id)
     session = store.get_session(session_id) if session_id else None
     if session is not None and session["status"] == "open":
-        return cast(str, session_id)
+        with store._connect() as db:
+            if not archive.trashed(db, [session_id]):
+                return cast(str, session_id)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         replacement = _new_session(store, db, definition)

@@ -16,7 +16,7 @@ from test_tool_turns import FakeGate, build
 
 from pi.actions import tool_forgets
 from pi.context import background_reads, calendar_events, loop_briefing, recent_mail
-from pi.conversation import forgetting, submissions
+from pi.conversation import archive, forgetting, submissions
 from pi.conversation.store import Store
 from pi.core import check_in_reads
 from pi.core.turn_failures import TurnFailed
@@ -275,3 +275,52 @@ def test_a_stored_receipt_is_never_taken_for_the_read(store):
         chat=("run-3", chat),
     )
     assert answer is None and len(mailbox.polls) == 2
+
+
+def dispatched(store, client, request_id, *, loop=None, now=NOON):
+    """One check-in run dispatched and finished as the worker does; (its chat, its run id)."""
+    rhythm.seed(store, now=NOON)  # once; later calls make nothing
+    job = jobs.get_job(store, check_in_reads.MORNING_CHECK_IN)
+    loop = loop or build(store, ["NOTHING"], FakeGate())[0]
+    executor = agent_jobs.AgentJobs(store, loop, Published(client), briefing=loop_briefing.for_job)
+    started = jobs.run_now(store, job["id"], request_id, now=now)
+
+    def invoke(*_args, action_id, **_kwargs):
+        return executor.run(action_id, now=now)
+
+    assert jobs.dispatch_claim(store, started, invoke) == "completed"
+    return agent_jobs.session_for(store, job["id"]), started["id"]
+
+
+def test_forgetting_only_the_child_of_a_forked_check_in_chat_finds_every_read(tmp_path):
+    # The reused chat outgrew the fork threshold: today's turn, and so its mail, is in a child.
+    path = tmp_path / "pi.db"
+    with closing(Store(path)) as store:
+        parent, earlier = dispatched(store, both(), "check-in-fork-run-0001")
+        loop, _ = build(store, ["Earlier check-ins.", "NOTHING"], FakeGate())
+        loop.fork_threshold_chars = 200
+        client = Mailbox(calendar=Calendar(), timeouts=1)  # and a fresh read under a new id
+        _, today_run = dispatched(store, client, "check-in-fork-run-0002", loop=loop, now=NOON + 60)
+        with store._connect() as db:
+            (child,) = [
+                row[0] for row in db.execute("SELECT id FROM sessions WHERE parent_id=?", (parent,))
+            ]
+        assert any("<recent-mail>" in m["content"] for m in store.messages(child))
+        today = {row[0] for row in recorded(store) if row[2] == today_run}
+        assert len(today) == 3 and {row[1] for row in recorded(store) if row[0] in today} == {
+            parent
+        }
+    plan, sent, rows = forget(path, child)
+    assert today <= set(plan["tool_record_ids"]["action"]) and today <= sent
+    assert all(rows[identity] == "forgotten" for identity in today)
+    assert not reads(earlier) & sent  # the parent's own reads stay until the parent is forgotten
+
+
+def test_a_check_in_chat_in_the_trash_gets_no_new_mail(store):
+    trashed, _ = dispatched(store, both(), "check-in-trash-run-0001")
+    archive.trash(store, archive.Trash(sessions=[trashed], trashed=True))
+    before = len(store.messages(trashed))
+    chat, run_id = dispatched(store, both(), "check-in-trash-run-0002", now=NOON + 60)
+    assert chat != trashed and len(store.messages(trashed)) == before
+    assert any("<recent-mail>" in m["content"] for m in store.messages(chat))
+    assert {row[1] for row in recorded(store) if row[2] == run_id} == {chat}

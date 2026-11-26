@@ -104,13 +104,21 @@ def records(db, session_ids) -> list[tuple[str, str, str]]:
     if "check_in_reads" in tables:
         # The Morning check-in's calendar and mail reads are made before the run's turn, so they
         # are in neither list above; each is recorded under the run's chat before it is sent
-        # (`pi.core.check_in_reads`), so a run that stopped anywhere after that is found too.
+        # (`pi.core.check_in_reads`), so a run that stopped anywhere after that is found too. A
+        # turn that forked the chat (it outgrew the fork threshold) ran in the child, where the
+        # reads' text is: the run's submission names that child, so its reads are found there.
+        by_run = ""
+        if "turn_submissions" in tables:
+            by_run = (
+                " OR run_id IN (SELECT request_id FROM turn_submissions WHERE "
+                f"requested_session_id IN ({marks}) OR effective_session_id IN ({marks}))"
+            )
         found += [
             ("action", row[0], row[1])
             for row in db.execute(
                 "SELECT DISTINCT action_id, agent_id FROM check_in_reads "
-                f"WHERE session_id IN ({marks}) ORDER BY action_id",
-                session_ids,
+                f"WHERE session_id IN ({marks}){by_run} ORDER BY action_id",
+                [*session_ids, *(session_ids * 2 if by_run else [])],
             )
         ]
     if {"scheduled_runs", "turn_submissions"} <= tables:

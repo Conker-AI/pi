@@ -170,7 +170,8 @@ Once the owner answers, or the chat is forgotten, the job runs again.
   already sent stays in MemoryGate, and recall never counts it as his words.
 - Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
   something the owner keeps asking. Forgetting a job's chat deletes its notes; the next run starts
-  a new chat.
+  a new chat. So does a job chat in the Trash: a run never writes into it (restoring it gives it
+  back as it was).
 - Owner routes: `POST /jobs/agent` creates one (name, instructions, timing, time zone; never a raw
   tool target, and the gateway asks for the password), `GET /jobs/agent/notes` lists open notes,
   `POST /jobs/agent/notes/{id}/dismiss` hides one (signed-in session only).
@@ -228,8 +229,10 @@ and never sees the address.
   (`check_in_reads.record`, table `check_in_reads`, ids only), the way a chat's tool action is
   recorded before dispatch. Forgetting the check-in's chat therefore asks ToolGate to blank that
   read's receipt (the events' titles and places) however far the run got, even when Pi stopped
-  between the read and the turn (`pi/actions/tool_forgets.py`). Without a run and a chat to
-  record it under, nothing is read.
+  between the read and the turn (`pi/actions/tool_forgets.py`). When the turn forked the chat
+  (it outgrew the fork threshold) and ran in the child, forgetting the child finds the run's
+  reads too, through the run's submission. Without a run and a chat to record it under, nothing
+  is read.
 - The forecast (`GET /insights/tomorrow`) does not read the calendar: a read there would leave a
   receipt that no chat holds, so nothing could forget it.
 - Other jobs never get events.
