@@ -170,7 +170,8 @@ Once the owner answers, or the chat is forgotten, the job runs again.
   already sent stays in MemoryGate, and recall never counts it as his words.
 - Their chats are left out of the Ideas pass, which would otherwise read the scheduled prompt as
   something the owner keeps asking. Forgetting a job's chat deletes its notes; the next run starts
-  a new chat.
+  a new chat. So does a job chat in the Trash: a run never writes into it (restoring it gives it
+  back as it was).
 - Owner routes: `POST /jobs/agent` creates one (name, instructions, timing, time zone; never a raw
   tool target, and the gateway asks for the password), `GET /jobs/agent/notes` lists open notes,
   `POST /jobs/agent/notes/{id}/dismiss` hides one (signed-in session only).
@@ -223,11 +224,66 @@ and never sees the address.
   could not read some events (`partial`), the block says `(some events could not be read)`.
 - The read's action id is made from the run id (`pi/core/check_in_reads.py`), and events are kept
   by the run's start time, so a repeated dispatch gets ToolGate's saved receipt and replays the
-  same text. Forgetting the check-in's chat also asks ToolGate to blank that read's receipt (the
-  events' titles and places), found by the same id from the run (`pi/actions/tool_forgets.py`).
+  same text. A read whose answer was lost (a timeout) is polled once by its id (`check_action`).
+- Before the read is sent it is recorded under the run and the chat the run's turn will use
+  (`check_in_reads.record`, table `check_in_reads`, ids only), the way a chat's tool action is
+  recorded before dispatch. Forgetting the check-in's chat therefore asks ToolGate to blank that
+  read's receipt (the events' titles and places) however far the run got, even when Pi stopped
+  between the read and the turn (`pi/actions/tool_forgets.py`). When the turn forked the chat
+  (it outgrew the fork threshold) and ran in the child, forgetting the child finds the run's
+  reads too, through the run's submission. Without a run and a chat to record it under, nothing
+  is read.
 - The forecast (`GET /insights/tomorrow`) does not read the calendar: a read there would leave a
   receipt that no chat holds, so nothing could forget it.
 - Other jobs never get events.
+
+### Mail in the check-in (2026-11-25)
+
+When ToolGate has the owner's mail account connected (its read-only `mail.recent` tool, which
+reads the INBOX over IMAP with an app password kept in ToolGate's vault; see ToolGate's
+`docs/mail.md`), the Morning check-in's input also lists the mail of the last 24 hours, newest
+first (`pi/context/recent_mail.py`). Pi asks the tool through the job agent's own ToolGate client
+and never sees the account. Reading, fences and bounds are shared with the calendar
+(`pi/context/background_reads.py`).
+
+- Set up means the same as for the calendar: the tool is in Pi's catalogue (scope
+  `tool:mail.recent`), it runs without asking, and setup did not leave tools off. Otherwise, and
+  when ToolGate answers `connected: false` (no account), refuses, is down or fails, nothing is
+  listed and the input is exactly as before: the check-in says nothing about mail. A read that
+  comes back asking takes its Inbox card back at once.
+- Senders, subjects and snippets are whoever sent the mail's words (anyone can send mail, and the
+  sender's name and address are only a claim), so they are outside content and may carry fake
+  instructions. ToolGate fences each field (`[UNTRUSTED_MAIL_CONTENT field=...]`); Pi takes the
+  text out of that exact fence (anything else leaves the message out and the block says
+  `(some messages could not be read ...)`) and lists one line per message in a fenced
+  `<recent-mail>` block: the received time, rebuilt by Pi in the job's zone, then each field as
+  its own JSON-quoted string (invisible characters removed, `<` escaped), after a lead-in saying
+  it is data, not instructions and not the owner's words. A chat holding that block counts as
+  having read outside content for every turn (`access.MAIL_MARK`), so remembering or promising
+  there always asks the owner. The run's opening message never goes to memory and never counts as
+  the owner's request, and job chats are no source of loop offers or proposals.
+- Bounded after escaping: each field is cut so its quoted form fits (name 42, address 82, subject
+  122, snippet 102 characters as the model reads them), so a message full of `<` costs no more
+  than a plain one; at most 8 messages and 2,000 characters for the block, then
+  `(more messages follow ...)`. With the longest instructions (4,000), the loops (6,000) and the
+  calendar (3,000) the check-in stays under the 16,000-character message limit. One sender shows
+  at most twice, then `(+N more from this sender)`, so a flood of notifications cannot hide the
+  other mail. The mail block comes last.
+- The read's action id is made from the run id (`check_in_reads.mail_action`) and recorded under
+  the run's chat before it is sent, like the calendar's, so forgetting the check-in's chat blanks
+  that read's receipt in ToolGate however far the run got.
+- ToolGate's stored mail receipt keeps counts and UIDs only (`"redacted": true`): only the live
+  reply holds the mail. When Pi gets the stored form instead (a repeated dispatch of the same run,
+  or a poll after a timeout), the read happened but its content is gone: Pi never takes it for
+  "no mail" or a failure, and makes exactly one fresh read under a new action id
+  (`check_in_reads.fresh_action`), recorded under the chat the same way. If that one gives no
+  content either (lost again, refused, failed), the check-in runs without mail, as when no
+  account is connected.
+- The forecast (`GET /insights/tomorrow`) never reads mail. Other jobs never get mail.
+- Limits: ToolGate answers at most 50 messages, so a flood of more than 50 leaves older mail out
+  of the read (the block then says some could not be read). A repeated dispatch reads the mail
+  afresh; if mail arrived since the first send, its text differs and the run fails as a conflict
+  (nothing runs twice), as a loop closed in between does.
 
 ### Starting from a tool (2026-10-25)
 

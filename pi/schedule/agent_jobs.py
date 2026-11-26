@@ -42,7 +42,7 @@ import time
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from pi.conversation import submissions
+from pi.conversation import archive, submissions
 from pi.core import check_in_reads
 from pi.core import owner_preferences as prefs
 from pi.core.errors import ServiceError
@@ -327,11 +327,15 @@ def session_for(store, job_id) -> str | None:
 
 
 def _open_session(store, job_id, definition) -> str:
-    """The job's chat; a forgotten or closed one is replaced, never reopened."""
+    """The job's chat; a forgotten, closed or trashed one is replaced, never reopened (a run
+    never writes into a chat the owner put in the Trash; restoring it later gives it back as it
+    was)."""
     session_id = session_for(store, job_id)
     session = store.get_session(session_id) if session_id else None
     if session is not None and session["status"] == "open":
-        return cast(str, session_id)
+        with store._connect() as db:
+            if not archive.trashed(db, [session_id]):
+                return cast(str, session_id)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         replacement = _new_session(store, db, definition)
@@ -349,8 +353,9 @@ class AgentJobs:
 
     def __init__(self, store, loop, published=None, briefing=None):
         # `briefing(store, job_id, **run)` is extra input text for a run (the Morning check-in's
-        # open loops and calendar events); it is passed in because this package cannot import
-        # them. `run` names the run, its start, its zone, its agent and that agent's client.
+        # open loops, calendar events and mail); it is passed in because this package cannot import
+        # them. `run` names the run, its chat, its start, its zone, its agent and that agent's
+        # client.
         self.store, self.loop, self.published = store, loop, published
         self.briefing = briefing
 
@@ -417,6 +422,7 @@ class AgentJobs:
                 row["job_id"],
                 client=clients.get(definition["agentId"]),
                 run_id=run_id,
+                session_id=session_id,
                 started_at=row["started_at"],
                 time_zone=definition["timeZone"],
                 agent_id=definition["agentId"],

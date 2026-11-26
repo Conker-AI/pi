@@ -21,7 +21,8 @@ import time
 from pi.actions.toolgate import ToolGateUnavailable
 from pi.core import check_in_reads
 
-SCHEMA = """
+SCHEMA = (
+    """
 CREATE TABLE IF NOT EXISTS toolgate_forgets (
  kind TEXT NOT NULL CHECK(kind IN ('request','action')), id TEXT NOT NULL, agent_id TEXT,
  state TEXT NOT NULL CHECK(state IN ('pending','forgotten','gone','blocked')),
@@ -33,6 +34,8 @@ CREATE TABLE IF NOT EXISTS turn_approval_requests (
  turn_id TEXT NOT NULL, request_id TEXT NOT NULL, PRIMARY KEY(turn_id, request_id)
 );
 """
+    + check_in_reads.SCHEMA
+)
 # ToolGate's own limits for one call: ids it accepts, and how many of each kind.
 RECORD_ID = re.compile(r"[A-Za-z0-9_.:/-]{1,160}")
 BATCH = 200
@@ -98,11 +101,30 @@ def records(db, session_ids) -> list[tuple[str, str, str]]:
                 session_ids,
             )
         ]
+    if "check_in_reads" in tables:
+        # The Morning check-in's calendar and mail reads are made before the run's turn, so they
+        # are in neither list above; each is recorded under the run's chat before it is sent
+        # (`pi.core.check_in_reads`), so a run that stopped anywhere after that is found too. A
+        # turn that forked the chat (it outgrew the fork threshold) ran in the child, where the
+        # reads' text is: the run's submission names that child, so its reads are found there.
+        by_run = ""
+        if "turn_submissions" in tables:
+            by_run = (
+                " OR run_id IN (SELECT request_id FROM turn_submissions WHERE "
+                f"requested_session_id IN ({marks}) OR effective_session_id IN ({marks}))"
+            )
+        found += [
+            ("action", row[0], row[1])
+            for row in db.execute(
+                "SELECT DISTINCT action_id, agent_id FROM check_in_reads "
+                f"WHERE session_id IN ({marks}){by_run} ORDER BY action_id",
+                [*session_ids, *(session_ids * 2 if by_run else [])],
+            )
+        ]
     if {"scheduled_runs", "turn_submissions"} <= tables:
-        # The Morning check-in's calendar read is made before the run's turn, so it is in neither
-        # list above (`pi.core.check_in_reads`). A run belongs to the chats its submission names,
-        # or, when its turn never started (refused before it was recorded), the chat its receipt
-        # names. The read was made as the run's agent (its definition's `agentId`).
+        # A calendar read made before that record existed: its run belongs to the chats its
+        # submission names, or, when its turn never started (refused before it was recorded), the
+        # chat its receipt names. The read was made as the run's agent (its `agentId`).
         found += [
             ("action", check_in_reads.calendar_action(row[0]), row[1])
             for row in db.execute(

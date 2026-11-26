@@ -12,8 +12,8 @@ is one more reason to ask, never a reason to run. ToolGate enforces the floor ag
 "run" only from a key he made a policy delegate. See context/design/automation-and-access.md.
 
 Outside content is any text in the turn the owner did not write: a result from a tool that is not
-Conker's own, calendar events in a check-in's input (for the whole chat), a webhook payload (once
-one arrives, for the whole chat,
+Conker's own, calendar events or mail in a check-in's input (for the whole chat), a webhook
+payload (once one arrives, for the whole chat,
 `pi.core.outside.mark_outside`; the writer lives in core so schedule can call it, the reader is
 outside_content() here), a memory
 recalled for this turn that is not his own words (`pi.memory.store.others_wrote`: Conker's own,
@@ -60,6 +60,11 @@ WEBHOOK_MARK = "<webhook>"
 # Wrapped by Pi around calendar events (`pi.context.calendar_events.FENCE`): their titles and
 # places are whoever made the event's words, so a chat that holds them has read outside content.
 CALENDAR_MARK = "<calendar-events>"
+# Wrapped by Pi around the owner's recent mail (`pi.context.recent_mail.FENCE`): anyone can send
+# mail, so a chat that holds its senders, subjects and snippets has read outside content.
+MAIL_MARK = "<recent-mail>"
+# Each mark above: a chat whose messages hold one has read outside content for every turn.
+MARKS = (WEBHOOK_MARK, CALENDAR_MARK, MAIL_MARK)
 # Conker's question to him (`pi.turns.native_tools.ASK`) and a tool draft (`DRAFT_TOOL`).
 native_ask = "conker.ask"
 native_draft = "conker.draft_tool"
@@ -122,9 +127,7 @@ _IN_CHAT = (
 
 def outside_content(store, session_id, owner_text, native, *, turn_id=None, execution=None):
     """True once this turn can read text the owner did not write (see the module notes)."""
-    if any(mark in (owner_text or "") for mark in (WEBHOOK_MARK, CALENDAR_MARK)) or (
-        execution or {}
-    ).get("projectContext"):
+    if any(mark in (owner_text or "") for mark in MARKS) or (execution or {}).get("projectContext"):
         return True
     with store._connect() as db:
         if turn_id and asks.answer_words(db, turn_id) is not None:
@@ -139,10 +142,10 @@ def outside_content(store, session_id, owner_text, native, *, turn_id=None, exec
             chat,
         ).fetchone():
             return True
+        holds = " OR ".join("m.content LIKE ?" for _ in MARKS)
         if db.execute(
-            f"SELECT 1 FROM messages m WHERE {_IN_CHAT} AND m.role='user' "
-            "AND (m.content LIKE ? OR m.content LIKE ?)",
-            (*chat, f"%{WEBHOOK_MARK}%", f"%{CALENDAR_MARK}%"),
+            f"SELECT 1 FROM messages m WHERE {_IN_CHAT} AND m.role='user' AND ({holds})",
+            (*chat, *(f"%{mark}%" for mark in MARKS)),
         ).fetchone():
             return True
         if db.execute(
